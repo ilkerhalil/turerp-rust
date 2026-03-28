@@ -1,6 +1,6 @@
 //! Configuration management for Turerp ERP
 
-use config::{ConfigError, File};
+use config::ConfigError;
 use serde::Deserialize;
 use std::fmt;
 
