@@ -51,6 +51,9 @@ chrono = { version = "0.4", features = ["serde"] }
 # UUID
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
+# Synchronization (no poisoning)
+parking_lot = "0.12"
+
 # Mocking for tests
 mockall = "0.12"
 
