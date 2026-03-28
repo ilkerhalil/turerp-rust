@@ -1,0 +1,368 @@
+//! Sales domain models
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+/// Sales order status
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum SalesOrderStatus {
+    Draft,
+    PendingApproval,
+    Approved,
+    InProgress,
+    Shipped,
+    Delivered,
+    Cancelled,
+    OnHold,
+}
+
+/// Quotation status
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum QuotationStatus {
+    Draft,
+    Sent,
+    UnderReview,
+    Accepted,
+    Rejected,
+    Expired,
+    ConvertedToOrder,
+}
+
+/// Sales order entity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesOrder {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub order_number: String,
+    pub cari_id: i64,
+    pub status: SalesOrderStatus,
+    pub order_date: DateTime<Utc>,
+    pub delivery_date: Option<DateTime<Utc>>,
+    pub subtotal: f64,
+    pub tax_amount: f64,
+    pub discount_amount: f64,
+    pub total_amount: f64,
+    pub notes: Option<String>,
+    pub shipping_address: Option<String>,
+    pub billing_address: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Sales order line item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesOrderLine {
+    pub id: i64,
+    pub order_id: i64,
+    pub product_id: Option<i64>,
+    pub description: String,
+    pub quantity: f64,
+    pub unit_price: f64,
+    pub tax_rate: f64,
+    pub discount_rate: f64,
+    pub line_total: f64,
+    pub sort_order: i32,
+}
+
+/// Quotation entity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Quotation {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub quotation_number: String,
+    pub cari_id: i64,
+    pub status: QuotationStatus,
+    pub valid_until: DateTime<Utc>,
+    pub subtotal: f64,
+    pub tax_amount: f64,
+    pub discount_amount: f64,
+    pub total_amount: f64,
+    pub notes: Option<String>,
+    pub terms: Option<String>,
+    pub sales_order_id: Option<i64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Quotation line item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuotationLine {
+    pub id: i64,
+    pub quotation_id: i64,
+    pub product_id: Option<i64>,
+    pub description: String,
+    pub quantity: f64,
+    pub unit_price: f64,
+    pub tax_rate: f64,
+    pub discount_rate: f64,
+    pub line_total: f64,
+    pub sort_order: i32,
+}
+
+/// Create sales order request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateSalesOrder {
+    pub tenant_id: i64,
+    pub cari_id: i64,
+    pub order_date: DateTime<Utc>,
+    pub delivery_date: Option<DateTime<Utc>>,
+    pub notes: Option<String>,
+    pub shipping_address: Option<String>,
+    pub billing_address: Option<String>,
+    pub lines: Vec<CreateSalesOrderLine>,
+}
+
+impl CreateSalesOrder {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.lines.is_empty() {
+            errors.push("Order must have at least one line item".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// Create sales order line
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateSalesOrderLine {
+    pub product_id: Option<i64>,
+    pub description: String,
+    pub quantity: f64,
+    pub unit_price: f64,
+    pub tax_rate: f64,
+    pub discount_rate: f64,
+}
+
+impl CreateSalesOrderLine {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.description.trim().is_empty() {
+            errors.push("Description is required".to_string());
+        }
+        if self.quantity <= 0.0 {
+            errors.push("Quantity must be positive".to_string());
+        }
+        if self.unit_price < 0.0 {
+            errors.push("Unit price cannot be negative".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+
+    pub fn calculate_line_total(&self) -> f64 {
+        let subtotal = self.quantity * self.unit_price;
+        let discount = subtotal * (self.discount_rate / 100.0);
+        let after_discount = subtotal - discount;
+        let tax = after_discount * (self.tax_rate / 100.0);
+        after_discount + tax
+    }
+}
+
+/// Create quotation request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateQuotation {
+    pub tenant_id: i64,
+    pub cari_id: i64,
+    pub valid_until: DateTime<Utc>,
+    pub notes: Option<String>,
+    pub terms: Option<String>,
+    pub lines: Vec<CreateQuotationLine>,
+}
+
+impl CreateQuotation {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.lines.is_empty() {
+            errors.push("Quotation must have at least one line item".to_string());
+        }
+        if self.valid_until < Utc::now() {
+            errors.push("Valid until date must be in the future".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// Create quotation line
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateQuotationLine {
+    pub product_id: Option<i64>,
+    pub description: String,
+    pub quantity: f64,
+    pub unit_price: f64,
+    pub tax_rate: f64,
+    pub discount_rate: f64,
+}
+
+impl CreateQuotationLine {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.description.trim().is_empty() {
+            errors.push("Description is required".to_string());
+        }
+        if self.quantity <= 0.0 {
+            errors.push("Quantity must be positive".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+
+    pub fn calculate_line_total(&self) -> f64 {
+        let subtotal = self.quantity * self.unit_price;
+        let discount = subtotal * (self.discount_rate / 100.0);
+        let after_discount = subtotal - discount;
+        let tax = after_discount * (self.tax_rate / 100.0);
+        after_discount + tax
+    }
+}
+
+/// Sales order response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SalesOrderResponse {
+    pub id: i64,
+    pub order_number: String,
+    pub cari_id: i64,
+    pub status: SalesOrderStatus,
+    pub order_date: DateTime<Utc>,
+    pub delivery_date: Option<DateTime<Utc>>,
+    pub subtotal: f64,
+    pub tax_amount: f64,
+    pub discount_amount: f64,
+    pub total_amount: f64,
+    pub notes: Option<String>,
+    pub shipping_address: Option<String>,
+    pub billing_address: Option<String>,
+    pub lines: Vec<SalesOrderLine>,
+}
+
+impl From<(SalesOrder, Vec<SalesOrderLine>)> for SalesOrderResponse {
+    fn from((order, lines): (SalesOrder, Vec<SalesOrderLine>)) -> Self {
+        Self {
+            id: order.id,
+            order_number: order.order_number,
+            cari_id: order.cari_id,
+            status: order.status,
+            order_date: order.order_date,
+            delivery_date: order.delivery_date,
+            subtotal: order.subtotal,
+            tax_amount: order.tax_amount,
+            discount_amount: order.discount_amount,
+            total_amount: order.total_amount,
+            notes: order.notes,
+            shipping_address: order.shipping_address,
+            billing_address: order.billing_address,
+            lines,
+        }
+    }
+}
+
+/// Quotation response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QuotationResponse {
+    pub id: i64,
+    pub quotation_number: String,
+    pub cari_id: i64,
+    pub status: QuotationStatus,
+    pub valid_until: DateTime<Utc>,
+    pub subtotal: f64,
+    pub tax_amount: f64,
+    pub discount_amount: f64,
+    pub total_amount: f64,
+    pub notes: Option<String>,
+    pub terms: Option<String>,
+    pub sales_order_id: Option<i64>,
+    pub lines: Vec<QuotationLine>,
+}
+
+impl From<(Quotation, Vec<QuotationLine>)> for QuotationResponse {
+    fn from((quotation, lines): (Quotation, Vec<QuotationLine>)) -> Self {
+        Self {
+            id: quotation.id,
+            quotation_number: quotation.quotation_number,
+            cari_id: quotation.cari_id,
+            status: quotation.status,
+            valid_until: quotation.valid_until,
+            subtotal: quotation.subtotal,
+            tax_amount: quotation.tax_amount,
+            discount_amount: quotation.discount_amount,
+            total_amount: quotation.total_amount,
+            notes: quotation.notes,
+            terms: quotation.terms,
+            sales_order_id: quotation.sales_order_id,
+            lines,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Duration;
+
+    #[test]
+    fn test_create_sales_order_validation() {
+        let valid = CreateSalesOrder {
+            tenant_id: 1,
+            cari_id: 1,
+            order_date: Utc::now(),
+            delivery_date: Some(Utc::now() + Duration::days(7)),
+            notes: None,
+            shipping_address: None,
+            billing_address: None,
+            lines: vec![CreateSalesOrderLine {
+                product_id: Some(1),
+                description: "Test".to_string(),
+                quantity: 1.0,
+                unit_price: 100.0,
+                tax_rate: 18.0,
+                discount_rate: 0.0,
+            }],
+        };
+        assert!(valid.validate().is_ok());
+
+        let invalid = CreateSalesOrder {
+            tenant_id: 1,
+            cari_id: 1,
+            order_date: Utc::now(),
+            delivery_date: None,
+            notes: None,
+            shipping_address: None,
+            billing_address: None,
+            lines: vec![],
+        };
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn test_create_quotation_validation() {
+        let valid = CreateQuotation {
+            tenant_id: 1,
+            cari_id: 1,
+            valid_until: Utc::now() + Duration::days(30),
+            notes: None,
+            terms: None,
+            lines: vec![CreateQuotationLine {
+                product_id: Some(1),
+                description: "Test".to_string(),
+                quantity: 1.0,
+                unit_price: 100.0,
+                tax_rate: 18.0,
+                discount_rate: 0.0,
+            }],
+        };
+        assert!(valid.validate().is_ok());
+    }
+}

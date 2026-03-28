@@ -1,0 +1,507 @@
+//! Manufacturing domain models
+
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+/// Work order status
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum WorkOrderStatus {
+    Draft,
+    Scheduled,
+    InProgress,
+    OnHold,
+    Completed,
+    Cancelled,
+}
+
+/// Work order priority
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum WorkOrderPriority {
+    Low,
+    Normal,
+    High,
+    Urgent,
+}
+
+/// Work order entity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkOrder {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub name: String,
+    pub product_id: i64,
+    pub quantity: f64,
+    pub bom_id: Option<i64>,
+    pub routing_id: Option<i64>,
+    pub status: WorkOrderStatus,
+    pub priority: WorkOrderPriority,
+    pub planned_start: Option<DateTime<Utc>>,
+    pub planned_end: Option<DateTime<Utc>>,
+    pub actual_start: Option<DateTime<Utc>>,
+    pub actual_end: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Work order operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkOrderOperation {
+    pub id: i64,
+    pub work_order_id: i64,
+    pub operation_sequence: i32,
+    pub operation_name: String,
+    pub work_center_id: Option<i64>,
+    pub planned_hours: f64,
+    pub actual_hours: f64,
+    pub status: String,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+/// Work order material
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkOrderMaterial {
+    pub id: i64,
+    pub work_order_id: i64,
+    pub product_id: i64,
+    pub quantity_required: f64,
+    pub quantity_issued: f64,
+    pub is_issued: bool,
+}
+
+/// Create work order request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateWorkOrder {
+    pub tenant_id: i64,
+    pub name: String,
+    pub product_id: i64,
+    pub quantity: f64,
+    pub bom_id: Option<i64>,
+    pub routing_id: Option<i64>,
+    pub priority: WorkOrderPriority,
+    pub planned_start: Option<DateTime<Utc>>,
+    pub planned_end: Option<DateTime<Utc>>,
+}
+
+impl CreateWorkOrder {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.name.trim().is_empty() {
+            errors.push("Work order name is required".to_string());
+        }
+        if self.product_id <= 0 {
+            errors.push("Product ID is required".to_string());
+        }
+        if self.quantity <= 0.0 {
+            errors.push("Quantity must be positive".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// Create work order operation request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateWorkOrderOperation {
+    pub work_order_id: i64,
+    pub operation_sequence: i32,
+    pub operation_name: String,
+    pub work_center_id: Option<i64>,
+    pub planned_hours: f64,
+}
+
+impl CreateWorkOrderOperation {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.operation_name.trim().is_empty() {
+            errors.push("Operation name is required".to_string());
+        }
+        if self.planned_hours < 0.0 {
+            errors.push("Planned hours cannot be negative".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// Create work order material request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateWorkOrderMaterial {
+    pub work_order_id: i64,
+    pub product_id: i64,
+    pub quantity_required: f64,
+}
+
+impl CreateWorkOrderMaterial {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.product_id <= 0 {
+            errors.push("Product ID is required".to_string());
+        }
+        if self.quantity_required <= 0.0 {
+            errors.push("Quantity must be positive".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+// ==================== BILL OF MATERIALS ====================
+
+/// Bill of Materials entity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BillOfMaterials {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub product_id: i64,
+    pub version: String,
+    pub is_active: bool,
+    pub is_primary: bool,
+    pub valid_from: Option<DateTime<Utc>>,
+    pub valid_to: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// BOM line item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BillOfMaterialsLine {
+    pub id: i64,
+    pub bom_id: i64,
+    pub component_product_id: i64,
+    pub quantity: f64,
+    pub unit_id: Option<i64>,
+    pub scrap_percentage: f64,
+    pub is_optional: bool,
+    pub notes: Option<String>,
+}
+
+/// Create BOM request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateBillOfMaterials {
+    pub tenant_id: i64,
+    pub product_id: i64,
+    pub version: String,
+    pub is_active: bool,
+    pub is_primary: bool,
+    pub valid_from: Option<DateTime<Utc>>,
+    pub valid_to: Option<DateTime<Utc>>,
+}
+
+impl CreateBillOfMaterials {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.product_id <= 0 {
+            errors.push("Product ID is required".to_string());
+        }
+        if self.version.trim().is_empty() {
+            errors.push("Version is required".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// Create BOM line request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateBillOfMaterialsLine {
+    pub bom_id: i64,
+    pub component_product_id: i64,
+    pub quantity: f64,
+    pub unit_id: Option<i64>,
+    pub scrap_percentage: f64,
+    pub is_optional: bool,
+    pub notes: Option<String>,
+}
+
+impl CreateBillOfMaterialsLine {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.component_product_id <= 0 {
+            errors.push("Component product ID is required".to_string());
+        }
+        if self.quantity <= 0.0 {
+            errors.push("Quantity must be positive".to_string());
+        }
+        if self.scrap_percentage < 0.0 || self.scrap_percentage > 100.0 {
+            errors.push("Scrap percentage must be between 0 and 100".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+// ==================== ROUTING ====================
+
+/// Routing entity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Routing {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub product_id: i64,
+    pub version: String,
+    pub is_active: bool,
+    pub is_primary: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Routing operation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutingOperation {
+    pub id: i64,
+    pub routing_id: i64,
+    pub sequence: i32,
+    pub operation_name: String,
+    pub work_center_id: Option<i64>,
+    pub setup_hours: f64,
+    pub run_hours: f64,
+    pub description: Option<String>,
+}
+
+/// Create routing request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateRouting {
+    pub tenant_id: i64,
+    pub product_id: i64,
+    pub version: String,
+    pub is_active: bool,
+    pub is_primary: bool,
+}
+
+/// Create routing operation request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateRoutingOperation {
+    pub routing_id: i64,
+    pub sequence: i32,
+    pub operation_name: String,
+    pub work_center_id: Option<i64>,
+    pub setup_hours: f64,
+    pub run_hours: f64,
+    pub description: Option<String>,
+}
+
+impl CreateRoutingOperation {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.routing_id <= 0 {
+            errors.push("Routing ID is required".to_string());
+        }
+        if self.operation_name.trim().is_empty() {
+            errors.push("Operation name is required".to_string());
+        }
+        if self.setup_hours < 0.0 {
+            errors.push("Setup hours cannot be negative".to_string());
+        }
+        if self.run_hours < 0.0 {
+            errors.push("Run hours cannot be negative".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+impl CreateRouting {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.product_id <= 0 {
+            errors.push("Product ID is required".to_string());
+        }
+        if self.version.trim().is_empty() {
+            errors.push("Version is required".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+// ==================== QUALITY CONTROL ====================
+
+/// Inspection status
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum InspectionStatus {
+    Pending,
+    InProgress,
+    Passed,
+    Failed,
+    Rework,
+}
+
+/// Inspection entity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Inspection {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub work_order_id: Option<i64>,
+    pub product_id: i64,
+    pub inspection_type: String,
+    pub quantity_inspected: f64,
+    pub quantity_passed: f64,
+    pub quantity_failed: f64,
+    pub status: InspectionStatus,
+    pub inspector_id: Option<i64>,
+    pub inspected_at: Option<DateTime<Utc>>,
+    pub notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// NCR type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum NcrType {
+    Minor,
+    Major,
+    Critical,
+}
+
+/// NCR status
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum NcrStatus {
+    Open,
+    UnderReview,
+    CorrectiveAction,
+    Closed,
+    Rejected,
+}
+
+/// Non-conformance report
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NonConformanceReport {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub inspection_id: Option<i64>,
+    pub product_id: i64,
+    pub ncr_type: NcrType,
+    pub description: String,
+    pub root_cause: Option<String>,
+    pub corrective_action: Option<String>,
+    pub status: NcrStatus,
+    pub raised_by: i64,
+    pub raised_at: DateTime<Utc>,
+    pub closed_at: Option<DateTime<Utc>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_work_order_validation() {
+        let valid = CreateWorkOrder {
+            tenant_id: 1,
+            name: "WO-001".to_string(),
+            product_id: 1,
+            quantity: 100.0,
+            bom_id: None,
+            routing_id: None,
+            priority: WorkOrderPriority::Normal,
+            planned_start: Some(Utc::now()),
+            planned_end: None,
+        };
+        assert!(valid.validate().is_ok());
+
+        let invalid = CreateWorkOrder {
+            tenant_id: 1,
+            name: "".to_string(),
+            product_id: 0,
+            quantity: -10.0,
+            bom_id: None,
+            routing_id: None,
+            priority: WorkOrderPriority::Normal,
+            planned_start: None,
+            planned_end: None,
+        };
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn test_create_bom_validation() {
+        let valid = CreateBillOfMaterials {
+            tenant_id: 1,
+            product_id: 1,
+            version: "1.0".to_string(),
+            is_active: true,
+            is_primary: true,
+            valid_from: Some(Utc::now()),
+            valid_to: None,
+        };
+        assert!(valid.validate().is_ok());
+
+        let invalid = CreateBillOfMaterials {
+            tenant_id: 1,
+            product_id: 0,
+            version: "".to_string(),
+            is_active: true,
+            is_primary: false,
+            valid_from: None,
+            valid_to: None,
+        };
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn test_create_bom_line_validation() {
+        let valid = CreateBillOfMaterialsLine {
+            bom_id: 1,
+            component_product_id: 2,
+            quantity: 5.0,
+            unit_id: Some(1),
+            scrap_percentage: 5.0,
+            is_optional: false,
+            notes: None,
+        };
+        assert!(valid.validate().is_ok());
+
+        let invalid = CreateBillOfMaterialsLine {
+            bom_id: 1,
+            component_product_id: 0,
+            quantity: -1.0,
+            unit_id: None,
+            scrap_percentage: 150.0,
+            is_optional: false,
+            notes: None,
+        };
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn test_create_routing_validation() {
+        let valid = CreateRouting {
+            tenant_id: 1,
+            product_id: 1,
+            version: "1.0".to_string(),
+            is_active: true,
+            is_primary: true,
+        };
+        assert!(valid.validate().is_ok());
+
+        let invalid = CreateRouting {
+            tenant_id: 1,
+            product_id: 0,
+            version: "".to_string(),
+            is_active: false,
+            is_primary: false,
+        };
+        assert!(invalid.validate().is_err());
+    }
+}
