@@ -31,9 +31,7 @@ pub struct DatabaseConfig {
 impl DatabaseConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
         let url = std::env::var("TURERP_DATABASE_URL")
-            .map_err(|_| ConfigError::Message(
-                "TURERP_DATABASE_URL must be set".to_string()
-            ))?;
+            .map_err(|_| ConfigError::Message("TURERP_DATABASE_URL must be set".to_string()))?;
 
         Ok(Self {
             url,
@@ -60,9 +58,7 @@ pub struct JwtConfig {
 impl JwtConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
         let secret = std::env::var("TURERP_JWT_SECRET")
-            .map_err(|_| ConfigError::Message(
-                "TURERP_JWT_SECRET must be set".to_string()
-            ))?;
+            .map_err(|_| ConfigError::Message("TURERP_JWT_SECRET must be set".to_string()))?;
 
         Ok(Self {
             secret,

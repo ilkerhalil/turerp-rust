@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo test --test api_integration_test
 
-use actix_web::{body::to_bytes, test, web, App, HttpResponse, http::StatusCode};
+use actix_web::{body::to_bytes, http::StatusCode, test, web, App, HttpResponse};
 use serde_json::json;
 
 // Import application modules
@@ -11,13 +11,9 @@ use turerp::app::create_app_state;
 
 #[actix_web::test]
 async fn test_health_check() {
-    let app = test::init_service(
-        App::new().route("/health", web::get().to(health_check))
-    ).await;
+    let app = test::init_service(App::new().route("/health", web::get().to(health_check))).await;
 
-    let req = test::TestRequest::get()
-        .uri("/health")
-        .to_request();
+    let req = test::TestRequest::get().uri("/health").to_request();
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -42,8 +38,9 @@ async fn test_auth_register() {
         App::new()
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
-            .service(web::scope("/api").configure(auth_configure))
-    ).await;
+            .service(web::scope("/api").configure(auth_configure)),
+    )
+    .await;
 
     let req = test::TestRequest::post()
         .uri("/api/auth/register")
@@ -73,8 +70,9 @@ async fn test_auth_register_validation_error() {
         App::new()
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
-            .service(web::scope("/api").configure(auth_configure))
-    ).await;
+            .service(web::scope("/api").configure(auth_configure)),
+    )
+    .await;
 
     let req = test::TestRequest::post()
         .uri("/api/auth/register")
@@ -95,8 +93,9 @@ async fn test_auth_login() {
         App::new()
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
-            .service(web::scope("/api").configure(auth_configure))
-    ).await;
+            .service(web::scope("/api").configure(auth_configure)),
+    )
+    .await;
 
     // First register a user
     let register_req = test::TestRequest::post()
@@ -137,8 +136,9 @@ async fn test_auth_login_invalid_credentials() {
         App::new()
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
-            .service(web::scope("/api").configure(auth_configure))
-    ).await;
+            .service(web::scope("/api").configure(auth_configure)),
+    )
+    .await;
 
     let req = test::TestRequest::post()
         .uri("/api/auth/login?tenant_id=1")
@@ -159,8 +159,9 @@ async fn test_users_create() {
     let app = test::init_service(
         App::new()
             .app_data(app_state.user_service.clone())
-            .service(web::scope("/api").configure(users_configure))
-    ).await;
+            .service(web::scope("/api").configure(users_configure)),
+    )
+    .await;
 
     let req = test::TestRequest::post()
         .uri("/api/users")
@@ -188,12 +189,11 @@ async fn test_users_list() {
     let app = test::init_service(
         App::new()
             .app_data(app_state.user_service.clone())
-            .service(web::scope("/api").configure(users_configure))
-    ).await;
+            .service(web::scope("/api").configure(users_configure)),
+    )
+    .await;
 
-    let req = test::TestRequest::get()
-        .uri("/api/users")
-        .to_request();
+    let req = test::TestRequest::get().uri("/api/users").to_request();
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
@@ -210,8 +210,9 @@ async fn test_users_get_by_id() {
     let app = test::init_service(
         App::new()
             .app_data(app_state.user_service.clone())
-            .service(web::scope("/api").configure(users_configure))
-    ).await;
+            .service(web::scope("/api").configure(users_configure)),
+    )
+    .await;
 
     // First create a user
     let create_req = test::TestRequest::post()
@@ -250,8 +251,9 @@ async fn test_users_update() {
     let app = test::init_service(
         App::new()
             .app_data(app_state.user_service.clone())
-            .service(web::scope("/api").configure(users_configure))
-    ).await;
+            .service(web::scope("/api").configure(users_configure)),
+    )
+    .await;
 
     // First create a user
     let create_req = test::TestRequest::post()
@@ -293,8 +295,9 @@ async fn test_users_delete() {
     let app = test::init_service(
         App::new()
             .app_data(app_state.user_service.clone())
-            .service(web::scope("/api").configure(users_configure))
-    ).await;
+            .service(web::scope("/api").configure(users_configure)),
+    )
+    .await;
 
     // First create a user
     let create_req = test::TestRequest::post()
@@ -338,12 +341,11 @@ async fn test_auth_me_not_implemented() {
         App::new()
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
-            .service(web::scope("/api").configure(auth_configure))
-    ).await;
+            .service(web::scope("/api").configure(auth_configure)),
+    )
+    .await;
 
-    let req = test::TestRequest::get()
-        .uri("/api/auth/me")
-        .to_request();
+    let req = test::TestRequest::get().uri("/api/auth/me").to_request();
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
