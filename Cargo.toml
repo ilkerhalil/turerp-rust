@@ -1,0 +1,67 @@
+[package]
+name = "turerp"
+version = "0.1.0"
+edition = "2021"
+authors = ["Turerp Team"]
+description = "Multi-tenant SaaS ERP system"
+
+[lib]
+name = "turerp"
+path = "src/lib.rs"
+
+[dependencies]
+# Web framework - use latest version
+actix-web = "4"
+actix-rt = "2"
+actix-cors = "0.7"
+
+# Database - use sqlx directly
+sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "macros", "chrono"] }
+
+# Authentication
+jsonwebtoken = "9"
+bcrypt = "0.15"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Validation
+validator = { version = "0.16", features = ["derive"] }
+
+# Configuration
+config = "0.14"
+dotenv = "0.15"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Async
+async-trait = "0.1"
+tokio = { version = "1", features = ["full"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# Mocking for tests
+mockall = "0.12"
+
+# OpenAPI / Swagger
+utoipa = "4"
+utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
+
+[features]
+default = []
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

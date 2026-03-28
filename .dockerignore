@@ -1,0 +1,36 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+target/
+*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Test
+tests/
+*_test.rs
+*_tests.rs
+
+# Documentation
+README.md
+docs/
+
+# Misc
+*.tmp
+*.bak
+.DS_Store

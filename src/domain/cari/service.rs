@@ -1,0 +1,382 @@
+//! Cari service for business logic
+#[allow(unused_imports)]
+use validator::Validate;
+
+use crate::domain::cari::model::{CariResponse, CreateCari, UpdateCari};
+use crate::domain::cari::repository::BoxCariRepository;
+use crate::error::ApiError;
+
+/// Cari service
+#[derive(Clone)]
+pub struct CariService {
+    repo: BoxCariRepository,
+}
+
+impl CariService {
+    pub fn new(repo: BoxCariRepository) -> Self {
+        Self { repo }
+    }
+
+    /// Create a new cari account
+    pub async fn create_cari(&self, create: CreateCari) -> Result<CariResponse, ApiError> {
+        // Validate input
+        create
+            .validate()
+            .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+        // Check if code exists
+        if self
+            .repo
+            .code_exists(&create.code, create.tenant_id)
+            .await?
+        {
+            return Err(ApiError::Conflict(format!(
+                "Cari code '{}' already exists",
+                create.code
+            )));
+        }
+
+        // Create cari
+        let cari = self.repo.create(create).await?;
+
+        Ok(cari.into())
+    }
+
+    /// Get cari by ID
+    pub async fn get_cari(&self, id: i64, tenant_id: i64) -> Result<CariResponse, ApiError> {
+        let cari = self
+            .repo
+            .find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", id)))?;
+
+        Ok(cari.into())
+    }
+
+    /// Get cari by code
+    pub async fn get_cari_by_code(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<CariResponse, ApiError> {
+        let cari = self
+            .repo
+            .find_by_code(code, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", code)))?;
+
+        Ok(cari.into())
+    }
+
+    /// Get all cari accounts for a tenant
+    pub async fn get_all_cari(&self, tenant_id: i64) -> Result<Vec<CariResponse>, ApiError> {
+        let cari_list = self.repo.find_all(tenant_id).await?;
+        Ok(cari_list.into_iter().map(|c| c.into()).collect())
+    }
+
+    /// Get cari accounts by type
+    pub async fn get_cari_by_type(
+        &self,
+        cari_type: crate::domain::cari::model::CariType,
+        tenant_id: i64,
+    ) -> Result<Vec<CariResponse>, ApiError> {
+        let cari_list = self.repo.find_by_type(cari_type, tenant_id).await?;
+        Ok(cari_list.into_iter().map(|c| c.into()).collect())
+    }
+
+    /// Search cari accounts
+    pub async fn search_cari(
+        &self,
+        query: &str,
+        tenant_id: i64,
+    ) -> Result<Vec<CariResponse>, ApiError> {
+        let cari_list = self.repo.search(query, tenant_id).await?;
+        Ok(cari_list.into_iter().map(|c| c.into()).collect())
+    }
+
+    /// Update a cari account
+    pub async fn update_cari(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateCari,
+    ) -> Result<CariResponse, ApiError> {
+        // Validate input
+        update
+            .validate()
+            .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+        // Check if code changed and exists
+        if let Some(ref code) = update.code {
+            let existing = self.repo.find_by_code(code, tenant_id).await?;
+            if let Some(c) = existing {
+                if c.id != id {
+                    return Err(ApiError::Conflict(format!(
+                        "Cari code '{}' already exists",
+                        code
+                    )));
+                }
+            }
+        }
+
+        let cari = self.repo.update(id, tenant_id, update).await?;
+        Ok(cari.into())
+    }
+
+    /// Delete a cari account
+    pub async fn delete_cari(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.delete(id, tenant_id).await
+    }
+
+    /// Update cari balance (for financial transactions)
+    pub async fn update_balance(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        amount: f64,
+    ) -> Result<(), ApiError> {
+        // Verify cari exists
+        let _ = self
+            .repo
+            .find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", id)))?;
+
+        // Check credit limit
+        if amount < 0.0 {
+            let cari = self.repo.find_by_id(id, tenant_id).await?.unwrap();
+            let new_balance = cari.current_balance + amount;
+            if new_balance < -cari.credit_limit {
+                return Err(ApiError::BadRequest("Credit limit exceeded".to_string()));
+            }
+        }
+
+        self.repo.update_balance(id, tenant_id, amount).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::cari::model::CariType;
+    use crate::domain::cari::repository::InMemoryCariRepository;
+    use std::sync::Arc;
+
+    fn create_service() -> CariService {
+        let repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
+        CariService::new(repo)
+    }
+
+    #[tokio::test]
+    async fn test_create_cari_success() {
+        let service = create_service();
+
+        let create = CreateCari {
+            code: "C001".to_string(),
+            name: "Test Customer".to_string(),
+            cari_type: CariType::Customer,
+            tax_number: Some("1234567890".to_string()),
+            tax_office: None,
+            identity_number: None,
+            email: Some("test@example.com".to_string()),
+            phone: None,
+            address: None,
+            city: None,
+            country: None,
+            postal_code: None,
+            credit_limit: 1000.0,
+            tenant_id: 1,
+            created_by: 1,
+        };
+
+        let result = service.create_cari(create).await;
+        assert!(result.is_ok());
+        let cari = result.unwrap();
+        assert_eq!(cari.code, "C001");
+        assert_eq!(cari.name, "Test Customer");
+    }
+
+    #[tokio::test]
+    async fn test_create_cari_duplicate_code() {
+        let service = create_service();
+
+        let create = CreateCari {
+            code: "C001".to_string(),
+            name: "Test Customer".to_string(),
+            cari_type: CariType::Customer,
+            tax_number: None,
+            tax_office: None,
+            identity_number: None,
+            email: None,
+            phone: None,
+            address: None,
+            city: None,
+            country: None,
+            postal_code: None,
+            credit_limit: 0.0,
+            tenant_id: 1,
+            created_by: 1,
+        };
+
+        service.create_cari(create.clone()).await.unwrap();
+
+        let result = service.create_cari(create).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::Conflict(_)));
+    }
+
+    #[tokio::test]
+    async fn test_get_cari_by_id() {
+        let service = create_service();
+
+        let create = CreateCari {
+            code: "C001".to_string(),
+            name: "Test Customer".to_string(),
+            cari_type: CariType::Customer,
+            tax_number: None,
+            tax_office: None,
+            identity_number: None,
+            email: None,
+            phone: None,
+            address: None,
+            city: None,
+            country: None,
+            postal_code: None,
+            credit_limit: 0.0,
+            tenant_id: 1,
+            created_by: 1,
+        };
+
+        let created = service.create_cari(create).await.unwrap();
+
+        let result = service.get_cari(created.id, 1).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().code, "C001");
+    }
+
+    #[tokio::test]
+    async fn test_get_cari_not_found() {
+        let service = create_service();
+
+        let result = service.get_cari(999, 1).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn test_search_cari() {
+        let service = create_service();
+
+        // Create multiple cari accounts
+        let create1 = CreateCari {
+            code: "C001".to_string(),
+            name: "ABC Company".to_string(),
+            cari_type: CariType::Customer,
+            tax_number: None,
+            tax_office: None,
+            identity_number: None,
+            email: None,
+            phone: None,
+            address: None,
+            city: None,
+            country: None,
+            postal_code: None,
+            credit_limit: 0.0,
+            tenant_id: 1,
+            created_by: 1,
+        };
+
+        let create2 = CreateCari {
+            code: "V001".to_string(),
+            name: "XYZ Vendor".to_string(),
+            cari_type: CariType::Vendor,
+            tax_number: None,
+            tax_office: None,
+            identity_number: None,
+            email: None,
+            phone: None,
+            address: None,
+            city: None,
+            country: None,
+            postal_code: None,
+            credit_limit: 0.0,
+            tenant_id: 1,
+            created_by: 1,
+        };
+
+        service.create_cari(create1).await.unwrap();
+        service.create_cari(create2).await.unwrap();
+
+        // Search
+        let result = service.search_cari("abc", 1).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].name, "ABC Company");
+    }
+
+    #[tokio::test]
+    async fn test_update_cari() {
+        let service = create_service();
+
+        let create = CreateCari {
+            code: "C001".to_string(),
+            name: "Test Customer".to_string(),
+            cari_type: CariType::Customer,
+            tax_number: None,
+            tax_office: None,
+            identity_number: None,
+            email: None,
+            phone: None,
+            address: None,
+            city: None,
+            country: None,
+            postal_code: None,
+            credit_limit: 0.0,
+            tenant_id: 1,
+            created_by: 1,
+        };
+
+        let created = service.create_cari(create).await.unwrap();
+
+        let update = UpdateCari {
+            name: Some("Updated Name".to_string()),
+            credit_limit: Some(5000.0),
+            ..Default::default()
+        };
+
+        let result = service.update_cari(created.id, 1, update).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().name, "Updated Name");
+    }
+
+    #[tokio::test]
+    async fn test_delete_cari() {
+        let service = create_service();
+
+        let create = CreateCari {
+            code: "C001".to_string(),
+            name: "Test Customer".to_string(),
+            cari_type: CariType::Customer,
+            tax_number: None,
+            tax_office: None,
+            identity_number: None,
+            email: None,
+            phone: None,
+            address: None,
+            city: None,
+            country: None,
+            postal_code: None,
+            credit_limit: 0.0,
+            tenant_id: 1,
+            created_by: 1,
+        };
+
+        let created = service.create_cari(create).await.unwrap();
+
+        let result = service.delete_cari(created.id, 1).await;
+        assert!(result.is_ok());
+
+        // Verify deleted
+        let result = service.get_cari(created.id, 1).await;
+        assert!(result.is_err());
+    }
+}
