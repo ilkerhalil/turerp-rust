@@ -9,6 +9,8 @@ pub use users::configure as users_configure;
 
 use crate::domain::auth::{LoginRequest, LoginResponse, RefreshTokenRequest, RegisterRequest};
 use crate::domain::user::{CreateUser, UpdateUser, UserResponse};
+use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
+use utoipa::Modify;
 use utoipa::OpenApi;
 
 /// OpenAPI specification for the API
@@ -16,7 +18,7 @@ use utoipa::OpenApi;
 #[openapi(
     info(
         title = "Turerp ERP API",
-        description = "Multi-tenant SaaS ERP system API",
+        description = "Multi-tenant SaaS ERP system API\n\n## Authentication\n\nAll endpoints except `/api/auth/login`, `/api/auth/register`, and `/api/auth/refresh` require JWT Bearer token authentication.\n\n## Rate Limiting\n\nAuthentication endpoints are rate limited to 10 requests per minute per IP address with a burst of 3 requests.",
         version = "0.1.0",
         contact(
             name = "Turerp Team",
@@ -45,9 +47,26 @@ use utoipa::OpenApi;
             UserResponse,
         )
     ),
+    security(
+        ("bearer_auth" = [])
+    ),
+    modifiers(&SecurityAddon),
     tags(
-        (name = "Auth", description = "Authentication endpoints"),
-        (name = "Users", description = "User management endpoints")
+        (name = "Auth", description = "Authentication endpoints (login, register, token refresh)"),
+        (name = "Users", description = "User management endpoints (CRUD operations)")
     )
 )]
 pub struct ApiDoc;
+
+/// Security scheme addon for OpenAPI
+pub struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        let components = openapi.components.as_mut().unwrap();
+        components.add_security_scheme(
+            "bearer_auth",
+            SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
+        );
+    }
+}

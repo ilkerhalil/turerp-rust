@@ -7,7 +7,7 @@ use crate::domain::user::service::UserService;
 use crate::error::ApiResult;
 use crate::middleware::AuthUser;
 
-/// Create user endpoint
+/// Create user endpoint (requires authentication)
 #[utoipa::path(
     post,
     path = "/api/users",
@@ -16,6 +16,7 @@ use crate::middleware::AuthUser;
     responses(
         (status = 201, description = "User created successfully", body = UserResponse),
         (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
         (status = 409, description = "User already exists")
     ),
     security(
@@ -32,7 +33,7 @@ pub async fn create_user(
     Ok(HttpResponse::Created().json(user))
 }
 
-/// Get user by ID endpoint
+/// Get user by ID endpoint (requires authentication)
 #[utoipa::path(
     get,
     path = "/api/users/{id}",
@@ -42,6 +43,7 @@ pub async fn create_user(
     ),
     responses(
         (status = 200, description = "User found", body = UserResponse),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
         (status = 404, description = "User not found")
     ),
     security(
@@ -58,13 +60,14 @@ pub async fn get_user(
     Ok(HttpResponse::Ok().json(user))
 }
 
-/// Get all users endpoint
+/// Get all users endpoint (requires authentication)
 #[utoipa::path(
     get,
     path = "/api/users",
     tag = "Users",
     responses(
-        (status = 200, description = "Users found", body = Vec<UserResponse>)
+        (status = 200, description = "Users found", body = Vec<UserResponse>),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token")
     ),
     security(
         ("bearer_auth" = [])
@@ -79,7 +82,7 @@ pub async fn get_users(
     Ok(HttpResponse::Ok().json(users))
 }
 
-/// Update user endpoint
+/// Update user endpoint (requires authentication)
 #[utoipa::path(
     put,
     path = "/api/users/{id}",
@@ -90,6 +93,7 @@ pub async fn get_users(
     request_body = UpdateUser,
     responses(
         (status = 200, description = "User updated", body = UserResponse),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
         (status = 404, description = "User not found")
     ),
     security(
@@ -110,7 +114,7 @@ pub async fn update_user(
     Ok(HttpResponse::Ok().json(user))
 }
 
-/// Delete user endpoint
+/// Delete user endpoint (requires authentication)
 #[utoipa::path(
     delete,
     path = "/api/users/{id}",
@@ -120,6 +124,7 @@ pub async fn update_user(
     ),
     responses(
         (status = 204, description = "User deleted"),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
         (status = 404, description = "User not found")
     ),
     security(

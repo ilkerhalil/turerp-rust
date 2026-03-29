@@ -8,7 +8,9 @@ use crate::domain::user::service::UserService;
 use crate::error::ApiResult;
 use crate::middleware::AuthUser;
 
-/// Register endpoint
+/// Register endpoint (public - no authentication required)
+///
+/// Rate limited: 10 requests/minute per IP
 #[utoipa::path(
     post,
     path = "/api/auth/register",
@@ -16,8 +18,9 @@ use crate::middleware::AuthUser;
     request_body = RegisterRequest,
     responses(
         (status = 201, description = "User registered successfully", body = LoginResponse),
-        (status = 400, description = "Validation error"),
-        (status = 409, description = "User already exists")
+        (status = 400, description = "Validation error - password requirements not met"),
+        (status = 409, description = "User already exists"),
+        (status = 429, description = "Rate limit exceeded")
     )
 )]
 pub async fn register(
@@ -29,7 +32,9 @@ pub async fn register(
     Ok(HttpResponse::Created().json(response))
 }
 
-/// Login endpoint
+/// Login endpoint (public - no authentication required)
+///
+/// Rate limited: 10 requests/minute per IP
 #[utoipa::path(
     post,
     path = "/api/auth/login",
@@ -40,7 +45,8 @@ pub async fn register(
     ),
     responses(
         (status = 200, description = "Login successful", body = LoginResponse),
-        (status = 401, description = "Invalid credentials")
+        (status = 401, description = "Invalid credentials"),
+        (status = 429, description = "Rate limit exceeded")
     )
 )]
 pub async fn login(
@@ -53,7 +59,7 @@ pub async fn login(
     Ok(HttpResponse::Ok().json(response))
 }
 
-/// Refresh token endpoint
+/// Refresh token endpoint (public - no authentication required)
 #[utoipa::path(
     post,
     path = "/api/auth/refresh",
@@ -72,14 +78,14 @@ pub async fn refresh_token(
     Ok(HttpResponse::Ok().json(tokens))
 }
 
-/// Get current user endpoint
+/// Get current user endpoint (requires authentication)
 #[utoipa::path(
     get,
     path = "/api/auth/me",
     tag = "Auth",
     responses(
         (status = 200, description = "Current user info", body = UserResponse),
-        (status = 401, description = "Not authenticated")
+        (status = 401, description = "Not authenticated - missing or invalid JWT token")
     ),
     security(
         ("bearer_auth" = [])
