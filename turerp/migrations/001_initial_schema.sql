@@ -77,3 +77,43 @@ VALUES (
     true
 )
 ON CONFLICT DO NOTHING;
+
+-- Cari (Customer/Vendor) table
+CREATE TABLE IF NOT EXISTS cari (
+    id BIGSERIAL PRIMARY KEY,
+    code VARCHAR(50) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    cari_type VARCHAR(20) NOT NULL DEFAULT 'customer',
+    tax_number VARCHAR(20),
+    tax_office VARCHAR(100),
+    identity_number VARCHAR(11),
+    email VARCHAR(255),
+    phone VARCHAR(20),
+    address VARCHAR(500),
+    city VARCHAR(100),
+    country VARCHAR(100),
+    postal_code VARCHAR(20),
+    credit_limit DOUBLE PRECISION DEFAULT 0.0,
+    current_balance DOUBLE PRECISION DEFAULT 0.0,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id),
+    created_by BIGINT NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Unique constraints for cari (per tenant)
+CREATE UNIQUE INDEX idx_cari_code_tenant ON cari(code, tenant_id);
+
+-- Additional indexes for cari
+CREATE INDEX idx_cari_tenant_id ON cari(tenant_id);
+CREATE INDEX idx_cari_tenant_type ON cari(tenant_id, cari_type);  -- Composite index for find_by_type
+CREATE INDEX idx_cari_type ON cari(cari_type);
+CREATE INDEX idx_cari_status ON cari(status);
+CREATE INDEX idx_cari_name ON cari(name);
+
+-- Apply updated_at trigger to cari
+CREATE TRIGGER update_cari_updated_at
+    BEFORE UPDATE ON cari
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();

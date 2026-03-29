@@ -59,6 +59,19 @@ impl std::fmt::Display for CariStatus {
     }
 }
 
+impl std::str::FromStr for CariStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "active" => Ok(CariStatus::Active),
+            "passive" => Ok(CariStatus::Passive),
+            "blocked" => Ok(CariStatus::Blocked),
+            _ => Err(format!("Invalid cari status: {}", s)),
+        }
+    }
+}
+
 /// Cari entity
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Cari {

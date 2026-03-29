@@ -13,11 +13,48 @@ use turerp::setup_logging;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-/// Health check endpoint
+#[cfg(feature = "postgres")]
+use turerp::app::AppState;
+
+/// Health check endpoint (in-memory mode)
+#[cfg(not(feature = "postgres"))]
 async fn health_check() -> actix_web::Result<actix_web::HttpResponse> {
     Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
         "status": "ok",
-        "service": "turerp-erp"
+        "service": "turerp-erp",
+        "storage": "in-memory"
+    })))
+}
+
+/// Health check endpoint (PostgreSQL mode)
+#[cfg(feature = "postgres")]
+async fn health_check(
+    app_state: web::Data<AppState>,
+) -> actix_web::Result<actix_web::HttpResponse> {
+    // Get the pool from web::Data
+    // web::Data<Arc<PgPool>> contains Arc<PgPool>, and we need &PgPool for sqlx
+    let pool: &sqlx::PgPool = &*app_state.db_pool;
+
+    // Test database connectivity
+    let db_health = match sqlx::query("SELECT 1").execute(pool).await {
+        Ok(_) => "healthy",
+        Err(e) => {
+            tracing::error!("Database health check failed: {}", e);
+            "unhealthy"
+        }
+    };
+
+    let status = if db_health == "healthy" {
+        "ok"
+    } else {
+        "degraded"
+    };
+
+    Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
+        "status": status,
+        "service": "turerp-erp",
+        "storage": "postgresql",
+        "database": db_health
     })))
 }
 
@@ -99,13 +136,12 @@ async fn main() -> std::io::Result<()> {
     #[cfg(feature = "postgres")]
     let app_state = {
         tracing::info!("Using PostgreSQL storage (production mode)");
-        turerp::app::create_app_state(&config)
-            .await
-            .expect("Failed to create app state")
+        turerp::app::create_app_state(&config).await
     };
 
     HttpServer::new(move || {
-        App::new()
+        #[cfg(feature = "postgres")]
+        let app = App::new()
             // Security middlewares (ORDER MATTERS!)
             .wrap(RequestIdMiddleware) // 1. Request ID for tracing
             .wrap(RateLimitMiddleware::new()) // 2. Rate limiting (before auth)
@@ -114,7 +150,20 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
             .app_data(app_state.jwt_service.clone())
-            // Health check
+            .app_data(app_state.db_pool.clone());
+
+        #[cfg(not(feature = "postgres"))]
+        let app = App::new()
+            // Security middlewares (ORDER MATTERS!)
+            .wrap(RequestIdMiddleware) // 1. Request ID for tracing
+            .wrap(RateLimitMiddleware::new()) // 2. Rate limiting (before auth)
+            .wrap(middleware::Logger::default()) // 3. Logging
+            .wrap(configure_cors(&config.cors)) // 4. CORS
+            .app_data(app_state.auth_service.clone())
+            .app_data(app_state.user_service.clone())
+            .app_data(app_state.jwt_service.clone());
+
+        app // Health check
             .route("/health", web::get().to(health_check))
             // API routes
             .service(

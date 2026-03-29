@@ -1,0 +1,151 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE cari\n            SET\n                code = COALESCE($1, code),\n                name = COALESCE($2, name),\n                cari_type = COALESCE($3, cari_type),\n                tax_number = COALESCE($4, tax_number),\n                tax_office = COALESCE($5, tax_office),\n                identity_number = COALESCE($6, identity_number),\n                email = COALESCE($7, email),\n                phone = COALESCE($8, phone),\n                address = COALESCE($9, address),\n                city = COALESCE($10, city),\n                country = COALESCE($11, country),\n                postal_code = COALESCE($12, postal_code),\n                credit_limit = COALESCE($13, credit_limit),\n                status = COALESCE($14, status),\n                updated_at = NOW()\n            WHERE id = $15 AND tenant_id = $16\n            RETURNING id, code, name, cari_type, tax_number, tax_office, identity_number,\n                      email, phone, address, city, country, postal_code,\n                      credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "cari_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "tax_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "tax_office",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "identity_number",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "phone",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 10,
+        "name": "city",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 11,
+        "name": "country",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "postal_code",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "credit_limit",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 14,
+        "name": "current_balance",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 15,
+        "name": "status",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 16,
+        "name": "tenant_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 17,
+        "name": "created_by",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 18,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 19,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Float8",
+        "Varchar",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "68003f44bcc513549441bb25adb5204b9ca1a1941ac2b30a34b46c900abdd1e2"
+}

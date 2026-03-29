@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE cari\n            SET current_balance = current_balance + $1,\n                updated_at = NOW()\n            WHERE id = $2 AND tenant_id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b2e4851cf999e9f5816bd11d0bb01b127674ac0a40fe5e568449f5991c972895"
+}

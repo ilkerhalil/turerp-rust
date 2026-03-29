@@ -1,12 +1,69 @@
 //! PostgreSQL user repository implementation
 
 use async_trait::async_trait;
-use sqlx::PgPool;
+use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
-use crate::domain::user::model::{CreateUser, UpdateUser, User};
+use crate::domain::user::model::{CreateUser, Role, UpdateUser, User};
 use crate::domain::user::repository::{BoxUserRepository, UserRepository};
 use crate::error::ApiError;
+
+/// Convert sqlx errors to ApiError with proper detection of error types
+fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
+    match e {
+        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
+        _ => {
+            let msg = e.to_string();
+            if msg.contains("duplicate key") || msg.contains("unique constraint") {
+                ApiError::Conflict(format!("{} already exists", entity))
+            } else {
+                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
+            }
+        }
+    }
+}
+
+/// Database row representation for User
+#[derive(Debug, FromRow)]
+struct UserRow {
+    id: i64,
+    username: String,
+    email: String,
+    full_name: String,
+    password: String,
+    tenant_id: i64,
+    role: String,
+    is_active: bool,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+impl From<UserRow> for User {
+    fn from(row: UserRow) -> Self {
+        // Parse role with warning for invalid values
+        let role = row.role.parse().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Invalid role '{}' in database: {}, defaulting to User",
+                row.role,
+                e
+            );
+            Role::default()
+        });
+
+        Self {
+            id: row.id,
+            username: row.username,
+            email: row.email,
+            full_name: row.full_name,
+            hashed_password: row.password,
+            tenant_id: row.tenant_id,
+            role,
+            is_active: row.is_active,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
 
 /// PostgreSQL user repository
 pub struct PostgresUserRepository {
@@ -31,52 +88,42 @@ impl UserRepository for PostgresUserRepository {
         let role = create.role.unwrap_or_default();
         let role_str = role.to_string();
 
-        let row = sqlx::query_as!(
-            User,
+        let row: UserRow = sqlx::query_as(
             r#"
             INSERT INTO users (username, email, full_name, password, tenant_id, role, is_active, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-            RETURNING id, username, email, full_name, password as hashed_password, tenant_id,
-                      role, is_active, created_at, updated_at
+            RETURNING id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
             "#,
-            create.username,
-            create.email,
-            create.full_name,
-            hashed_password,
-            create.tenant_id,
-            role_str,
-            true
         )
+        .bind(&create.username)
+        .bind(&create.email)
+        .bind(&create.full_name)
+        .bind(&hashed_password)
+        .bind(create.tenant_id)
+        .bind(&role_str)
+        .bind(true)
         .fetch_one(&*self.pool)
         .await
-        .map_err(|e| {
-            if e.to_string().contains("duplicate key") {
-                ApiError::Conflict("Username or email already exists".to_string())
-            } else {
-                ApiError::Database(format!("Failed to create user: {}", e))
-            }
-        })?;
+        .map_err(|e| map_sqlx_error(e, "User"))?;
 
-        Ok(row)
+        Ok(row.into())
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<User>, ApiError> {
-        let result = sqlx::query_as!(
-            User,
+        let result: Option<UserRow> = sqlx::query_as(
             r#"
-            SELECT id, username, email, full_name, password as hashed_password, tenant_id,
-                   role, is_active, created_at, updated_at
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
             FROM users
             WHERE id = $1 AND tenant_id = $2
             "#,
-            id,
-            tenant_id
         )
+        .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find user by id: {}", e)))?;
 
-        Ok(result)
+        Ok(result.map(|r| r.into()))
     }
 
     async fn find_by_username(
@@ -84,66 +131,60 @@ impl UserRepository for PostgresUserRepository {
         username: &str,
         tenant_id: i64,
     ) -> Result<Option<User>, ApiError> {
-        let result = sqlx::query_as!(
-            User,
+        let result: Option<UserRow> = sqlx::query_as(
             r#"
-            SELECT id, username, email, full_name, password as hashed_password, tenant_id,
-                   role, is_active, created_at, updated_at
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
             FROM users
             WHERE username = $1 AND tenant_id = $2
             "#,
-            username,
-            tenant_id
         )
+        .bind(username)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find user by username: {}", e)))?;
 
-        Ok(result)
+        Ok(result.map(|r| r.into()))
     }
 
     async fn find_by_email(&self, email: &str, tenant_id: i64) -> Result<Option<User>, ApiError> {
-        let result = sqlx::query_as!(
-            User,
+        let result: Option<UserRow> = sqlx::query_as(
             r#"
-            SELECT id, username, email, full_name, password as hashed_password, tenant_id,
-                   role, is_active, created_at, updated_at
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
             FROM users
             WHERE email = $1 AND tenant_id = $2
             "#,
-            email,
-            tenant_id
         )
+        .bind(email)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find user by email: {}", e)))?;
 
-        Ok(result)
+        Ok(result.map(|r| r.into()))
     }
 
     async fn find_all(&self, tenant_id: i64) -> Result<Vec<User>, ApiError> {
-        let users = sqlx::query_as!(
-            User,
+        let rows: Vec<UserRow> = sqlx::query_as(
             r#"
-            SELECT id, username, email, full_name, password as hashed_password, tenant_id,
-                   role, is_active, created_at, updated_at
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
             FROM users
             WHERE tenant_id = $1
             ORDER BY created_at DESC
             "#,
-            tenant_id
         )
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find all users: {}", e)))?;
 
-        Ok(users)
+        Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
     async fn update(&self, id: i64, tenant_id: i64, update: UpdateUser) -> Result<User, ApiError> {
-        // Build dynamic update query
-        let user = sqlx::query_as!(
-            User,
+        let role_str = update.role.map(|r| r.to_string());
+
+        let row: UserRow = sqlx::query_as(
             r#"
             UPDATE users
             SET
@@ -154,39 +195,32 @@ impl UserRepository for PostgresUserRepository {
                 role = COALESCE($5, role),
                 updated_at = NOW()
             WHERE id = $6 AND tenant_id = $7
-            RETURNING id, username, email, full_name, password as hashed_password, tenant_id,
-                      role, is_active, created_at, updated_at
+            RETURNING id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
             "#,
-            update.username,
-            update.email,
-            update.full_name,
-            update.is_active,
-            update.role.map(|r| r.to_string()),
-            id,
-            tenant_id
         )
+        .bind(&update.username)
+        .bind(&update.email)
+        .bind(&update.full_name)
+        .bind(update.is_active)
+        .bind(&role_str)
+        .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
-        .map_err(|e| {
-            if e.to_string().contains("no rows") {
-                ApiError::NotFound("User not found".to_string())
-            } else {
-                ApiError::Database(format!("Failed to update user: {}", e))
-            }
-        })?;
+        .map_err(|e| map_sqlx_error(e, "User"))?;
 
-        Ok(user)
+        Ok(row.into())
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"
             DELETE FROM users
             WHERE id = $1 AND tenant_id = $2
             "#,
-            id,
-            tenant_id
         )
+        .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete user: {}", e)))?;
@@ -199,32 +233,32 @@ impl UserRepository for PostgresUserRepository {
     }
 
     async fn username_exists(&self, username: &str, tenant_id: i64) -> Result<bool, ApiError> {
-        let result = sqlx::query!(
+        let result: (bool,) = sqlx::query_as(
             r#"
-            SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND tenant_id = $2) as exists
+            SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND tenant_id = $2)
             "#,
-            username,
-            tenant_id
         )
+        .bind(username)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to check username: {}", e)))?;
 
-        Ok(result.exists.unwrap_or(false))
+        Ok(result.0)
     }
 
     async fn email_exists(&self, email: &str, tenant_id: i64) -> Result<bool, ApiError> {
-        let result = sqlx::query!(
+        let result: (bool,) = sqlx::query_as(
             r#"
-            SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND tenant_id = $2) as exists
+            SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND tenant_id = $2)
             "#,
-            email,
-            tenant_id
         )
+        .bind(email)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to check email: {}", e)))?;
 
-        Ok(result.exists.unwrap_or(false))
+        Ok(result.0)
     }
 }

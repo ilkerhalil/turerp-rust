@@ -42,10 +42,11 @@
 | **Backend** | Rust | 1.70+ |
 | **Web Framework** | Actix-web | 4.x |
 | **Database** | PostgreSQL | 14+ |
-| **ORM** | SQLx | 0.8 |
+| **ORM** | SQLx (runtime queries) | 0.8 |
 | **Auth** | JWT + bcrypt | - |
 | **Validation** | validator | 0.16 |
 | **Rate Limiting** | governor | 0.8 |
+| **Synchronization** | parking_lot (Mutex) | 0.12 |
 | **API Docs** | utoipa (OpenAPI/Swagger) | 4.x |
 | **Logging** | tracing | 0.1 |
 
@@ -72,17 +73,29 @@ docker-compose up -d
 git clone https://github.com/ilkerhalil/turerp-rust.git
 cd turerp-rust/turerp
 
-# Environment variables ayarla
+# Build ve çalıştır (in-memory storage - development)
+cargo run
+
+# PostgreSQL ile çalıştır (production)
 export TURERP_DATABASE_URL="postgres://postgres:postgres@localhost:5432/turerp"
 export TURERP_JWT_SECRET="your-secret-key-change-in-production"
-
-# Build ve çalıştır
-cargo build
-cargo run
+cargo run --features postgres
 
 # Testleri çalıştır
 cargo test
+
+# PostgreSQL testleri
+cargo test --features postgres
 ```
+
+### Storage Options
+
+| Mode | Command | Use Case |
+|------|---------|----------|
+| **In-Memory** | `cargo run` | Development, testing |
+| **PostgreSQL** | `cargo run --features postgres` | Production |
+
+**Not**: In-memory mod tüm verileri RAM'de tutar. Sunucu yeniden başlatıldığında veriler kaybolur. Production için PostgreSQL kullanın.
 
 ### Pre-commit & Pre-push Hooks (Lefthook)
 
@@ -127,12 +140,22 @@ turerp-rust/
 ├── turerp/                    # Ana uygulama (Rust crate)
 │   ├── src/
 │   │   ├── api/               # HTTP handlers (Actix-web)
-│   │   ├── config/            # Konfigürasyon
-│   │   ├── domain/            # Domain modülleri (business logic)
+│   │   ├── config/           # Konfigürasyon
+│   │   ├── db/                # Database layer (PostgreSQL)
+│   │   │   ├── mod.rs
+│   │   │   └── pool.rs       # Connection pool, migrations
+│   │   ├── domain/           # Domain modülleri (business logic)
 │   │   │   ├── auth/          # Kimlik doğrulama
-│   │   │   ├── user/          # Kullanıcı yönetimi
+│   │   │   ├── user/         # Kullanıcı yönetimi
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── model.rs
+│   │   │   │   ├── repository.rs      # InMemory impl
+│   │   │   │   ├── postgres_repository.rs  # PostgreSQL impl
+│   │   │   │   └── service.rs
 │   │   │   ├── tenant/        # Tenant yönetimi
+│   │   │   │   └── postgres_repository.rs
 │   │   │   ├── cari/          # Cari hesaplar
+│   │   │   │   └── postgres_repository.rs
 │   │   │   ├── product/       # Ürün yönetimi
 │   │   │   ├── stock/         # Stok yönetimi
 │   │   │   ├── invoice/       # Fatura yönetimi
@@ -144,17 +167,23 @@ turerp-rust/
 │   │   │   ├── manufacturing/ # Üretim modülü
 │   │   │   └── crm/           # CRM modülü
 │   │   ├── error/             # Hata yönetimi
-│   │   ├── middleware/        # HTTP middleware
+│   │   ├── middleware/       # HTTP middleware
+│   │   │   ├── auth.rs        # JWT authentication
+│   │   │   ├── rate_limit.rs  # Rate limiting (governor)
+│   │   │   └── request_id.rs  # Request ID tracing
 │   │   ├── utils/             # Yardımcı fonksiyonlar
 │   │   ├── lib.rs             # Library entry point
 │   │   └── main.rs            # Application entry point
+│   ├── migrations/
+│   │   └── 001_initial_schema.sql  # Database schema
 │   ├── tests/                 # Entegrasyon testleri
 │   └── Cargo.toml             # Bağımlılıklar
 ├── docs/                      # Proje dokümantasyonu
 │   └── modules/               # Modül detayları
 ├── .github/                   # GitHub Actions CI/CD
 ├── AGENTS.md                  # AI agent konfigürasyonu
-└── IMPLEMENTATION_PLAN.md     # Implementasyon planı
+├── IMPLEMENTATION_PLAN.md     # Implementasyon planı
+└── lefthook.yml               # Pre-commit/pre-push hooks
 ```
 
 ## API Endpoints
