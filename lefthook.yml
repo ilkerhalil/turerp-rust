@@ -1,0 +1,50 @@
+# Lefthook configuration for Turerp ERP
+# https://github.com/evilmartians/lefthook
+
+# Pre-commit hooks run before each commit
+pre-commit:
+  parallel: true
+  commands:
+    format:
+      run: cargo fmt --check
+      root: turerp/
+      stage_fixed: true
+      fail_text: |
+        Code is not formatted. Run `cargo fmt` to fix.
+    clippy:
+      run: cargo clippy -- -D warnings
+      root: turerp/
+      fail_text: |
+        Clippy found issues. Fix them before committing.
+
+# Pre-push hooks run before pushing to remote
+pre-push:
+  commands:
+    test:
+      run: cargo test --verbose
+      root: turerp/
+      fail_text: |
+        Tests failed. Fix them before pushing.
+
+    security:
+      run: cargo audit 2>/dev/null || echo "Run 'cargo audit' manually to check for vulnerabilities"
+      root: turerp/
+      fail_text: |
+        Security vulnerabilities found. Run 'cargo audit' for details.
+
+# Commit-msg hooks validate commit messages
+commit-msg:
+  commands:
+    conventional:
+      run: |
+        # Check if commit message follows conventional commits
+        # Format: type(scope): description
+        # Examples: feat: add rate limiting, fix: auth bug, docs: update README
+        cat {1} | grep -qE "^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .+" || {
+          echo "Commit message must follow conventional commits format:"
+          echo "  type(scope): description"
+          echo ""
+          echo "Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+          echo "Example: feat: add rate limiting middleware"
+          exit 1
+        }

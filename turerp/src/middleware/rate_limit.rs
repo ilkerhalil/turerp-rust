@@ -2,15 +2,10 @@
 //!
 //! Limits the number of requests per time window to prevent abuse
 
-use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
 use actix_web::body::BoxBody;
+use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
 use futures::future::LocalBoxFuture;
-use governor::{
-    Quota,
-    RateLimiter,
-    state::keyed::DashMapStateStore,
-    clock::DefaultClock,
-};
+use governor::{clock::DefaultClock, state::keyed::DashMapStateStore, Quota, RateLimiter};
 use nonzero_ext::nonzero;
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -45,8 +40,7 @@ impl RateLimitMiddleware {
 
     /// Create a rate limiter with custom settings
     pub fn with_quota(requests_per_minute: NonZeroU32, burst_size: NonZeroU32) -> Self {
-        let quota = Quota::per_minute(requests_per_minute)
-            .allow_burst(burst_size);
+        let quota = Quota::per_minute(requests_per_minute).allow_burst(burst_size);
 
         let limiter = RateLimiter::keyed(quota);
 
