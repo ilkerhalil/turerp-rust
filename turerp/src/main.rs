@@ -1,6 +1,7 @@
 //! Turerp ERP - Main application entry point
 //!
 //! Run with: cargo run --package turerp
+//! With PostgreSQL: cargo run --package turerp --features postgres
 
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
@@ -8,7 +9,6 @@ use turerp::config::Config;
 use turerp::middleware::{RateLimitMiddleware, RequestIdMiddleware};
 
 use turerp::api::{auth_configure, users_configure, ApiDoc};
-use turerp::app::create_app_state;
 use turerp::setup_logging;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -90,7 +90,19 @@ async fn main() -> std::io::Result<()> {
     tracing::info!("Environment: {}", config.environment);
 
     // Create application state with config
-    let app_state = create_app_state(&config);
+    #[cfg(not(feature = "postgres"))]
+    let app_state = {
+        tracing::info!("Using in-memory storage (development mode)");
+        turerp::app::create_app_state_in_memory(&config)
+    };
+
+    #[cfg(feature = "postgres")]
+    let app_state = {
+        tracing::info!("Using PostgreSQL storage (production mode)");
+        turerp::app::create_app_state(&config)
+            .await
+            .expect("Failed to create app state")
+    };
 
     HttpServer::new(move || {
         App::new()

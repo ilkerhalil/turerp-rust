@@ -1,10 +1,12 @@
 //! Turerp ERP - Multi-tenant SaaS ERP system
 //!
 //! This is the core library for the Turerp ERP system built with Rust,
-//! Actix-web, and Sea-orm.
+//! Actix-web, and SQLx.
 
 pub mod api;
 pub mod config;
+#[cfg(feature = "postgres")]
+pub mod db;
 pub mod domain;
 pub mod error;
 pub mod middleware;
@@ -23,13 +25,18 @@ pub use error::{ApiError, ApiResult, ErrorResponse};
 /// Application state
 pub mod app {
     use actix_web::web;
+    use std::sync::Arc;
 
     use crate::config::Config;
     use crate::domain::auth::AuthService;
     use crate::domain::user::repository::{BoxUserRepository, InMemoryUserRepository};
     use crate::domain::user::service::UserService;
     use crate::utils::jwt::JwtService;
-    use std::sync::Arc;
+
+    #[cfg(feature = "postgres")]
+    use crate::db;
+    #[cfg(feature = "postgres")]
+    use crate::domain::user::postgres_repository::PostgresUserRepository;
 
     /// Application state data
     #[derive(Clone)]
@@ -39,11 +46,42 @@ pub mod app {
         pub jwt_service: web::Data<JwtService>,
     }
 
-    /// Create application with in-memory storage (for development/testing)
+    /// Create application state with in-memory storage (for development/testing)
+    #[cfg(not(feature = "postgres"))]
     pub fn create_app_state(config: &Config) -> AppState {
-        // Create in-memory repository
-        let repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
+        create_app_state_in_memory(config)
+    }
 
+    /// Create application state with PostgreSQL storage (for production)
+    #[cfg(feature = "postgres")]
+    pub async fn create_app_state(config: &Config) -> AppState {
+        // Create connection pool
+        let pool = Arc::new(
+            db::create_pool(&config.database)
+                .await
+                .expect("Failed to create database pool"),
+        );
+
+        // Run migrations
+        db::run_migrations(&pool)
+            .await
+            .expect("Failed to run migrations");
+
+        // Create PostgreSQL repository
+        let repo = Arc::new(PostgresUserRepository::new(pool)) as BoxUserRepository;
+
+        // Create services
+        create_app_state_with_repo(config, repo)
+    }
+
+    /// Create application state with in-memory storage
+    pub fn create_app_state_in_memory(config: &Config) -> AppState {
+        let repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
+        create_app_state_with_repo(config, repo)
+    }
+
+    /// Create application state with a given repository
+    fn create_app_state_with_repo(config: &Config, repo: BoxUserRepository) -> AppState {
         // Create user service
         let user_service = UserService::new(repo);
 
@@ -102,7 +140,7 @@ mod tests {
     #[test]
     fn test_app_state_creation() {
         let config = Config::default();
-        let state = app::create_app_state(&config);
+        let state = app::create_app_state_in_memory(&config);
         // Verify services are created
         assert!(std::sync::Arc::strong_count(&state.auth_service) > 0);
         assert!(std::sync::Arc::strong_count(&state.user_service) > 0);

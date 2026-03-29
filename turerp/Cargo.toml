@@ -72,6 +72,7 @@ utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 
 [features]
 default = []
+postgres = ["sqlx/runtime-tokio-native-tls"]
 
 [profile.release]
 lto = true
