@@ -84,6 +84,42 @@ cargo run
 cargo test
 ```
 
+### Pre-commit & Pre-push Hooks (Lefthook)
+
+Bu proje, CI başarısızlıklarını önlemek için lefthook kullanır. Her commit ve push işlemlerinde otomatik kontroller çalışır.
+
+**Kurulum:**
+```bash
+# Lefthook'u kur (tek seferlik)
+cargo install lefthook
+
+# Git hook'ları aktifleştir
+lefthook install
+```
+
+**Çalışan Kontroller:**
+
+| Hook | Komutlar | Açıklama |
+|------|----------|----------|
+| `pre-commit` | `cargo fmt --check` | Kod formatı kontrolü |
+| `pre-commit` | `cargo clippy -- -D warnings` | Lint hataları |
+| `pre-push` | `cargo test` | Tüm testler |
+| `pre-push` | `cargo audit` | Güvenlik denetimi |
+| `commit-msg` | Conventional commits | Commit mesaj formatı |
+
+**Commit Mesaj Formatı:**
+```
+type(scope): description
+
+# Örnekler:
+feat: add rate limiting middleware
+fix: auth token validation bug
+docs: update README
+ci: add lefthook configuration
+```
+
+**Types:** feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+
 ## Proje Yapısı
 
 ```
