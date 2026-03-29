@@ -1,6 +1,7 @@
 //! Product repository
 
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::domain::product::model::{
@@ -54,17 +55,17 @@ pub type BoxProductVariantRepository = Arc<dyn ProductVariantRepository>;
 
 /// In-memory product repository for testing
 pub struct InMemoryProductRepository {
-    products: std::sync::Mutex<std::collections::HashMap<i64, Product>>,
-    next_id: std::sync::Mutex<i64>,
-    tenant_products: std::sync::Mutex<std::collections::HashMap<i64, Vec<i64>>>,
+    products: Mutex<std::collections::HashMap<i64, Product>>,
+    next_id: Mutex<i64>,
+    tenant_products: Mutex<std::collections::HashMap<i64, Vec<i64>>>,
 }
 
 impl InMemoryProductRepository {
     pub fn new() -> Self {
         Self {
-            products: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
-            tenant_products: std::sync::Mutex::new(std::collections::HashMap::new()),
+            products: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
+            tenant_products: Mutex::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -78,7 +79,7 @@ impl Default for InMemoryProductRepository {
 #[async_trait]
 impl ProductRepository for InMemoryProductRepository {
     async fn create(&self, create: CreateProduct) -> Result<Product, ApiError> {
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -100,9 +101,9 @@ impl ProductRepository for InMemoryProductRepository {
             updated_at: now,
         };
 
-        self.products.lock().unwrap().insert(id, product.clone());
+        self.products.lock().insert(id, product.clone());
 
-        let mut tenant_products = self.tenant_products.lock().unwrap();
+        let mut tenant_products = self.tenant_products.lock();
         tenant_products
             .entry(create.tenant_id)
             .or_default()
@@ -112,12 +113,12 @@ impl ProductRepository for InMemoryProductRepository {
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Product>, ApiError> {
-        Ok(self.products.lock().unwrap().get(&id).cloned())
+        Ok(self.products.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
-        let tenant_products = self.tenant_products.lock().unwrap();
-        let products = self.products.lock().unwrap();
+        let tenant_products = self.tenant_products.lock();
+        let products = self.products.lock();
 
         let ids = tenant_products.get(&tenant_id).cloned().unwrap_or_default();
         Ok(ids
@@ -127,7 +128,7 @@ impl ProductRepository for InMemoryProductRepository {
     }
 
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Product>, ApiError> {
-        let products = self.products.lock().unwrap();
+        let products = self.products.lock();
         Ok(products
             .values()
             .find(|p| p.tenant_id == tenant_id && p.code == code)
@@ -136,7 +137,7 @@ impl ProductRepository for InMemoryProductRepository {
 
     async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Product>, ApiError> {
         let query_lower = query.to_lowercase();
-        let products = self.products.lock().unwrap();
+        let products = self.products.lock();
 
         Ok(products
             .values()
@@ -150,7 +151,7 @@ impl ProductRepository for InMemoryProductRepository {
     }
 
     async fn update(&self, id: i64, update: UpdateProduct) -> Result<Product, ApiError> {
-        let mut products = self.products.lock().unwrap();
+        let mut products = self.products.lock();
 
         let product = products
             .get_mut(&id)
@@ -192,7 +193,7 @@ impl ProductRepository for InMemoryProductRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        let mut products = self.products.lock().unwrap();
+        let mut products = self.products.lock();
 
         if !products.contains_key(&id) {
             return Err(ApiError::NotFound(format!("Product {} not found", id)));
@@ -202,7 +203,7 @@ impl ProductRepository for InMemoryProductRepository {
         products.remove(&id);
 
         if let Some(tid) = tenant_id {
-            let mut tenant_products = self.tenant_products.lock().unwrap();
+            let mut tenant_products = self.tenant_products.lock();
             if let Some(ids) = tenant_products.get_mut(&tid) {
                 ids.retain(|x| *x != id);
             }
@@ -214,15 +215,15 @@ impl ProductRepository for InMemoryProductRepository {
 
 /// In-memory category repository
 pub struct InMemoryCategoryRepository {
-    categories: std::sync::Mutex<std::collections::HashMap<i64, Category>>,
-    next_id: std::sync::Mutex<i64>,
+    categories: Mutex<std::collections::HashMap<i64, Category>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryCategoryRepository {
     pub fn new() -> Self {
         Self {
-            categories: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            categories: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -236,7 +237,7 @@ impl Default for InMemoryCategoryRepository {
 #[async_trait]
 impl CategoryRepository for InMemoryCategoryRepository {
     async fn create(&self, create: CreateCategory) -> Result<Category, ApiError> {
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -248,16 +249,16 @@ impl CategoryRepository for InMemoryCategoryRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.categories.lock().unwrap().insert(id, category.clone());
+        self.categories.lock().insert(id, category.clone());
         Ok(category)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Category>, ApiError> {
-        Ok(self.categories.lock().unwrap().get(&id).cloned())
+        Ok(self.categories.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
-        let categories = self.categories.lock().unwrap();
+        let categories = self.categories.lock();
         Ok(categories
             .values()
             .filter(|c| c.tenant_id == tenant_id)
@@ -266,7 +267,7 @@ impl CategoryRepository for InMemoryCategoryRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        let mut categories = self.categories.lock().unwrap();
+        let mut categories = self.categories.lock();
         categories.remove(&id);
         Ok(())
     }
@@ -274,15 +275,15 @@ impl CategoryRepository for InMemoryCategoryRepository {
 
 /// In-memory unit repository
 pub struct InMemoryUnitRepository {
-    units: std::sync::Mutex<std::collections::HashMap<i64, Unit>>,
-    next_id: std::sync::Mutex<i64>,
+    units: Mutex<std::collections::HashMap<i64, Unit>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryUnitRepository {
     pub fn new() -> Self {
         Self {
-            units: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            units: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 
@@ -296,7 +297,7 @@ impl InMemoryUnitRepository {
             (5, tenant_id, "L", "Liter", false),
         ];
 
-        let mut units = repo.units.lock().unwrap();
+        let mut units = repo.units.lock();
         for (id, tid, code, name, is_int) in defaults {
             units.insert(
                 id,
@@ -310,7 +311,7 @@ impl InMemoryUnitRepository {
                 },
             );
         }
-        *repo.next_id.lock().unwrap() = 6;
+        *repo.next_id.lock() = 6;
         drop(units);
         repo
     }
@@ -325,7 +326,7 @@ impl Default for InMemoryUnitRepository {
 #[async_trait]
 impl UnitRepository for InMemoryUnitRepository {
     async fn create(&self, create: CreateUnit) -> Result<Unit, ApiError> {
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -338,16 +339,16 @@ impl UnitRepository for InMemoryUnitRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.units.lock().unwrap().insert(id, unit.clone());
+        self.units.lock().insert(id, unit.clone());
         Ok(unit)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Unit>, ApiError> {
-        Ok(self.units.lock().unwrap().get(&id).cloned())
+        Ok(self.units.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
-        let units = self.units.lock().unwrap();
+        let units = self.units.lock();
         Ok(units
             .values()
             .filter(|u| u.tenant_id == tenant_id)
@@ -356,7 +357,7 @@ impl UnitRepository for InMemoryUnitRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.units.lock().unwrap().remove(&id);
+        self.units.lock().remove(&id);
         Ok(())
     }
 }

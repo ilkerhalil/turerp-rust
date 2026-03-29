@@ -1,6 +1,7 @@
 //! Cari repository
 
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::domain::cari::model::{Cari, CreateCari, UpdateCari};
@@ -49,15 +50,15 @@ pub type BoxCariRepository = Arc<dyn CariRepository>;
 
 /// In-memory cari repository for testing
 pub struct InMemoryCariRepository {
-    cari: std::sync::Mutex<std::collections::HashMap<i64, Cari>>,
-    next_id: std::sync::Mutex<i64>,
+    cari: Mutex<std::collections::HashMap<i64, Cari>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryCariRepository {
     pub fn new() -> Self {
         Self {
-            cari: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            cari: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -71,7 +72,7 @@ impl Default for InMemoryCariRepository {
 #[async_trait]
 impl CariRepository for InMemoryCariRepository {
     async fn create(&self, create: CreateCari) -> Result<Cari, ApiError> {
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -100,12 +101,12 @@ impl CariRepository for InMemoryCariRepository {
             updated_at: None,
         };
 
-        self.cari.lock().unwrap().insert(id, new_cari.clone());
+        self.cari.lock().insert(id, new_cari.clone());
         Ok(new_cari)
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Cari>, ApiError> {
-        let cari = self.cari.lock().unwrap();
+        let cari = self.cari.lock();
         Ok(cari
             .values()
             .find(|c| c.id == id && c.tenant_id == tenant_id)
@@ -113,7 +114,7 @@ impl CariRepository for InMemoryCariRepository {
     }
 
     async fn find_by_code(&self, code: &str, tenant_id: i64) -> Result<Option<Cari>, ApiError> {
-        let cari = self.cari.lock().unwrap();
+        let cari = self.cari.lock();
         Ok(cari
             .values()
             .find(|c| c.code == code && c.tenant_id == tenant_id)
@@ -121,7 +122,7 @@ impl CariRepository for InMemoryCariRepository {
     }
 
     async fn find_all(&self, tenant_id: i64) -> Result<Vec<Cari>, ApiError> {
-        let cari = self.cari.lock().unwrap();
+        let cari = self.cari.lock();
         Ok(cari
             .values()
             .filter(|c| c.tenant_id == tenant_id)
@@ -134,7 +135,7 @@ impl CariRepository for InMemoryCariRepository {
         cari_type: crate::domain::cari::model::CariType,
         tenant_id: i64,
     ) -> Result<Vec<Cari>, ApiError> {
-        let cari = self.cari.lock().unwrap();
+        let cari = self.cari.lock();
         Ok(cari
             .values()
             .filter(|c| c.tenant_id == tenant_id && c.cari_type == cari_type)
@@ -143,7 +144,7 @@ impl CariRepository for InMemoryCariRepository {
     }
 
     async fn search(&self, query: &str, tenant_id: i64) -> Result<Vec<Cari>, ApiError> {
-        let cari = self.cari.lock().unwrap();
+        let cari = self.cari.lock();
         let query_lower = query.to_lowercase();
         Ok(cari
             .values()
@@ -157,7 +158,7 @@ impl CariRepository for InMemoryCariRepository {
     }
 
     async fn update(&self, id: i64, tenant_id: i64, update: UpdateCari) -> Result<Cari, ApiError> {
-        let mut cari_map = self.cari.lock().unwrap();
+        let mut cari_map = self.cari.lock();
 
         let cari = cari_map
             .get_mut(&id)
@@ -216,7 +217,7 @@ impl CariRepository for InMemoryCariRepository {
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        let mut cari_map = self.cari.lock().unwrap();
+        let mut cari_map = self.cari.lock();
 
         let cari = cari_map
             .get(&id)
@@ -231,14 +232,14 @@ impl CariRepository for InMemoryCariRepository {
     }
 
     async fn code_exists(&self, code: &str, tenant_id: i64) -> Result<bool, ApiError> {
-        let cari = self.cari.lock().unwrap();
+        let cari = self.cari.lock();
         Ok(cari
             .values()
             .any(|c| c.code == code && c.tenant_id == tenant_id))
     }
 
     async fn update_balance(&self, id: i64, tenant_id: i64, amount: f64) -> Result<(), ApiError> {
-        let mut cari_map = self.cari.lock().unwrap();
+        let mut cari_map = self.cari.lock();
 
         let cari = cari_map
             .get_mut(&id)

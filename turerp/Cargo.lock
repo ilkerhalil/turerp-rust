@@ -3078,6 +3078,7 @@ dependencies = [
  "futures",
  "governor",
  "jsonwebtoken",
+ "lazy_static",
  "mockall",
  "nonzero_ext",
  "parking_lot",

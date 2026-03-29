@@ -48,6 +48,7 @@ nonzero_ext = "0.3"
 
 # Validation
 regex = "1"
+lazy_static = "1.4"
 
 # Logging
 tracing = "0.1"

@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use chrono::Utc;
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::domain::project::model::{
@@ -52,15 +53,15 @@ pub type BoxWbsItemRepository = Arc<dyn WbsItemRepository>;
 pub type BoxProjectCostRepository = Arc<dyn ProjectCostRepository>;
 
 pub struct InMemoryProjectRepository {
-    projects: std::sync::Mutex<std::collections::HashMap<i64, Project>>,
-    next_id: std::sync::Mutex<i64>,
+    projects: Mutex<std::collections::HashMap<i64, Project>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryProjectRepository {
     pub fn new() -> Self {
         Self {
-            projects: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            projects: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -76,7 +77,7 @@ impl ProjectRepository for InMemoryProjectRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
         let now = Utc::now();
@@ -94,21 +95,21 @@ impl ProjectRepository for InMemoryProjectRepository {
             created_at: now,
             updated_at: now,
         };
-        self.projects.lock().unwrap().insert(id, project.clone());
+        self.projects.lock().insert(id, project.clone());
         Ok(project)
     }
     async fn find_by_id(&self, id: i64) -> Result<Option<Project>, ApiError> {
-        Ok(self.projects.lock().unwrap().get(&id).cloned())
+        Ok(self.projects.lock().get(&id).cloned())
     }
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Project>, ApiError> {
-        let p = self.projects.lock().unwrap();
+        let p = self.projects.lock();
         Ok(p.values()
             .filter(|x| x.tenant_id == tenant_id)
             .cloned()
             .collect())
     }
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Project>, ApiError> {
-        let p = self.projects.lock().unwrap();
+        let p = self.projects.lock();
         Ok(p.values()
             .filter(|x| x.cari_id == Some(cari_id))
             .cloned()
@@ -119,14 +120,14 @@ impl ProjectRepository for InMemoryProjectRepository {
         tenant_id: i64,
         status: ProjectStatus,
     ) -> Result<Vec<Project>, ApiError> {
-        let p = self.projects.lock().unwrap();
+        let p = self.projects.lock();
         Ok(p.values()
             .filter(|x| x.tenant_id == tenant_id && x.status == status)
             .cloned()
             .collect())
     }
     async fn update_status(&self, id: i64, status: ProjectStatus) -> Result<Project, ApiError> {
-        let mut p = self.projects.lock().unwrap();
+        let mut p = self.projects.lock();
         let proj = p
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))?;
@@ -135,7 +136,7 @@ impl ProjectRepository for InMemoryProjectRepository {
         Ok(proj.clone())
     }
     async fn update_actual_cost(&self, id: i64, cost: f64) -> Result<Project, ApiError> {
-        let mut p = self.projects.lock().unwrap();
+        let mut p = self.projects.lock();
         let proj = p
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))?;
@@ -144,20 +145,20 @@ impl ProjectRepository for InMemoryProjectRepository {
         Ok(proj.clone())
     }
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.projects.lock().unwrap().remove(&id);
+        self.projects.lock().remove(&id);
         Ok(())
     }
 }
 
 pub struct InMemoryWbsItemRepository {
-    items: std::sync::Mutex<std::collections::HashMap<i64, WbsItem>>,
-    next_id: std::sync::Mutex<i64>,
+    items: Mutex<std::collections::HashMap<i64, WbsItem>>,
+    next_id: Mutex<i64>,
 }
 impl InMemoryWbsItemRepository {
     pub fn new() -> Self {
         Self {
-            items: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            items: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -173,7 +174,7 @@ impl WbsItemRepository for InMemoryWbsItemRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
         let item = WbsItem {
@@ -187,18 +188,18 @@ impl WbsItemRepository for InMemoryWbsItemRepository {
             progress: 0.0,
             sort_order: *next_id as i32,
         };
-        self.items.lock().unwrap().insert(id, item.clone());
+        self.items.lock().insert(id, item.clone());
         Ok(item)
     }
     async fn find_by_project(&self, project_id: i64) -> Result<Vec<WbsItem>, ApiError> {
-        let i = self.items.lock().unwrap();
+        let i = self.items.lock();
         Ok(i.values()
             .filter(|x| x.project_id == project_id)
             .cloned()
             .collect())
     }
     async fn find_by_id(&self, id: i64) -> Result<Option<WbsItem>, ApiError> {
-        Ok(self.items.lock().unwrap().get(&id).cloned())
+        Ok(self.items.lock().get(&id).cloned())
     }
     async fn update_progress(
         &self,
@@ -206,7 +207,7 @@ impl WbsItemRepository for InMemoryWbsItemRepository {
         progress: f64,
         hours: f64,
     ) -> Result<WbsItem, ApiError> {
-        let mut i = self.items.lock().unwrap();
+        let mut i = self.items.lock();
         let item = i
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("WBS item not found".to_string()))?;
@@ -215,20 +216,20 @@ impl WbsItemRepository for InMemoryWbsItemRepository {
         Ok(item.clone())
     }
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.items.lock().unwrap().remove(&id);
+        self.items.lock().remove(&id);
         Ok(())
     }
 }
 
 pub struct InMemoryProjectCostRepository {
-    costs: std::sync::Mutex<std::collections::HashMap<i64, ProjectCost>>,
-    next_id: std::sync::Mutex<i64>,
+    costs: Mutex<std::collections::HashMap<i64, ProjectCost>>,
+    next_id: Mutex<i64>,
 }
 impl InMemoryProjectCostRepository {
     pub fn new() -> Self {
         Self {
-            costs: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            costs: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -244,7 +245,7 @@ impl ProjectCostRepository for InMemoryProjectCostRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
         let cost = ProjectCost {
@@ -257,25 +258,25 @@ impl ProjectCostRepository for InMemoryProjectCostRepository {
             incurred_at: create.incurred_at,
             created_at: Utc::now(),
         };
-        self.costs.lock().unwrap().insert(id, cost.clone());
+        self.costs.lock().insert(id, cost.clone());
         Ok(cost)
     }
     async fn find_by_project(&self, project_id: i64) -> Result<Vec<ProjectCost>, ApiError> {
-        let c = self.costs.lock().unwrap();
+        let c = self.costs.lock();
         Ok(c.values()
             .filter(|x| x.project_id == project_id)
             .cloned()
             .collect())
     }
     async fn find_total_by_project(&self, project_id: i64) -> Result<f64, ApiError> {
-        let c = self.costs.lock().unwrap();
+        let c = self.costs.lock();
         Ok(c.values()
             .filter(|x| x.project_id == project_id)
             .map(|x| x.amount)
             .sum())
     }
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.costs.lock().unwrap().remove(&id);
+        self.costs.lock().remove(&id);
         Ok(())
     }
 }

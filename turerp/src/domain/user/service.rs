@@ -1,5 +1,5 @@
 //! User service for business logic
-#[allow(unused_imports)]
+
 use validator::Validate;
 
 use crate::domain::user::model::{CreateUser, UpdateUser, User, UserResponse};
@@ -19,7 +19,10 @@ impl UserService {
 
     /// Create a new user
     pub async fn create_user(&self, create: CreateUser) -> Result<UserResponse, ApiError> {
-        // Validate input
+        // Validate password complexity first
+        create.validate_password().map_err(ApiError::Validation)?;
+
+        // Validate other input fields
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.to_string()))?;

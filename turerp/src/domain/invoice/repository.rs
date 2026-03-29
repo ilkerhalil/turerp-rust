@@ -1,6 +1,7 @@
 //! Invoice repository
 
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::domain::invoice::model::{
@@ -58,19 +59,19 @@ pub type BoxPaymentRepository = Arc<dyn PaymentRepository>;
 
 /// In-memory invoice repository
 pub struct InMemoryInvoiceRepository {
-    invoices: std::sync::Mutex<std::collections::HashMap<i64, Invoice>>,
-    next_id: std::sync::Mutex<i64>,
-    tenant_invoices: std::sync::Mutex<std::collections::HashMap<i64, Vec<i64>>>,
-    cari_invoices: std::sync::Mutex<std::collections::HashMap<i64, Vec<i64>>>,
+    invoices: Mutex<std::collections::HashMap<i64, Invoice>>,
+    next_id: Mutex<i64>,
+    tenant_invoices: Mutex<std::collections::HashMap<i64, Vec<i64>>>,
+    cari_invoices: Mutex<std::collections::HashMap<i64, Vec<i64>>>,
 }
 
 impl InMemoryInvoiceRepository {
     pub fn new() -> Self {
         Self {
-            invoices: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
-            tenant_invoices: std::sync::Mutex::new(std::collections::HashMap::new()),
-            cari_invoices: std::sync::Mutex::new(std::collections::HashMap::new()),
+            invoices: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
+            tenant_invoices: Mutex::new(std::collections::HashMap::new()),
+            cari_invoices: Mutex::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -94,7 +95,7 @@ fn generate_invoice_number(invoice_type: &InvoiceType, count: i64) -> String {
 #[async_trait]
 impl InvoiceRepository for InMemoryInvoiceRepository {
     async fn create(&self, create: CreateInvoice) -> Result<Invoice, ApiError> {
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -138,16 +139,14 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
             updated_at: now,
         };
 
-        self.invoices.lock().unwrap().insert(id, invoice.clone());
+        self.invoices.lock().insert(id, invoice.clone());
         self.tenant_invoices
             .lock()
-            .unwrap()
             .entry(create.tenant_id)
             .or_default()
             .push(id);
         self.cari_invoices
             .lock()
-            .unwrap()
             .entry(create.cari_id)
             .or_default()
             .push(id);
@@ -156,12 +155,12 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Invoice>, ApiError> {
-        Ok(self.invoices.lock().unwrap().get(&id).cloned())
+        Ok(self.invoices.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
-        let tenant_invoices = self.tenant_invoices.lock().unwrap();
-        let invoices = self.invoices.lock().unwrap();
+        let tenant_invoices = self.tenant_invoices.lock();
+        let invoices = self.invoices.lock();
         let ids = tenant_invoices.get(&tenant_id).cloned().unwrap_or_default();
         Ok(ids
             .iter()
@@ -174,7 +173,7 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
         tenant_id: i64,
         number: &str,
     ) -> Result<Option<Invoice>, ApiError> {
-        let invoices = self.invoices.lock().unwrap();
+        let invoices = self.invoices.lock();
         Ok(invoices
             .values()
             .find(|i| i.tenant_id == tenant_id && i.invoice_number == number)
@@ -182,8 +181,8 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
     }
 
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Invoice>, ApiError> {
-        let cari_invoices = self.cari_invoices.lock().unwrap();
-        let invoices = self.invoices.lock().unwrap();
+        let cari_invoices = self.cari_invoices.lock();
+        let invoices = self.invoices.lock();
         let ids = cari_invoices.get(&cari_id).cloned().unwrap_or_default();
         Ok(ids
             .iter()
@@ -196,7 +195,7 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
         tenant_id: i64,
         status: InvoiceStatus,
     ) -> Result<Vec<Invoice>, ApiError> {
-        let invoices = self.invoices.lock().unwrap();
+        let invoices = self.invoices.lock();
         Ok(invoices
             .values()
             .filter(|i| i.tenant_id == tenant_id && i.status == status)
@@ -205,7 +204,7 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
     }
 
     async fn update_status(&self, id: i64, status: InvoiceStatus) -> Result<Invoice, ApiError> {
-        let mut invoices = self.invoices.lock().unwrap();
+        let mut invoices = self.invoices.lock();
         let invoice = invoices
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", id)))?;
@@ -215,7 +214,7 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
     }
 
     async fn update_paid_amount(&self, id: i64, paid_amount: f64) -> Result<Invoice, ApiError> {
-        let mut invoices = self.invoices.lock().unwrap();
+        let mut invoices = self.invoices.lock();
         let invoice = invoices
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", id)))?;
@@ -238,22 +237,22 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.invoices.lock().unwrap().remove(&id);
+        self.invoices.lock().remove(&id);
         Ok(())
     }
 }
 
 /// In-memory invoice line repository
 pub struct InMemoryInvoiceLineRepository {
-    lines: std::sync::Mutex<std::collections::HashMap<i64, Vec<InvoiceLine>>>,
-    next_id: std::sync::Mutex<i64>,
+    lines: Mutex<std::collections::HashMap<i64, Vec<InvoiceLine>>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryInvoiceLineRepository {
     pub fn new() -> Self {
         Self {
-            lines: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            lines: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -271,7 +270,7 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
         invoice_id: i64,
         create_lines: Vec<crate::domain::invoice::model::CreateInvoiceLine>,
     ) -> Result<Vec<InvoiceLine>, ApiError> {
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let mut lines = Vec::new();
 
         for (i, create) in create_lines.into_iter().enumerate() {
@@ -298,7 +297,7 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
             });
         }
 
-        self.lines.lock().unwrap().insert(invoice_id, lines.clone());
+        self.lines.lock().insert(invoice_id, lines.clone());
         Ok(lines)
     }
 
@@ -306,31 +305,30 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
         Ok(self
             .lines
             .lock()
-            .unwrap()
             .get(&invoice_id)
             .cloned()
             .unwrap_or_default())
     }
 
     async fn delete_by_invoice(&self, invoice_id: i64) -> Result<(), ApiError> {
-        self.lines.lock().unwrap().remove(&invoice_id);
+        self.lines.lock().remove(&invoice_id);
         Ok(())
     }
 }
 
 /// In-memory payment repository
 pub struct InMemoryPaymentRepository {
-    payments: std::sync::Mutex<std::collections::HashMap<i64, Payment>>,
-    next_id: std::sync::Mutex<i64>,
-    invoice_payments: std::sync::Mutex<std::collections::HashMap<i64, Vec<i64>>>,
+    payments: Mutex<std::collections::HashMap<i64, Payment>>,
+    next_id: Mutex<i64>,
+    invoice_payments: Mutex<std::collections::HashMap<i64, Vec<i64>>>,
 }
 
 impl InMemoryPaymentRepository {
     pub fn new() -> Self {
         Self {
-            payments: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
-            invoice_payments: std::sync::Mutex::new(std::collections::HashMap::new()),
+            payments: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
+            invoice_payments: Mutex::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -348,7 +346,7 @@ impl PaymentRepository for InMemoryPaymentRepository {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -364,10 +362,9 @@ impl PaymentRepository for InMemoryPaymentRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.payments.lock().unwrap().insert(id, payment.clone());
+        self.payments.lock().insert(id, payment.clone());
         self.invoice_payments
             .lock()
-            .unwrap()
             .entry(create.invoice_id)
             .or_default()
             .push(id);
@@ -376,12 +373,12 @@ impl PaymentRepository for InMemoryPaymentRepository {
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Payment>, ApiError> {
-        Ok(self.payments.lock().unwrap().get(&id).cloned())
+        Ok(self.payments.lock().get(&id).cloned())
     }
 
     async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<Payment>, ApiError> {
-        let invoice_payments = self.invoice_payments.lock().unwrap();
-        let payments = self.payments.lock().unwrap();
+        let invoice_payments = self.invoice_payments.lock();
+        let payments = self.payments.lock();
         let ids = invoice_payments
             .get(&invoice_id)
             .cloned()
@@ -393,7 +390,7 @@ impl PaymentRepository for InMemoryPaymentRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.payments.lock().unwrap().remove(&id);
+        self.payments.lock().remove(&id);
         Ok(())
     }
 }

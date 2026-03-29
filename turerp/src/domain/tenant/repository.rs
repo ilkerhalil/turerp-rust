@@ -1,6 +1,7 @@
 //! Tenant repository
 
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::domain::tenant::model::{CreateTenant, Tenant, UpdateTenant};
@@ -36,15 +37,15 @@ pub type BoxTenantRepository = Arc<dyn TenantRepository>;
 
 /// In-memory tenant repository for testing
 pub struct InMemoryTenantRepository {
-    tenants: std::sync::Mutex<std::collections::HashMap<i64, Tenant>>,
-    next_id: std::sync::Mutex<i64>,
+    tenants: Mutex<std::collections::HashMap<i64, Tenant>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryTenantRepository {
     pub fn new() -> Self {
         let repo = Self {
-            tenants: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            tenants: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         };
 
         // Add a default tenant
@@ -56,7 +57,7 @@ impl InMemoryTenantRepository {
             is_active: true,
             created_at: chrono::Utc::now(),
         };
-        repo.tenants.lock().unwrap().insert(1, default_tenant);
+        repo.tenants.lock().insert(1, default_tenant);
 
         repo
     }
@@ -71,7 +72,7 @@ impl Default for InMemoryTenantRepository {
 #[async_trait]
 impl TenantRepository for InMemoryTenantRepository {
     async fn create(&self, create: CreateTenant) -> Result<Tenant, ApiError> {
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -86,27 +87,27 @@ impl TenantRepository for InMemoryTenantRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.tenants.lock().unwrap().insert(id, new_tenant.clone());
+        self.tenants.lock().insert(id, new_tenant.clone());
         Ok(new_tenant)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Tenant>, ApiError> {
-        let tenants = self.tenants.lock().unwrap();
+        let tenants = self.tenants.lock();
         Ok(tenants.get(&id).cloned())
     }
 
     async fn find_by_subdomain(&self, subdomain: &str) -> Result<Option<Tenant>, ApiError> {
-        let tenants = self.tenants.lock().unwrap();
+        let tenants = self.tenants.lock();
         Ok(tenants.values().find(|t| t.subdomain == subdomain).cloned())
     }
 
     async fn find_all(&self) -> Result<Vec<Tenant>, ApiError> {
-        let tenants = self.tenants.lock().unwrap();
+        let tenants = self.tenants.lock();
         Ok(tenants.values().cloned().collect())
     }
 
     async fn update(&self, id: i64, update: UpdateTenant) -> Result<Tenant, ApiError> {
-        let mut tenants = self.tenants.lock().unwrap();
+        let mut tenants = self.tenants.lock();
 
         let tenant = tenants
             .get_mut(&id)
@@ -127,7 +128,7 @@ impl TenantRepository for InMemoryTenantRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        let mut tenants = self.tenants.lock().unwrap();
+        let mut tenants = self.tenants.lock();
 
         if !tenants.contains_key(&id) {
             return Err(ApiError::NotFound(format!("Tenant {} not found", id)));
@@ -138,7 +139,7 @@ impl TenantRepository for InMemoryTenantRepository {
     }
 
     async fn subdomain_exists(&self, subdomain: &str) -> Result<bool, ApiError> {
-        let tenants = self.tenants.lock().unwrap();
+        let tenants = self.tenants.lock();
         Ok(tenants.values().any(|t| t.subdomain == subdomain))
     }
 }

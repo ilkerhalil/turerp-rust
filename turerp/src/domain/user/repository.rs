@@ -1,6 +1,7 @@
 //! User repository trait and implementations
 
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::domain::user::model::{CreateUser, UpdateUser, User};
@@ -55,23 +56,23 @@ pub trait UserRepository: Send + Sync {
 
 /// In-memory user repository for testing
 pub struct InMemoryUserRepository {
-    users: std::sync::Mutex<Vec<User>>,
-    next_id: std::sync::Mutex<i64>,
+    users: Mutex<Vec<User>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryUserRepository {
     pub fn new() -> Self {
         Self {
-            users: std::sync::Mutex::new(Vec::new()),
-            next_id: std::sync::Mutex::new(1),
+            users: Mutex::new(Vec::new()),
+            next_id: Mutex::new(1),
         }
     }
 
     pub fn with_users(users: Vec<User>) -> Self {
         let max_id = users.iter().map(|u| u.id).max().unwrap_or(0);
         Self {
-            users: std::sync::Mutex::new(users),
-            next_id: std::sync::Mutex::new(max_id + 1),
+            users: Mutex::new(users),
+            next_id: Mutex::new(max_id + 1),
         }
     }
 }
@@ -85,7 +86,7 @@ impl Default for InMemoryUserRepository {
 #[async_trait]
 impl UserRepository for InMemoryUserRepository {
     async fn create(&self, create: CreateUser, hashed_password: String) -> Result<User, ApiError> {
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -102,12 +103,12 @@ impl UserRepository for InMemoryUserRepository {
             updated_at: None,
         };
 
-        self.users.lock().unwrap().push(user.clone());
+        self.users.lock().push(user.clone());
         Ok(user)
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<User>, ApiError> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.lock();
         Ok(users
             .iter()
             .find(|u| u.id == id && u.tenant_id == tenant_id)
@@ -119,7 +120,7 @@ impl UserRepository for InMemoryUserRepository {
         username: &str,
         tenant_id: i64,
     ) -> Result<Option<User>, ApiError> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.lock();
         Ok(users
             .iter()
             .find(|u| u.username == username && u.tenant_id == tenant_id)
@@ -127,7 +128,7 @@ impl UserRepository for InMemoryUserRepository {
     }
 
     async fn find_by_email(&self, email: &str, tenant_id: i64) -> Result<Option<User>, ApiError> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.lock();
         Ok(users
             .iter()
             .find(|u| u.email == email && u.tenant_id == tenant_id)
@@ -135,7 +136,7 @@ impl UserRepository for InMemoryUserRepository {
     }
 
     async fn find_all(&self, tenant_id: i64) -> Result<Vec<User>, ApiError> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.lock();
         Ok(users
             .iter()
             .filter(|u| u.tenant_id == tenant_id)
@@ -144,7 +145,7 @@ impl UserRepository for InMemoryUserRepository {
     }
 
     async fn update(&self, id: i64, tenant_id: i64, update: UpdateUser) -> Result<User, ApiError> {
-        let mut users = self.users.lock().unwrap();
+        let mut users = self.users.lock();
         let user = users
             .iter_mut()
             .find(|u| u.id == id && u.tenant_id == tenant_id)
@@ -171,7 +172,7 @@ impl UserRepository for InMemoryUserRepository {
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        let mut users = self.users.lock().unwrap();
+        let mut users = self.users.lock();
         let len_before = users.len();
         users.retain(|u| !(u.id == id && u.tenant_id == tenant_id));
 
@@ -182,14 +183,14 @@ impl UserRepository for InMemoryUserRepository {
     }
 
     async fn username_exists(&self, username: &str, tenant_id: i64) -> Result<bool, ApiError> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.lock();
         Ok(users
             .iter()
             .any(|u| u.username == username && u.tenant_id == tenant_id))
     }
 
     async fn email_exists(&self, email: &str, tenant_id: i64) -> Result<bool, ApiError> {
-        let users = self.users.lock().unwrap();
+        let users = self.users.lock();
         Ok(users
             .iter()
             .any(|u| u.email == email && u.tenant_id == tenant_id))

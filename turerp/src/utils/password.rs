@@ -1,7 +1,16 @@
 //! Password utilities
 
 use bcrypt::{hash, verify, DEFAULT_COST};
+use lazy_static::lazy_static;
 use regex::Regex;
+
+// Compile regex patterns once for better performance
+lazy_static! {
+    static ref UPPERCASE_REGEX: Regex = Regex::new(r"[A-Z]").unwrap();
+    static ref LOWERCASE_REGEX: Regex = Regex::new(r"[a-z]").unwrap();
+    static ref DIGIT_REGEX: Regex = Regex::new(r"[0-9]").unwrap();
+    static ref SPECIAL_REGEX: Regex = Regex::new(r"[^A-Za-z0-9]").unwrap();
+}
 
 /// Minimum password length
 pub const MIN_PASSWORD_LENGTH: usize = 12;
@@ -66,32 +75,20 @@ pub fn validate_password_with_requirements(
         ));
     }
 
-    if requirements.require_uppercase {
-        let uppercase_regex = Regex::new(r"[A-Z]").unwrap();
-        if !uppercase_regex.is_match(password) {
-            errors.push("Password must contain at least one uppercase letter".to_string());
-        }
+    if requirements.require_uppercase && !UPPERCASE_REGEX.is_match(password) {
+        errors.push("Password must contain at least one uppercase letter".to_string());
     }
 
-    if requirements.require_lowercase {
-        let lowercase_regex = Regex::new(r"[a-z]").unwrap();
-        if !lowercase_regex.is_match(password) {
-            errors.push("Password must contain at least one lowercase letter".to_string());
-        }
+    if requirements.require_lowercase && !LOWERCASE_REGEX.is_match(password) {
+        errors.push("Password must contain at least one lowercase letter".to_string());
     }
 
-    if requirements.require_digit {
-        let digit_regex = Regex::new(r"[0-9]").unwrap();
-        if !digit_regex.is_match(password) {
-            errors.push("Password must contain at least one digit".to_string());
-        }
+    if requirements.require_digit && !DIGIT_REGEX.is_match(password) {
+        errors.push("Password must contain at least one digit".to_string());
     }
 
-    if requirements.require_special {
-        let special_regex = Regex::new(r"[^A-Za-z0-9]").unwrap();
-        if !special_regex.is_match(password) {
-            errors.push("Password must contain at least one special character".to_string());
-        }
+    if requirements.require_special && !SPECIAL_REGEX.is_match(password) {
+        errors.push("Password must contain at least one special character".to_string());
     }
 
     if errors.is_empty() {

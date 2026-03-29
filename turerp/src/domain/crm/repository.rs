@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use chrono::Utc;
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::domain::crm::model::{
@@ -87,15 +88,15 @@ pub type BoxTicketRepository = Arc<dyn TicketRepository>;
 // ==================== IN-MEMORY IMPLEMENTATIONS ====================
 
 pub struct InMemoryLeadRepository {
-    leads: std::sync::Mutex<std::collections::HashMap<i64, Lead>>,
-    next_id: std::sync::Mutex<i64>,
+    leads: Mutex<std::collections::HashMap<i64, Lead>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryLeadRepository {
     pub fn new() -> Self {
         Self {
-            leads: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            leads: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -111,7 +112,7 @@ impl LeadRepository for InMemoryLeadRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
         let now = Utc::now();
@@ -130,16 +131,16 @@ impl LeadRepository for InMemoryLeadRepository {
             created_at: now,
             updated_at: now,
         };
-        self.leads.lock().unwrap().insert(id, lead.clone());
+        self.leads.lock().insert(id, lead.clone());
         Ok(lead)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Lead>, ApiError> {
-        Ok(self.leads.lock().unwrap().get(&id).cloned())
+        Ok(self.leads.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError> {
-        let l = self.leads.lock().unwrap();
+        let l = self.leads.lock();
         Ok(l.values()
             .filter(|x| x.tenant_id == tenant_id)
             .cloned()
@@ -151,7 +152,7 @@ impl LeadRepository for InMemoryLeadRepository {
         tenant_id: i64,
         status: LeadStatus,
     ) -> Result<Vec<Lead>, ApiError> {
-        let l = self.leads.lock().unwrap();
+        let l = self.leads.lock();
         Ok(l.values()
             .filter(|x| x.tenant_id == tenant_id && x.status == status)
             .cloned()
@@ -159,7 +160,7 @@ impl LeadRepository for InMemoryLeadRepository {
     }
 
     async fn update_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError> {
-        let mut l = self.leads.lock().unwrap();
+        let mut l = self.leads.lock();
         let lead = l
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Lead not found".to_string()))?;
@@ -169,7 +170,7 @@ impl LeadRepository for InMemoryLeadRepository {
     }
 
     async fn convert_to_customer(&self, id: i64, customer_id: i64) -> Result<Lead, ApiError> {
-        let mut l = self.leads.lock().unwrap();
+        let mut l = self.leads.lock();
         let lead = l
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Lead not found".to_string()))?;
@@ -180,21 +181,21 @@ impl LeadRepository for InMemoryLeadRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.leads.lock().unwrap().remove(&id);
+        self.leads.lock().remove(&id);
         Ok(())
     }
 }
 
 pub struct InMemoryOpportunityRepository {
-    opportunities: std::sync::Mutex<std::collections::HashMap<i64, Opportunity>>,
-    next_id: std::sync::Mutex<i64>,
+    opportunities: Mutex<std::collections::HashMap<i64, Opportunity>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryOpportunityRepository {
     pub fn new() -> Self {
         Self {
-            opportunities: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            opportunities: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -210,7 +211,7 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
         let now = Utc::now();
@@ -229,16 +230,16 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
             created_at: now,
             updated_at: now,
         };
-        self.opportunities.lock().unwrap().insert(id, opp.clone());
+        self.opportunities.lock().insert(id, opp.clone());
         Ok(opp)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Opportunity>, ApiError> {
-        Ok(self.opportunities.lock().unwrap().get(&id).cloned())
+        Ok(self.opportunities.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Opportunity>, ApiError> {
-        let o = self.opportunities.lock().unwrap();
+        let o = self.opportunities.lock();
         Ok(o.values()
             .filter(|x| x.tenant_id == tenant_id)
             .cloned()
@@ -250,7 +251,7 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
         tenant_id: i64,
         status: OpportunityStatus,
     ) -> Result<Vec<Opportunity>, ApiError> {
-        let o = self.opportunities.lock().unwrap();
+        let o = self.opportunities.lock();
         Ok(o.values()
             .filter(|x| x.tenant_id == tenant_id && x.status == status)
             .cloned()
@@ -258,7 +259,7 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
     }
 
     async fn find_by_customer(&self, customer_id: i64) -> Result<Vec<Opportunity>, ApiError> {
-        let o = self.opportunities.lock().unwrap();
+        let o = self.opportunities.lock();
         Ok(o.values()
             .filter(|x| x.customer_id == Some(customer_id))
             .cloned()
@@ -270,7 +271,7 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
         id: i64,
         status: OpportunityStatus,
     ) -> Result<Opportunity, ApiError> {
-        let mut o = self.opportunities.lock().unwrap();
+        let mut o = self.opportunities.lock();
         let opp = o
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Opportunity not found".to_string()))?;
@@ -280,21 +281,21 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.opportunities.lock().unwrap().remove(&id);
+        self.opportunities.lock().remove(&id);
         Ok(())
     }
 }
 
 pub struct InMemoryCampaignRepository {
-    campaigns: std::sync::Mutex<std::collections::HashMap<i64, Campaign>>,
-    next_id: std::sync::Mutex<i64>,
+    campaigns: Mutex<std::collections::HashMap<i64, Campaign>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryCampaignRepository {
     pub fn new() -> Self {
         Self {
-            campaigns: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            campaigns: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -310,7 +311,7 @@ impl CampaignRepository for InMemoryCampaignRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
         let now = Utc::now();
@@ -328,16 +329,16 @@ impl CampaignRepository for InMemoryCampaignRepository {
             created_at: now,
             updated_at: now,
         };
-        self.campaigns.lock().unwrap().insert(id, campaign.clone());
+        self.campaigns.lock().insert(id, campaign.clone());
         Ok(campaign)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Campaign>, ApiError> {
-        Ok(self.campaigns.lock().unwrap().get(&id).cloned())
+        Ok(self.campaigns.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError> {
-        let c = self.campaigns.lock().unwrap();
+        let c = self.campaigns.lock();
         Ok(c.values()
             .filter(|x| x.tenant_id == tenant_id)
             .cloned()
@@ -349,7 +350,7 @@ impl CampaignRepository for InMemoryCampaignRepository {
         tenant_id: i64,
         status: CampaignStatus,
     ) -> Result<Vec<Campaign>, ApiError> {
-        let c = self.campaigns.lock().unwrap();
+        let c = self.campaigns.lock();
         Ok(c.values()
             .filter(|x| x.tenant_id == tenant_id && x.status == status)
             .cloned()
@@ -357,7 +358,7 @@ impl CampaignRepository for InMemoryCampaignRepository {
     }
 
     async fn update_status(&self, id: i64, status: CampaignStatus) -> Result<Campaign, ApiError> {
-        let mut c = self.campaigns.lock().unwrap();
+        let mut c = self.campaigns.lock();
         let campaign = c
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Campaign not found".to_string()))?;
@@ -367,21 +368,21 @@ impl CampaignRepository for InMemoryCampaignRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.campaigns.lock().unwrap().remove(&id);
+        self.campaigns.lock().remove(&id);
         Ok(())
     }
 }
 
 pub struct InMemoryTicketRepository {
-    tickets: std::sync::Mutex<std::collections::HashMap<i64, Ticket>>,
-    next_id: std::sync::Mutex<i64>,
+    tickets: Mutex<std::collections::HashMap<i64, Ticket>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryTicketRepository {
     pub fn new() -> Self {
         Self {
-            tickets: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            tickets: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -401,7 +402,7 @@ impl TicketRepository for InMemoryTicketRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
         let ticket_number = generate_ticket_number(id);
@@ -421,16 +422,16 @@ impl TicketRepository for InMemoryTicketRepository {
             created_at: now,
             updated_at: now,
         };
-        self.tickets.lock().unwrap().insert(id, ticket.clone());
+        self.tickets.lock().insert(id, ticket.clone());
         Ok(ticket)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Ticket>, ApiError> {
-        Ok(self.tickets.lock().unwrap().get(&id).cloned())
+        Ok(self.tickets.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError> {
-        let t = self.tickets.lock().unwrap();
+        let t = self.tickets.lock();
         Ok(t.values()
             .filter(|x| x.tenant_id == tenant_id)
             .cloned()
@@ -442,7 +443,7 @@ impl TicketRepository for InMemoryTicketRepository {
         tenant_id: i64,
         ticket_number: &str,
     ) -> Result<Option<Ticket>, ApiError> {
-        let t = self.tickets.lock().unwrap();
+        let t = self.tickets.lock();
         Ok(t.values()
             .filter(|x| x.tenant_id == tenant_id && x.ticket_number == ticket_number)
             .cloned()
@@ -455,7 +456,7 @@ impl TicketRepository for InMemoryTicketRepository {
         tenant_id: i64,
         status: TicketStatus,
     ) -> Result<Vec<Ticket>, ApiError> {
-        let t = self.tickets.lock().unwrap();
+        let t = self.tickets.lock();
         Ok(t.values()
             .filter(|x| x.tenant_id == tenant_id && x.status == status)
             .cloned()
@@ -463,7 +464,7 @@ impl TicketRepository for InMemoryTicketRepository {
     }
 
     async fn find_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError> {
-        let t = self.tickets.lock().unwrap();
+        let t = self.tickets.lock();
         Ok(t.values()
             .filter(|x| x.assigned_to == Some(assignee_id))
             .cloned()
@@ -471,7 +472,7 @@ impl TicketRepository for InMemoryTicketRepository {
     }
 
     async fn update_status(&self, id: i64, status: TicketStatus) -> Result<Ticket, ApiError> {
-        let mut t = self.tickets.lock().unwrap();
+        let mut t = self.tickets.lock();
         let ticket = t
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Ticket not found".to_string()))?;
@@ -481,7 +482,7 @@ impl TicketRepository for InMemoryTicketRepository {
     }
 
     async fn resolve(&self, id: i64) -> Result<Ticket, ApiError> {
-        let mut t = self.tickets.lock().unwrap();
+        let mut t = self.tickets.lock();
         let ticket = t
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Ticket not found".to_string()))?;
@@ -492,7 +493,7 @@ impl TicketRepository for InMemoryTicketRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.tickets.lock().unwrap().remove(&id);
+        self.tickets.lock().remove(&id);
         Ok(())
     }
 }

@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::domain::accounting::model::{
@@ -71,15 +72,15 @@ fn generate_entry_number(count: i64) -> String {
 
 /// In-memory account repository
 pub struct InMemoryAccountRepository {
-    accounts: std::sync::Mutex<std::collections::HashMap<i64, Account>>,
-    next_id: std::sync::Mutex<i64>,
+    accounts: Mutex<std::collections::HashMap<i64, Account>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryAccountRepository {
     pub fn new() -> Self {
         let repo = Self {
-            accounts: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            accounts: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         };
         repo.seed_defaults();
         repo
@@ -173,7 +174,7 @@ impl InMemoryAccountRepository {
             ),
         ];
 
-        let mut accounts = self.accounts.lock().unwrap();
+        let mut accounts = self.accounts.lock();
         for (id, code, name, at, st) in defaults {
             accounts.insert(
                 id,
@@ -191,7 +192,7 @@ impl InMemoryAccountRepository {
                 },
             );
         }
-        *self.next_id.lock().unwrap() = 13;
+        *self.next_id.lock() = 13;
     }
 }
 
@@ -208,7 +209,7 @@ impl AccountRepository for InMemoryAccountRepository {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -225,16 +226,16 @@ impl AccountRepository for InMemoryAccountRepository {
             created_at: Utc::now(),
         };
 
-        self.accounts.lock().unwrap().insert(id, account.clone());
+        self.accounts.lock().insert(id, account.clone());
         Ok(account)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Account>, ApiError> {
-        Ok(self.accounts.lock().unwrap().get(&id).cloned())
+        Ok(self.accounts.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Account>, ApiError> {
-        let accounts = self.accounts.lock().unwrap();
+        let accounts = self.accounts.lock();
         Ok(accounts
             .values()
             .filter(|a| a.tenant_id == tenant_id)
@@ -243,7 +244,7 @@ impl AccountRepository for InMemoryAccountRepository {
     }
 
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Account>, ApiError> {
-        let accounts = self.accounts.lock().unwrap();
+        let accounts = self.accounts.lock();
         Ok(accounts
             .values()
             .find(|a| a.tenant_id == tenant_id && a.code == code)
@@ -255,7 +256,7 @@ impl AccountRepository for InMemoryAccountRepository {
         tenant_id: i64,
         account_type: AccountType,
     ) -> Result<Vec<Account>, ApiError> {
-        let accounts = self.accounts.lock().unwrap();
+        let accounts = self.accounts.lock();
         Ok(accounts
             .values()
             .filter(|a| a.tenant_id == tenant_id && a.account_type == account_type)
@@ -269,7 +270,7 @@ impl AccountRepository for InMemoryAccountRepository {
         name: Option<String>,
         is_active: Option<bool>,
     ) -> Result<Account, ApiError> {
-        let mut accounts = self.accounts.lock().unwrap();
+        let mut accounts = self.accounts.lock();
         let account = accounts
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Account {} not found", id)))?;
@@ -283,22 +284,22 @@ impl AccountRepository for InMemoryAccountRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.accounts.lock().unwrap().remove(&id);
+        self.accounts.lock().remove(&id);
         Ok(())
     }
 }
 
 /// In-memory journal entry repository
 pub struct InMemoryJournalEntryRepository {
-    entries: std::sync::Mutex<std::collections::HashMap<i64, JournalEntry>>,
-    next_id: std::sync::Mutex<i64>,
+    entries: Mutex<std::collections::HashMap<i64, JournalEntry>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryJournalEntryRepository {
     pub fn new() -> Self {
         Self {
-            entries: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            entries: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -316,7 +317,7 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -338,16 +339,16 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
             posted_at: None,
         };
 
-        self.entries.lock().unwrap().insert(id, entry.clone());
+        self.entries.lock().insert(id, entry.clone());
         Ok(entry)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<JournalEntry>, ApiError> {
-        Ok(self.entries.lock().unwrap().get(&id).cloned())
+        Ok(self.entries.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<JournalEntry>, ApiError> {
-        let entries = self.entries.lock().unwrap();
+        let entries = self.entries.lock();
         Ok(entries
             .values()
             .filter(|e| e.tenant_id == tenant_id)
@@ -361,7 +362,7 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<JournalEntry>, ApiError> {
-        let entries = self.entries.lock().unwrap();
+        let entries = self.entries.lock();
         Ok(entries
             .values()
             .filter(|e| e.tenant_id == tenant_id && e.date >= start && e.date <= end)
@@ -370,7 +371,7 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
     }
 
     async fn post(&self, id: i64) -> Result<JournalEntry, ApiError> {
-        let mut entries = self.entries.lock().unwrap();
+        let mut entries = self.entries.lock();
         let entry = entries
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))?;
@@ -383,7 +384,7 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
     }
 
     async fn void(&self, id: i64) -> Result<JournalEntry, ApiError> {
-        let mut entries = self.entries.lock().unwrap();
+        let mut entries = self.entries.lock();
         let entry = entries
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))?;
@@ -392,22 +393,22 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.entries.lock().unwrap().remove(&id);
+        self.entries.lock().remove(&id);
         Ok(())
     }
 }
 
 /// In-memory journal line repository
 pub struct InMemoryJournalLineRepository {
-    lines: std::sync::Mutex<std::collections::HashMap<i64, Vec<JournalLine>>>,
-    next_id: std::sync::Mutex<i64>,
+    lines: Mutex<std::collections::HashMap<i64, Vec<JournalLine>>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryJournalLineRepository {
     pub fn new() -> Self {
         Self {
-            lines: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            lines: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -430,7 +431,7 @@ impl JournalLineRepository for InMemoryJournalLineRepository {
                 .map_err(|e| ApiError::Validation(e.join(", ")))?;
         }
 
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let mut lines = Vec::new();
 
         for create in create_lines {
@@ -447,7 +448,7 @@ impl JournalLineRepository for InMemoryJournalLineRepository {
             });
         }
 
-        self.lines.lock().unwrap().insert(entry_id, lines.clone());
+        self.lines.lock().insert(entry_id, lines.clone());
         Ok(lines)
     }
 
@@ -455,14 +456,13 @@ impl JournalLineRepository for InMemoryJournalLineRepository {
         Ok(self
             .lines
             .lock()
-            .unwrap()
             .get(&entry_id)
             .cloned()
             .unwrap_or_default())
     }
 
     async fn delete_by_entry(&self, entry_id: i64) -> Result<(), ApiError> {
-        self.lines.lock().unwrap().remove(&entry_id);
+        self.lines.lock().remove(&entry_id);
         Ok(())
     }
 }

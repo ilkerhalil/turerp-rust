@@ -5,6 +5,7 @@
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
 use turerp::config::Config;
+use turerp::middleware::{RateLimitMiddleware, RequestIdMiddleware};
 
 use turerp::api::{auth_configure, users_configure, ApiDoc};
 use turerp::app::create_app_state;
@@ -93,9 +94,11 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            // Global middleware
-            .wrap(middleware::Logger::default())
-            .wrap(configure_cors(&config.cors))
+            // Security middlewares (ORDER MATTERS!)
+            .wrap(RequestIdMiddleware) // 1. Request ID for tracing
+            .wrap(RateLimitMiddleware::new()) // 2. Rate limiting (before auth)
+            .wrap(middleware::Logger::default()) // 3. Logging
+            .wrap(configure_cors(&config.cors)) // 4. CORS
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
             .app_data(app_state.jwt_service.clone())
@@ -114,6 +117,7 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .bind(&bind_addr)?
+    .shutdown_timeout(30) // Graceful shutdown: 30 seconds
     .run()
     .await
 }

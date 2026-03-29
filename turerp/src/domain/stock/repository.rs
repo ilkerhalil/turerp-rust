@@ -1,6 +1,7 @@
 //! Stock repository
 
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::domain::stock::model::{
@@ -76,15 +77,15 @@ pub type BoxStockMovementRepository = Arc<dyn StockMovementRepository>;
 
 /// In-memory warehouse repository
 pub struct InMemoryWarehouseRepository {
-    warehouses: std::sync::Mutex<std::collections::HashMap<i64, Warehouse>>,
-    next_id: std::sync::Mutex<i64>,
+    warehouses: Mutex<std::collections::HashMap<i64, Warehouse>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryWarehouseRepository {
     pub fn new() -> Self {
         Self {
-            warehouses: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            warehouses: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -98,7 +99,7 @@ impl Default for InMemoryWarehouseRepository {
 #[async_trait]
 impl WarehouseRepository for InMemoryWarehouseRepository {
     async fn create(&self, create: CreateWarehouse) -> Result<Warehouse, ApiError> {
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -112,19 +113,16 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.warehouses
-            .lock()
-            .unwrap()
-            .insert(id, warehouse.clone());
+        self.warehouses.lock().insert(id, warehouse.clone());
         Ok(warehouse)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Warehouse>, ApiError> {
-        Ok(self.warehouses.lock().unwrap().get(&id).cloned())
+        Ok(self.warehouses.lock().get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError> {
-        let warehouses = self.warehouses.lock().unwrap();
+        let warehouses = self.warehouses.lock();
         Ok(warehouses
             .values()
             .filter(|w| w.tenant_id == tenant_id)
@@ -140,7 +138,7 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
         address: Option<String>,
         is_active: Option<bool>,
     ) -> Result<Warehouse, ApiError> {
-        let mut warehouses = self.warehouses.lock().unwrap();
+        let mut warehouses = self.warehouses.lock();
         let warehouse = warehouses
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Warehouse {} not found", id)))?;
@@ -162,22 +160,22 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.warehouses.lock().unwrap().remove(&id);
+        self.warehouses.lock().remove(&id);
         Ok(())
     }
 }
 
 /// In-memory stock level repository
 pub struct InMemoryStockLevelRepository {
-    levels: std::sync::Mutex<std::collections::HashMap<(i64, i64), StockLevel>>,
-    next_id: std::sync::Mutex<i64>,
+    levels: Mutex<std::collections::HashMap<(i64, i64), StockLevel>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryStockLevelRepository {
     pub fn new() -> Self {
         Self {
-            levels: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            levels: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -195,16 +193,11 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
         warehouse_id: i64,
         product_id: i64,
     ) -> Result<Option<StockLevel>, ApiError> {
-        Ok(self
-            .levels
-            .lock()
-            .unwrap()
-            .get(&(warehouse_id, product_id))
-            .cloned())
+        Ok(self.levels.lock().get(&(warehouse_id, product_id)).cloned())
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockLevel>, ApiError> {
-        let levels = self.levels.lock().unwrap();
+        let levels = self.levels.lock();
         Ok(levels
             .values()
             .filter(|l| l.product_id == product_id)
@@ -213,7 +206,7 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
     }
 
     async fn find_by_warehouse(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError> {
-        let levels = self.levels.lock().unwrap();
+        let levels = self.levels.lock();
         Ok(levels
             .values()
             .filter(|l| l.warehouse_id == warehouse_id)
@@ -227,11 +220,11 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
         product_id: i64,
         quantity: f64,
     ) -> Result<StockLevel, ApiError> {
-        let mut levels = self.levels.lock().unwrap();
+        let mut levels = self.levels.lock();
         let key = (warehouse_id, product_id);
 
         let level = levels.entry(key).or_insert_with(|| StockLevel {
-            id: *self.next_id.lock().unwrap(),
+            id: *self.next_id.lock(),
             warehouse_id,
             product_id,
             quantity: 0.0,
@@ -250,11 +243,11 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
         product_id: i64,
         quantity: f64,
     ) -> Result<StockLevel, ApiError> {
-        let mut levels = self.levels.lock().unwrap();
+        let mut levels = self.levels.lock();
         let key = (warehouse_id, product_id);
 
         let level = levels.entry(key).or_insert_with(|| StockLevel {
-            id: *self.next_id.lock().unwrap(),
+            id: *self.next_id.lock(),
             warehouse_id,
             product_id,
             quantity: 0.0,
@@ -281,11 +274,11 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
         product_id: i64,
         quantity: f64,
     ) -> Result<StockLevel, ApiError> {
-        let mut levels = self.levels.lock().unwrap();
+        let mut levels = self.levels.lock();
         let key = (warehouse_id, product_id);
 
         let level = levels.entry(key).or_insert_with(|| StockLevel {
-            id: *self.next_id.lock().unwrap(),
+            id: *self.next_id.lock(),
             warehouse_id,
             product_id,
             quantity: 0.0,
@@ -301,15 +294,15 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
 
 /// In-memory stock movement repository
 pub struct InMemoryStockMovementRepository {
-    movements: std::sync::Mutex<std::collections::HashMap<i64, StockMovement>>,
-    next_id: std::sync::Mutex<i64>,
+    movements: Mutex<std::collections::HashMap<i64, StockMovement>>,
+    next_id: Mutex<i64>,
 }
 
 impl InMemoryStockMovementRepository {
     pub fn new() -> Self {
         Self {
-            movements: std::sync::Mutex::new(std::collections::HashMap::new()),
-            next_id: std::sync::Mutex::new(1),
+            movements: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
         }
     }
 }
@@ -327,7 +320,7 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        let mut next_id = self.next_id.lock().unwrap();
+        let mut next_id = self.next_id.lock();
         let id = *next_id;
         *next_id += 1;
 
@@ -344,16 +337,16 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
             created_by: create.created_by,
         };
 
-        self.movements.lock().unwrap().insert(id, movement.clone());
+        self.movements.lock().insert(id, movement.clone());
         Ok(movement)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<StockMovement>, ApiError> {
-        Ok(self.movements.lock().unwrap().get(&id).cloned())
+        Ok(self.movements.lock().get(&id).cloned())
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockMovement>, ApiError> {
-        let movements = self.movements.lock().unwrap();
+        let movements = self.movements.lock();
         Ok(movements
             .values()
             .filter(|m| m.product_id == product_id)
@@ -362,7 +355,7 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
     }
 
     async fn find_by_warehouse(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError> {
-        let movements = self.movements.lock().unwrap();
+        let movements = self.movements.lock();
         Ok(movements
             .values()
             .filter(|m| m.warehouse_id == warehouse_id)
@@ -375,7 +368,7 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
         reference_type: &str,
         reference_id: i64,
     ) -> Result<Vec<StockMovement>, ApiError> {
-        let movements = self.movements.lock().unwrap();
+        let movements = self.movements.lock();
         Ok(movements
             .values()
             .filter(|m| {
