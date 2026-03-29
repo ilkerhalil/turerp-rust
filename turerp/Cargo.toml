@@ -40,6 +40,14 @@ anyhow = "1.0"
 # Async
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+
+# Rate limiting
+governor = "0.8"
+nonzero_ext = "0.3"
+
+# Validation
+regex = "1"
 
 # Logging
 tracing = "0.1"

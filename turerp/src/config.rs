@@ -4,6 +4,24 @@ use config::ConfigError;
 use serde::Deserialize;
 use std::fmt;
 
+/// Application environment
+#[derive(Debug, Clone, PartialEq, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum Environment {
+    #[default]
+    Development,
+    Production,
+}
+
+impl fmt::Display for Environment {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Environment::Development => write!(f, "development"),
+            Environment::Production => write!(f, "production"),
+        }
+    }
+}
+
 /// Server configuration
 #[derive(Debug, Clone, Deserialize)]
 pub struct ServerConfig {
@@ -72,19 +90,105 @@ impl JwtConfig {
                 .unwrap_or(604800),
         })
     }
+
+    /// Create a dev configuration (only for development/testing)
+    #[cfg(any(test, debug_assertions))]
+    pub fn dev() -> Self {
+        Self {
+            secret: "dev-secret-key-change-in-production-12345".to_string(),
+            access_token_expiration: 3600,
+            refresh_token_expiration: 604800,
+        }
+    }
+}
+
+/// CORS configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct CorsConfig {
+    pub allowed_origins: Vec<String>,
+    pub allowed_methods: Vec<String>,
+    pub allowed_headers: Vec<String>,
+    pub allow_credentials: bool,
+    pub max_age: Option<u32>,
+}
+
+impl Default for CorsConfig {
+    fn default() -> Self {
+        Self {
+            allowed_origins: vec!["*".to_string()],
+            allowed_methods: vec![
+                "GET".to_string(),
+                "POST".to_string(),
+                "PUT".to_string(),
+                "DELETE".to_string(),
+                "OPTIONS".to_string(),
+            ],
+            allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
+            allow_credentials: true,
+            max_age: Some(3600),
+        }
+    }
+}
+
+impl CorsConfig {
+    pub fn from_env() -> Result<Self, ConfigError> {
+        let allowed_origins: Vec<String> = std::env::var("TURERP_CORS_ORIGINS")
+            .ok()
+            .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+            .unwrap_or_default();
+
+        Ok(Self {
+            allowed_origins: if allowed_origins.is_empty() {
+                vec!["*".to_string()]
+            } else {
+                allowed_origins
+            },
+            allowed_methods: std::env::var("TURERP_CORS_METHODS")
+                .ok()
+                .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                .unwrap_or_else(|| {
+                    vec![
+                        "GET".to_string(),
+                        "POST".to_string(),
+                        "PUT".to_string(),
+                        "DELETE".to_string(),
+                        "OPTIONS".to_string(),
+                    ]
+                }),
+            allowed_headers: std::env::var("TURERP_CORS_HEADERS")
+                .ok()
+                .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+                .unwrap_or_else(|| vec!["Content-Type".to_string(), "Authorization".to_string()]),
+            allow_credentials: std::env::var("TURERP_CORS_CREDENTIALS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(true),
+            max_age: std::env::var("TURERP_CORS_MAX_AGE")
+                .ok()
+                .and_then(|v| v.parse().ok()),
+        })
+    }
+
+    /// Check if wildcard origin is allowed
+    pub fn is_wildcard(&self) -> bool {
+        self.allowed_origins.iter().any(|o| o == "*")
+    }
 }
 
 /// Application configuration
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
+    pub environment: Environment,
     pub server: ServerConfig,
     pub database: DatabaseConfig,
     pub jwt: JwtConfig,
+    pub cors: CorsConfig,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
+            environment: Environment::Development,
             server: ServerConfig::default(),
             database: DatabaseConfig {
                 url: "postgres://postgres:postgres@localhost:5432/turerp".to_string(),
@@ -96,6 +200,7 @@ impl Default for Config {
                 access_token_expiration: 3600,
                 refresh_token_expiration: 604800,
             },
+            cors: CorsConfig::default(),
         }
     }
 }
@@ -113,18 +218,30 @@ impl fmt::Display for Config {
 impl Config {
     /// Load configuration from environment variables
     ///
-    /// Required environment variables:
+    /// Required environment variables (production):
     /// - TURERP_DATABASE_URL: PostgreSQL connection string
-    /// - TURERP_JWT_SECRET: Secret key for JWT tokens
+    /// - TURERP_JWT_SECRET: Secret key for JWT tokens (min 32 chars in production)
     ///
     /// Optional environment variables:
+    /// - TURERP_ENV: Environment (development/production, default: development)
     /// - TURERP_SERVER_HOST: Server host (default: 0.0.0.0)
     /// - TURERP_SERVER_PORT: Server port (default: 8000)
     /// - TURERP_DB_MAX_CONNECTIONS: Max DB connections (default: 10)
     /// - TURERP_DB_MIN_CONNECTIONS: Min DB connections (default: 5)
     /// - TURERP_JWT_ACCESS_EXPIRATION: Access token expiry in seconds (default: 3600)
     /// - TURERP_JWT_REFRESH_EXPIRATION: Refresh token expiry in seconds (default: 604800)
+    /// - TURERP_CORS_ORIGINS: Comma-separated allowed origins (default: *)
+    /// - TURERP_CORS_METHODS: Comma-separated allowed methods (default: GET,POST,PUT,DELETE,OPTIONS)
+    /// - TURERP_CORS_HEADERS: Comma-separated allowed headers (default: Content-Type,Authorization)
     pub fn new() -> Result<Self, ConfigError> {
+        let environment = std::env::var("TURERP_ENV")
+            .ok()
+            .map(|s| match s.to_lowercase().as_str() {
+                "production" | "prod" => Environment::Production,
+                _ => Environment::Development,
+            })
+            .unwrap_or_default();
+
         let server = ServerConfig {
             host: std::env::var("TURERP_SERVER_HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
             port: std::env::var("TURERP_SERVER_PORT")
@@ -135,12 +252,49 @@ impl Config {
 
         let database = DatabaseConfig::from_env()?;
         let jwt = JwtConfig::from_env()?;
+        let cors = CorsConfig::from_env()?;
 
         Ok(Self {
+            environment,
             server,
             database,
             jwt,
+            cors,
         })
+    }
+
+    /// Validate configuration for production use
+    pub fn validate(&self) -> Result<(), ConfigError> {
+        // In production, enforce security requirements
+        if matches!(self.environment, Environment::Production) {
+            // JWT secret must be strong
+            if self.jwt.secret.len() < 32 {
+                return Err(ConfigError::Message(
+                    "JWT_SECRET must be at least 32 characters in production".to_string(),
+                ));
+            }
+
+            // JWT secret should not contain common weak patterns
+            let weak_patterns = ["dev", "test", "secret", "password", "change", "production"];
+            for pattern in weak_patterns {
+                if self.jwt.secret.to_lowercase().contains(pattern) {
+                    return Err(ConfigError::Message(format!(
+                        "JWT_SECRET contains weak pattern '{}' - use a secure random string",
+                        pattern
+                    )));
+                }
+            }
+
+            // CORS should not be wildcard in production
+            if self.cors.is_wildcard() {
+                tracing::warn!(
+                    "CORS is configured to allow all origins (*) in production mode. \
+                     Consider setting TURERP_CORS_ORIGINS to specific domains."
+                );
+            }
+        }
+
+        Ok(())
     }
 
     /// Get database URL reference for master database
@@ -156,6 +310,16 @@ impl Config {
             self.database.url.clone()
         }
     }
+
+    /// Check if running in production mode
+    pub fn is_production(&self) -> bool {
+        matches!(self.environment, Environment::Production)
+    }
+
+    /// Check if running in development mode
+    pub fn is_development(&self) -> bool {
+        matches!(self.environment, Environment::Development)
+    }
 }
 
 #[cfg(test)]
@@ -167,6 +331,7 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.server.port, 8000);
         assert_eq!(config.jwt.access_token_expiration, 3600);
+        assert!(config.cors.is_wildcard());
     }
 
     #[test]
@@ -174,5 +339,27 @@ mod tests {
         let config = Config::default();
         let tenant_url = config.tenant_database_url("tenant_abc");
         assert!(tenant_url.contains("tenant_abc"));
+    }
+
+    #[test]
+    fn test_environment_default() {
+        let config = Config::default();
+        assert!(config.is_development());
+        assert!(!config.is_production());
+    }
+
+    #[test]
+    fn test_cors_wildcard() {
+        let cors = CorsConfig::default();
+        assert!(cors.is_wildcard());
+    }
+
+    #[test]
+    fn test_cors_specific_origins() {
+        let cors = CorsConfig {
+            allowed_origins: vec!["https://example.com".to_string()],
+            ..Default::default()
+        };
+        assert!(!cors.is_wildcard());
     }
 }

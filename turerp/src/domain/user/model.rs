@@ -90,12 +90,19 @@ pub struct CreateUser {
     #[validate(length(min = 1, max = 100))]
     pub full_name: String,
 
-    #[validate(length(min = 8))]
+    #[validate(length(min = 12))]
     pub password: String,
 
     pub tenant_id: i64,
 
     pub role: Option<Role>,
+}
+
+impl CreateUser {
+    /// Validate password complexity
+    pub fn validate_password(&self) -> Result<(), String> {
+        crate::utils::password::validate_password(&self.password).map_err(|e| e.message)
+    }
 }
 
 /// Data for updating an existing user

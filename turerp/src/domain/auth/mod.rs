@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
+use crate::config::JwtConfig;
 use crate::domain::user::model::{CreateUser, Role, UserResponse};
 use crate::domain::user::service::UserService;
 use crate::error::ApiError;
@@ -31,7 +32,7 @@ pub struct RegisterRequest {
     #[validate(length(min = 1, max = 100))]
     pub full_name: String,
 
-    #[validate(length(min = 8))]
+    #[validate(length(min = 12))]
     pub password: String,
 
     /// Tenant ID for the new user (required for normal registration)
@@ -39,6 +40,13 @@ pub struct RegisterRequest {
 
     #[serde(default)]
     pub role: Option<Role>,
+}
+
+impl RegisterRequest {
+    /// Validate password complexity
+    pub fn validate_password(&self) -> Result<(), String> {
+        crate::utils::password::validate_password(&self.password).map_err(|e| e.message)
+    }
 }
 
 /// Token refresh request
@@ -75,6 +83,9 @@ impl AuthService {
         request
             .validate()
             .map_err(|e: validator::ValidationErrors| ApiError::Validation(e.to_string()))?;
+
+        // Validate password complexity
+        request.validate_password().map_err(ApiError::Validation)?;
 
         // Use default tenant_id if not provided (for system admin registration)
         let tenant_id = request.tenant_id.unwrap_or(1);
@@ -149,13 +160,20 @@ impl AuthService {
     }
 }
 
-/// Create auth service with default configuration
-pub fn create_auth_service(user_service: UserService) -> AuthService {
+/// Create auth service with JWT configuration
+pub fn create_auth_service(user_service: UserService, jwt_config: &JwtConfig) -> AuthService {
     let jwt_service = JwtService::new(
-        "your-secret-key-change-in-production".to_string(),
-        3600,   // 1 hour
-        604800, // 7 days
+        jwt_config.secret.clone(),
+        jwt_config.access_token_expiration,
+        jwt_config.refresh_token_expiration,
     );
 
     AuthService::new(user_service, jwt_service)
+}
+
+/// Create auth service with default configuration (dev/testing only)
+#[cfg(any(test, debug_assertions))]
+pub fn create_auth_service_dev(user_service: UserService) -> AuthService {
+    let jwt_config = JwtConfig::dev();
+    create_auth_service(user_service, &jwt_config)
 }

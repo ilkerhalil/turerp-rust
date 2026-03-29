@@ -24,6 +24,7 @@ pub use error::{ApiError, ApiResult, ErrorResponse};
 pub mod app {
     use actix_web::web;
 
+    use crate::config::Config;
     use crate::domain::auth::AuthService;
     use crate::domain::user::repository::{BoxUserRepository, InMemoryUserRepository};
     use crate::domain::user::service::UserService;
@@ -35,33 +36,36 @@ pub mod app {
     pub struct AppState {
         pub auth_service: web::Data<AuthService>,
         pub user_service: web::Data<UserService>,
+        pub jwt_service: web::Data<JwtService>,
     }
 
     /// Create application with in-memory storage (for development/testing)
-    pub fn create_app_state() -> AppState {
+    pub fn create_app_state(config: &Config) -> AppState {
         // Create in-memory repository
         let repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
 
         // Create user service
         let user_service = UserService::new(repo);
 
-        // Create JWT service
+        // Create JWT service from config
         let jwt_service = JwtService::new(
-            "dev-secret-key-change-in-production-12345".to_string(),
-            3600,
-            604800,
+            config.jwt.secret.clone(),
+            config.jwt.access_token_expiration,
+            config.jwt.refresh_token_expiration,
         );
 
         // Create auth service
-        let auth_service = AuthService::new(user_service.clone(), jwt_service);
+        let auth_service = AuthService::new(user_service.clone(), jwt_service.clone());
 
         // Wrap in actix Data
         let user_service = web::Data::new(user_service);
+        let jwt_service = web::Data::new(jwt_service);
         let auth_service = web::Data::new(auth_service);
 
         AppState {
             auth_service,
             user_service,
+            jwt_service,
         }
     }
 }
@@ -92,5 +96,16 @@ mod tests {
     fn test_config_default() {
         let config = Config::default();
         assert_eq!(config.server.port, 8000);
+        assert!(config.is_development());
+    }
+
+    #[test]
+    fn test_app_state_creation() {
+        let config = Config::default();
+        let state = app::create_app_state(&config);
+        // Verify services are created
+        assert!(std::sync::Arc::strong_count(&state.auth_service) > 0);
+        assert!(std::sync::Arc::strong_count(&state.user_service) > 0);
+        assert!(std::sync::Arc::strong_count(&state.jwt_service) > 0);
     }
 }

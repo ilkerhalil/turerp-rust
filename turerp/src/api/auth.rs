@@ -6,6 +6,7 @@ use serde::Deserialize;
 use crate::domain::auth::{AuthService, LoginRequest, RefreshTokenRequest, RegisterRequest};
 use crate::domain::user::service::UserService;
 use crate::error::ApiResult;
+use crate::middleware::AuthUser;
 
 /// Register endpoint
 #[utoipa::path(
@@ -77,15 +78,30 @@ pub async fn refresh_token(
     path = "/api/auth/me",
     tag = "Auth",
     responses(
-        (status = 200, description = "Current user info")
+        (status = 200, description = "Current user info", body = UserResponse),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(
+        ("bearer_auth" = [])
     )
 )]
-pub async fn me(_user_service: web::Data<UserService>) -> ApiResult<HttpResponse> {
-    // TODO: Get from auth context
-    // For now, return a placeholder
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "message": "Auth context not implemented - use login to get tokens"
-    })))
+pub async fn me(
+    auth_user: AuthUser,
+    user_service: web::Data<UserService>,
+) -> ApiResult<HttpResponse> {
+    // Extract user ID from JWT claims
+    let user_id: i64 = auth_user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
+
+    let tenant_id = auth_user.0.tenant_id;
+
+    // Fetch user from database
+    let user = user_service.get_user(user_id, tenant_id).await?;
+
+    Ok(HttpResponse::Ok().json(user))
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]

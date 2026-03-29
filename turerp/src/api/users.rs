@@ -5,6 +5,7 @@ use actix_web::{web, HttpResponse};
 use crate::domain::user::model::{CreateUser, UpdateUser};
 use crate::domain::user::service::UserService;
 use crate::error::ApiResult;
+use crate::middleware::AuthUser;
 
 /// Create user endpoint
 #[utoipa::path(
@@ -16,9 +17,13 @@ use crate::error::ApiResult;
         (status = 201, description = "User created successfully", body = UserResponse),
         (status = 400, description = "Validation error"),
         (status = 409, description = "User already exists")
+    ),
+    security(
+        ("bearer_auth" = [])
     )
 )]
 pub async fn create_user(
+    _auth_user: AuthUser,
     user_service: web::Data<UserService>,
     payload: web::Json<CreateUser>,
 ) -> ApiResult<HttpResponse> {
@@ -38,14 +43,18 @@ pub async fn create_user(
     responses(
         (status = 200, description = "User found", body = UserResponse),
         (status = 404, description = "User not found")
+    ),
+    security(
+        ("bearer_auth" = [])
     )
 )]
 pub async fn get_user(
+    auth_user: AuthUser,
     user_service: web::Data<UserService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    // Use default tenant_id for now
-    let user = user_service.get_user(*path, 1).await?;
+    let tenant_id = auth_user.0.tenant_id;
+    let user = user_service.get_user(*path, tenant_id).await?;
     Ok(HttpResponse::Ok().json(user))
 }
 
@@ -56,11 +65,17 @@ pub async fn get_user(
     tag = "Users",
     responses(
         (status = 200, description = "Users found", body = Vec<UserResponse>)
+    ),
+    security(
+        ("bearer_auth" = [])
     )
 )]
-pub async fn get_users(user_service: web::Data<UserService>) -> ApiResult<HttpResponse> {
-    // Use default tenant_id for now
-    let users = user_service.get_all_users(1).await?;
+pub async fn get_users(
+    auth_user: AuthUser,
+    user_service: web::Data<UserService>,
+) -> ApiResult<HttpResponse> {
+    let tenant_id = auth_user.0.tenant_id;
+    let users = user_service.get_all_users(tenant_id).await?;
     Ok(HttpResponse::Ok().json(users))
 }
 
@@ -76,16 +91,21 @@ pub async fn get_users(user_service: web::Data<UserService>) -> ApiResult<HttpRe
     responses(
         (status = 200, description = "User updated", body = UserResponse),
         (status = 404, description = "User not found")
+    ),
+    security(
+        ("bearer_auth" = [])
     )
 )]
 pub async fn update_user(
+    auth_user: AuthUser,
     user_service: web::Data<UserService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateUser>,
 ) -> ApiResult<HttpResponse> {
+    let tenant_id = auth_user.0.tenant_id;
     let id = *path;
     let user = user_service
-        .update_user(id, 1, payload.into_inner())
+        .update_user(id, tenant_id, payload.into_inner())
         .await?;
     Ok(HttpResponse::Ok().json(user))
 }
@@ -101,14 +121,19 @@ pub async fn update_user(
     responses(
         (status = 204, description = "User deleted"),
         (status = 404, description = "User not found")
+    ),
+    security(
+        ("bearer_auth" = [])
     )
 )]
 pub async fn delete_user(
+    auth_user: AuthUser,
     user_service: web::Data<UserService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
+    let tenant_id = auth_user.0.tenant_id;
     let id = *path;
-    user_service.delete_user(id, 1).await?;
+    user_service.delete_user(id, tenant_id).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
