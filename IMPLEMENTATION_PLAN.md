@@ -17,16 +17,18 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Initialize Rust project with Cargo
 - [x] Set up project structure (domain-driven design)
 - [x] Configure logging and error handling
-- [ ] Set up database migrations framework
+- [x] Set up database migrations framework (sqlx migrations)
 
 ### 1.2 Authentication Module
 - [x] User model and repository
-- [x] Password hashing (bcrypt)
+- [x] Password hashing (bcrypt with cost 12)
 - [x] JWT token generation and validation
 - [x] Registration endpoint
 - [x] Login endpoints
 - [x] Token refresh mechanism
 - [x] OpenAPI/Swagger documentation
+- [x] Rate limiting (10 req/min per IP)
+- [x] Password complexity validation (12+ chars, complexity rules)
 
 ### 1.3 Tenants Module
 - [x] Tenant model and repository
@@ -38,6 +40,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] User management within tenant
 - [x] Role assignment (Admin, User, Viewer)
 - [x] User CRUD endpoints
+- [x] User validation tests
 
 ### 1.5 Feature Flags Module
 - [ ] Feature flag model
@@ -46,6 +49,8 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ### 1.6 Configuration Module
 - [x] Global config management
+- [x] Environment-based configuration
+- [x] Production validation (JWT secret strength)
 - [ ] Tenant-specific config
 - [ ] Encrypted storage for sensitive values
 
@@ -60,6 +65,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Search by code/name
 - [x] Credit limit management
 - [x] Status management (Active, Passive, Blocked)
+- [x] PostgreSQL repository implementation
 
 ### 2.2 Products Module
 - [x] Product model
@@ -178,13 +184,29 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ### 9.1 API Documentation
 - [x] OpenAPI/Swagger UI
-- [ ] API versioning
-- [ ] Rate limiting
+- [ ] API versioning (planned)
+- [x] Rate limiting (governor crate)
 
 ### 9.2 Testing & Security
-- [x] Unit tests (99 passing)
-- [ ] Integration tests
-- [ ] Security audit
+- [x] Unit tests (160 passing)
+- [x] Integration tests (14 passing)
+- [x] Request ID middleware
+- [x] JWT authentication middleware
+- [x] Password complexity validation
+- [x] Production config validation
+- [ ] Security audit (OWASP)
+- [ ] SQL injection tests
+- [ ] XSS prevention tests
+
+### 9.3 Code Quality
+- [x] cargo check passes
+- [x] cargo clippy passes (no warnings)
+- [x] cargo fmt passes
+- [x] No ambiguous glob re-exports
+- [x] No unused imports
+- [x] No dead code
+- [x] Proper error handling (thiserror)
+- [x] Request tracing (tracing crate)
 
 ---
 
@@ -193,10 +215,10 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 ### Completed Modules
 | Module | Status | Notes |
 |--------|--------|-------|
-| Auth | ✅ Complete | JWT, bcrypt, OpenAPI |
-| Tenant | ✅ Complete | Subdomain routing |
-| User | ✅ Complete | CRUD + roles |
-| Cari | ✅ Complete | Customer/Vendor |
+| Auth | ✅ Complete | JWT, bcrypt, rate limiting, OpenAPI |
+| Tenant | ✅ Complete | Subdomain routing, PostgreSQL repo |
+| User | ✅ Complete | CRUD + roles + validation tests |
+| Cari | ✅ Complete | Customer/Vendor + PostgreSQL repo |
 | Product | ✅ Complete | Categories, units |
 | Stock | ✅ Complete | Warehouses, movements |
 | Invoice | ✅ Complete | Payments, status |
@@ -209,18 +231,59 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | CRM | ✅ Complete | Leads, opportunities, tickets |
 
 ### Test Coverage
-- **99 tests passing**
+- **174 tests passing** (160 unit + 14 integration)
 - Unit tests for all domain modules
 - Model validation tests
 - Service business logic tests
+- Middleware tests
+- Config validation tests
+- Error handling tests
 
 ### Code Quality
 - ✅ cargo check passes
-- ✅ cargo clippy passes
+- ✅ cargo clippy passes (0 warnings)
 - ✅ cargo fmt passes
 - ✅ No ambiguous glob re-exports
 - ✅ No unused imports
 - ✅ No dead code
+- ✅ Comprehensive error handling
+- ✅ Request tracing
+
+### Security Features
+- ✅ JWT authentication with HS256
+- ✅ Password hashing with bcrypt (cost 12)
+- ✅ Password complexity validation
+- ✅ Rate limiting (10 req/min per IP)
+- ✅ Request ID tracking
+- ✅ Production config validation
+- ✅ SQL injection prevention (parameterized queries)
+- ⚠️ Default admin credentials (dev only, warning in migrations)
+
+---
+
+## Pending Implementation
+
+### High Priority
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Tenant DB Routing | Multi-tenant database isolation | Planned |
+| Security Audit | OWASP Top 10 review | Needed |
+| API Versioning | /v1/, /v2/ endpoints | Planned |
+| Feature Flags | A/B testing, gradual rollout | Planned |
+
+### Medium Priority
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Product Variants | Size, color, etc. | Planned |
+| Purchase Requests | Approval workflow | Planned |
+| Fixed Assets | Depreciation tracking | Planned |
+| Tenant-specific Config | Per-tenant settings | Planned |
+
+### Low Priority
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Encrypted Config | Sensitive value encryption | Planned |
+| API Analytics | Request metrics | Planned |
 
 ---
 
@@ -253,6 +316,23 @@ utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 # Async
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
+
+# Error handling
+thiserror = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Rate limiting
+governor = "0.6"
+
+# UUID
+uuid = { version = "1.0", features = ["v4"] }
+
+# Configuration
+config = "0.14"
+dotenv = "0.15"
 ```
 
 ---
@@ -261,16 +341,16 @@ tokio = { version = "1", features = ["full"] }
 
 ### Auth
 - `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login
+- `POST /api/auth/login` - Login (rate limited: 10 req/min)
 - `POST /api/auth/refresh` - Refresh token
-- `GET /api/auth/me` - Current user
+- `GET /api/auth/me` - Current user (requires auth)
 
 ### Users
-- `GET /api/users` - List users
-- `POST /api/users` - Create user
-- `GET /api/users/{id}` - Get user
-- `PUT /api/users/{id}` - Update user
-- `DELETE /api/users/{id}` - Delete user
+- `GET /api/users` - List users (requires auth)
+- `POST /api/users` - Create user (requires auth)
+- `GET /api/users/{id}` - Get user (requires auth)
+- `PUT /api/users/{id}` - Update user (requires auth)
+- `DELETE /api/users/{id}` - Delete user (requires auth)
 
 ### Tenants
 - `GET /api/tenants` - List tenants
@@ -278,6 +358,9 @@ tokio = { version = "1", features = ["full"] }
 - `GET /api/tenants/{id}` - Get tenant
 - `PUT /api/tenants/{id}` - Update tenant
 - `DELETE /api/tenants/{id}` - Delete tenant
+
+### Health Check
+- `GET /health` - Health check endpoint
 
 ### Swagger UI
 - `/swagger-ui/` - Interactive API documentation
@@ -293,6 +376,9 @@ cargo run
 
 # Tests
 cargo test
+
+# Tests with output
+cargo test -- --nocapture
 
 # Build
 cargo build --release
@@ -313,8 +399,72 @@ docker-compose up -d --build
 
 ### Environment Variables
 | Variable | Description | Default |
-|----------|-------------|---------|
-| DATABASE_URL | PostgreSQL connection string | - |
-| JWT_SECRET | Secret key for JWT tokens | - |
-| PORT | Server port | 8080 |
+|----------|-------------|--------|
+| TURERP_DATABASE_URL | PostgreSQL connection string | Required |
+| TURERP_JWT_SECRET | Secret key for JWT tokens (min 32 chars in prod) | Required |
+| TURERP_SERVER_HOST | Server host | 0.0.0.0 |
+| TURERP_SERVER_PORT | Server port | 8000 |
+| TURERP_ENV | Environment (development/production) | development |
+| TURERP_CORS_ORIGINS | Comma-separated allowed origins | * |
 | RUST_LOG | Log level | info |
+
+---
+
+## Project Structure
+
+```
+turerp/
+├── Cargo.toml
+├── src/
+│   ├── main.rs           # Application entry point
+│   ├── lib.rs            # Library exports
+│   ├── config.rs         # Configuration management
+│   ├── error.rs          # Error types
+│   ├── api/
+│   │   ├── mod.rs        # API module + OpenAPI
+│   │   ├── auth.rs       # Auth endpoints
+│   │   └── users.rs      # User endpoints
+│   ├── middleware/
+│   │   ├── mod.rs        # Middleware exports
+│   │   ├── auth.rs       # JWT authentication
+│   │   ├── rate_limit.rs # Rate limiting
+│   │   └── request_id.rs # Request ID tracking
+│   ├── domain/
+│   │   ├── auth/         # Auth domain
+│   │   ├── user/         # User domain
+│   │   ├── tenant/       # Tenant domain
+│   │   ├── cari/         # Customer/Vendor domain
+│   │   ├── product/      # Product domain
+│   │   ├── stock/        # Stock domain
+│   │   ├── invoice/      # Invoice domain
+│   │   ├── sales/        # Sales domain
+│   │   ├── purchase/     # Purchase domain
+│   │   ├── hr/           # HR domain
+│   │   ├── accounting/   # Accounting domain
+│   │   ├── project/      # Project domain
+│   │   ├── manufacturing/# Manufacturing domain
+│   │   └── crm/          # CRM domain
+│   ├── db/
+│   │   ├── mod.rs        # DB module
+│   │   └── pool.rs       # Connection pool
+│   └── utils/
+│       ├── jwt.rs        # JWT utilities
+│       └── password.rs   # Password utilities
+├── migrations/
+│   └── 001_initial_schema.sql
+├── tests/
+│   └── api_integration_test.rs
+└── docker-compose.yml
+```
+
+---
+
+## Next Steps
+
+1. **Tenant Database Routing** - Implement per-tenant database isolation
+2. **Security Audit** - Complete OWASP Top 10 review
+3. **API Versioning** - Add /v1/ prefix to all endpoints
+4. **Feature Flags** - Implement feature flag system
+5. **Performance Testing** - Load testing with realistic data
+6. **Documentation** - Add more inline documentation
+7. **Monitoring** - Add Prometheus/Grafana metrics
