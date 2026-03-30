@@ -1,12 +1,8 @@
 //! Project service for business logic
 
-#[allow(unused_imports)]
-use std::sync::Arc;
-
-#[allow(unused_imports)]
 use crate::domain::project::model::{
-    CostType, CreateProject, CreateProjectCost, CreateWbsItem, Project, ProjectCost,
-    ProjectProfitability, ProjectStatus, WbsItem,
+    CreateProject, CreateProjectCost, CreateWbsItem, Project, ProjectCost, ProjectProfitability,
+    ProjectStatus, WbsItem,
 };
 use crate::domain::project::repository::{
     BoxProjectCostRepository, BoxProjectRepository, BoxWbsItemRepository,
@@ -102,6 +98,7 @@ impl ProjectService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::project::model::CostType;
     use crate::domain::project::repository::{
         InMemoryProjectCostRepository, InMemoryProjectRepository, InMemoryWbsItemRepository,
     };

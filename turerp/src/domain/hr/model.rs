@@ -175,11 +175,10 @@ pub struct CreateAttendance {
 impl CreateAttendance {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        if self.check_in.is_some()
-            && self.check_out.is_some()
-            && self.check_out.unwrap() <= self.check_in.unwrap()
-        {
-            errors.push("Check out must be after check in".to_string());
+        if let (Some(check_in), Some(check_out)) = (self.check_in, self.check_out) {
+            if check_out <= check_in {
+                errors.push("Check out must be after check in".to_string());
+            }
         }
         if errors.is_empty() {
             Ok(())

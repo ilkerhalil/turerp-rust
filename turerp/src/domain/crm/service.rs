@@ -1,8 +1,5 @@
 //! CRM service for business logic
 
-#[allow(unused_imports)]
-use std::sync::Arc;
-
 use crate::domain::crm::model::{
     Campaign, CampaignStatus, CreateCampaign, CreateLead, CreateOpportunity, CreateTicket, Lead,
     LeadStatus, Opportunity, OpportunityStatus, Ticket, TicketStatus,
@@ -232,6 +229,7 @@ mod tests {
         InMemoryCampaignRepository, InMemoryLeadRepository, InMemoryOpportunityRepository,
         InMemoryTicketRepository,
     };
+    use std::sync::Arc;
 
     fn create_service() -> CrmService {
         let lead_repo = Arc::new(InMemoryLeadRepository::new()) as BoxLeadRepository;

@@ -1,5 +1,4 @@
 //! Cari service for business logic
-#[allow(unused_imports)]
 use validator::Validate;
 
 use crate::domain::cari::model::{CariResponse, CreateCari, UpdateCari};
@@ -136,18 +135,20 @@ impl CariService {
         amount: f64,
     ) -> Result<(), ApiError> {
         // Verify cari exists
-        let _ = self
+        let cari = self
             .repo
             .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", id)))?;
 
-        // Check credit limit
+        // Check credit limit for negative amounts (debit operations)
         if amount < 0.0 {
-            let cari = self.repo.find_by_id(id, tenant_id).await?.unwrap();
             let new_balance = cari.current_balance + amount;
             if new_balance < -cari.credit_limit {
-                return Err(ApiError::BadRequest("Credit limit exceeded".to_string()));
+                return Err(ApiError::BadRequest(format!(
+                    "Credit limit exceeded: current balance {:.2}, amount {:.2}, credit limit {:.2}",
+                    cari.current_balance, amount, cari.credit_limit
+                )));
             }
         }
 

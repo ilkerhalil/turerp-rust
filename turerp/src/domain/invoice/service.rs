@@ -1,5 +1,4 @@
 //! Invoice service for business logic
-#[allow(unused_imports)]
 use crate::domain::invoice::model::{
     CreateInvoice, CreatePayment, Invoice, InvoiceResponse, InvoiceStatus, Payment,
 };

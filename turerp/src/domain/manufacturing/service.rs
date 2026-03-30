@@ -1,8 +1,5 @@
 //! Manufacturing service for business logic
 
-#[allow(unused_imports)]
-use std::sync::Arc;
-
 use crate::domain::manufacturing::model::{
     BillOfMaterials, BillOfMaterialsLine, CreateBillOfMaterials, CreateBillOfMaterialsLine,
     CreateRouting, CreateRoutingOperation, CreateWorkOrder, CreateWorkOrderMaterial,
@@ -218,6 +215,7 @@ mod tests {
     use crate::domain::manufacturing::repository::{
         InMemoryBillOfMaterialsRepository, InMemoryRoutingRepository, InMemoryWorkOrderRepository,
     };
+    use std::sync::Arc;
 
     fn create_service() -> ManufacturingService {
         let wo_repo = Arc::new(InMemoryWorkOrderRepository::new()) as BoxWorkOrderRepository;

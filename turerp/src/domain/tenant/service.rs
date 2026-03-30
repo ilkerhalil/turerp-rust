@@ -1,5 +1,4 @@
 //! Tenant service for business logic
-#[allow(unused_imports)]
 use crate::domain::tenant::model::Tenant;
 use crate::domain::tenant::model::{CreateTenant, UpdateTenant};
 use crate::domain::tenant::repository::BoxTenantRepository;

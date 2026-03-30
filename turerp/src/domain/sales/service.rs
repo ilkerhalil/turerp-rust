@@ -1,8 +1,7 @@
 //! Sales service for business logic
-#[allow(unused_imports)]
 use crate::domain::sales::model::{
-    CreateQuotation, CreateQuotationLine, CreateSalesOrder, CreateSalesOrderLine,
-    QuotationResponse, QuotationStatus, SalesOrderResponse, SalesOrderStatus,
+    CreateQuotation, CreateSalesOrder, CreateSalesOrderLine, QuotationResponse, QuotationStatus,
+    SalesOrderResponse, SalesOrderStatus,
 };
 use crate::domain::sales::repository::{
     BoxQuotationLineRepository, BoxQuotationRepository, BoxSalesOrderLineRepository,

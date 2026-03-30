@@ -1,5 +1,4 @@
 //! Stock service for business logic
-#[allow(unused_imports)]
 use crate::domain::stock::model::{
     CreateStockMovement, CreateWarehouse, MovementType, StockLevel, StockMovement, StockSummary,
     Warehouse, WarehouseStock,

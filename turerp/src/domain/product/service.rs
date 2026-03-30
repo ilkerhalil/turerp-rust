@@ -1,5 +1,4 @@
 //! Product service for business logic
-#[allow(unused_imports)]
 use crate::domain::product::model::{
     Category, CreateCategory, CreateProduct, CreateUnit, Product, Unit, UpdateProduct,
 };

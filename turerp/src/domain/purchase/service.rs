@@ -1,12 +1,8 @@
 //! Purchase service for business logic
 
-#[allow(unused_imports)]
-use std::sync::Arc;
-
-#[allow(unused_imports)]
 use crate::domain::purchase::model::{
-    CreateGoodsReceipt, CreateGoodsReceiptLine, CreatePurchaseOrder, GoodsReceiptResponse,
-    GoodsReceiptStatus, PurchaseOrderResponse, PurchaseOrderStatus,
+    CreateGoodsReceipt, CreatePurchaseOrder, GoodsReceiptResponse, GoodsReceiptStatus,
+    PurchaseOrderResponse, PurchaseOrderStatus,
 };
 use crate::domain::purchase::repository::{
     BoxGoodsReceiptLineRepository, BoxGoodsReceiptRepository, BoxPurchaseOrderLineRepository,
@@ -211,7 +207,7 @@ impl PurchaseService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::purchase::model::CreatePurchaseOrderLine;
+    use crate::domain::purchase::model::{CreateGoodsReceiptLine, CreatePurchaseOrderLine};
     use crate::domain::purchase::repository::{
         InMemoryGoodsReceiptLineRepository, InMemoryGoodsReceiptRepository,
         InMemoryPurchaseOrderLineRepository, InMemoryPurchaseOrderRepository,

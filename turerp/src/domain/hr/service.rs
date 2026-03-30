@@ -1,5 +1,4 @@
 //! HR service for business logic
-#[allow(unused_imports)]
 use chrono::Utc;
 
 use crate::domain::hr::model::{

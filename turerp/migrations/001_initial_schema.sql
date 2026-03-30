@@ -64,8 +64,11 @@ INSERT INTO tenants (id, name, subdomain, is_active)
 VALUES (1, 'Default Tenant', 'default', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Insert default admin user (password: Admin123!)
--- Note: In production, change this password immediately
+-- Insert default admin user for DEVELOPMENT ONLY
+-- ⚠️ SECURITY WARNING: Remove this default user in production deployments!
+-- For production, use environment variables to create initial admin:
+--   INITIAL_ADMIN_USERNAME, INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD
+-- Or run: DELETE FROM users WHERE username = 'admin' before deployment
 INSERT INTO users (username, email, full_name, password, tenant_id, role, is_active)
 VALUES (
     'admin',
