@@ -330,6 +330,7 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.server.port, 8000);
+        assert_eq!(config.server.host, "0.0.0.0");
         assert_eq!(config.jwt.access_token_expiration, 3600);
         assert!(config.cors.is_wildcard());
     }
@@ -339,6 +340,7 @@ mod tests {
         let config = Config::default();
         let tenant_url = config.tenant_database_url("tenant_abc");
         assert!(tenant_url.contains("tenant_abc"));
+        assert!(tenant_url.contains("turerp") || tenant_url.contains("postgres"));
     }
 
     #[test]
@@ -346,6 +348,12 @@ mod tests {
         let config = Config::default();
         assert!(config.is_development());
         assert!(!config.is_production());
+    }
+
+    #[test]
+    fn test_environment_display() {
+        assert_eq!(format!("{}", Environment::Development), "development");
+        assert_eq!(format!("{}", Environment::Production), "production");
     }
 
     #[test]
@@ -361,5 +369,155 @@ mod tests {
             ..Default::default()
         };
         assert!(!cors.is_wildcard());
+    }
+
+    #[test]
+    fn test_cors_multiple_origins() {
+        let cors = CorsConfig {
+            allowed_origins: vec![
+                "https://example.com".to_string(),
+                "https://api.example.com".to_string(),
+            ],
+            ..Default::default()
+        };
+        assert!(!cors.is_wildcard());
+        assert_eq!(cors.allowed_origins.len(), 2);
+    }
+
+    #[test]
+    fn test_config_display() {
+        let config = Config::default();
+        let display = format!("{}", config);
+        assert!(display.contains("0.0.0.0:8000"));
+    }
+
+    #[test]
+    fn test_validate_development_mode() {
+        let config = Config::default();
+        // Development mode should always pass validation
+        assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_production_weak_jwt_secret() {
+        let config = Config {
+            environment: Environment::Production,
+            jwt: JwtConfig {
+                secret: "dev-secret-do-not-use-in-production".to_string(),
+                access_token_expiration: 3600,
+                refresh_token_expiration: 604800,
+            },
+            ..Default::default()
+        };
+
+        let result = config.validate();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("weak pattern"));
+    }
+
+    #[test]
+    fn test_validate_production_short_jwt_secret() {
+        let config = Config {
+            environment: Environment::Production,
+            jwt: JwtConfig {
+                secret: "short".to_string(),
+                access_token_expiration: 3600,
+                refresh_token_expiration: 604800,
+            },
+            ..Default::default()
+        };
+
+        let result = config.validate();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("32 characters"));
+    }
+
+    #[test]
+    fn test_validate_production_strong_jwt_secret() {
+        let config = Config {
+            environment: Environment::Production,
+            jwt: JwtConfig {
+                secret: "aGg3N2RmZ2hqOEBrc2RqZmhosdKJF8sdfkjhsdkjfh".to_string(), // Strong random-looking secret
+                access_token_expiration: 3600,
+                refresh_token_expiration: 604800,
+            },
+            cors: CorsConfig {
+                allowed_origins: vec!["https://example.com".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let result = config.validate();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_server_config_default() {
+        let server = ServerConfig::default();
+        assert_eq!(server.host, "0.0.0.0");
+        assert_eq!(server.port, 8000);
+    }
+
+    #[test]
+    fn test_jwt_config_dev() {
+        let jwt = JwtConfig::dev();
+        assert!(jwt.secret.contains("dev"));
+        assert_eq!(jwt.access_token_expiration, 3600);
+        assert_eq!(jwt.refresh_token_expiration, 604800);
+    }
+
+    #[test]
+    fn test_config_master_database_url() {
+        let config = Config::default();
+        let url = config.master_database_url();
+        assert!(!url.is_empty());
+    }
+
+    #[test]
+    fn test_tenant_database_url_edge_cases() {
+        let config = Config {
+            database: DatabaseConfig {
+                url: "postgres://user:pass@host/db".to_string(),
+                max_connections: 10,
+                min_connections: 5,
+            },
+            ..Default::default()
+        };
+
+        let tenant_url = config.tenant_database_url("newdb");
+        assert_eq!(tenant_url, "postgres://user:pass@host/newdb");
+    }
+
+    #[test]
+    fn test_cors_default_methods() {
+        let cors = CorsConfig::default();
+        assert!(cors.allowed_methods.contains(&"GET".to_string()));
+        assert!(cors.allowed_methods.contains(&"POST".to_string()));
+        assert!(cors.allowed_methods.contains(&"PUT".to_string()));
+        assert!(cors.allowed_methods.contains(&"DELETE".to_string()));
+        assert!(cors.allowed_methods.contains(&"OPTIONS".to_string()));
+    }
+
+    #[test]
+    fn test_cors_default_headers() {
+        let cors = CorsConfig::default();
+        assert!(cors.allowed_headers.contains(&"Content-Type".to_string()));
+        assert!(cors.allowed_headers.contains(&"Authorization".to_string()));
+    }
+
+    #[test]
+    fn test_cors_credentials_default() {
+        let cors = CorsConfig::default();
+        assert!(cors.allow_credentials);
+    }
+
+    #[test]
+    fn test_environment_equality() {
+        assert_eq!(Environment::Development, Environment::Development);
+        assert_eq!(Environment::Production, Environment::Production);
+        assert_ne!(Environment::Development, Environment::Production);
     }
 }
