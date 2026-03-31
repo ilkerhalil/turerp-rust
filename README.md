@@ -25,6 +25,7 @@
 | **Purchase** | Satın alma siparişleri, mal kabul, tedarikçi yönetimi |
 | **HR** | Personel yönetimi, bordro, izin takibi |
 | **Accounting** | Hesap planı, yevmiye kayıtları, mizan |
+| **Assets** | Demirbaşlar, amortisman hesaplama, bakım takibi |
 
 ### 📊 Gelişmiş Modüller
 | Modül | Açıklama |
@@ -163,9 +164,20 @@ turerp-rust/
 │   │   │   ├── purchase/      # Satın alma modülü
 │   │   │   ├── hr/            # İK modülü
 │   │   │   ├── accounting/    # Muhasebe modülü
+│   │   │   ├── assets/        # Demirbaş modülü (NEW)
 │   │   │   ├── project/       # Proje yönetimi
 │   │   │   ├── manufacturing/ # Üretim modülü
 │   │   │   └── crm/           # CRM modülü
+│   │   ├── common/
+│   │   │   └── pagination.rs  # Sayfalama yardımcıları (NEW)
+│   │   ├── middleware/       # HTTP middleware
+│   │   │   ├── auth.rs        # JWT authentication
+│   │   │   ├── rate_limit.rs  # Rate limiting (governor)
+│   │   │   └── request_id.rs  # Request ID tracing
+│   │   ├── utils/             # Yardımcı fonksiyonlar
+│   │   │   ├── jwt.rs         # JWT utilities
+│   │   │   ├── password.rs    # Password utilities
+│   │   │   └── encryption.rs  # AES-256-GCM encryption (NEW)
 │   │   ├── error/             # Hata yönetimi
 │   │   ├── middleware/       # HTTP middleware
 │   │   │   ├── auth.rs        # JWT authentication
@@ -239,6 +251,9 @@ JWT Token → Kullanıcı Doğrulama → Rol Bazlı Erişim
 │                   Business Modules                           │
 │  Sales  │  Purchase  │  HR  │  Accounting  │  Assets        │
 ├─────────┴───────────┴──────┴──────────────┴────────────────┤
+│                    Security Layer                            │
+│     OWASP Tests  │  Input Validation  │  Rate Limiting     │
+├───────────┴─────────────────┴───────┴──────┴────────────────┤
 │                   Extended Modules                           │
 │  Projects  │  Manufacturing  │  BOM  │  QC  │  Shop Floor   │
 ├───────────┴─────────────────┴───────┴──────┴────────────────┤
@@ -250,8 +265,11 @@ JWT Token → Kullanıcı Doğrulama → Rol Bazlı Erişim
 ## Test
 
 ```bash
-# Tüm testler
+# Tüm testler (239 test)
 cargo test
+
+# Security testleri
+cargo test --test security_test
 
 # Belirli modül testleri
 cargo test --lib domain::cari
@@ -295,6 +313,16 @@ GitHub Actions ile otomatik:
 | `RUST_LOG` | Log seviyesi | `info` |
 
 ## Güvenlik
+
+### OWASP Top 10 Koruması
+
+Sistem OWASP Top 10 güvenlik açıklarına karşı test edilmiştir:
+- ✅ **SQL Injection Prevention** - Parametreli sorgular
+- ✅ **JWT Token Security** - Token doğrulama ve manipülasyon koruması
+- ✅ **Authentication Security** - Güçlü şifre politikaları, rate limiting
+- ✅ **Authorization** - Rol bazlı erişim kontrolü
+- ✅ **Input Validation** - Tüm girişler doğrulanıyor
+- ✅ **HTTP Method Security** - İzin verilmeyen metodlar reddediliyor
 
 ### JWT Kimlik Doğrulama
 

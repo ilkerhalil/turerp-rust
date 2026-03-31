@@ -54,7 +54,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Environment-based configuration
 - [x] Production validation (JWT secret strength)
 - [x] Tenant-specific config (TenantConfigRepository)
-- [ ] Encrypted storage for sensitive values (planned)
+- [x] Encrypted storage for sensitive values (AES-256-GCM)
 
 ---
 
@@ -131,9 +131,10 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Posting mechanism
 
 ### 5.2 Assets Module
-- [ ] Fixed assets
-- [ ] Depreciation
-- [ ] Maintenance tracking
+- [x] Fixed assets model and repository
+- [x] Depreciation calculations (straight-line, declining balance)
+- [x] Maintenance tracking
+- [x] In-memory repository for testing
 
 ---
 
@@ -191,17 +192,21 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Rate limiting (governor crate)
 
 ### 9.2 Testing & Security
-- [x] Unit tests (211 passing)
+- [x] Unit tests (217 passing)
 - [x] Integration tests (14 passing)
+- [x] Security tests (8 passing)
 - [x] Request ID middleware
 - [x] JWT authentication middleware
 - [x] Password complexity validation
 - [x] Production config validation
 - [x] Admin role authorization
 - [x] Tenant isolation enforcement
-- [ ] Security audit (OWASP)
-- [ ] SQL injection tests
-- [ ] XSS prevention tests
+- [x] Security audit (OWASP Top 10)
+- [x] SQL injection tests
+- [x] Input validation tests
+- [x] JWT tampering tests
+- [x] Authentication security tests
+- [x] HTTP method security tests
 
 ### 9.3 Code Quality
 - [x] cargo check passes
@@ -231,23 +236,25 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Purchase | ✅ Complete | Orders, goods receipt, purchase requests |
 | HR | ✅ Complete | Employees, attendance, leave |
 | Accounting | ✅ Complete | Journal entries, trial balance |
+| Assets | ✅ Complete | Fixed assets, depreciation, maintenance |
 | Project | ✅ Complete | WBS, costs, profitability |
 | Manufacturing | ✅ Complete | Work orders, BOM, routing, NCR |
 | CRM | ✅ Complete | Leads, opportunities, tickets |
 | Feature Flags | ✅ Complete | CRUD, tenant-specific, API v1, admin auth |
 | Product Variants | ✅ Complete | CRUD, API v1 |
-| Purchase Requests | ✅ Complete | CRUD, approval workflow, API v1, state machine |
+| Purchase Requests | ✅ Complete | CRUD, approval workflow, API v1, state machine, pagination |
 | Tenant DB Routing | ✅ Complete | Multi-tenant isolation middleware |
-| Tenant Config | ✅ Complete | Per-tenant settings, key-value storage |
+| Tenant Config | ✅ Complete | Per-tenant settings, encrypted values |
 
 ### Test Coverage
-- **225 tests passing** (211 unit + 14 integration)
+- **239 tests passing** (217 unit + 14 integration + 8 security)
 - Unit tests for all domain modules
 - Model validation tests
 - Service business logic tests
 - Middleware tests
 - Config validation tests
 - Error handling tests
+- Security tests (OWASP Top 10)
 
 ### Code Quality
 - ✅ cargo check passes
@@ -279,7 +286,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Feature | Description | Status |
 |---------|-------------|--------|
 | Tenant DB Routing | Multi-tenant database isolation | ✅ Complete |
-| Security Audit | OWASP Top 10 review | Needed |
+| Security Audit | OWASP Top 10 review | ✅ Complete |
 | API Versioning | /v1/, /v2/ endpoints | ✅ Complete |
 | Feature Flags | A/B testing, gradual rollout | ✅ Complete |
 
@@ -287,15 +294,17 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Feature | Description | Status |
 |---------|-------------|--------|
 | Product Variants | Size, color, etc. | ✅ Complete |
-| Purchase Requests | Approval workflow | ✅ Complete |
-| Fixed Assets | Depreciation tracking | Planned |
+| Purchase Requests | Approval workflow, pagination | ✅ Complete |
+| Fixed Assets | Depreciation tracking | ✅ Complete |
 | Tenant-specific Config | Per-tenant settings | ✅ Complete |
+| Encrypted Config | Sensitive value encryption | ✅ Complete |
 
 ### Low Priority
 | Feature | Description | Status |
 |---------|-------------|--------|
-| Encrypted Config | Sensitive value encryption | Planned |
 | API Analytics | Request metrics | Planned |
+| Performance Testing | Load testing with realistic data | Planned |
+| Monitoring | Prometheus/Grafana metrics | Planned |
 
 ---
 
@@ -486,10 +495,26 @@ turerp/
 │   │   ├── purchase/     # Purchase domain (includes requests)
 │   │   ├── hr/           # HR domain
 │   │   ├── accounting/   # Accounting domain
+│   │   ├── assets/       # Fixed assets domain (NEW)
 │   │   ├── project/      # Project domain
 │   │   ├── manufacturing/# Manufacturing domain
 │   │   ├── crm/          # CRM domain
 │   │   └── feature/      # Feature flags domain
+│   ├── common/
+│   │   └── pagination.rs # Pagination utilities (NEW)
+│   ├── db/
+│   │   ├── mod.rs        # DB module
+│   │   ├── pool.rs       # Connection pool
+│   │   └── tenant_registry.rs # Tenant pool registry
+│   └── utils/
+│       ├── jwt.rs        # JWT utilities
+│       ├── password.rs   # Password utilities
+│       └── encryption.rs # AES-256-GCM encryption (NEW)
+├── migrations/
+│   └── 001_initial_schema.sql
+├── tests/
+│   ├── api_integration_test.rs
+│   └── security_test.rs  # OWASP security tests (NEW)
 │   ├── db/
 │   │   ├── mod.rs        # DB module
 │   │   ├── pool.rs       # Connection pool
@@ -513,6 +538,8 @@ turerp/
 3. ~~Tenant Database Routing~~ - Implement per-tenant database isolation ✅
 4. ~~Tenant-Specific Config~~ - Per-tenant settings ✅
 5. ~~Feature Flags Admin Auth~~ - Security hardening ✅
-6. **Security Audit** - Complete OWASP Top 10 review
-7. **Performance Testing** - Load testing with realistic data
-8. **Monitoring** - Add Prometheus/Grafana metrics
+6. ~~Security Audit~~ - Complete OWASP Top 10 review ✅
+7. ~~Fixed Assets~~ - Depreciation tracking ✅
+8. ~~Encrypted Config~~ - Sensitive value encryption ✅
+9. **Performance Testing** - Load testing with realistic data
+10. **Monitoring** - Add Prometheus/Grafana metrics
