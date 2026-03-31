@@ -95,7 +95,8 @@ async fn test_sql_injection_in_registration() {
                 "username": format!("{}_{}", payload, unique_id),
                 "email": format!("{}@test.com", unique_id),
                 "password": "ValidPass123!",
-                "full_name": "Test User"
+                "full_name": "Test User",
+                "tenant_id": 1
             }))
             .to_request();
 
@@ -172,7 +173,8 @@ async fn test_valid_password_accepted() {
             "username": format!("testuser_{}", unique_id),
             "email": format!("{}@test.com", unique_id),
             "password": "StrongP@ssw0rd!",  // 14 chars, meets all requirements
-            "full_name": "Test User"
+            "full_name": "Test User",
+            "tenant_id": 1
         }))
         .to_request();
 
@@ -231,7 +233,8 @@ async fn test_user_cannot_access_other_users_data() {
             "username": format!("user1_{}", unique_id1),
             "email": format!("{}@test.com", unique_id1),
             "password": password,
-            "full_name": "User One"
+            "full_name": "User One",
+            "tenant_id": 1
         }))
         .send_request(&app)
         .await;
@@ -305,7 +308,8 @@ async fn test_input_validation_valid_data() {
             "username": format!("validuser_{}", unique_id),
             "email": format!("{}@example.com", unique_id),
             "password": "ValidPass123!",  // 13 chars, meets all requirements
-            "full_name": "Valid User"
+            "full_name": "Valid User",
+            "tenant_id": 1
         }))
         .to_request();
 

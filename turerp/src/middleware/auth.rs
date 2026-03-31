@@ -40,8 +40,21 @@ impl JwtAuthMiddleware {
     }
 
     /// Check if path is public (doesn't require authentication)
+    ///
+    /// Uses exact matching for file paths (like /health) and prefix matching
+    /// for directory paths (ending with / like /swagger-ui/).
     fn is_public_path(path: &str) -> bool {
-        PUBLIC_PATHS.iter().any(|public| path.starts_with(public))
+        // Strip query parameters from path
+        let path = path.split('?').next().unwrap_or(path);
+
+        PUBLIC_PATHS.iter().any(|public| {
+            // Exact match for the path
+            *public == path ||
+            // Prefix match for directory-like paths (public ends with /)
+            (public.ends_with('/') && path.starts_with(public)) ||
+            // Check if path is a subpath of the public path
+            path.starts_with(&format!("{}/", public))
+        })
     }
 
     /// Extract Bearer token from Authorization header
@@ -355,15 +368,28 @@ mod tests {
 
     #[test]
     fn test_public_path_edge_cases() {
-        // Paths that start with public paths but have extra segments
-        assert!(JwtAuthMiddleware::is_public_path("/api/auth/login/extra"));
-        assert!(JwtAuthMiddleware::is_public_path("/swagger-ui/"));
-        assert!(JwtAuthMiddleware::is_public_path("/api-docs/"));
+        // Exact matches are public
+        assert!(JwtAuthMiddleware::is_public_path("/health"));
+        assert!(JwtAuthMiddleware::is_public_path("/api/v1/auth/login"));
 
-        // Similar but not matching paths
-        assert!(!JwtAuthMiddleware::is_public_path("/api/auth/log"));
-        assert!(!JwtAuthMiddleware::is_public_path("/api/authenticator"));
-        // Note: /healthcheck starts with /health, so it matches - this is intentional
-        // Paths like /health-status would also match
+        // Subpaths are also public (directory-like behavior)
+        assert!(JwtAuthMiddleware::is_public_path("/swagger-ui/index.html"));
+        assert!(JwtAuthMiddleware::is_public_path("/api-docs/openapi.json"));
+
+        // Query params are stripped
+        assert!(JwtAuthMiddleware::is_public_path(
+            "/api/v1/auth/login?redirect=/home"
+        ));
+        assert!(JwtAuthMiddleware::is_public_path("/health?check=true"));
+
+        // Similar but not matching paths should NOT be public
+        assert!(!JwtAuthMiddleware::is_public_path("/api/auth/log")); // Missing 'in'
+        assert!(!JwtAuthMiddleware::is_public_path("/api/authenticator")); // Different path
+        assert!(!JwtAuthMiddleware::is_public_path("/healthcheck")); // Different path, not subpath
+        assert!(!JwtAuthMiddleware::is_public_path("/healthy")); // Different path
+        assert!(!JwtAuthMiddleware::is_public_path("/api/v1/auth/me")); // Protected endpoint
+
+        // Extra segments that aren't subpaths should not match
+        assert!(!JwtAuthMiddleware::is_public_path("/api/auth/login-extra")); // Hyphen is not a subpath
     }
 }

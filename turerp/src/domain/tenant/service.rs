@@ -6,6 +6,7 @@ use crate::domain::tenant::model::{
 use crate::domain::tenant::repository::{BoxTenantConfigRepository, BoxTenantRepository};
 use crate::error::ApiError;
 use crate::utils::encryption::{decrypt, encrypt};
+use zeroize::Zeroizing;
 
 /// Tenant service
 #[derive(Clone)]
@@ -92,8 +93,8 @@ impl TenantService {
 #[derive(Clone)]
 pub struct TenantConfigService {
     repo: BoxTenantConfigRepository,
-    /// Optional encryption key for sensitive values
-    encryption_key: Option<Vec<u8>>,
+    /// Optional encryption key for sensitive values (securely zeroed on drop)
+    encryption_key: Option<Zeroizing<Vec<u8>>>,
 }
 
 impl TenantConfigService {
@@ -106,10 +107,13 @@ impl TenantConfigService {
     }
 
     /// Create a config service with encryption support
+    ///
+    /// The encryption key is wrapped in `Zeroizing` to ensure it's securely
+    /// cleared from memory when the service is dropped.
     pub fn with_encryption(repo: BoxTenantConfigRepository, encryption_key: Vec<u8>) -> Self {
         Self {
             repo,
-            encryption_key: Some(encryption_key),
+            encryption_key: Some(Zeroizing::new(encryption_key)),
         }
     }
 

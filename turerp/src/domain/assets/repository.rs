@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use parking_lot::Mutex;
+use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use super::model::{
@@ -52,7 +53,7 @@ pub trait AssetsRepository: Send + Sync {
     async fn update_status(&self, id: i64, status: AssetStatus) -> Result<Asset, ApiError>;
 
     /// Record depreciation for an asset
-    async fn record_depreciation(&self, id: i64, amount: f64) -> Result<Asset, ApiError>;
+    async fn record_depreciation(&self, id: i64, amount: Decimal) -> Result<Asset, ApiError>;
 
     /// Delete an asset
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
@@ -97,21 +98,28 @@ fn generate_asset_code(count: i64) -> String {
     format!("AST-{:06}", count)
 }
 
-/// In-memory assets repository
+/// Internal state for InMemoryAssetsRepository
+struct InMemoryAssetsInner {
+    assets: std::collections::HashMap<i64, Asset>,
+    maintenance_records: std::collections::HashMap<i64, Vec<MaintenanceRecord>>,
+    next_id: i64,
+    next_maintenance_id: i64,
+}
+
+/// In-memory assets repository with thread-safe single mutex
 pub struct InMemoryAssetsRepository {
-    assets: Mutex<std::collections::HashMap<i64, Asset>>,
-    maintenance_records: Mutex<std::collections::HashMap<i64, Vec<MaintenanceRecord>>>,
-    next_id: Mutex<i64>,
-    next_maintenance_id: Mutex<i64>,
+    inner: Mutex<InMemoryAssetsInner>,
 }
 
 impl InMemoryAssetsRepository {
     pub fn new() -> Self {
         Self {
-            assets: Mutex::new(std::collections::HashMap::new()),
-            maintenance_records: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
-            next_maintenance_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryAssetsInner {
+                assets: std::collections::HashMap::new(),
+                maintenance_records: std::collections::HashMap::new(),
+                next_id: 1,
+                next_maintenance_id: 1,
+            }),
         }
     }
 }
@@ -129,9 +137,9 @@ impl AssetsRepository for InMemoryAssetsRepository {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let asset_code = generate_asset_code(id);
         let now = chrono::Utc::now();
@@ -152,7 +160,7 @@ impl AssetsRepository for InMemoryAssetsRepository {
             salvage_value: create.salvage_value,
             useful_life_years: create.useful_life_years,
             depreciation_method,
-            accumulated_depreciation: 0.0,
+            accumulated_depreciation: Decimal::ZERO,
             book_value: create.acquisition_cost,
             warranty_expiry: create.warranty_expiry,
             insurance_number: create.insurance_number,
@@ -163,17 +171,18 @@ impl AssetsRepository for InMemoryAssetsRepository {
             updated_at: now,
         };
 
-        self.assets.lock().insert(id, asset.clone());
+        inner.assets.insert(id, asset.clone());
         Ok(asset)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Asset>, ApiError> {
-        Ok(self.assets.lock().get(&id).cloned())
+        Ok(self.inner.lock().assets.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError> {
-        let assets = self.assets.lock();
-        Ok(assets
+        let inner = self.inner.lock();
+        Ok(inner
+            .assets
             .values()
             .filter(|a| a.tenant_id == tenant_id)
             .cloned()
@@ -186,10 +195,15 @@ impl AssetsRepository for InMemoryAssetsRepository {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<Asset>, ApiError> {
-        let assets = self.assets.lock();
-        let total = assets.values().filter(|a| a.tenant_id == tenant_id).count() as u64;
+        let inner = self.inner.lock();
+        let total = inner
+            .assets
+            .values()
+            .filter(|a| a.tenant_id == tenant_id)
+            .count() as u64;
 
-        let items: Vec<Asset> = assets
+        let items: Vec<Asset> = inner
+            .assets
             .values()
             .filter(|a| a.tenant_id == tenant_id)
             .skip(((page.saturating_sub(1)) * per_page) as usize)
@@ -205,8 +219,9 @@ impl AssetsRepository for InMemoryAssetsRepository {
         tenant_id: i64,
         status: AssetStatus,
     ) -> Result<Vec<Asset>, ApiError> {
-        let assets = self.assets.lock();
-        Ok(assets
+        let inner = self.inner.lock();
+        Ok(inner
+            .assets
             .values()
             .filter(|a| a.tenant_id == tenant_id && a.status == status)
             .cloned()
@@ -218,8 +233,9 @@ impl AssetsRepository for InMemoryAssetsRepository {
         tenant_id: i64,
         category_id: i64,
     ) -> Result<Vec<Asset>, ApiError> {
-        let assets = self.assets.lock();
-        Ok(assets
+        let inner = self.inner.lock();
+        Ok(inner
+            .assets
             .values()
             .filter(|a| a.tenant_id == tenant_id && a.category_id == Some(category_id))
             .cloned()
@@ -227,8 +243,9 @@ impl AssetsRepository for InMemoryAssetsRepository {
     }
 
     async fn update(&self, id: i64, update: UpdateAsset) -> Result<Asset, ApiError> {
-        let mut assets = self.assets.lock();
-        let asset = assets
+        let mut inner = self.inner.lock();
+        let asset = inner
+            .assets
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))?;
 
@@ -259,8 +276,9 @@ impl AssetsRepository for InMemoryAssetsRepository {
     }
 
     async fn update_status(&self, id: i64, status: AssetStatus) -> Result<Asset, ApiError> {
-        let mut assets = self.assets.lock();
-        let asset = assets
+        let mut inner = self.inner.lock();
+        let asset = inner
+            .assets
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))?;
 
@@ -269,9 +287,10 @@ impl AssetsRepository for InMemoryAssetsRepository {
         Ok(asset.clone())
     }
 
-    async fn record_depreciation(&self, id: i64, amount: f64) -> Result<Asset, ApiError> {
-        let mut assets = self.assets.lock();
-        let asset = assets
+    async fn record_depreciation(&self, id: i64, amount: Decimal) -> Result<Asset, ApiError> {
+        let mut inner = self.inner.lock();
+        let asset = inner
+            .assets
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))?;
 
@@ -288,8 +307,9 @@ impl AssetsRepository for InMemoryAssetsRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.assets.lock().remove(&id);
-        self.maintenance_records.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.assets.remove(&id);
+        inner.maintenance_records.remove(&id);
         Ok(())
     }
 
@@ -308,26 +328,24 @@ impl AssetsRepository for InMemoryAssetsRepository {
                 "Description must be 1-1000 characters".to_string(),
             ));
         }
-        if create.cost < 0.0 {
+        if create.cost < Decimal::ZERO {
             return Err(ApiError::Validation(
                 "Cost must be non-negative".to_string(),
             ));
         }
 
+        let mut inner = self.inner.lock();
+
         // Verify asset exists
-        {
-            let assets = self.assets.lock();
-            if !assets.contains_key(&create.asset_id) {
-                return Err(ApiError::NotFound(format!(
-                    "Asset {} not found",
-                    create.asset_id
-                )));
-            }
+        if !inner.assets.contains_key(&create.asset_id) {
+            return Err(ApiError::NotFound(format!(
+                "Asset {} not found",
+                create.asset_id
+            )));
         }
 
-        let mut next_id = self.next_maintenance_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let id = inner.next_maintenance_id;
+        inner.next_maintenance_id += 1;
 
         let record = MaintenanceRecord {
             id,
@@ -341,8 +359,8 @@ impl AssetsRepository for InMemoryAssetsRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.maintenance_records
-            .lock()
+        inner
+            .maintenance_records
             .entry(create.asset_id)
             .or_default()
             .push(record.clone());
@@ -354,8 +372,12 @@ impl AssetsRepository for InMemoryAssetsRepository {
         &self,
         asset_id: i64,
     ) -> Result<Vec<MaintenanceRecord>, ApiError> {
-        let records = self.maintenance_records.lock();
-        Ok(records.get(&asset_id).cloned().unwrap_or_default())
+        let inner = self.inner.lock();
+        Ok(inner
+            .maintenance_records
+            .get(&asset_id)
+            .cloned()
+            .unwrap_or_default())
     }
 }
 
@@ -377,8 +399,8 @@ mod tests {
                 serial_number: Some("SN12345".to_string()),
                 location: Some("Office".to_string()),
                 acquisition_date: chrono::Utc::now(),
-                acquisition_cost: 5000.0,
-                salvage_value: 500.0,
+                acquisition_cost: Decimal::from(5000),
+                salvage_value: Decimal::from(500),
                 useful_life_years: 5,
                 depreciation_method: Some(DepreciationMethod::StraightLine),
                 warranty_expiry: None,
@@ -391,7 +413,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(asset.name, "Test Computer");
-        assert_eq!(asset.acquisition_cost, 5000.0);
+        assert_eq!(asset.acquisition_cost, Decimal::from(5000));
         assert!(asset.asset_code.starts_with("AST-"));
     }
 
@@ -408,8 +430,8 @@ mod tests {
                 serial_number: None,
                 location: None,
                 acquisition_date: chrono::Utc::now(),
-                acquisition_cost: 10000.0,
-                salvage_value: 1000.0,
+                acquisition_cost: Decimal::from(10000),
+                salvage_value: Decimal::from(1000),
                 useful_life_years: 5,
                 depreciation_method: Some(DepreciationMethod::StraightLine),
                 warranty_expiry: None,
@@ -421,9 +443,12 @@ mod tests {
             .await
             .unwrap();
 
-        let updated = repo.record_depreciation(asset.id, 1800.0).await.unwrap();
-        assert_eq!(updated.accumulated_depreciation, 1800.0);
-        assert_eq!(updated.book_value, 8200.0);
+        let updated = repo
+            .record_depreciation(asset.id, Decimal::from(1800))
+            .await
+            .unwrap();
+        assert_eq!(updated.accumulated_depreciation, Decimal::from(1800));
+        assert_eq!(updated.book_value, Decimal::from(8200));
     }
 
     #[actix_web::test]
@@ -439,8 +464,8 @@ mod tests {
                 serial_number: None,
                 location: None,
                 acquisition_date: chrono::Utc::now(),
-                acquisition_cost: 10000.0,
-                salvage_value: 1000.0,
+                acquisition_cost: Decimal::from(10000),
+                salvage_value: Decimal::from(1000),
                 useful_life_years: 10,
                 depreciation_method: Some(DepreciationMethod::StraightLine),
                 warranty_expiry: None,
@@ -458,7 +483,7 @@ mod tests {
                 maintenance_date: chrono::Utc::now(),
                 maintenance_type: "Preventive".to_string(),
                 description: "Annual maintenance".to_string(),
-                cost: 500.0,
+                cost: Decimal::from(500),
                 performed_by: Some("John Doe".to_string()),
                 next_maintenance_date: Some(chrono::Utc::now() + chrono::Duration::days(365)),
             })

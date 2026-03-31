@@ -68,6 +68,12 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 # Synchronization (no poisoning)
 parking_lot = "0.12"
 
+# Secure memory zeroing
+zeroize = "1.8"
+
+# Precise decimal for financial calculations
+rust_decimal = { version = "1.36", features = ["serde"] }
+
 # Mocking for tests
 mockall = "0.12"
 

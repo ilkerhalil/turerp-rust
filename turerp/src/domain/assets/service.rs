@@ -1,5 +1,6 @@
 //! Assets service for business logic
 
+use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use super::model::{
@@ -111,8 +112,8 @@ impl AssetsService {
     }
 
     /// Record manual depreciation for an asset
-    pub async fn record_depreciation(&self, id: i64, amount: f64) -> Result<Asset, ApiError> {
-        if amount < 0.0 {
+    pub async fn record_depreciation(&self, id: i64, amount: Decimal) -> Result<Asset, ApiError> {
+        if amount < Decimal::ZERO {
             return Err(ApiError::Validation(
                 "Depreciation amount must be non-negative".to_string(),
             ));
@@ -207,7 +208,6 @@ mod tests {
     use super::*;
     use crate::domain::assets::model::DepreciationMethod;
     use crate::domain::assets::repository::InMemoryAssetsRepository;
-    use chrono::TimeZone;
 
     #[actix_web::test]
     async fn test_create_and_get_asset() {
@@ -223,8 +223,8 @@ mod tests {
                 serial_number: Some("SN123".to_string()),
                 location: Some("Office".to_string()),
                 acquisition_date: chrono::Utc::now(),
-                acquisition_cost: 5000.0,
-                salvage_value: 500.0,
+                acquisition_cost: Decimal::from(5000),
+                salvage_value: Decimal::from(500),
                 useful_life_years: 5,
                 depreciation_method: Some(DepreciationMethod::StraightLine),
                 warranty_expiry: None,
@@ -254,8 +254,8 @@ mod tests {
                 serial_number: None,
                 location: None,
                 acquisition_date: chrono::Utc::now(),
-                acquisition_cost: 10000.0,
-                salvage_value: 1000.0,
+                acquisition_cost: Decimal::from(10000),
+                salvage_value: Decimal::from(1000),
                 useful_life_years: 5,
                 depreciation_method: Some(DepreciationMethod::StraightLine),
                 warranty_expiry: None,
@@ -269,8 +269,8 @@ mod tests {
 
         let updated = service.calculate_depreciation(asset.id).await.unwrap();
         // Annual depreciation: (10000 - 1000) / 5 = 1800
-        assert_eq!(updated.accumulated_depreciation, 1800.0);
-        assert_eq!(updated.book_value, 8200.0);
+        assert_eq!(updated.accumulated_depreciation, Decimal::from(1800));
+        assert_eq!(updated.book_value, Decimal::from(8200));
     }
 
     #[actix_web::test]
@@ -287,8 +287,8 @@ mod tests {
                 serial_number: None,
                 location: None,
                 acquisition_date: chrono::Utc::now(),
-                acquisition_cost: 1000.0,
-                salvage_value: 100.0,
+                acquisition_cost: Decimal::from(1000),
+                salvage_value: Decimal::from(100),
                 useful_life_years: 5,
                 depreciation_method: Some(DepreciationMethod::StraightLine),
                 warranty_expiry: None,
@@ -326,8 +326,8 @@ mod tests {
                 serial_number: None,
                 location: None,
                 acquisition_date: chrono::Utc::now(),
-                acquisition_cost: 10000.0,
-                salvage_value: 1000.0,
+                acquisition_cost: Decimal::from(10000),
+                salvage_value: Decimal::from(1000),
                 useful_life_years: 10,
                 depreciation_method: Some(DepreciationMethod::StraightLine),
                 warranty_expiry: None,
@@ -345,7 +345,7 @@ mod tests {
                 maintenance_date: chrono::Utc::now(),
                 maintenance_type: "Preventive".to_string(),
                 description: "Annual service".to_string(),
-                cost: 500.0,
+                cost: Decimal::from(500),
                 performed_by: Some("John".to_string()),
                 next_maintenance_date: Some(chrono::Utc::now() + chrono::Duration::days(365)),
             })

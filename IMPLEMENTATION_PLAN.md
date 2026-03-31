@@ -276,6 +276,11 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - ✅ SQL injection prevention (parameterized queries)
 - ✅ Admin role authorization for sensitive operations
 - ✅ Tenant isolation enforced at API layer
+- ✅ Secure public path matching (exact match, no bypass)
+- ✅ Encryption key memory security (zeroize on drop)
+- ✅ Decimal precision for financial values (no floating-point errors)
+- ✅ Required tenant_id in registration (no default tenant exposure)
+- ✅ Thread-safe in-memory repositories (single mutex pattern)
 - ⚠️ Default admin credentials (dev only, warning in migrations)
 
 ---
@@ -354,6 +359,12 @@ uuid = { version = "1.0", features = ["v4"] }
 # Configuration
 config = "0.14"
 dotenv = "0.15"
+
+# Precise decimal for financial calculations
+rust_decimal = { version = "1.36", features = ["serde"] }
+
+# Secure memory zeroing
+zeroize = "1.8"
 ```
 
 ---

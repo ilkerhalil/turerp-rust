@@ -35,8 +35,10 @@ pub struct RegisterRequest {
     #[validate(length(min = 12))]
     pub password: String,
 
-    /// Tenant ID for the new user (required for normal registration)
-    pub tenant_id: Option<i64>,
+    /// Tenant ID for the new user (required for registration)
+    /// SECURITY: Must be explicitly provided - no default tenant to prevent
+    /// accidental exposure of system tenant (id=1)
+    pub tenant_id: i64,
 
     #[serde(default)]
     pub role: Option<Role>,
@@ -87,8 +89,9 @@ impl AuthService {
         // Validate password complexity
         request.validate_password().map_err(ApiError::Validation)?;
 
-        // Use default tenant_id if not provided (for system admin registration)
-        let tenant_id = request.tenant_id.unwrap_or(1);
+        // SECURITY: tenant_id is required and explicitly provided by the caller
+        // No default is used to prevent accidental exposure of system tenant
+        let tenant_id = request.tenant_id;
 
         // Create user
         let create = CreateUser {
