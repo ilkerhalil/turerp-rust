@@ -5,6 +5,7 @@ use crate::domain::tenant::model::{
 };
 use crate::domain::tenant::repository::{BoxTenantConfigRepository, BoxTenantRepository};
 use crate::error::ApiError;
+use crate::utils::encryption::{decrypt, encrypt};
 
 /// Tenant service
 #[derive(Clone)]
@@ -87,25 +88,74 @@ impl TenantService {
     }
 }
 
-/// Tenant config service
+/// Tenant config service with optional encryption support
 #[derive(Clone)]
 pub struct TenantConfigService {
     repo: BoxTenantConfigRepository,
+    /// Optional encryption key for sensitive values
+    encryption_key: Option<Vec<u8>>,
 }
 
 impl TenantConfigService {
+    /// Create a new config service without encryption
     pub fn new(repo: BoxTenantConfigRepository) -> Self {
-        Self { repo }
+        Self {
+            repo,
+            encryption_key: None,
+        }
+    }
+
+    /// Create a config service with encryption support
+    pub fn with_encryption(repo: BoxTenantConfigRepository, encryption_key: Vec<u8>) -> Self {
+        Self {
+            repo,
+            encryption_key: Some(encryption_key),
+        }
+    }
+
+    /// Encrypt a value if encryption is enabled
+    fn encrypt_value(&self, value: &serde_json::Value) -> Result<serde_json::Value, ApiError> {
+        if let Some(ref key) = self.encryption_key {
+            let plaintext = value.to_string();
+            let encrypted = encrypt(&plaintext, key)
+                .map_err(|e| ApiError::Internal(format!("Encryption failed: {}", e)))?;
+            Ok(serde_json::Value::String(encrypted))
+        } else {
+            Err(ApiError::Internal(
+                "Encryption key not configured for encrypted values".to_string(),
+            ))
+        }
+    }
+
+    /// Decrypt a value if encryption is enabled
+    fn decrypt_value(&self, value: &serde_json::Value) -> Result<serde_json::Value, ApiError> {
+        if let Some(ref key) = self.encryption_key {
+            let ciphertext = value
+                .as_str()
+                .ok_or_else(|| ApiError::Internal("Encrypted value is not a string".to_string()))?;
+            let decrypted = decrypt(ciphertext, key)
+                .map_err(|e| ApiError::Internal(format!("Decryption failed: {}", e)))?;
+            serde_json::from_str(&decrypted)
+                .map_err(|e| ApiError::Internal(format!("Invalid decrypted JSON: {}", e)))
+        } else {
+            // Return as-is if no encryption configured (for development)
+            Ok(value.clone())
+        }
     }
 
     /// Set a config value
     pub async fn set_config(
         &self,
-        create: CreateTenantConfig,
+        mut create: CreateTenantConfig,
     ) -> Result<TenantConfigResponse, ApiError> {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
+
+        // Encrypt if requested and encryption is enabled
+        if create.is_encrypted.unwrap_or(false) {
+            create.value = self.encrypt_value(&create.value)?;
+        }
 
         let config = self.repo.set(create).await?;
         Ok(config.into())
@@ -122,7 +172,22 @@ impl TenantConfigService {
             .get(tenant_id, key)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Config '{}' not found", key)))?;
-        Ok(config.into())
+
+        // Decrypt if encrypted
+        let response = if config.is_encrypted {
+            let decrypted_value = self.decrypt_value(&config.value)?;
+            TenantConfigResponse {
+                id: config.id,
+                tenant_id: config.tenant_id,
+                key: config.key,
+                value: decrypted_value,
+                is_encrypted: config.is_encrypted,
+            }
+        } else {
+            config.into()
+        };
+
+        Ok(response)
     }
 
     /// Get all configs for a tenant
@@ -131,17 +196,64 @@ impl TenantConfigService {
         tenant_id: i64,
     ) -> Result<Vec<TenantConfigResponse>, ApiError> {
         let configs = self.repo.get_all(tenant_id).await?;
-        Ok(configs.into_iter().map(|c| c.into()).collect())
+        let mut responses = Vec::new();
+
+        for config in configs {
+            let response = if config.is_encrypted {
+                match self.decrypt_value(&config.value) {
+                    Ok(decrypted_value) => TenantConfigResponse {
+                        id: config.id,
+                        tenant_id: config.tenant_id,
+                        key: config.key,
+                        value: decrypted_value,
+                        is_encrypted: config.is_encrypted,
+                    },
+                    Err(_) => {
+                        // Include encrypted values that can't be decrypted
+                        // This allows listing configs even if decryption fails
+                        config.into()
+                    }
+                }
+            } else {
+                config.into()
+            };
+            responses.push(response);
+        }
+
+        Ok(responses)
     }
 
     /// Update a config
     pub async fn update_config(
         &self,
         id: i64,
-        update: UpdateTenantConfig,
+        mut update: UpdateTenantConfig,
     ) -> Result<TenantConfigResponse, ApiError> {
+        // Encrypt new value if requested
+        if let Some(ref value) = update.value {
+            // Check if this should be encrypted
+            if update.is_encrypted.unwrap_or(false) {
+                update.value = Some(self.encrypt_value(value)?);
+            }
+        }
+
         let config = self.repo.update(id, update).await?;
-        Ok(config.into())
+
+        // Decrypt for response if encrypted
+        let response = if config.is_encrypted {
+            let decrypted_value = self.decrypt_value(&config.value)?;
+            TenantConfigResponse {
+                id: config.id,
+                tenant_id: config.tenant_id,
+                key: config.key,
+                value: decrypted_value,
+                is_encrypted: config.is_encrypted,
+            }
+        } else {
+            config.into()
+        };
+
+        Ok(response)
     }
 
     /// Delete a config
@@ -425,5 +537,36 @@ mod tests {
         // Should have same ID (upsert)
         assert_eq!(updated.id, first_id);
         assert_eq!(updated.value, json!("light"));
+    }
+
+    #[tokio::test]
+    async fn test_encrypted_config() {
+        // Create service with encryption key
+        let repo = Arc::new(InMemoryTenantConfigRepository::new()) as BoxTenantConfigRepository;
+        let encryption_key = crate::utils::encryption::generate_key().to_vec();
+        let service = TenantConfigService::with_encryption(repo, encryption_key);
+
+        // Create encrypted config
+        let create = CreateTenantConfig {
+            tenant_id: 1,
+            key: "db.password".to_string(),
+            value: json!("super_secret_password"),
+            is_encrypted: Some(true),
+        };
+
+        let created = service.set_config(create).await.unwrap();
+        assert!(created.is_encrypted);
+
+        // Value should be decrypted when retrieved
+        let retrieved = service.get_config(1, "db.password").await.unwrap();
+        assert_eq!(retrieved.value, json!("super_secret_password"));
+
+        // Update encrypted value
+        let update = UpdateTenantConfig {
+            value: Some(json!("new_secret_password")),
+            is_encrypted: Some(true),
+        };
+        let updated = service.update_config(created.id, update).await.unwrap();
+        assert_eq!(updated.value, json!("new_secret_password"));
     }
 }

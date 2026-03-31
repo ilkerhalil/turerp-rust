@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::purchase::model::{
     CreateGoodsReceipt, CreateGoodsReceiptLine, CreatePurchaseOrder, CreatePurchaseOrderLine,
     CreatePurchaseRequest, CreatePurchaseRequestLine, GoodsReceipt, GoodsReceiptLine,
@@ -90,12 +91,31 @@ pub trait PurchaseRequestRepository: Send + Sync {
     async fn create(&self, request: CreatePurchaseRequest) -> Result<PurchaseRequest, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseRequest>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<PurchaseRequest>, ApiError>;
     async fn find_by_status(
         &self,
         tenant_id: i64,
         status: PurchaseRequestStatus,
     ) -> Result<Vec<PurchaseRequest>, ApiError>;
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: PurchaseRequestStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<PurchaseRequest>, ApiError>;
     async fn find_by_requester(&self, requested_by: i64) -> Result<Vec<PurchaseRequest>, ApiError>;
+    async fn count_by_tenant(&self, tenant_id: i64) -> Result<u64, ApiError>;
+    async fn count_by_status(
+        &self,
+        tenant_id: i64,
+        status: PurchaseRequestStatus,
+    ) -> Result<u64, ApiError>;
     async fn update(
         &self,
         id: i64,
@@ -555,6 +575,29 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
             .collect())
     }
 
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<PurchaseRequest>, ApiError> {
+        let requests = self.requests.lock();
+        let total = requests
+            .values()
+            .filter(|r| r.tenant_id == tenant_id)
+            .count() as u64;
+
+        let items: Vec<PurchaseRequest> = requests
+            .values()
+            .filter(|r| r.tenant_id == tenant_id)
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .cloned()
+            .collect();
+
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
     async fn find_by_status(
         &self,
         tenant_id: i64,
@@ -568,6 +611,30 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
             .collect())
     }
 
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: PurchaseRequestStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<PurchaseRequest>, ApiError> {
+        let requests = self.requests.lock();
+        let total = requests
+            .values()
+            .filter(|r| r.tenant_id == tenant_id && r.status == status)
+            .count() as u64;
+
+        let items: Vec<PurchaseRequest> = requests
+            .values()
+            .filter(|r| r.tenant_id == tenant_id && r.status == status)
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .cloned()
+            .collect();
+
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
     async fn find_by_requester(&self, requested_by: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
         let requests = self.requests.lock();
         Ok(requests
@@ -575,6 +642,26 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
             .filter(|r| r.requested_by == requested_by)
             .cloned()
             .collect())
+    }
+
+    async fn count_by_tenant(&self, tenant_id: i64) -> Result<u64, ApiError> {
+        let requests = self.requests.lock();
+        Ok(requests
+            .values()
+            .filter(|r| r.tenant_id == tenant_id)
+            .count() as u64)
+    }
+
+    async fn count_by_status(
+        &self,
+        tenant_id: i64,
+        status: PurchaseRequestStatus,
+    ) -> Result<u64, ApiError> {
+        let requests = self.requests.lock();
+        Ok(requests
+            .values()
+            .filter(|r| r.tenant_id == tenant_id && r.status == status)
+            .count() as u64)
     }
 
     async fn update(

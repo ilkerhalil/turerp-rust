@@ -1,6 +1,7 @@
 //! Domain layer
 
 pub mod accounting;
+pub mod assets;
 pub mod auth;
 pub mod cari;
 pub mod crm;

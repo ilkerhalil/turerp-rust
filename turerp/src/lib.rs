@@ -4,6 +4,7 @@
 //! Actix-web, and SQLx.
 
 pub mod api;
+pub mod common;
 pub mod config;
 #[cfg(feature = "postgres")]
 pub mod db;

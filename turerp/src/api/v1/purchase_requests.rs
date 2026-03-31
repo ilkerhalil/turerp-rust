@@ -1,10 +1,13 @@
 //! Purchase Requests API endpoints (v1)
 
 use actix_web::{web, HttpResponse};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::purchase::{
-    CreatePurchaseRequest, PurchaseRequestStatus, PurchaseService, UpdatePurchaseRequest,
+    CreatePurchaseRequest, PurchaseRequest, PurchaseRequestStatus, PurchaseService,
+    UpdatePurchaseRequest,
 };
 use crate::error::ApiResult;
 use crate::middleware::{AdminUser, AuthUser};
@@ -82,7 +85,7 @@ pub async fn create_request(
         ("per_page" = Option<u32>, Query, description = "Items per page (default: 20, max: 100)")
     ),
     responses(
-        (status = 200, description = "List of purchase requests", body = Vec<PurchaseRequest>),
+        (status = 200, description = "Paginated list of purchase requests", body = PurchaseRequestListResponse),
         (status = 401, description = "Not authenticated - missing or invalid JWT token")
     ),
     security(
@@ -100,16 +103,45 @@ pub async fn get_requests(
 
     let tenant_id = auth_user.0.tenant_id;
 
-    let requests = if let Some(status_str) = &query.status {
+    let result = if let Some(status_str) = &query.status {
         let status = parse_status(status_str)?;
-        service.get_requests_by_status(tenant_id, status).await?
+        service
+            .get_requests_by_status_paginated(tenant_id, status, query.page, query.per_page)
+            .await?
     } else {
-        service.get_requests_by_tenant(tenant_id).await?
+        service
+            .get_requests_by_tenant_paginated(tenant_id, query.page, query.per_page)
+            .await?
     };
 
-    // TODO: Implement pagination at repository level
-    // For now, return all results (this should be fixed for production)
-    Ok(HttpResponse::Ok().json(requests))
+    Ok(HttpResponse::Ok().json(PurchaseRequestListResponse::from(result)))
+}
+
+/// Response for paginated purchase request list
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PurchaseRequestListResponse {
+    /// The items on this page
+    pub items: Vec<PurchaseRequest>,
+    /// Current page number (1-based)
+    pub page: u32,
+    /// Number of items per page
+    pub per_page: u32,
+    /// Total number of items
+    pub total: u64,
+    /// Total number of pages
+    pub total_pages: u32,
+}
+
+impl From<PaginatedResult<PurchaseRequest>> for PurchaseRequestListResponse {
+    fn from(result: PaginatedResult<PurchaseRequest>) -> Self {
+        Self {
+            items: result.items,
+            page: result.page,
+            per_page: result.per_page,
+            total: result.total,
+            total_pages: result.total_pages,
+        }
+    }
 }
 
 /// Parse status string to PurchaseRequestStatus

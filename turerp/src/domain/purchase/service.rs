@@ -1,5 +1,6 @@
 //! Purchase service for business logic
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::purchase::model::{
     CreateGoodsReceipt, CreatePurchaseOrder, CreatePurchaseRequest, GoodsReceiptResponse,
     GoodsReceiptStatus, PurchaseOrderResponse, PurchaseOrderStatus, PurchaseRequestResponse,
@@ -299,6 +300,22 @@ impl PurchaseService {
         request_repo.find_by_tenant(tenant_id).await
     }
 
+    /// Get purchase requests by tenant with pagination
+    pub async fn get_requests_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<crate::domain::purchase::model::PurchaseRequest>, ApiError> {
+        let request_repo = self.request_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request repository not configured".to_string())
+        })?;
+
+        request_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
+    }
+
     pub async fn get_requests_by_status(
         &self,
         tenant_id: i64,
@@ -309,6 +326,23 @@ impl PurchaseService {
         })?;
 
         request_repo.find_by_status(tenant_id, status).await
+    }
+
+    /// Get purchase requests by status with pagination
+    pub async fn get_requests_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: PurchaseRequestStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<crate::domain::purchase::model::PurchaseRequest>, ApiError> {
+        let request_repo = self.request_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request repository not configured".to_string())
+        })?;
+
+        request_repo
+            .find_by_status_paginated(tenant_id, status, page, per_page)
+            .await
     }
 
     pub async fn get_requests_by_requester(
