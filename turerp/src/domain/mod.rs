@@ -4,6 +4,7 @@ pub mod accounting;
 pub mod auth;
 pub mod cari;
 pub mod crm;
+pub mod feature;
 pub mod hr;
 pub mod invoice;
 pub mod manufacturing;
@@ -159,3 +160,10 @@ pub use user::repository::{
     BoxUserRepository, InMemoryUserRepository, RepositoryError, UserRepository,
 };
 pub use user::service::UserService;
+
+// Feature module re-exports
+pub use feature::model::{
+    CreateFeatureFlag, FeatureFlag, FeatureFlagResponse, FeatureFlagStatus, UpdateFeatureFlag,
+};
+pub use feature::repository::{FeatureFlagRepository, InMemoryFeatureFlagRepository};
+pub use feature::service::FeatureFlagService;

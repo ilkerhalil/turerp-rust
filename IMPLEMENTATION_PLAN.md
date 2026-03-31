@@ -43,9 +43,10 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] User validation tests
 
 ### 1.5 Feature Flags Module
-- [ ] Feature flag model
-- [ ] CRUD operations
-- [ ] Tenant-specific toggles
+- [x] Feature flag model
+- [x] CRUD operations
+- [x] Tenant-specific toggles
+- [x] API endpoints (v1)
 
 ### 1.6 Configuration Module
 - [x] Global config management
@@ -71,7 +72,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Product model
 - [x] Category management
 - [x] Unit of measure
-- [ ] Product variants (planned)
+- [x] Product variants (CRUD operations)
 - [x] Barcode support
 
 ### 2.3 Stock Module
@@ -100,7 +101,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Tax and discount calculations
 
 ### 3.2 Purchase Module
-- [ ] Purchase requests (planned)
+- [x] Purchase requests
 - [x] Purchase orders
 - [x] Goods receipt
 - [x] Vendor management
@@ -184,7 +185,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ### 9.1 API Documentation
 - [x] OpenAPI/Swagger UI
-- [ ] API versioning (planned)
+- [x] API versioning (/api/v1/ prefix, backward compatibility)
 - [x] Rate limiting (governor crate)
 
 ### 9.2 Testing & Security
@@ -210,7 +211,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ---
 
-## Current Status: Phase 9 - Complete ✅
+## Current Status: Phase 9 - Complete ✅ (Feature Flags Added)
 
 ### Completed Modules
 | Module | Status | Notes |
@@ -219,19 +220,24 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Tenant | ✅ Complete | Subdomain routing, PostgreSQL repo |
 | User | ✅ Complete | CRUD + roles + validation tests |
 | Cari | ✅ Complete | Customer/Vendor + PostgreSQL repo |
-| Product | ✅ Complete | Categories, units |
+| Product | ✅ Complete | Categories, units, variants |
 | Stock | ✅ Complete | Warehouses, movements |
 | Invoice | ✅ Complete | Payments, status |
 | Sales | ✅ Complete | Orders, quotations |
-| Purchase | ✅ Complete | Orders, goods receipt |
+| Purchase | ✅ Complete | Orders, goods receipt, purchase requests |
 | HR | ✅ Complete | Employees, attendance, leave |
 | Accounting | ✅ Complete | Journal entries, trial balance |
 | Project | ✅ Complete | WBS, costs, profitability |
 | Manufacturing | ✅ Complete | Work orders, BOM, routing, NCR |
 | CRM | ✅ Complete | Leads, opportunities, tickets |
+| Feature Flags | ✅ Complete | CRUD, tenant-specific, API v1 |
+| Product Variants | ✅ Complete | CRUD, API v1 |
+| Purchase Requests | ✅ Complete | CRUD, approval workflow, API v1 |
+| Tenant DB Routing | ✅ Complete | Multi-tenant isolation middleware |
+| Tenant Config | ✅ Complete | Per-tenant settings, key-value storage |
 
 ### Test Coverage
-- **174 tests passing** (160 unit + 14 integration)
+- **211 tests passing** (197 unit + 14 integration)
 - Unit tests for all domain modules
 - Model validation tests
 - Service business logic tests
@@ -266,18 +272,18 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 ### High Priority
 | Feature | Description | Status |
 |---------|-------------|--------|
-| Tenant DB Routing | Multi-tenant database isolation | Planned |
+| Tenant DB Routing | Multi-tenant database isolation | ✅ Complete |
 | Security Audit | OWASP Top 10 review | Needed |
-| API Versioning | /v1/, /v2/ endpoints | Planned |
-| Feature Flags | A/B testing, gradual rollout | Planned |
+| API Versioning | /v1/, /v2/ endpoints | ✅ Complete |
+| Feature Flags | A/B testing, gradual rollout | ✅ Complete |
 
 ### Medium Priority
 | Feature | Description | Status |
 |---------|-------------|--------|
-| Product Variants | Size, color, etc. | Planned |
-| Purchase Requests | Approval workflow | Planned |
+| Product Variants | Size, color, etc. | ✅ Complete |
+| Purchase Requests | Approval workflow | ✅ Complete |
 | Fixed Assets | Depreciation tracking | Planned |
-| Tenant-specific Config | Per-tenant settings | Planned |
+| Tenant-specific Config | Per-tenant settings | ✅ Complete |
 
 ### Low Priority
 | Feature | Description | Status |
@@ -461,10 +467,10 @@ turerp/
 
 ## Next Steps
 
-1. **Tenant Database Routing** - Implement per-tenant database isolation
-2. **Security Audit** - Complete OWASP Top 10 review
-3. **API Versioning** - Add /v1/ prefix to all endpoints
-4. **Feature Flags** - Implement feature flag system
-5. **Performance Testing** - Load testing with realistic data
-6. **Documentation** - Add more inline documentation
+1. **Product Variants** - Complete CRUD for product variants
+2. **Purchase Requests** - Implement approval workflow
+3. **Tenant Database Routing** - Implement per-tenant database isolation
+4. **Tenant-Specific Config** - Per-tenant settings
+5. **Security Audit** - Complete OWASP Top 10 review
+6. **Performance Testing** - Load testing with realistic data
 7. **Monitoring** - Add Prometheus/Grafana metrics

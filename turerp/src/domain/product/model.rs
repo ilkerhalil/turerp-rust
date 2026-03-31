@@ -56,6 +56,68 @@ pub struct ProductVariant {
     pub created_at: DateTime<Utc>,
 }
 
+/// Create product variant request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateProductVariant {
+    pub product_id: i64,
+    pub name: String,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub price_modifier: f64,
+}
+
+impl CreateProductVariant {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+
+        if self.name.trim().is_empty() {
+            errors.push("Variant name is required".to_string());
+        }
+
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// Update product variant request
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UpdateProductVariant {
+    pub name: Option<String>,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub price_modifier: Option<f64>,
+    pub is_active: Option<bool>,
+}
+
+/// Product variant response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProductVariantResponse {
+    pub id: i64,
+    pub product_id: i64,
+    pub name: String,
+    pub sku: Option<String>,
+    pub barcode: Option<String>,
+    pub price_modifier: f64,
+    pub is_active: bool,
+}
+
+impl From<ProductVariant> for ProductVariantResponse {
+    fn from(v: ProductVariant) -> Self {
+        Self {
+            id: v.id,
+            product_id: v.product_id,
+            name: v.name,
+            sku: v.sku,
+            barcode: v.barcode,
+            price_modifier: v.price_modifier,
+            is_active: v.is_active,
+        }
+    }
+}
+
 /// Create product request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateProduct {

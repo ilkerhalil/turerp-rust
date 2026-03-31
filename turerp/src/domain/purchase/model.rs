@@ -16,6 +16,21 @@ pub enum PurchaseOrderStatus {
     OnHold,
 }
 
+impl std::fmt::Display for PurchaseOrderStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Draft => write!(f, "Draft"),
+            Self::PendingApproval => write!(f, "PendingApproval"),
+            Self::Approved => write!(f, "Approved"),
+            Self::SentToVendor => write!(f, "SentToVendor"),
+            Self::PartialReceived => write!(f, "PartialReceived"),
+            Self::Received => write!(f, "Received"),
+            Self::Cancelled => write!(f, "Cancelled"),
+            Self::OnHold => write!(f, "OnHold"),
+        }
+    }
+}
+
 /// Purchase request status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PurchaseRequestStatus {
@@ -24,6 +39,44 @@ pub enum PurchaseRequestStatus {
     Approved,
     Rejected,
     ConvertedToOrder,
+}
+
+impl PurchaseRequestStatus {
+    /// Check if this status can transition to the target status
+    pub fn can_transition_to(&self, target: &Self) -> bool {
+        match self {
+            Self::Draft => matches!(target, Self::PendingApproval),
+            Self::PendingApproval => {
+                matches!(target, Self::Approved | Self::Rejected | Self::Draft)
+            }
+            Self::Approved => matches!(target, Self::ConvertedToOrder),
+            Self::Rejected => matches!(target, Self::Draft), // Allow re-submission after rejection
+            Self::ConvertedToOrder => false,                 // Terminal state
+        }
+    }
+
+    /// Get valid next statuses
+    pub fn valid_next_statuses(&self) -> Vec<Self> {
+        match self {
+            Self::Draft => vec![Self::PendingApproval],
+            Self::PendingApproval => vec![Self::Approved, Self::Rejected, Self::Draft],
+            Self::Approved => vec![Self::ConvertedToOrder],
+            Self::Rejected => vec![Self::Draft],
+            Self::ConvertedToOrder => vec![],
+        }
+    }
+}
+
+impl std::fmt::Display for PurchaseRequestStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Draft => write!(f, "Draft"),
+            Self::PendingApproval => write!(f, "PendingApproval"),
+            Self::Approved => write!(f, "Approved"),
+            Self::Rejected => write!(f, "Rejected"),
+            Self::ConvertedToOrder => write!(f, "ConvertedToOrder"),
+        }
+    }
 }
 
 /// Goods receipt status
@@ -120,6 +173,110 @@ pub struct GoodsReceiptLine {
     pub quantity: f64,
     pub condition: String,
     pub notes: Option<String>,
+}
+
+/// Create purchase request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreatePurchaseRequest {
+    pub tenant_id: i64,
+    pub requested_by: i64,
+    pub department: Option<String>,
+    pub priority: String,
+    pub reason: Option<String>,
+    pub lines: Vec<CreatePurchaseRequestLine>,
+}
+
+impl CreatePurchaseRequest {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.lines.is_empty() {
+            errors.push("Request must have at least one line item".to_string());
+        }
+        if self.priority.trim().is_empty() {
+            errors.push("Priority is required".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// Create purchase request line
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreatePurchaseRequestLine {
+    pub product_id: Option<i64>,
+    pub description: String,
+    pub quantity: f64,
+    pub notes: Option<String>,
+}
+
+impl CreatePurchaseRequestLine {
+    pub fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+        if self.description.trim().is_empty() {
+            errors.push("Description is required".to_string());
+        }
+        if self.quantity <= 0.0 {
+            errors.push("Quantity must be positive".to_string());
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// Update purchase request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdatePurchaseRequest {
+    pub department: Option<String>,
+    pub priority: Option<String>,
+    pub reason: Option<String>,
+    pub status: Option<PurchaseRequestStatus>,
+}
+
+/// Update purchase request line
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdatePurchaseRequestLine {
+    pub product_id: Option<i64>,
+    pub description: Option<String>,
+    pub quantity: Option<f64>,
+    pub notes: Option<String>,
+}
+
+/// Purchase request response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PurchaseRequestResponse {
+    pub id: i64,
+    pub request_number: String,
+    pub status: PurchaseRequestStatus,
+    pub requested_by: i64,
+    pub department: Option<String>,
+    pub priority: String,
+    pub reason: Option<String>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub lines: Vec<PurchaseRequestLine>,
+}
+
+impl From<(PurchaseRequest, Vec<PurchaseRequestLine>)> for PurchaseRequestResponse {
+    fn from((request, lines): (PurchaseRequest, Vec<PurchaseRequestLine>)) -> Self {
+        Self {
+            id: request.id,
+            request_number: request.request_number,
+            status: request.status,
+            requested_by: request.requested_by,
+            department: request.department,
+            priority: request.priority,
+            reason: request.reason,
+            created_at: request.created_at,
+            updated_at: request.updated_at,
+            lines,
+        }
+    }
 }
 
 /// Create purchase order request

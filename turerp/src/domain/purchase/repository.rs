@@ -6,8 +6,9 @@ use std::sync::Arc;
 
 use crate::domain::purchase::model::{
     CreateGoodsReceipt, CreateGoodsReceiptLine, CreatePurchaseOrder, CreatePurchaseOrderLine,
-    GoodsReceipt, GoodsReceiptLine, GoodsReceiptStatus, PurchaseOrder, PurchaseOrderLine,
-    PurchaseOrderStatus,
+    CreatePurchaseRequest, CreatePurchaseRequestLine, GoodsReceipt, GoodsReceiptLine,
+    GoodsReceiptStatus, PurchaseOrder, PurchaseOrderLine, PurchaseOrderStatus, PurchaseRequest,
+    PurchaseRequestLine, PurchaseRequestStatus, UpdatePurchaseRequest,
 };
 use crate::error::ApiError;
 
@@ -80,6 +81,45 @@ pub type BoxPurchaseOrderRepository = Arc<dyn PurchaseOrderRepository>;
 pub type BoxPurchaseOrderLineRepository = Arc<dyn PurchaseOrderLineRepository>;
 pub type BoxGoodsReceiptRepository = Arc<dyn GoodsReceiptRepository>;
 pub type BoxGoodsReceiptLineRepository = Arc<dyn GoodsReceiptLineRepository>;
+pub type BoxPurchaseRequestRepository = Arc<dyn PurchaseRequestRepository>;
+pub type BoxPurchaseRequestLineRepository = Arc<dyn PurchaseRequestLineRepository>;
+
+/// Repository trait for PurchaseRequest operations
+#[async_trait]
+pub trait PurchaseRequestRepository: Send + Sync {
+    async fn create(&self, request: CreatePurchaseRequest) -> Result<PurchaseRequest, ApiError>;
+    async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseRequest>, ApiError>;
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError>;
+    async fn find_by_status(
+        &self,
+        tenant_id: i64,
+        status: PurchaseRequestStatus,
+    ) -> Result<Vec<PurchaseRequest>, ApiError>;
+    async fn find_by_requester(&self, requested_by: i64) -> Result<Vec<PurchaseRequest>, ApiError>;
+    async fn update(
+        &self,
+        id: i64,
+        update: UpdatePurchaseRequest,
+    ) -> Result<PurchaseRequest, ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        status: PurchaseRequestStatus,
+    ) -> Result<PurchaseRequest, ApiError>;
+    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+}
+
+/// Repository trait for PurchaseRequestLine operations
+#[async_trait]
+pub trait PurchaseRequestLineRepository: Send + Sync {
+    async fn create_many(
+        &self,
+        request_id: i64,
+        lines: Vec<CreatePurchaseRequestLine>,
+    ) -> Result<Vec<PurchaseRequestLine>, ApiError>;
+    async fn find_by_request(&self, request_id: i64) -> Result<Vec<PurchaseRequestLine>, ApiError>;
+    async fn delete_by_request(&self, request_id: i64) -> Result<(), ApiError>;
+}
 
 fn calculate_totals(lines: &[CreatePurchaseOrderLine]) -> (f64, f64, f64, f64) {
     let mut subtotal = 0.0;
@@ -107,6 +147,10 @@ fn generate_order_number(count: i64) -> String {
 
 fn generate_receipt_number(count: i64) -> String {
     format!("GR-{:06}", count)
+}
+
+fn generate_request_number(count: i64) -> String {
+    format!("PR-{:06}", count)
 }
 
 /// In-memory purchase order repository
@@ -446,6 +490,201 @@ impl GoodsReceiptLineRepository for InMemoryGoodsReceiptLineRepository {
 
     async fn delete_by_receipt(&self, receipt_id: i64) -> Result<(), ApiError> {
         self.lines.lock().remove(&receipt_id);
+        Ok(())
+    }
+}
+
+/// In-memory purchase request repository
+pub struct InMemoryPurchaseRequestRepository {
+    requests: Mutex<std::collections::HashMap<i64, PurchaseRequest>>,
+    next_id: Mutex<i64>,
+}
+
+impl InMemoryPurchaseRequestRepository {
+    pub fn new() -> Self {
+        Self {
+            requests: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
+        }
+    }
+}
+
+impl Default for InMemoryPurchaseRequestRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
+    async fn create(&self, create: CreatePurchaseRequest) -> Result<PurchaseRequest, ApiError> {
+        let mut next_id = self.next_id.lock();
+        let id = *next_id;
+        *next_id += 1;
+
+        let request_number = generate_request_number(id);
+        let now = chrono::Utc::now();
+
+        let request = PurchaseRequest {
+            id,
+            tenant_id: create.tenant_id,
+            request_number,
+            status: PurchaseRequestStatus::Draft,
+            requested_by: create.requested_by,
+            department: create.department,
+            priority: create.priority,
+            reason: create.reason,
+            created_at: now,
+            updated_at: now,
+        };
+
+        self.requests.lock().insert(id, request.clone());
+        Ok(request)
+    }
+
+    async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseRequest>, ApiError> {
+        Ok(self.requests.lock().get(&id).cloned())
+    }
+
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
+        let requests = self.requests.lock();
+        Ok(requests
+            .values()
+            .filter(|r| r.tenant_id == tenant_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn find_by_status(
+        &self,
+        tenant_id: i64,
+        status: PurchaseRequestStatus,
+    ) -> Result<Vec<PurchaseRequest>, ApiError> {
+        let requests = self.requests.lock();
+        Ok(requests
+            .values()
+            .filter(|r| r.tenant_id == tenant_id && r.status == status)
+            .cloned()
+            .collect())
+    }
+
+    async fn find_by_requester(&self, requested_by: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
+        let requests = self.requests.lock();
+        Ok(requests
+            .values()
+            .filter(|r| r.requested_by == requested_by)
+            .cloned()
+            .collect())
+    }
+
+    async fn update(
+        &self,
+        id: i64,
+        update: UpdatePurchaseRequest,
+    ) -> Result<PurchaseRequest, ApiError> {
+        let mut requests = self.requests.lock();
+        let request = requests
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Purchase request {} not found", id)))?;
+
+        if let Some(department) = update.department {
+            request.department = Some(department);
+        }
+        if let Some(priority) = update.priority {
+            request.priority = priority;
+        }
+        if let Some(reason) = update.reason {
+            request.reason = Some(reason);
+        }
+        if let Some(status) = update.status {
+            request.status = status;
+        }
+        request.updated_at = chrono::Utc::now();
+
+        Ok(request.clone())
+    }
+
+    async fn update_status(
+        &self,
+        id: i64,
+        status: PurchaseRequestStatus,
+    ) -> Result<PurchaseRequest, ApiError> {
+        let mut requests = self.requests.lock();
+        let request = requests
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Purchase request {} not found", id)))?;
+        request.status = status;
+        request.updated_at = chrono::Utc::now();
+        Ok(request.clone())
+    }
+
+    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+        self.requests.lock().remove(&id);
+        Ok(())
+    }
+}
+
+/// In-memory purchase request line repository
+pub struct InMemoryPurchaseRequestLineRepository {
+    lines: Mutex<std::collections::HashMap<i64, Vec<PurchaseRequestLine>>>,
+    next_id: Mutex<i64>,
+}
+
+impl InMemoryPurchaseRequestLineRepository {
+    pub fn new() -> Self {
+        Self {
+            lines: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
+        }
+    }
+}
+
+impl Default for InMemoryPurchaseRequestLineRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl PurchaseRequestLineRepository for InMemoryPurchaseRequestLineRepository {
+    async fn create_many(
+        &self,
+        request_id: i64,
+        create_lines: Vec<CreatePurchaseRequestLine>,
+    ) -> Result<Vec<PurchaseRequestLine>, ApiError> {
+        let mut next_id = self.next_id.lock();
+        let mut lines = Vec::new();
+
+        for (i, create) in create_lines.into_iter().enumerate() {
+            let id = *next_id;
+            *next_id += 1;
+
+            lines.push(PurchaseRequestLine {
+                id,
+                request_id,
+                product_id: create.product_id,
+                description: create.description,
+                quantity: create.quantity,
+                notes: create.notes,
+                sort_order: i as i32,
+            });
+        }
+
+        self.lines.lock().insert(request_id, lines.clone());
+        Ok(lines)
+    }
+
+    async fn find_by_request(&self, request_id: i64) -> Result<Vec<PurchaseRequestLine>, ApiError> {
+        Ok(self
+            .lines
+            .lock()
+            .get(&request_id)
+            .cloned()
+            .unwrap_or_default())
+    }
+
+    async fn delete_by_request(&self, request_id: i64) -> Result<(), ApiError> {
+        self.lines.lock().remove(&request_id);
         Ok(())
     }
 }

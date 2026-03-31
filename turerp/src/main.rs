@@ -8,7 +8,13 @@ use actix_web::{middleware, web, App, HttpServer};
 use turerp::config::Config;
 use turerp::middleware::{RateLimitMiddleware, RequestIdMiddleware};
 
-use turerp::api::{auth_configure, users_configure, ApiDoc};
+use turerp::api::{
+    v1_auth_configure, v1_feature_flags_configure, v1_product_variants_configure,
+    v1_purchase_requests_configure, v1_users_configure, ApiDoc,
+};
+// Legacy imports (deprecated)
+#[allow(deprecated)]
+use turerp::api::{auth_configure, users_configure};
 use turerp::setup_logging;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -150,6 +156,9 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
             .app_data(app_state.jwt_service.clone())
+            .app_data(app_state.feature_service.clone())
+            .app_data(app_state.product_service.clone())
+            .app_data(app_state.purchase_service.clone())
             .app_data(app_state.db_pool.clone());
 
         #[cfg(not(feature = "postgres"))]
@@ -161,11 +170,23 @@ async fn main() -> std::io::Result<()> {
             .wrap(configure_cors(&config.cors)) // 4. CORS
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
-            .app_data(app_state.jwt_service.clone());
+            .app_data(app_state.jwt_service.clone())
+            .app_data(app_state.feature_service.clone())
+            .app_data(app_state.product_service.clone())
+            .app_data(app_state.purchase_service.clone());
 
         app // Health check
             .route("/health", web::get().to(health_check))
-            // API routes
+            // V1 API routes (preferred)
+            .service(
+                web::scope("/api")
+                    .configure(v1_auth_configure)
+                    .configure(v1_users_configure)
+                    .configure(v1_feature_flags_configure)
+                    .configure(v1_product_variants_configure)
+                    .configure(v1_purchase_requests_configure),
+            )
+            // Legacy API routes (deprecated, will be removed in v2)
             .service(
                 web::scope("/api")
                     .configure(auth_configure)

@@ -5,8 +5,8 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::domain::product::model::{
-    Category, CreateCategory, CreateProduct, CreateUnit, Product, ProductVariant, Unit,
-    UpdateProduct,
+    Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
+    ProductVariant, Unit, UpdateProduct, UpdateProductVariant,
 };
 use crate::error::ApiError;
 
@@ -43,8 +43,15 @@ pub trait UnitRepository: Send + Sync {
 /// Repository trait for ProductVariant operations
 #[async_trait]
 pub trait ProductVariantRepository: Send + Sync {
+    async fn create(&self, variant: CreateProductVariant) -> Result<ProductVariant, ApiError>;
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<ProductVariant>, ApiError>;
+    async fn update(
+        &self,
+        id: i64,
+        variant: UpdateProductVariant,
+    ) -> Result<ProductVariant, ApiError>;
+    async fn delete(&self, id: i64) -> Result<(), ApiError>;
 }
 
 /// Type aliases
@@ -358,6 +365,130 @@ impl UnitRepository for InMemoryUnitRepository {
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
         self.units.lock().remove(&id);
+        Ok(())
+    }
+}
+
+/// In-memory product variant repository
+pub struct InMemoryProductVariantRepository {
+    variants: Mutex<std::collections::HashMap<i64, ProductVariant>>,
+    next_id: Mutex<i64>,
+    product_variants: Mutex<std::collections::HashMap<i64, Vec<i64>>>,
+}
+
+impl InMemoryProductVariantRepository {
+    pub fn new() -> Self {
+        Self {
+            variants: Mutex::new(std::collections::HashMap::new()),
+            next_id: Mutex::new(1),
+            product_variants: Mutex::new(std::collections::HashMap::new()),
+        }
+    }
+}
+
+impl Default for InMemoryProductVariantRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl ProductVariantRepository for InMemoryProductVariantRepository {
+    async fn create(&self, create: CreateProductVariant) -> Result<ProductVariant, ApiError> {
+        let mut next_id = self.next_id.lock();
+        let id = *next_id;
+        *next_id += 1;
+
+        let variant = ProductVariant {
+            id,
+            product_id: create.product_id,
+            name: create.name,
+            sku: create.sku,
+            barcode: create.barcode,
+            price_modifier: create.price_modifier,
+            is_active: true,
+            created_at: chrono::Utc::now(),
+        };
+
+        self.variants.lock().insert(id, variant.clone());
+
+        let mut product_variants = self.product_variants.lock();
+        product_variants
+            .entry(create.product_id)
+            .or_default()
+            .push(id);
+
+        Ok(variant)
+    }
+
+    async fn find_by_product(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError> {
+        let product_variants = self.product_variants.lock();
+        let variants = self.variants.lock();
+
+        let ids = product_variants
+            .get(&product_id)
+            .cloned()
+            .unwrap_or_default();
+        Ok(ids
+            .iter()
+            .filter_map(|id| variants.get(id).cloned())
+            .collect())
+    }
+
+    async fn find_by_id(&self, id: i64) -> Result<Option<ProductVariant>, ApiError> {
+        Ok(self.variants.lock().get(&id).cloned())
+    }
+
+    async fn update(
+        &self,
+        id: i64,
+        update: UpdateProductVariant,
+    ) -> Result<ProductVariant, ApiError> {
+        let mut variants = self.variants.lock();
+
+        let variant = variants
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Product variant {} not found", id)))?;
+
+        if let Some(name) = update.name {
+            variant.name = name;
+        }
+        if let Some(sku) = update.sku {
+            variant.sku = Some(sku);
+        }
+        if let Some(barcode) = update.barcode {
+            variant.barcode = Some(barcode);
+        }
+        if let Some(price_modifier) = update.price_modifier {
+            variant.price_modifier = price_modifier;
+        }
+        if let Some(is_active) = update.is_active {
+            variant.is_active = is_active;
+        }
+
+        Ok(variant.clone())
+    }
+
+    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+        let mut variants = self.variants.lock();
+
+        if !variants.contains_key(&id) {
+            return Err(ApiError::NotFound(format!(
+                "Product variant {} not found",
+                id
+            )));
+        }
+
+        let product_id = variants.get(&id).map(|v| v.product_id);
+        variants.remove(&id);
+
+        if let Some(pid) = product_id {
+            let mut product_variants = self.product_variants.lock();
+            if let Some(ids) = product_variants.get_mut(&pid) {
+                ids.retain(|x| *x != id);
+            }
+        }
+
         Ok(())
     }
 }

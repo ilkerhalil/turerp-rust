@@ -14,9 +14,15 @@ use crate::utils::jwt::{AuthClaims, JwtService};
 
 /// Paths that don't require authentication
 pub const PUBLIC_PATHS: &[&str] = &[
+    // V1 API paths (preferred)
+    "/api/v1/auth/login",
+    "/api/v1/auth/register",
+    "/api/v1/auth/refresh",
+    // Legacy API paths (deprecated)
     "/api/auth/login",
     "/api/auth/register",
     "/api/auth/refresh",
+    // Other public paths
     "/health",
     "/swagger-ui",
     "/api-docs",
@@ -200,17 +206,30 @@ mod tests {
 
     #[test]
     fn test_public_paths() {
-        // Public paths
+        // V1 public paths (preferred)
+        assert!(JwtAuthMiddleware::is_public_path("/api/v1/auth/login"));
+        assert!(JwtAuthMiddleware::is_public_path("/api/v1/auth/register"));
+        assert!(JwtAuthMiddleware::is_public_path("/api/v1/auth/refresh"));
+
+        // Legacy public paths (deprecated)
         assert!(JwtAuthMiddleware::is_public_path("/api/auth/login"));
         assert!(JwtAuthMiddleware::is_public_path("/api/auth/register"));
         assert!(JwtAuthMiddleware::is_public_path("/api/auth/refresh"));
+
+        // Other public paths
         assert!(JwtAuthMiddleware::is_public_path("/health"));
         assert!(JwtAuthMiddleware::is_public_path("/swagger-ui/index.html"));
         assert!(JwtAuthMiddleware::is_public_path("/api-docs/openapi.json"));
 
-        // Protected paths
+        // Protected paths (V1)
+        assert!(!JwtAuthMiddleware::is_public_path("/api/v1/users"));
+        assert!(!JwtAuthMiddleware::is_public_path("/api/v1/auth/me"));
+
+        // Protected paths (legacy)
         assert!(!JwtAuthMiddleware::is_public_path("/api/users"));
         assert!(!JwtAuthMiddleware::is_public_path("/api/auth/me"));
+
+        // Other protected paths
         assert!(!JwtAuthMiddleware::is_public_path("/api/cari"));
         assert!(!JwtAuthMiddleware::is_public_path("/api/products"));
     }

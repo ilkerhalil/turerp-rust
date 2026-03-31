@@ -6,12 +6,14 @@ pub mod service;
 
 // Re-exports
 pub use model::{
-    Category, CreateCategory, CreateProduct, CreateUnit, Product, ProductResponse, ProductVariant,
-    Unit, UpdateProduct,
+    Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
+    ProductResponse, ProductVariant, ProductVariantResponse, Unit, UpdateProduct,
+    UpdateProductVariant,
 };
 pub use repository::{
-    BoxCategoryRepository, BoxProductRepository, BoxUnitRepository, CategoryRepository,
-    InMemoryCategoryRepository, InMemoryProductRepository, InMemoryUnitRepository,
-    ProductRepository, UnitRepository,
+    BoxCategoryRepository, BoxProductRepository, BoxProductVariantRepository, BoxUnitRepository,
+    CategoryRepository, InMemoryCategoryRepository, InMemoryProductRepository,
+    InMemoryProductVariantRepository, InMemoryUnitRepository, ProductRepository,
+    ProductVariantRepository, UnitRepository,
 };
 pub use service::ProductService;

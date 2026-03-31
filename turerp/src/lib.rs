@@ -29,6 +29,23 @@ pub mod app {
 
     use crate::config::Config;
     use crate::domain::auth::AuthService;
+    use crate::domain::feature::repository::InMemoryFeatureFlagRepository;
+    use crate::domain::feature::service::FeatureFlagService;
+    use crate::domain::feature::FeatureFlagRepository;
+    use crate::domain::product::repository::{
+        BoxCategoryRepository, BoxProductRepository, BoxProductVariantRepository,
+        BoxUnitRepository, InMemoryCategoryRepository, InMemoryProductRepository,
+        InMemoryProductVariantRepository, InMemoryUnitRepository,
+    };
+    use crate::domain::product::service::ProductService;
+    use crate::domain::purchase::repository::{
+        BoxGoodsReceiptLineRepository, BoxGoodsReceiptRepository, BoxPurchaseOrderLineRepository,
+        BoxPurchaseOrderRepository, BoxPurchaseRequestLineRepository, BoxPurchaseRequestRepository,
+        InMemoryGoodsReceiptLineRepository, InMemoryGoodsReceiptRepository,
+        InMemoryPurchaseOrderLineRepository, InMemoryPurchaseOrderRepository,
+        InMemoryPurchaseRequestLineRepository, InMemoryPurchaseRequestRepository,
+    };
+    use crate::domain::purchase::service::PurchaseService;
     use crate::domain::user::repository::BoxUserRepository;
     use crate::domain::user::service::UserService;
     use crate::utils::jwt::JwtService;
@@ -49,6 +66,9 @@ pub mod app {
         pub auth_service: web::Data<AuthService>,
         pub user_service: web::Data<UserService>,
         pub jwt_service: web::Data<JwtService>,
+        pub feature_service: web::Data<FeatureFlagService>,
+        pub product_service: web::Data<ProductService>,
+        pub purchase_service: web::Data<PurchaseService>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
     }
@@ -71,15 +91,57 @@ pub mod app {
         // Create auth service
         let auth_service = AuthService::new(user_service.clone(), jwt_service.clone());
 
+        // Create feature flag service
+        let feature_repo =
+            Arc::new(InMemoryFeatureFlagRepository::new()) as Arc<dyn FeatureFlagRepository>;
+        let feature_service = FeatureFlagService::new(feature_repo);
+
+        // Create product service with variant repository
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        let category_repo = Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
+        let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
+        let variant_repo =
+            Arc::new(InMemoryProductVariantRepository::new()) as BoxProductVariantRepository;
+        let product_service =
+            ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo);
+
+        // Create purchase service with request repositories
+        let order_repo =
+            Arc::new(InMemoryPurchaseOrderRepository::new()) as BoxPurchaseOrderRepository;
+        let order_line_repo =
+            Arc::new(InMemoryPurchaseOrderLineRepository::new()) as BoxPurchaseOrderLineRepository;
+        let receipt_repo =
+            Arc::new(InMemoryGoodsReceiptRepository::new()) as BoxGoodsReceiptRepository;
+        let receipt_line_repo =
+            Arc::new(InMemoryGoodsReceiptLineRepository::new()) as BoxGoodsReceiptLineRepository;
+        let request_repo =
+            Arc::new(InMemoryPurchaseRequestRepository::new()) as BoxPurchaseRequestRepository;
+        let request_line_repo = Arc::new(InMemoryPurchaseRequestLineRepository::new())
+            as BoxPurchaseRequestLineRepository;
+        let purchase_service = PurchaseService::with_requests(
+            order_repo,
+            order_line_repo,
+            receipt_repo,
+            receipt_line_repo,
+            request_repo,
+            request_line_repo,
+        );
+
         // Wrap in actix Data
         let user_service = web::Data::new(user_service);
         let jwt_service = web::Data::new(jwt_service);
         let auth_service = web::Data::new(auth_service);
+        let feature_service = web::Data::new(feature_service);
+        let product_service = web::Data::new(product_service);
+        let purchase_service = web::Data::new(purchase_service);
 
         AppState {
             auth_service,
             user_service,
             jwt_service,
+            feature_service,
+            product_service,
+            purchase_service,
         }
     }
 
@@ -114,16 +176,58 @@ pub mod app {
         // Create auth service
         let auth_service = AuthService::new(user_service.clone(), jwt_service.clone());
 
+        // Create feature flag service (in-memory for now, will use Postgres later)
+        let feature_repo =
+            Arc::new(InMemoryFeatureFlagRepository::new()) as Arc<dyn FeatureFlagRepository>;
+        let feature_service = FeatureFlagService::new(feature_repo);
+
+        // Create product service with variant repository
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        let category_repo = Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
+        let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
+        let variant_repo =
+            Arc::new(InMemoryProductVariantRepository::new()) as BoxProductVariantRepository;
+        let product_service =
+            ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo);
+
+        // Create purchase service with request repositories
+        let order_repo =
+            Arc::new(InMemoryPurchaseOrderRepository::new()) as BoxPurchaseOrderRepository;
+        let order_line_repo =
+            Arc::new(InMemoryPurchaseOrderLineRepository::new()) as BoxPurchaseOrderLineRepository;
+        let receipt_repo =
+            Arc::new(InMemoryGoodsReceiptRepository::new()) as BoxGoodsReceiptRepository;
+        let receipt_line_repo =
+            Arc::new(InMemoryGoodsReceiptLineRepository::new()) as BoxGoodsReceiptLineRepository;
+        let request_repo =
+            Arc::new(InMemoryPurchaseRequestRepository::new()) as BoxPurchaseRequestRepository;
+        let request_line_repo = Arc::new(InMemoryPurchaseRequestLineRepository::new())
+            as BoxPurchaseRequestLineRepository;
+        let purchase_service = PurchaseService::with_requests(
+            order_repo,
+            order_line_repo,
+            receipt_repo,
+            receipt_line_repo,
+            request_repo,
+            request_line_repo,
+        );
+
         // Wrap in actix Data
         let user_service = web::Data::new(user_service);
         let jwt_service = web::Data::new(jwt_service);
         let auth_service = web::Data::new(auth_service);
+        let feature_service = web::Data::new(feature_service);
+        let product_service = web::Data::new(product_service);
+        let purchase_service = web::Data::new(purchase_service);
         let db_pool = web::Data::new(pool);
 
         AppState {
             auth_service,
             user_service,
             jwt_service,
+            feature_service,
+            product_service,
+            purchase_service,
             db_pool,
         }
     }
@@ -154,10 +258,49 @@ pub mod app {
         // Create auth service
         let auth_service = AuthService::new(user_service.clone(), jwt_service.clone());
 
+        // Create feature flag service
+        let feature_repo =
+            Arc::new(InMemoryFeatureFlagRepository::new()) as Arc<dyn FeatureFlagRepository>;
+        let feature_service = FeatureFlagService::new(feature_repo);
+
+        // Create product service with variant repository
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        let category_repo = Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
+        let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
+        let variant_repo =
+            Arc::new(InMemoryProductVariantRepository::new()) as BoxProductVariantRepository;
+        let product_service =
+            ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo);
+
+        // Create purchase service with request repositories
+        let order_repo =
+            Arc::new(InMemoryPurchaseOrderRepository::new()) as BoxPurchaseOrderRepository;
+        let order_line_repo =
+            Arc::new(InMemoryPurchaseOrderLineRepository::new()) as BoxPurchaseOrderLineRepository;
+        let receipt_repo =
+            Arc::new(InMemoryGoodsReceiptRepository::new()) as BoxGoodsReceiptRepository;
+        let receipt_line_repo =
+            Arc::new(InMemoryGoodsReceiptLineRepository::new()) as BoxGoodsReceiptLineRepository;
+        let request_repo =
+            Arc::new(InMemoryPurchaseRequestRepository::new()) as BoxPurchaseRequestRepository;
+        let request_line_repo = Arc::new(InMemoryPurchaseRequestLineRepository::new())
+            as BoxPurchaseRequestLineRepository;
+        let purchase_service = PurchaseService::with_requests(
+            order_repo,
+            order_line_repo,
+            receipt_repo,
+            receipt_line_repo,
+            request_repo,
+            request_line_repo,
+        );
+
         // Wrap in actix Data
         let user_service = web::Data::new(user_service);
         let jwt_service = web::Data::new(jwt_service);
         let auth_service = web::Data::new(auth_service);
+        let feature_service = web::Data::new(feature_service);
+        let product_service = web::Data::new(product_service);
+        let purchase_service = web::Data::new(purchase_service);
 
         // For in-memory testing with postgres feature, create a mock pool
         // Note: This should only be used for testing - health checks will fail
@@ -175,6 +318,9 @@ pub mod app {
             auth_service,
             user_service,
             jwt_service,
+            feature_service,
+            product_service,
+            purchase_service,
             db_pool,
         }
     }
