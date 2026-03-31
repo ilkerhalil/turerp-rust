@@ -4,7 +4,7 @@ use actix_web::{web, HttpResponse};
 
 use crate::domain::feature::{CreateFeatureFlag, FeatureFlagService, UpdateFeatureFlag};
 use crate::error::ApiResult;
-use crate::middleware::AuthUser;
+use crate::middleware::{AdminUser, AuthUser};
 
 /// Create feature flag endpoint (admin only)
 #[utoipa::path(
@@ -24,7 +24,7 @@ use crate::middleware::AuthUser;
     )
 )]
 pub async fn create_flag(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     payload: web::Json<CreateFeatureFlag>,
 ) -> ApiResult<HttpResponse> {
@@ -37,9 +37,6 @@ pub async fn create_flag(
     get,
     path = "/api/v1/feature-flags",
     tag = "Feature Flags",
-    params(
-        ("tenant_id" = Option<i64>, Query, description = "Filter by tenant ID (optional)")
-    ),
     responses(
         (status = 200, description = "Feature flags retrieved", body = Vec<FeatureFlagResponse>),
         (status = 401, description = "Not authenticated - missing or invalid JWT token")
@@ -51,10 +48,11 @@ pub async fn create_flag(
 pub async fn get_flags(
     auth_user: AuthUser,
     feature_service: web::Data<FeatureFlagService>,
-    query: web::Query<GetFlagsParams>,
+    _query: web::Query<GetFlagsParams>,
 ) -> ApiResult<HttpResponse> {
-    // If tenant_id is specified in query, use it; otherwise use the authenticated user's tenant
-    let tenant_id = query.tenant_id.or(Some(auth_user.0.tenant_id));
+    // Always use authenticated user's tenant for isolation
+    // Regular users can only see their own tenant's feature flags
+    let tenant_id = Some(auth_user.0.tenant_id);
     let flags = feature_service.get_all(tenant_id).await?;
     Ok(HttpResponse::Ok().json(flags))
 }
@@ -108,7 +106,7 @@ pub async fn get_flag_by_id(
     )
 )]
 pub async fn update_flag(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateFeatureFlag>,
@@ -141,7 +139,7 @@ pub async fn update_flag(
     )
 )]
 pub async fn delete_flag(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
@@ -168,7 +166,7 @@ pub async fn delete_flag(
     )
 )]
 pub async fn enable_flag(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
@@ -197,7 +195,7 @@ pub async fn enable_flag(
     )
 )]
 pub async fn disable_flag(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
