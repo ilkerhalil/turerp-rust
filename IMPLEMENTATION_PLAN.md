@@ -34,7 +34,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Tenant model and repository
 - [x] Subdomain validation
 - [x] Tenant CRUD operations
-- [ ] Database routing per tenant (planned)
+- [x] Database routing per tenant (TenantPoolRegistry)
 
 ### 1.4 Users Module
 - [x] User management within tenant
@@ -47,13 +47,14 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] CRUD operations
 - [x] Tenant-specific toggles
 - [x] API endpoints (v1)
+- [x] Admin authorization for modifications
 
 ### 1.6 Configuration Module
 - [x] Global config management
 - [x] Environment-based configuration
 - [x] Production validation (JWT secret strength)
-- [ ] Tenant-specific config
-- [ ] Encrypted storage for sensitive values
+- [x] Tenant-specific config (TenantConfigRepository)
+- [ ] Encrypted storage for sensitive values (planned)
 
 ---
 
@@ -101,10 +102,11 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Tax and discount calculations
 
 ### 3.2 Purchase Module
-- [x] Purchase requests
+- [x] Purchase requests (approval workflow)
 - [x] Purchase orders
 - [x] Goods receipt
 - [x] Vendor management
+- [x] Status transition validation (state machine)
 
 ---
 
@@ -189,12 +191,14 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Rate limiting (governor crate)
 
 ### 9.2 Testing & Security
-- [x] Unit tests (160 passing)
+- [x] Unit tests (211 passing)
 - [x] Integration tests (14 passing)
 - [x] Request ID middleware
 - [x] JWT authentication middleware
 - [x] Password complexity validation
 - [x] Production config validation
+- [x] Admin role authorization
+- [x] Tenant isolation enforcement
 - [ ] Security audit (OWASP)
 - [ ] SQL injection tests
 - [ ] XSS prevention tests
@@ -211,13 +215,13 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ---
 
-## Current Status: Phase 9 - Complete ✅ (Feature Flags Added)
+## Current Status: Phase 9 - Complete ✅ (Security Hardened)
 
 ### Completed Modules
 | Module | Status | Notes |
 |--------|--------|-------|
 | Auth | ✅ Complete | JWT, bcrypt, rate limiting, OpenAPI |
-| Tenant | ✅ Complete | Subdomain routing, PostgreSQL repo |
+| Tenant | ✅ Complete | Subdomain routing, PostgreSQL repo, TenantConfig |
 | User | ✅ Complete | CRUD + roles + validation tests |
 | Cari | ✅ Complete | Customer/Vendor + PostgreSQL repo |
 | Product | ✅ Complete | Categories, units, variants |
@@ -230,14 +234,14 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Project | ✅ Complete | WBS, costs, profitability |
 | Manufacturing | ✅ Complete | Work orders, BOM, routing, NCR |
 | CRM | ✅ Complete | Leads, opportunities, tickets |
-| Feature Flags | ✅ Complete | CRUD, tenant-specific, API v1 |
+| Feature Flags | ✅ Complete | CRUD, tenant-specific, API v1, admin auth |
 | Product Variants | ✅ Complete | CRUD, API v1 |
-| Purchase Requests | ✅ Complete | CRUD, approval workflow, API v1 |
+| Purchase Requests | ✅ Complete | CRUD, approval workflow, API v1, state machine |
 | Tenant DB Routing | ✅ Complete | Multi-tenant isolation middleware |
 | Tenant Config | ✅ Complete | Per-tenant settings, key-value storage |
 
 ### Test Coverage
-- **211 tests passing** (197 unit + 14 integration)
+- **225 tests passing** (211 unit + 14 integration)
 - Unit tests for all domain modules
 - Model validation tests
 - Service business logic tests
@@ -263,6 +267,8 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - ✅ Request ID tracking
 - ✅ Production config validation
 - ✅ SQL injection prevention (parameterized queries)
+- ✅ Admin role authorization for sensitive operations
+- ✅ Tenant isolation enforced at API layer
 - ⚠️ Default admin credentials (dev only, warning in migrations)
 
 ---
@@ -345,18 +351,18 @@ dotenv = "0.15"
 
 ## API Endpoints Summary
 
-### Auth
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login (rate limited: 10 req/min)
-- `POST /api/auth/refresh` - Refresh token
-- `GET /api/auth/me` - Current user (requires auth)
+### Auth (v1)
+- `POST /api/v1/auth/register` - Register new user
+- `POST /api/v1/auth/login` - Login (rate limited: 10 req/min)
+- `POST /api/v1/auth/refresh` - Refresh token
+- `GET /api/v1/auth/me` - Current user (requires auth)
 
-### Users
-- `GET /api/users` - List users (requires auth)
-- `POST /api/users` - Create user (requires auth)
-- `GET /api/users/{id}` - Get user (requires auth)
-- `PUT /api/users/{id}` - Update user (requires auth)
-- `DELETE /api/users/{id}` - Delete user (requires auth)
+### Users (v1)
+- `GET /api/v1/users` - List users (requires auth)
+- `POST /api/v1/users` - Create user (requires auth)
+- `GET /api/v1/users/{id}` - Get user (requires auth)
+- `PUT /api/v1/users/{id}` - Update user (requires auth)
+- `DELETE /api/v1/users/{id}` - Delete user (requires auth)
 
 ### Tenants
 - `GET /api/tenants` - List tenants
@@ -364,6 +370,33 @@ dotenv = "0.15"
 - `GET /api/tenants/{id}` - Get tenant
 - `PUT /api/tenants/{id}` - Update tenant
 - `DELETE /api/tenants/{id}` - Delete tenant
+
+### Feature Flags (v1)
+- `GET /api/v1/feature-flags` - List flags (auth, tenant-isolated)
+- `POST /api/v1/feature-flags` - Create flag (admin only)
+- `GET /api/v1/feature-flags/{id}` - Get flag (auth)
+- `PUT /api/v1/feature-flags/{id}` - Update flag (admin only)
+- `DELETE /api/v1/feature-flags/{id}` - Delete flag (admin only)
+- `POST /api/v1/feature-flags/{id}/enable` - Enable flag (admin only)
+- `POST /api/v1/feature-flags/{id}/disable` - Disable flag (admin only)
+- `GET /api/v1/feature-flags/check/{name}` - Check if enabled (auth)
+
+### Purchase Requests (v1)
+- `GET /api/v1/purchase-requests` - List requests (auth, tenant-isolated)
+- `POST /api/v1/purchase-requests` - Create request (auth)
+- `GET /api/v1/purchase-requests/{id}` - Get request (auth)
+- `PUT /api/v1/purchase-requests/{id}` - Update request (auth)
+- `DELETE /api/v1/purchase-requests/{id}` - Delete request (auth)
+- `POST /api/v1/purchase-requests/{id}/submit` - Submit for approval (auth)
+- `POST /api/v1/purchase-requests/{id}/approve` - Approve request (admin only)
+- `POST /api/v1/purchase-requests/{id}/reject` - Reject request (admin only)
+
+### Product Variants (v1)
+- `GET /api/v1/products/{product_id}/variants` - List variants (auth)
+- `POST /api/v1/products/{product_id}/variants` - Create variant (auth)
+- `GET /api/v1/variants/{id}` - Get variant (auth)
+- `PUT /api/v1/variants/{id}` - Update variant (auth)
+- `DELETE /api/v1/variants/{id}` - Delete variant (auth)
 
 ### Health Check
 - `GET /health` - Health check endpoint
@@ -428,31 +461,39 @@ turerp/
 │   ├── error.rs          # Error types
 │   ├── api/
 │   │   ├── mod.rs        # API module + OpenAPI
-│   │   ├── auth.rs       # Auth endpoints
-│   │   └── users.rs      # User endpoints
+│   │   └── v1/           # API version 1
+│   │       ├── mod.rs
+│   │       ├── auth.rs
+│   │       ├── users.rs
+│   │       ├── feature_flags.rs
+│   │       ├── product_variants.rs
+│   │       └── purchase_requests.rs
 │   ├── middleware/
 │   │   ├── mod.rs        # Middleware exports
 │   │   ├── auth.rs       # JWT authentication
 │   │   ├── rate_limit.rs # Rate limiting
-│   │   └── request_id.rs # Request ID tracking
+│   │   ├── request_id.rs # Request ID tracking
+│   │   └── tenant.rs     # Tenant context middleware
 │   ├── domain/
 │   │   ├── auth/         # Auth domain
 │   │   ├── user/         # User domain
-│   │   ├── tenant/       # Tenant domain
+│   │   ├── tenant/       # Tenant domain (includes TenantConfig)
 │   │   ├── cari/         # Customer/Vendor domain
-│   │   ├── product/      # Product domain
+│   │   ├── product/      # Product domain (includes variants)
 │   │   ├── stock/        # Stock domain
 │   │   ├── invoice/      # Invoice domain
 │   │   ├── sales/        # Sales domain
-│   │   ├── purchase/     # Purchase domain
+│   │   ├── purchase/     # Purchase domain (includes requests)
 │   │   ├── hr/           # HR domain
 │   │   ├── accounting/   # Accounting domain
 │   │   ├── project/      # Project domain
 │   │   ├── manufacturing/# Manufacturing domain
-│   │   └── crm/          # CRM domain
+│   │   ├── crm/          # CRM domain
+│   │   └── feature/      # Feature flags domain
 │   ├── db/
 │   │   ├── mod.rs        # DB module
-│   │   └── pool.rs       # Connection pool
+│   │   ├── pool.rs       # Connection pool
+│   │   └── tenant_registry.rs # Tenant pool registry
 │   └── utils/
 │       ├── jwt.rs        # JWT utilities
 │       └── password.rs   # Password utilities
@@ -467,10 +508,11 @@ turerp/
 
 ## Next Steps
 
-1. **Product Variants** - Complete CRUD for product variants
-2. **Purchase Requests** - Implement approval workflow
-3. **Tenant Database Routing** - Implement per-tenant database isolation
-4. **Tenant-Specific Config** - Per-tenant settings
-5. **Security Audit** - Complete OWASP Top 10 review
-6. **Performance Testing** - Load testing with realistic data
-7. **Monitoring** - Add Prometheus/Grafana metrics
+1. ~~Product Variants~~ - Complete CRUD for product variants ✅
+2. ~~Purchase Requests~~ - Implement approval workflow ✅
+3. ~~Tenant Database Routing~~ - Implement per-tenant database isolation ✅
+4. ~~Tenant-Specific Config~~ - Per-tenant settings ✅
+5. ~~Feature Flags Admin Auth~~ - Security hardening ✅
+6. **Security Audit** - Complete OWASP Top 10 review
+7. **Performance Testing** - Load testing with realistic data
+8. **Monitoring** - Add Prometheus/Grafana metrics
