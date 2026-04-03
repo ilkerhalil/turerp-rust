@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use parking_lot::Mutex;
+use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::domain::sales::model::{
@@ -77,16 +78,16 @@ pub type BoxSalesOrderLineRepository = Arc<dyn SalesOrderLineRepository>;
 pub type BoxQuotationRepository = Arc<dyn QuotationRepository>;
 pub type BoxQuotationLineRepository = Arc<dyn QuotationLineRepository>;
 
-fn calculate_totals(lines: &[CreateSalesOrderLine]) -> (f64, f64, f64, f64) {
-    let mut subtotal = 0.0;
-    let mut tax_amount = 0.0;
-    let mut discount_amount = 0.0;
+fn calculate_totals(lines: &[CreateSalesOrderLine]) -> (Decimal, Decimal, Decimal, Decimal) {
+    let mut subtotal = Decimal::ZERO;
+    let mut tax_amount = Decimal::ZERO;
+    let mut discount_amount = Decimal::ZERO;
 
     for line in lines {
         let line_subtotal = line.quantity * line.unit_price;
-        let line_discount = line_subtotal * (line.discount_rate / 100.0);
+        let line_discount = line_subtotal * (line.discount_rate / Decimal::ONE_HUNDRED);
         let after_discount = line_subtotal - line_discount;
-        let line_tax = after_discount * (line.tax_rate / 100.0);
+        let line_tax = after_discount * (line.tax_rate / Decimal::ONE_HUNDRED);
 
         subtotal += line_subtotal;
         discount_amount += line_discount;
@@ -105,17 +106,24 @@ fn generate_quotation_number(count: i64) -> String {
     format!("QT-{:06}", count)
 }
 
+/// Inner state for InMemorySalesOrderRepository
+struct InMemorySalesOrderInner {
+    orders: std::collections::HashMap<i64, SalesOrder>,
+    next_id: i64,
+}
+
 /// In-memory sales order repository
 pub struct InMemorySalesOrderRepository {
-    orders: Mutex<std::collections::HashMap<i64, SalesOrder>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemorySalesOrderInner>,
 }
 
 impl InMemorySalesOrderRepository {
     pub fn new() -> Self {
         Self {
-            orders: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemorySalesOrderInner {
+                orders: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -129,9 +137,9 @@ impl Default for InMemorySalesOrderRepository {
 #[async_trait]
 impl SalesOrderRepository for InMemorySalesOrderRepository {
     async fn create(&self, create: CreateSalesOrder) -> Result<SalesOrder, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let order_number = generate_order_number(id);
         let (subtotal, tax_amount, discount_amount, total_amount) = calculate_totals(&create.lines);
@@ -156,17 +164,19 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
             updated_at: now,
         };
 
-        self.orders.lock().insert(id, order.clone());
+        inner.orders.insert(id, order.clone());
         Ok(order)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<SalesOrder>, ApiError> {
-        Ok(self.orders.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.orders.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
-        let orders = self.orders.lock();
-        Ok(orders
+        let inner = self.inner.lock();
+        Ok(inner
+            .orders
             .values()
             .filter(|o| o.tenant_id == tenant_id)
             .cloned()
@@ -174,8 +184,9 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
     }
 
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
-        let orders = self.orders.lock();
-        Ok(orders
+        let inner = self.inner.lock();
+        Ok(inner
+            .orders
             .values()
             .filter(|o| o.cari_id == cari_id)
             .cloned()
@@ -187,8 +198,9 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
         tenant_id: i64,
         status: SalesOrderStatus,
     ) -> Result<Vec<SalesOrder>, ApiError> {
-        let orders = self.orders.lock();
-        Ok(orders
+        let inner = self.inner.lock();
+        Ok(inner
+            .orders
             .values()
             .filter(|o| o.tenant_id == tenant_id && o.status == status)
             .cloned()
@@ -200,8 +212,9 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
         id: i64,
         status: SalesOrderStatus,
     ) -> Result<SalesOrder, ApiError> {
-        let mut orders = self.orders.lock();
-        let order = orders
+        let mut inner = self.inner.lock();
+        let order = inner
+            .orders
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", id)))?;
         order.status = status;
@@ -210,22 +223,30 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.orders.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.orders.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemorySalesOrderLineRepository
+struct InMemorySalesOrderLineInner {
+    lines: std::collections::HashMap<i64, Vec<SalesOrderLine>>,
+    next_id: i64,
+}
+
 /// In-memory sales order line repository
 pub struct InMemorySalesOrderLineRepository {
-    lines: Mutex<std::collections::HashMap<i64, Vec<SalesOrderLine>>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemorySalesOrderLineInner>,
 }
 
 impl InMemorySalesOrderLineRepository {
     pub fn new() -> Self {
         Self {
-            lines: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemorySalesOrderLineInner {
+                lines: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -243,12 +264,12 @@ impl SalesOrderLineRepository for InMemorySalesOrderLineRepository {
         order_id: i64,
         create_lines: Vec<CreateSalesOrderLine>,
     ) -> Result<Vec<SalesOrderLine>, ApiError> {
-        let mut next_id = self.next_id.lock();
+        let mut inner = self.inner.lock();
         let mut lines = Vec::new();
 
         for (i, create) in create_lines.into_iter().enumerate() {
-            let id = *next_id;
-            *next_id += 1;
+            let id = inner.next_id;
+            inner.next_id += 1;
 
             let line_total = create.calculate_line_total();
 
@@ -266,36 +287,40 @@ impl SalesOrderLineRepository for InMemorySalesOrderLineRepository {
             });
         }
 
-        self.lines.lock().insert(order_id, lines.clone());
+        inner.lines.insert(order_id, lines.clone());
         Ok(lines)
     }
 
     async fn find_by_order(&self, order_id: i64) -> Result<Vec<SalesOrderLine>, ApiError> {
-        Ok(self
-            .lines
-            .lock()
-            .get(&order_id)
-            .cloned()
-            .unwrap_or_default())
+        let inner = self.inner.lock();
+        Ok(inner.lines.get(&order_id).cloned().unwrap_or_default())
     }
 
     async fn delete_by_order(&self, order_id: i64) -> Result<(), ApiError> {
-        self.lines.lock().remove(&order_id);
+        let mut inner = self.inner.lock();
+        inner.lines.remove(&order_id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryQuotationRepository
+struct InMemoryQuotationInner {
+    quotations: std::collections::HashMap<i64, Quotation>,
+    next_id: i64,
+}
+
 /// In-memory quotation repository
 pub struct InMemoryQuotationRepository {
-    quotations: Mutex<std::collections::HashMap<i64, Quotation>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryQuotationInner>,
 }
 
 impl InMemoryQuotationRepository {
     pub fn new() -> Self {
         Self {
-            quotations: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryQuotationInner {
+                quotations: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -309,20 +334,20 @@ impl Default for InMemoryQuotationRepository {
 #[async_trait]
 impl QuotationRepository for InMemoryQuotationRepository {
     async fn create(&self, create: CreateQuotation) -> Result<Quotation, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let quotation_number = generate_quotation_number(id);
-        let mut subtotal = 0.0;
-        let mut tax_amount = 0.0;
-        let mut discount_amount = 0.0;
+        let mut subtotal = Decimal::ZERO;
+        let mut tax_amount = Decimal::ZERO;
+        let mut discount_amount = Decimal::ZERO;
 
         for line in &create.lines {
             let line_subtotal = line.quantity * line.unit_price;
-            let line_discount = line_subtotal * (line.discount_rate / 100.0);
+            let line_discount = line_subtotal * (line.discount_rate / Decimal::ONE_HUNDRED);
             let after_discount = line_subtotal - line_discount;
-            let line_tax = after_discount * (line.tax_rate / 100.0);
+            let line_tax = after_discount * (line.tax_rate / Decimal::ONE_HUNDRED);
 
             subtotal += line_subtotal;
             discount_amount += line_discount;
@@ -350,17 +375,19 @@ impl QuotationRepository for InMemoryQuotationRepository {
             updated_at: now,
         };
 
-        self.quotations.lock().insert(id, quotation.clone());
+        inner.quotations.insert(id, quotation.clone());
         Ok(quotation)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Quotation>, ApiError> {
-        Ok(self.quotations.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.quotations.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Quotation>, ApiError> {
-        let quotations = self.quotations.lock();
-        Ok(quotations
+        let inner = self.inner.lock();
+        Ok(inner
+            .quotations
             .values()
             .filter(|q| q.tenant_id == tenant_id)
             .cloned()
@@ -368,8 +395,9 @@ impl QuotationRepository for InMemoryQuotationRepository {
     }
 
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Quotation>, ApiError> {
-        let quotations = self.quotations.lock();
-        Ok(quotations
+        let inner = self.inner.lock();
+        Ok(inner
+            .quotations
             .values()
             .filter(|q| q.cari_id == cari_id)
             .cloned()
@@ -381,8 +409,9 @@ impl QuotationRepository for InMemoryQuotationRepository {
         tenant_id: i64,
         status: QuotationStatus,
     ) -> Result<Vec<Quotation>, ApiError> {
-        let quotations = self.quotations.lock();
-        Ok(quotations
+        let inner = self.inner.lock();
+        Ok(inner
+            .quotations
             .values()
             .filter(|q| q.tenant_id == tenant_id && q.status == status)
             .cloned()
@@ -390,8 +419,9 @@ impl QuotationRepository for InMemoryQuotationRepository {
     }
 
     async fn update_status(&self, id: i64, status: QuotationStatus) -> Result<Quotation, ApiError> {
-        let mut quotations = self.quotations.lock();
-        let quotation = quotations
+        let mut inner = self.inner.lock();
+        let quotation = inner
+            .quotations
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", id)))?;
         quotation.status = status;
@@ -400,8 +430,9 @@ impl QuotationRepository for InMemoryQuotationRepository {
     }
 
     async fn link_to_order(&self, id: i64, order_id: i64) -> Result<Quotation, ApiError> {
-        let mut quotations = self.quotations.lock();
-        let quotation = quotations
+        let mut inner = self.inner.lock();
+        let quotation = inner
+            .quotations
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", id)))?;
         quotation.sales_order_id = Some(order_id);
@@ -411,22 +442,30 @@ impl QuotationRepository for InMemoryQuotationRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.quotations.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.quotations.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryQuotationLineRepository
+struct InMemoryQuotationLineInner {
+    lines: std::collections::HashMap<i64, Vec<QuotationLine>>,
+    next_id: i64,
+}
+
 /// In-memory quotation line repository
 pub struct InMemoryQuotationLineRepository {
-    lines: Mutex<std::collections::HashMap<i64, Vec<QuotationLine>>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryQuotationLineInner>,
 }
 
 impl InMemoryQuotationLineRepository {
     pub fn new() -> Self {
         Self {
-            lines: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryQuotationLineInner {
+                lines: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -444,17 +483,17 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
         quotation_id: i64,
         create_lines: Vec<CreateQuotationLine>,
     ) -> Result<Vec<QuotationLine>, ApiError> {
-        let mut next_id = self.next_id.lock();
+        let mut inner = self.inner.lock();
         let mut lines = Vec::new();
 
         for (i, create) in create_lines.into_iter().enumerate() {
-            let id = *next_id;
-            *next_id += 1;
+            let id = inner.next_id;
+            inner.next_id += 1;
 
             let line_subtotal = create.quantity * create.unit_price;
-            let line_discount = line_subtotal * (create.discount_rate / 100.0);
+            let line_discount = line_subtotal * (create.discount_rate / Decimal::ONE_HUNDRED);
             let after_discount = line_subtotal - line_discount;
-            let line_tax = after_discount * (create.tax_rate / 100.0);
+            let line_tax = after_discount * (create.tax_rate / Decimal::ONE_HUNDRED);
             let line_total = after_discount + line_tax;
 
             lines.push(QuotationLine {
@@ -471,21 +510,18 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
             });
         }
 
-        self.lines.lock().insert(quotation_id, lines.clone());
+        inner.lines.insert(quotation_id, lines.clone());
         Ok(lines)
     }
 
     async fn find_by_quotation(&self, quotation_id: i64) -> Result<Vec<QuotationLine>, ApiError> {
-        Ok(self
-            .lines
-            .lock()
-            .get(&quotation_id)
-            .cloned()
-            .unwrap_or_default())
+        let inner = self.inner.lock();
+        Ok(inner.lines.get(&quotation_id).cloned().unwrap_or_default())
     }
 
     async fn delete_by_quotation(&self, quotation_id: i64) -> Result<(), ApiError> {
-        self.lines.lock().remove(&quotation_id);
+        let mut inner = self.inner.lock();
+        inner.lines.remove(&quotation_id);
         Ok(())
     }
 }

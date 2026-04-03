@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
+use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::domain::manufacturing::model::{
@@ -76,24 +77,31 @@ pub type BoxRoutingRepository = Arc<dyn RoutingRepository>;
 
 // ==================== IN-MEMORY IMPLEMENTATIONS ====================
 
+/// Inner state for InMemoryWorkOrderRepository
+struct InMemoryWorkOrderInner {
+    work_orders: std::collections::HashMap<i64, WorkOrder>,
+    operations: std::collections::HashMap<i64, Vec<WorkOrderOperation>>,
+    materials: std::collections::HashMap<i64, Vec<WorkOrderMaterial>>,
+    next_id: i64,
+    next_op_id: i64,
+    next_mat_id: i64,
+}
+
 pub struct InMemoryWorkOrderRepository {
-    work_orders: Mutex<std::collections::HashMap<i64, WorkOrder>>,
-    operations: Mutex<std::collections::HashMap<i64, Vec<WorkOrderOperation>>>,
-    materials: Mutex<std::collections::HashMap<i64, Vec<WorkOrderMaterial>>>,
-    next_id: Mutex<i64>,
-    next_op_id: Mutex<i64>,
-    next_mat_id: Mutex<i64>,
+    inner: Mutex<InMemoryWorkOrderInner>,
 }
 
 impl InMemoryWorkOrderRepository {
     pub fn new() -> Self {
         Self {
-            work_orders: Mutex::new(std::collections::HashMap::new()),
-            operations: Mutex::new(std::collections::HashMap::new()),
-            materials: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
-            next_op_id: Mutex::new(1),
-            next_mat_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryWorkOrderInner {
+                work_orders: std::collections::HashMap::new(),
+                operations: std::collections::HashMap::new(),
+                materials: std::collections::HashMap::new(),
+                next_id: 1,
+                next_op_id: 1,
+                next_mat_id: 1,
+            }),
         }
     }
 }
@@ -109,9 +117,9 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
         let now = Utc::now();
         let work_order = WorkOrder {
             id,
@@ -130,17 +138,19 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
             created_at: now,
             updated_at: now,
         };
-        self.work_orders.lock().insert(id, work_order.clone());
+        inner.work_orders.insert(id, work_order.clone());
         Ok(work_order)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<WorkOrder>, ApiError> {
-        Ok(self.work_orders.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.work_orders.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<WorkOrder>, ApiError> {
-        let wo = self.work_orders.lock();
-        Ok(wo
+        let inner = self.inner.lock();
+        Ok(inner
+            .work_orders
             .values()
             .filter(|x| x.tenant_id == tenant_id)
             .cloned()
@@ -148,8 +158,9 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<WorkOrder>, ApiError> {
-        let wo = self.work_orders.lock();
-        Ok(wo
+        let inner = self.inner.lock();
+        Ok(inner
+            .work_orders
             .values()
             .filter(|x| x.product_id == product_id)
             .cloned()
@@ -161,8 +172,9 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
         tenant_id: i64,
         status: WorkOrderStatus,
     ) -> Result<Vec<WorkOrder>, ApiError> {
-        let wo = self.work_orders.lock();
-        Ok(wo
+        let inner = self.inner.lock();
+        Ok(inner
+            .work_orders
             .values()
             .filter(|x| x.tenant_id == tenant_id && x.status == status)
             .cloned()
@@ -170,8 +182,9 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
     }
 
     async fn update_status(&self, id: i64, status: WorkOrderStatus) -> Result<WorkOrder, ApiError> {
-        let mut wo = self.work_orders.lock();
-        let order = wo
+        let mut inner = self.inner.lock();
+        let order = inner
+            .work_orders
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))?;
         order.status = status;
@@ -185,9 +198,9 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
     ) -> Result<WorkOrderOperation, ApiError> {
         op.validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_op_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_op_id;
+        inner.next_op_id += 1;
         let operation = WorkOrderOperation {
             id,
             work_order_id: op.work_order_id,
@@ -195,13 +208,13 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
             operation_name: op.operation_name,
             work_center_id: op.work_center_id,
             planned_hours: op.planned_hours,
-            actual_hours: 0.0,
+            actual_hours: Decimal::ZERO,
             status: "Pending".to_string(),
             started_at: None,
             completed_at: None,
         };
-        self.operations
-            .lock()
+        inner
+            .operations
             .entry(op.work_order_id)
             .or_default()
             .push(operation.clone());
@@ -212,9 +225,9 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
         &self,
         work_order_id: i64,
     ) -> Result<Vec<WorkOrderOperation>, ApiError> {
-        Ok(self
+        let inner = self.inner.lock();
+        Ok(inner
             .operations
-            .lock()
             .get(&work_order_id)
             .cloned()
             .unwrap_or_default())
@@ -226,19 +239,19 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
     ) -> Result<WorkOrderMaterial, ApiError> {
         mat.validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_mat_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_mat_id;
+        inner.next_mat_id += 1;
         let material = WorkOrderMaterial {
             id,
             work_order_id: mat.work_order_id,
             product_id: mat.product_id,
             quantity_required: mat.quantity_required,
-            quantity_issued: 0.0,
+            quantity_issued: Decimal::ZERO,
             is_issued: false,
         };
-        self.materials
-            .lock()
+        inner
+            .materials
             .entry(mat.work_order_id)
             .or_default()
             .push(material.clone());
@@ -246,34 +259,42 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
     }
 
     async fn get_materials(&self, work_order_id: i64) -> Result<Vec<WorkOrderMaterial>, ApiError> {
-        Ok(self
+        let inner = self.inner.lock();
+        Ok(inner
             .materials
-            .lock()
             .get(&work_order_id)
             .cloned()
             .unwrap_or_default())
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.work_orders.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.work_orders.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryBillOfMaterialsRepository
+struct InMemoryBillOfMaterialsInner {
+    boms: std::collections::HashMap<i64, BillOfMaterials>,
+    lines: std::collections::HashMap<i64, Vec<BillOfMaterialsLine>>,
+    next_id: i64,
+    next_line_id: i64,
+}
+
 pub struct InMemoryBillOfMaterialsRepository {
-    boms: Mutex<std::collections::HashMap<i64, BillOfMaterials>>,
-    lines: Mutex<std::collections::HashMap<i64, Vec<BillOfMaterialsLine>>>,
-    next_id: Mutex<i64>,
-    next_line_id: Mutex<i64>,
+    inner: Mutex<InMemoryBillOfMaterialsInner>,
 }
 
 impl InMemoryBillOfMaterialsRepository {
     pub fn new() -> Self {
         Self {
-            boms: Mutex::new(std::collections::HashMap::new()),
-            lines: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
-            next_line_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryBillOfMaterialsInner {
+                boms: std::collections::HashMap::new(),
+                lines: std::collections::HashMap::new(),
+                next_id: 1,
+                next_line_id: 1,
+            }),
         }
     }
 }
@@ -289,9 +310,9 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
         let now = Utc::now();
         let bom = BillOfMaterials {
             id,
@@ -305,17 +326,19 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
             created_at: now,
             updated_at: now,
         };
-        self.boms.lock().insert(id, bom.clone());
+        inner.boms.insert(id, bom.clone());
         Ok(bom)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<BillOfMaterials>, ApiError> {
-        Ok(self.boms.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.boms.get(&id).cloned())
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<BillOfMaterials>, ApiError> {
-        let bom = self.boms.lock();
-        Ok(bom
+        let inner = self.inner.lock();
+        Ok(inner
+            .boms
             .values()
             .filter(|x| x.product_id == product_id)
             .cloned()
@@ -326,8 +349,9 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
         &self,
         product_id: i64,
     ) -> Result<Option<BillOfMaterials>, ApiError> {
-        let bom = self.boms.lock();
-        Ok(bom
+        let inner = self.inner.lock();
+        Ok(inner
+            .boms
             .values()
             .filter(|x| x.product_id == product_id && x.is_primary && x.is_active)
             .cloned()
@@ -341,9 +365,9 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
     ) -> Result<BillOfMaterialsLine, ApiError> {
         line.validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_line_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_line_id;
+        inner.next_line_id += 1;
         let bom_line = BillOfMaterialsLine {
             id,
             bom_id: line.bom_id,
@@ -354,8 +378,8 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
             is_optional: line.is_optional,
             notes: line.notes,
         };
-        self.lines
-            .lock()
+        inner
+            .lines
             .entry(line.bom_id)
             .or_default()
             .push(bom_line.clone());
@@ -363,29 +387,38 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
     }
 
     async fn get_lines(&self, bom_id: i64) -> Result<Vec<BillOfMaterialsLine>, ApiError> {
-        Ok(self.lines.lock().get(&bom_id).cloned().unwrap_or_default())
+        let inner = self.inner.lock();
+        Ok(inner.lines.get(&bom_id).cloned().unwrap_or_default())
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.boms.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.boms.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryRoutingRepository
+struct InMemoryRoutingInner {
+    routings: std::collections::HashMap<i64, Routing>,
+    operations: std::collections::HashMap<i64, Vec<RoutingOperation>>,
+    next_id: i64,
+    next_op_id: i64,
+}
+
 pub struct InMemoryRoutingRepository {
-    routings: Mutex<std::collections::HashMap<i64, Routing>>,
-    operations: Mutex<std::collections::HashMap<i64, Vec<RoutingOperation>>>,
-    next_id: Mutex<i64>,
-    next_op_id: Mutex<i64>,
+    inner: Mutex<InMemoryRoutingInner>,
 }
 
 impl InMemoryRoutingRepository {
     pub fn new() -> Self {
         Self {
-            routings: Mutex::new(std::collections::HashMap::new()),
-            operations: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
-            next_op_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryRoutingInner {
+                routings: std::collections::HashMap::new(),
+                operations: std::collections::HashMap::new(),
+                next_id: 1,
+                next_op_id: 1,
+            }),
         }
     }
 }
@@ -401,9 +434,9 @@ impl RoutingRepository for InMemoryRoutingRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
         let now = Utc::now();
         let routing = Routing {
             id,
@@ -415,25 +448,30 @@ impl RoutingRepository for InMemoryRoutingRepository {
             created_at: now,
             updated_at: now,
         };
-        self.routings.lock().insert(id, routing.clone());
+        inner.routings.insert(id, routing.clone());
         Ok(routing)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Routing>, ApiError> {
-        Ok(self.routings.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.routings.get(&id).cloned())
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<Routing>, ApiError> {
-        let r = self.routings.lock();
-        Ok(r.values()
+        let inner = self.inner.lock();
+        Ok(inner
+            .routings
+            .values()
             .filter(|x| x.product_id == product_id)
             .cloned()
             .collect())
     }
 
     async fn find_primary_by_product(&self, product_id: i64) -> Result<Option<Routing>, ApiError> {
-        let r = self.routings.lock();
-        Ok(r.values()
+        let inner = self.inner.lock();
+        Ok(inner
+            .routings
+            .values()
             .filter(|x| x.product_id == product_id && x.is_primary && x.is_active)
             .cloned()
             .collect::<Vec<_>>()
@@ -447,9 +485,9 @@ impl RoutingRepository for InMemoryRoutingRepository {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        let mut next_id = self.next_op_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_op_id;
+        inner.next_op_id += 1;
         let op = RoutingOperation {
             id,
             routing_id: create.routing_id,
@@ -460,8 +498,8 @@ impl RoutingRepository for InMemoryRoutingRepository {
             run_hours: create.run_hours,
             description: create.description,
         };
-        self.operations
-            .lock()
+        inner
+            .operations
             .entry(create.routing_id)
             .or_default()
             .push(op.clone());
@@ -469,16 +507,17 @@ impl RoutingRepository for InMemoryRoutingRepository {
     }
 
     async fn get_operations(&self, routing_id: i64) -> Result<Vec<RoutingOperation>, ApiError> {
-        Ok(self
+        let inner = self.inner.lock();
+        Ok(inner
             .operations
-            .lock()
             .get(&routing_id)
             .cloned()
             .unwrap_or_default())
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.routings.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.routings.remove(&id);
         Ok(())
     }
 }

@@ -1,4 +1,6 @@
 //! Stock service for business logic
+use rust_decimal::Decimal;
+
 use crate::domain::stock::model::{
     CreateStockMovement, CreateWarehouse, MovementType, StockLevel, StockMovement, StockSummary,
     Warehouse, WarehouseStock,
@@ -94,8 +96,8 @@ impl StockService {
     pub async fn get_stock_summary(&self, product_id: i64) -> Result<StockSummary, ApiError> {
         let levels = self.stock_level_repo.find_by_product(product_id).await?;
 
-        let total_quantity: f64 = levels.iter().map(|l| l.quantity).sum();
-        let reserved_quantity: f64 = levels.iter().map(|l| l.reserved_quantity).sum();
+        let total_quantity: Decimal = levels.iter().map(|l| l.quantity).sum();
+        let reserved_quantity: Decimal = levels.iter().map(|l| l.reserved_quantity).sum();
 
         let mut warehouses = Vec::new();
         for level in &levels {
@@ -151,7 +153,7 @@ impl StockService {
             }
             // Stock out operations
             MovementType::Sale | MovementType::ProductionOut | MovementType::Waste => {
-                let current = current_level.map(|l| l.quantity).unwrap_or(0.0);
+                let current = current_level.map(|l| l.quantity).unwrap_or(Decimal::ZERO);
                 if create.quantity > current {
                     return Err(ApiError::BadRequest(format!(
                         "Insufficient stock. Available: {}, requested: {}",
@@ -162,7 +164,7 @@ impl StockService {
             }
             // Neutral operations (doesn't change quantity)
             MovementType::Adjustment | MovementType::Transfer => {
-                current_level.map(|l| l.quantity).unwrap_or(0.0)
+                current_level.map(|l| l.quantity).unwrap_or(Decimal::ZERO)
             }
         };
 
@@ -196,7 +198,7 @@ impl StockService {
         &self,
         warehouse_id: i64,
         product_id: i64,
-        quantity: f64,
+        quantity: Decimal,
     ) -> Result<StockLevel, ApiError> {
         self.stock_level_repo
             .reserve_quantity(warehouse_id, product_id, quantity)
@@ -207,7 +209,7 @@ impl StockService {
         &self,
         warehouse_id: i64,
         product_id: i64,
-        quantity: f64,
+        quantity: Decimal,
     ) -> Result<StockLevel, ApiError> {
         self.stock_level_repo
             .release_quantity(warehouse_id, product_id, quantity)
@@ -222,6 +224,7 @@ mod tests {
     use crate::domain::stock::repository::{
         InMemoryStockLevelRepository, InMemoryStockMovementRepository, InMemoryWarehouseRepository,
     };
+    use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> StockService {
@@ -270,7 +273,7 @@ mod tests {
                 warehouse_id: warehouse.id,
                 product_id: 1,
                 movement_type: MovementType::Purchase,
-                quantity: 100.0,
+                quantity: dec!(100),
                 reference_type: Some("PO".to_string()),
                 reference_id: Some(1),
                 notes: None,
@@ -279,11 +282,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(movement.quantity, 100.0);
+        assert_eq!(movement.quantity, dec!(100));
 
         // Check stock level
         let stock = service.get_stock_level(warehouse.id, 1).await.unwrap();
-        assert_eq!(stock.quantity, 100.0);
+        assert_eq!(stock.quantity, dec!(100));
     }
 
     #[tokio::test]
@@ -306,7 +309,7 @@ mod tests {
                 warehouse_id: warehouse.id,
                 product_id: 1,
                 movement_type: MovementType::Purchase,
-                quantity: 100.0,
+                quantity: dec!(100),
                 reference_type: None,
                 reference_id: None,
                 notes: None,
@@ -321,7 +324,7 @@ mod tests {
                 warehouse_id: warehouse.id,
                 product_id: 1,
                 movement_type: MovementType::Sale,
-                quantity: 30.0,
+                quantity: dec!(30),
                 reference_type: Some("SO".to_string()),
                 reference_id: Some(1),
                 notes: None,
@@ -331,7 +334,7 @@ mod tests {
 
         assert!(result.is_ok());
         let stock = service.get_stock_level(warehouse.id, 1).await.unwrap();
-        assert_eq!(stock.quantity, 70.0);
+        assert_eq!(stock.quantity, dec!(70));
     }
 
     #[tokio::test]
@@ -354,7 +357,7 @@ mod tests {
                 warehouse_id: warehouse.id,
                 product_id: 1,
                 movement_type: MovementType::Sale,
-                quantity: 100.0,
+                quantity: dec!(100),
                 reference_type: None,
                 reference_id: None,
                 notes: None,

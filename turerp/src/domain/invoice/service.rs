@@ -175,6 +175,7 @@ mod tests {
         InMemoryInvoiceLineRepository, InMemoryInvoiceRepository, InMemoryPaymentRepository,
     };
     use chrono::Utc;
+    use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> InvoiceService {
@@ -200,10 +201,10 @@ mod tests {
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
                 description: "Test Product".to_string(),
-                quantity: 2.0,
-                unit_price: 100.0,
-                tax_rate: 18.0,
-                discount_rate: 0.0,
+                quantity: dec!(2),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
             }],
         };
 
@@ -212,7 +213,7 @@ mod tests {
         let invoice = result.unwrap();
         assert_eq!(invoice.lines.len(), 1);
         // 2 * 100 = 200, tax = 36, total = 236
-        assert!((invoice.total_amount - 236.0).abs() < 0.01);
+        assert_eq!(invoice.total_amount, dec!(236));
     }
 
     #[tokio::test]
@@ -232,10 +233,10 @@ mod tests {
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
                 description: "Test Product".to_string(),
-                quantity: 1.0,
-                unit_price: 100.0,
-                tax_rate: 18.0,
-                discount_rate: 0.0,
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
             }],
         };
 
@@ -245,7 +246,7 @@ mod tests {
         let payment_create = CreatePayment {
             tenant_id: 1,
             invoice_id: invoice.id,
-            amount: 50.0,
+            amount: dec!(50),
             payment_date: now,
             payment_method: "Bank Transfer".to_string(),
             reference_number: Some("TRF001".to_string()),
@@ -276,10 +277,10 @@ mod tests {
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
                 description: "Test".to_string(),
-                quantity: 1.0,
-                unit_price: 100.0,
-                tax_rate: 18.0,
-                discount_rate: 0.0,
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
             }],
         };
 

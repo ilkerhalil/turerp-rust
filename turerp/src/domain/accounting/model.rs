@@ -1,6 +1,7 @@
 //! Accounting domain models
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Account type
@@ -58,8 +59,8 @@ pub struct JournalEntry {
     pub description: String,
     pub reference: Option<String>,
     pub status: JournalEntryStatus,
-    pub total_debit: f64,
-    pub total_credit: f64,
+    pub total_debit: Decimal,
+    pub total_credit: Decimal,
     pub created_by: i64,
     pub created_at: DateTime<Utc>,
     pub posted_at: Option<DateTime<Utc>>,
@@ -79,8 +80,8 @@ pub struct JournalLine {
     pub id: i64,
     pub entry_id: i64,
     pub account_id: i64,
-    pub debit: f64,
-    pub credit: f64,
+    pub debit: Decimal,
+    pub credit: Decimal,
     pub description: Option<String>,
     pub reference: Option<String>,
 }
@@ -92,9 +93,9 @@ pub struct AccountBalance {
     pub account_code: String,
     pub account_name: String,
     pub account_type: AccountType,
-    pub debit_balance: f64,
-    pub credit_balance: f64,
-    pub balance: f64,
+    pub debit_balance: Decimal,
+    pub credit_balance: Decimal,
+    pub balance: Decimal,
 }
 
 /// Trial balance report
@@ -103,8 +104,8 @@ pub struct TrialBalance {
     pub period_start: DateTime<Utc>,
     pub period_end: DateTime<Utc>,
     pub accounts: Vec<AccountBalance>,
-    pub total_debits: f64,
-    pub total_credits: f64,
+    pub total_debits: Decimal,
+    pub total_credits: Decimal,
 }
 
 /// Create account request
@@ -153,9 +154,9 @@ impl CreateJournalEntry {
         if self.lines.is_empty() {
             errors.push("Journal entry must have at least one line".to_string());
         }
-        let total_debit: f64 = self.lines.iter().map(|l| l.debit).sum();
-        let total_credit: f64 = self.lines.iter().map(|l| l.credit).sum();
-        if (total_debit - total_credit).abs() > 0.01 {
+        let total_debit: Decimal = self.lines.iter().map(|l| l.debit).sum();
+        let total_credit: Decimal = self.lines.iter().map(|l| l.credit).sum();
+        if total_debit != total_credit {
             errors.push("Total debits must equal total credits".to_string());
         }
         if errors.is_empty() {
@@ -170,8 +171,8 @@ impl CreateJournalEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateJournalLine {
     pub account_id: i64,
-    pub debit: f64,
-    pub credit: f64,
+    pub debit: Decimal,
+    pub credit: Decimal,
     pub description: Option<String>,
     pub reference: Option<String>,
 }
@@ -179,13 +180,13 @@ pub struct CreateJournalLine {
 impl CreateJournalLine {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        if self.debit < 0.0 || self.credit < 0.0 {
+        if self.debit < Decimal::ZERO || self.credit < Decimal::ZERO {
             errors.push("Amounts cannot be negative".to_string());
         }
-        if self.debit > 0.0 && self.credit > 0.0 {
+        if self.debit > Decimal::ZERO && self.credit > Decimal::ZERO {
             errors.push("Line cannot have both debit and credit".to_string());
         }
-        if self.debit == 0.0 && self.credit == 0.0 {
+        if self.debit == Decimal::ZERO && self.credit == Decimal::ZERO {
             errors.push("Line must have either debit or credit".to_string());
         }
         if errors.is_empty() {
@@ -199,6 +200,7 @@ impl CreateJournalLine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal_macros::dec;
 
     #[test]
     fn test_create_account_validation() {
@@ -236,15 +238,15 @@ mod tests {
             lines: vec![
                 CreateJournalLine {
                     account_id: 1,
-                    debit: 100.0,
-                    credit: 0.0,
+                    debit: dec!(100.0),
+                    credit: Decimal::ZERO,
                     description: None,
                     reference: None,
                 },
                 CreateJournalLine {
                     account_id: 2,
-                    debit: 0.0,
-                    credit: 100.0,
+                    debit: Decimal::ZERO,
+                    credit: dec!(100.0),
                     description: None,
                     reference: None,
                 },

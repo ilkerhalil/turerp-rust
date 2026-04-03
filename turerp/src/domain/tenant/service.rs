@@ -360,7 +360,7 @@ mod tests {
 
         // Default tenant exists
         let result = service.get_all_tenants().await.unwrap();
-        assert!(result.len() >= 1);
+        assert!(!result.is_empty());
     }
 
     #[tokio::test]

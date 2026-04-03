@@ -1,5 +1,7 @@
 //! Manufacturing service for business logic
 
+use rust_decimal::Decimal;
+
 use crate::domain::manufacturing::model::{
     BillOfMaterials, BillOfMaterialsLine, CreateBillOfMaterials, CreateBillOfMaterialsLine,
     CreateRouting, CreateRoutingOperation, CreateWorkOrder, CreateWorkOrderMaterial,
@@ -174,15 +176,16 @@ impl ManufacturingService {
     pub async fn calculate_material_requirements(
         &self,
         product_id: i64,
-        quantity: f64,
-    ) -> Result<Vec<(i64, f64)>, ApiError> {
+        quantity: Decimal,
+    ) -> Result<Vec<(i64, Decimal)>, ApiError> {
         let bom = self.bom_repo.find_primary_by_product(product_id).await?;
         match bom {
             Some(bom) => {
                 let lines = self.bom_repo.get_lines(bom.id).await?;
                 let mut requirements = Vec::new();
                 for line in lines {
-                    let scrap_factor = 1.0 + (line.scrap_percentage / 100.0);
+                    let scrap_factor =
+                        Decimal::ONE + (line.scrap_percentage / Decimal::ONE_HUNDRED);
                     let required_qty = quantity * line.quantity * scrap_factor;
                     requirements.push((line.component_product_id, required_qty));
                 }
@@ -193,7 +196,7 @@ impl ManufacturingService {
     }
 
     // Calculate production time from routing
-    pub async fn calculate_production_time(&self, product_id: i64) -> Result<f64, ApiError> {
+    pub async fn calculate_production_time(&self, product_id: i64) -> Result<Decimal, ApiError> {
         let routing = self
             .routing_repo
             .find_primary_by_product(product_id)
@@ -201,10 +204,10 @@ impl ManufacturingService {
         match routing {
             Some(r) => {
                 let ops = self.routing_repo.get_operations(r.id).await?;
-                let total_time: f64 = ops.iter().map(|op| op.setup_hours + op.run_hours).sum();
+                let total_time: Decimal = ops.iter().map(|op| op.setup_hours + op.run_hours).sum();
                 Ok(total_time)
             }
-            None => Ok(0.0),
+            None => Ok(Decimal::ZERO),
         }
     }
 }
@@ -212,9 +215,11 @@ impl ManufacturingService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::manufacturing::model::WorkOrderPriority;
     use crate::domain::manufacturing::repository::{
         InMemoryBillOfMaterialsRepository, InMemoryRoutingRepository, InMemoryWorkOrderRepository,
     };
+    use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> ManufacturingService {
@@ -232,10 +237,10 @@ mod tests {
             tenant_id: 1,
             name: "WO-001".to_string(),
             product_id: 1,
-            quantity: 100.0,
+            quantity: dec!(100),
             bom_id: None,
             routing_id: None,
-            priority: crate::domain::manufacturing::model::WorkOrderPriority::Normal,
+            priority: WorkOrderPriority::Normal,
             planned_start: Some(chrono::Utc::now()),
             planned_end: None,
         };
@@ -280,16 +285,16 @@ mod tests {
             .add_bom_line(CreateBillOfMaterialsLine {
                 bom_id: bom.id,
                 component_product_id: 2,
-                quantity: 5.0,
+                quantity: dec!(5),
                 unit_id: Some(1),
-                scrap_percentage: 5.0,
+                scrap_percentage: dec!(5),
                 is_optional: false,
                 notes: None,
             })
             .await
             .unwrap();
 
-        assert_eq!(line.quantity, 5.0);
+        assert_eq!(line.quantity, dec!(5));
     }
 
     #[tokio::test]
@@ -329,9 +334,9 @@ mod tests {
             .add_bom_line(CreateBillOfMaterialsLine {
                 bom_id: bom.id,
                 component_product_id: 2,
-                quantity: 2.0,
+                quantity: dec!(2),
                 unit_id: Some(1),
-                scrap_percentage: 10.0,
+                scrap_percentage: dec!(10),
                 is_optional: false,
                 notes: None,
             })
@@ -340,12 +345,12 @@ mod tests {
 
         // Calculate for quantity of 10
         let requirements = service
-            .calculate_material_requirements(1, 10.0)
+            .calculate_material_requirements(1, dec!(10))
             .await
             .unwrap();
         assert_eq!(requirements.len(), 1);
         // 10 * 2 * 1.1 = 22.0 (with 10% scrap)
-        assert!((requirements[0].1 - 22.0).abs() < 0.001);
+        assert_eq!(requirements[0].1, dec!(22));
     }
 
     #[tokio::test]
@@ -371,8 +376,8 @@ mod tests {
                 sequence: 1,
                 operation_name: "Setup".to_string(),
                 work_center_id: Some(1),
-                setup_hours: 1.0,
-                run_hours: 0.0,
+                setup_hours: dec!(1),
+                run_hours: Decimal::ZERO,
                 description: None,
             })
             .await
@@ -384,14 +389,14 @@ mod tests {
                 sequence: 2,
                 operation_name: "Assembly".to_string(),
                 work_center_id: Some(1),
-                setup_hours: 0.0,
-                run_hours: 5.0,
+                setup_hours: Decimal::ZERO,
+                run_hours: dec!(5),
                 description: None,
             })
             .await
             .unwrap();
 
         let time = service.calculate_production_time(1).await.unwrap();
-        assert_eq!(time, 6.0); // 1.0 + 5.0
+        assert_eq!(time, dec!(6)); // 1 + 5
     }
 }

@@ -1,5 +1,6 @@
 //! HR service for business logic
 use chrono::Utc;
+use rust_decimal::Decimal;
 
 use crate::domain::hr::model::{
     Attendance, CreateAttendance, CreateEmployee, CreateLeaveRequest, Employee, EmployeeResponse,
@@ -158,15 +159,19 @@ impl HrService {
 
         // Get attendance for the period to calculate overtime
         let attendance = self.attendance_repo.find_by_employee(employee_id).await?;
-        let overtime_hours: f64 = attendance
+        let overtime_hours: Decimal = attendance
             .iter()
-            .filter(|a| a.date >= period_start && a.date <= period_end && a.hours_worked > 8.0)
-            .map(|a| a.hours_worked - 8.0)
+            .filter(|a| {
+                a.date >= period_start
+                    && a.date <= period_end
+                    && a.hours_worked > Decimal::new(8, 0)
+            })
+            .map(|a| a.hours_worked - Decimal::new(8, 0))
             .sum();
 
-        let overtime_pay = overtime_hours * (employee.salary / 200.0); // Hourly rate
+        let overtime_pay = overtime_hours * (employee.salary / Decimal::new(200, 0)); // Hourly rate
         let gross = employee.salary + overtime_pay;
-        let deductions = gross * 0.20; // Simplified tax calculation
+        let deductions = gross * Decimal::new(20, 2); // Simplified tax calculation (0.20)
         let net = gross - deductions;
 
         let payroll = Payroll {
@@ -178,7 +183,7 @@ impl HrService {
             basic_salary: employee.salary,
             overtime_hours,
             overtime_pay,
-            bonuses: 0.0,
+            bonuses: Decimal::ZERO,
             deductions,
             net_salary: net,
             status: PayrollStatus::Calculated,
@@ -242,7 +247,7 @@ mod tests {
             department: Some("IT".to_string()),
             position: Some("Developer".to_string()),
             hire_date: chrono::Utc::now(),
-            salary: 5000.0,
+            salary: Decimal::new(500000, 2), // 5000.00
         };
         let result = service.create_employee(create).await;
         assert!(result.is_ok());

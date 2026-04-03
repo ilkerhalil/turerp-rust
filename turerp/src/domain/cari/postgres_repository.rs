@@ -1,6 +1,7 @@
 //! PostgreSQL cari repository implementation
 
 use async_trait::async_trait;
+use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
@@ -39,8 +40,8 @@ struct CariRow {
     city: Option<String>,
     country: Option<String>,
     postal_code: Option<String>,
-    credit_limit: f64,
-    current_balance: f64,
+    credit_limit: Decimal,
+    current_balance: Decimal,
     status: String,
     tenant_id: i64,
     created_by: i64,
@@ -123,7 +124,7 @@ impl CariRepository for PostgresCariRepository {
             INSERT INTO cari (code, name, cari_type, tax_number, tax_office, identity_number,
                               email, phone, address, city, country, postal_code,
                               credit_limit, current_balance, status, tenant_id, created_by, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 0.0, $14, $15, $16, NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
             RETURNING id, code, name, cari_type, tax_number, tax_office, identity_number,
                       email, phone, address, city, country, postal_code,
                       credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at
@@ -142,6 +143,7 @@ impl CariRepository for PostgresCariRepository {
         .bind(&create.country)
         .bind(&create.postal_code)
         .bind(create.credit_limit)
+        .bind(Decimal::ZERO)
         .bind(&status)
         .bind(create.tenant_id)
         .bind(create.created_by)
@@ -345,7 +347,12 @@ impl CariRepository for PostgresCariRepository {
         Ok(result.0)
     }
 
-    async fn update_balance(&self, id: i64, tenant_id: i64, amount: f64) -> Result<(), ApiError> {
+    async fn update_balance(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        amount: Decimal,
+    ) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE cari

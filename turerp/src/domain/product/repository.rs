@@ -60,19 +60,26 @@ pub type BoxCategoryRepository = Arc<dyn CategoryRepository>;
 pub type BoxUnitRepository = Arc<dyn UnitRepository>;
 pub type BoxProductVariantRepository = Arc<dyn ProductVariantRepository>;
 
+/// Inner state for InMemoryProductRepository
+struct InMemoryProductInner {
+    products: std::collections::HashMap<i64, Product>,
+    next_id: i64,
+    tenant_products: std::collections::HashMap<i64, Vec<i64>>,
+}
+
 /// In-memory product repository for testing
 pub struct InMemoryProductRepository {
-    products: Mutex<std::collections::HashMap<i64, Product>>,
-    next_id: Mutex<i64>,
-    tenant_products: Mutex<std::collections::HashMap<i64, Vec<i64>>>,
+    inner: Mutex<InMemoryProductInner>,
 }
 
 impl InMemoryProductRepository {
     pub fn new() -> Self {
         Self {
-            products: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
-            tenant_products: Mutex::new(std::collections::HashMap::new()),
+            inner: Mutex::new(InMemoryProductInner {
+                products: std::collections::HashMap::new(),
+                next_id: 1,
+                tenant_products: std::collections::HashMap::new(),
+            }),
         }
     }
 }
@@ -86,9 +93,9 @@ impl Default for InMemoryProductRepository {
 #[async_trait]
 impl ProductRepository for InMemoryProductRepository {
     async fn create(&self, create: CreateProduct) -> Result<Product, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let now = chrono::Utc::now();
         let product = Product {
@@ -108,10 +115,9 @@ impl ProductRepository for InMemoryProductRepository {
             updated_at: now,
         };
 
-        self.products.lock().insert(id, product.clone());
-
-        let mut tenant_products = self.tenant_products.lock();
-        tenant_products
+        inner.products.insert(id, product.clone());
+        inner
+            .tenant_products
             .entry(create.tenant_id)
             .or_default()
             .push(id);
@@ -120,23 +126,27 @@ impl ProductRepository for InMemoryProductRepository {
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Product>, ApiError> {
-        Ok(self.products.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.products.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
-        let tenant_products = self.tenant_products.lock();
-        let products = self.products.lock();
-
-        let ids = tenant_products.get(&tenant_id).cloned().unwrap_or_default();
+        let inner = self.inner.lock();
+        let ids = inner
+            .tenant_products
+            .get(&tenant_id)
+            .cloned()
+            .unwrap_or_default();
         Ok(ids
             .iter()
-            .filter_map(|id| products.get(id).cloned())
+            .filter_map(|id| inner.products.get(id).cloned())
             .collect())
     }
 
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Product>, ApiError> {
-        let products = self.products.lock();
-        Ok(products
+        let inner = self.inner.lock();
+        Ok(inner
+            .products
             .values()
             .find(|p| p.tenant_id == tenant_id && p.code == code)
             .cloned())
@@ -144,9 +154,10 @@ impl ProductRepository for InMemoryProductRepository {
 
     async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Product>, ApiError> {
         let query_lower = query.to_lowercase();
-        let products = self.products.lock();
+        let inner = self.inner.lock();
 
-        Ok(products
+        Ok(inner
+            .products
             .values()
             .filter(|p| {
                 p.tenant_id == tenant_id
@@ -158,9 +169,10 @@ impl ProductRepository for InMemoryProductRepository {
     }
 
     async fn update(&self, id: i64, update: UpdateProduct) -> Result<Product, ApiError> {
-        let mut products = self.products.lock();
+        let mut inner = self.inner.lock();
 
-        let product = products
+        let product = inner
+            .products
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", id)))?;
 
@@ -200,18 +212,17 @@ impl ProductRepository for InMemoryProductRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        let mut products = self.products.lock();
+        let mut inner = self.inner.lock();
 
-        if !products.contains_key(&id) {
+        if !inner.products.contains_key(&id) {
             return Err(ApiError::NotFound(format!("Product {} not found", id)));
         }
 
-        let tenant_id = products.get(&id).map(|p| p.tenant_id);
-        products.remove(&id);
+        let tenant_id = inner.products.get(&id).map(|p| p.tenant_id);
+        inner.products.remove(&id);
 
         if let Some(tid) = tenant_id {
-            let mut tenant_products = self.tenant_products.lock();
-            if let Some(ids) = tenant_products.get_mut(&tid) {
+            if let Some(ids) = inner.tenant_products.get_mut(&tid) {
                 ids.retain(|x| *x != id);
             }
         }
@@ -220,17 +231,24 @@ impl ProductRepository for InMemoryProductRepository {
     }
 }
 
+/// Inner state for InMemoryCategoryRepository
+struct InMemoryCategoryInner {
+    categories: std::collections::HashMap<i64, Category>,
+    next_id: i64,
+}
+
 /// In-memory category repository
 pub struct InMemoryCategoryRepository {
-    categories: Mutex<std::collections::HashMap<i64, Category>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryCategoryInner>,
 }
 
 impl InMemoryCategoryRepository {
     pub fn new() -> Self {
         Self {
-            categories: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryCategoryInner {
+                categories: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -244,9 +262,9 @@ impl Default for InMemoryCategoryRepository {
 #[async_trait]
 impl CategoryRepository for InMemoryCategoryRepository {
     async fn create(&self, create: CreateCategory) -> Result<Category, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let category = Category {
             id,
@@ -256,17 +274,19 @@ impl CategoryRepository for InMemoryCategoryRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.categories.lock().insert(id, category.clone());
+        inner.categories.insert(id, category.clone());
         Ok(category)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Category>, ApiError> {
-        Ok(self.categories.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.categories.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
-        let categories = self.categories.lock();
-        Ok(categories
+        let inner = self.inner.lock();
+        Ok(inner
+            .categories
             .values()
             .filter(|c| c.tenant_id == tenant_id)
             .cloned()
@@ -274,23 +294,30 @@ impl CategoryRepository for InMemoryCategoryRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        let mut categories = self.categories.lock();
-        categories.remove(&id);
+        let mut inner = self.inner.lock();
+        inner.categories.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryUnitRepository
+struct InMemoryUnitInner {
+    units: std::collections::HashMap<i64, Unit>,
+    next_id: i64,
+}
+
 /// In-memory unit repository
 pub struct InMemoryUnitRepository {
-    units: Mutex<std::collections::HashMap<i64, Unit>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryUnitInner>,
 }
 
 impl InMemoryUnitRepository {
     pub fn new() -> Self {
         Self {
-            units: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryUnitInner {
+                units: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 
@@ -304,9 +331,9 @@ impl InMemoryUnitRepository {
             (5, tenant_id, "L", "Liter", false),
         ];
 
-        let mut units = repo.units.lock();
+        let mut inner = repo.inner.lock();
         for (id, tid, code, name, is_int) in defaults {
-            units.insert(
+            inner.units.insert(
                 id,
                 Unit {
                     id,
@@ -318,8 +345,8 @@ impl InMemoryUnitRepository {
                 },
             );
         }
-        *repo.next_id.lock() = 6;
-        drop(units);
+        inner.next_id = 6;
+        drop(inner);
         repo
     }
 }
@@ -333,9 +360,9 @@ impl Default for InMemoryUnitRepository {
 #[async_trait]
 impl UnitRepository for InMemoryUnitRepository {
     async fn create(&self, create: CreateUnit) -> Result<Unit, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let unit = Unit {
             id,
@@ -346,17 +373,19 @@ impl UnitRepository for InMemoryUnitRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.units.lock().insert(id, unit.clone());
+        inner.units.insert(id, unit.clone());
         Ok(unit)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Unit>, ApiError> {
-        Ok(self.units.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.units.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
-        let units = self.units.lock();
-        Ok(units
+        let inner = self.inner.lock();
+        Ok(inner
+            .units
             .values()
             .filter(|u| u.tenant_id == tenant_id)
             .cloned()
@@ -364,24 +393,32 @@ impl UnitRepository for InMemoryUnitRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.units.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.units.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryProductVariantRepository
+struct InMemoryProductVariantInner {
+    variants: std::collections::HashMap<i64, ProductVariant>,
+    next_id: i64,
+    product_variants: std::collections::HashMap<i64, Vec<i64>>,
+}
+
 /// In-memory product variant repository
 pub struct InMemoryProductVariantRepository {
-    variants: Mutex<std::collections::HashMap<i64, ProductVariant>>,
-    next_id: Mutex<i64>,
-    product_variants: Mutex<std::collections::HashMap<i64, Vec<i64>>>,
+    inner: Mutex<InMemoryProductVariantInner>,
 }
 
 impl InMemoryProductVariantRepository {
     pub fn new() -> Self {
         Self {
-            variants: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
-            product_variants: Mutex::new(std::collections::HashMap::new()),
+            inner: Mutex::new(InMemoryProductVariantInner {
+                variants: std::collections::HashMap::new(),
+                next_id: 1,
+                product_variants: std::collections::HashMap::new(),
+            }),
         }
     }
 }
@@ -395,9 +432,9 @@ impl Default for InMemoryProductVariantRepository {
 #[async_trait]
 impl ProductVariantRepository for InMemoryProductVariantRepository {
     async fn create(&self, create: CreateProductVariant) -> Result<ProductVariant, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let variant = ProductVariant {
             id,
@@ -410,10 +447,9 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.variants.lock().insert(id, variant.clone());
-
-        let mut product_variants = self.product_variants.lock();
-        product_variants
+        inner.variants.insert(id, variant.clone());
+        inner
+            .product_variants
             .entry(create.product_id)
             .or_default()
             .push(id);
@@ -422,21 +458,21 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError> {
-        let product_variants = self.product_variants.lock();
-        let variants = self.variants.lock();
-
-        let ids = product_variants
+        let inner = self.inner.lock();
+        let ids = inner
+            .product_variants
             .get(&product_id)
             .cloned()
             .unwrap_or_default();
         Ok(ids
             .iter()
-            .filter_map(|id| variants.get(id).cloned())
+            .filter_map(|id| inner.variants.get(id).cloned())
             .collect())
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<ProductVariant>, ApiError> {
-        Ok(self.variants.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.variants.get(&id).cloned())
     }
 
     async fn update(
@@ -444,9 +480,10 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
         id: i64,
         update: UpdateProductVariant,
     ) -> Result<ProductVariant, ApiError> {
-        let mut variants = self.variants.lock();
+        let mut inner = self.inner.lock();
 
-        let variant = variants
+        let variant = inner
+            .variants
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Product variant {} not found", id)))?;
 
@@ -470,21 +507,20 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        let mut variants = self.variants.lock();
+        let mut inner = self.inner.lock();
 
-        if !variants.contains_key(&id) {
+        if !inner.variants.contains_key(&id) {
             return Err(ApiError::NotFound(format!(
                 "Product variant {} not found",
                 id
             )));
         }
 
-        let product_id = variants.get(&id).map(|v| v.product_id);
-        variants.remove(&id);
+        let product_id = inner.variants.get(&id).map(|v| v.product_id);
+        inner.variants.remove(&id);
 
         if let Some(pid) = product_id {
-            let mut product_variants = self.product_variants.lock();
-            if let Some(ids) = product_variants.get_mut(&pid) {
+            if let Some(ids) = inner.product_variants.get_mut(&pid) {
                 ids.retain(|x| *x != id);
             }
         }

@@ -60,17 +60,24 @@ pub trait TenantConfigRepository: Send + Sync {
 pub type BoxTenantRepository = Arc<dyn TenantRepository>;
 pub type BoxTenantConfigRepository = Arc<dyn TenantConfigRepository>;
 
+/// Inner state for InMemoryTenantRepository
+struct InMemoryTenantInner {
+    tenants: std::collections::HashMap<i64, Tenant>,
+    next_id: i64,
+}
+
 /// In-memory tenant repository for testing
 pub struct InMemoryTenantRepository {
-    tenants: Mutex<std::collections::HashMap<i64, Tenant>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryTenantInner>,
 }
 
 impl InMemoryTenantRepository {
     pub fn new() -> Self {
         let repo = Self {
-            tenants: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryTenantInner {
+                tenants: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         };
 
         // Add a default tenant
@@ -82,7 +89,7 @@ impl InMemoryTenantRepository {
             is_active: true,
             created_at: chrono::Utc::now(),
         };
-        repo.tenants.lock().insert(1, default_tenant);
+        repo.inner.lock().tenants.insert(1, default_tenant);
 
         repo
     }
@@ -97,9 +104,9 @@ impl Default for InMemoryTenantRepository {
 #[async_trait]
 impl TenantRepository for InMemoryTenantRepository {
     async fn create(&self, create: CreateTenant) -> Result<Tenant, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let db_name = crate::domain::tenant::model::generate_db_name(&create.subdomain);
 
@@ -112,29 +119,34 @@ impl TenantRepository for InMemoryTenantRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.tenants.lock().insert(id, new_tenant.clone());
+        inner.tenants.insert(id, new_tenant.clone());
         Ok(new_tenant)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Tenant>, ApiError> {
-        let tenants = self.tenants.lock();
-        Ok(tenants.get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.tenants.get(&id).cloned())
     }
 
     async fn find_by_subdomain(&self, subdomain: &str) -> Result<Option<Tenant>, ApiError> {
-        let tenants = self.tenants.lock();
-        Ok(tenants.values().find(|t| t.subdomain == subdomain).cloned())
+        let inner = self.inner.lock();
+        Ok(inner
+            .tenants
+            .values()
+            .find(|t| t.subdomain == subdomain)
+            .cloned())
     }
 
     async fn find_all(&self) -> Result<Vec<Tenant>, ApiError> {
-        let tenants = self.tenants.lock();
-        Ok(tenants.values().cloned().collect())
+        let inner = self.inner.lock();
+        Ok(inner.tenants.values().cloned().collect())
     }
 
     async fn update(&self, id: i64, update: UpdateTenant) -> Result<Tenant, ApiError> {
-        let mut tenants = self.tenants.lock();
+        let mut inner = self.inner.lock();
 
-        let tenant = tenants
+        let tenant = inner
+            .tenants
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Tenant {} not found", id)))?;
 
@@ -153,35 +165,42 @@ impl TenantRepository for InMemoryTenantRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        let mut tenants = self.tenants.lock();
+        let mut inner = self.inner.lock();
 
-        if !tenants.contains_key(&id) {
+        if !inner.tenants.contains_key(&id) {
             return Err(ApiError::NotFound(format!("Tenant {} not found", id)));
         }
 
-        tenants.remove(&id);
+        inner.tenants.remove(&id);
         Ok(())
     }
 
     async fn subdomain_exists(&self, subdomain: &str) -> Result<bool, ApiError> {
-        let tenants = self.tenants.lock();
-        Ok(tenants.values().any(|t| t.subdomain == subdomain))
+        let inner = self.inner.lock();
+        Ok(inner.tenants.values().any(|t| t.subdomain == subdomain))
     }
+}
+
+/// Inner state for InMemoryTenantConfigRepository
+struct InMemoryTenantConfigInner {
+    configs: std::collections::HashMap<i64, TenantConfig>,
+    next_id: i64,
+    tenant_configs: std::collections::HashMap<i64, Vec<i64>>,
 }
 
 /// In-memory tenant config repository for testing
 pub struct InMemoryTenantConfigRepository {
-    configs: Mutex<std::collections::HashMap<i64, TenantConfig>>,
-    next_id: Mutex<i64>,
-    tenant_configs: Mutex<std::collections::HashMap<i64, Vec<i64>>>,
+    inner: Mutex<InMemoryTenantConfigInner>,
 }
 
 impl InMemoryTenantConfigRepository {
     pub fn new() -> Self {
         Self {
-            configs: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
-            tenant_configs: Mutex::new(std::collections::HashMap::new()),
+            inner: Mutex::new(InMemoryTenantConfigInner {
+                configs: std::collections::HashMap::new(),
+                next_id: 1,
+                tenant_configs: std::collections::HashMap::new(),
+            }),
         }
     }
 }
@@ -197,8 +216,9 @@ impl TenantConfigRepository for InMemoryTenantConfigRepository {
     async fn set(&self, create: CreateTenantConfig) -> Result<TenantConfig, ApiError> {
         // Check if key already exists for this tenant
         let existing_id = {
-            let configs = self.configs.lock();
-            configs
+            let inner = self.inner.lock();
+            inner
+                .configs
                 .values()
                 .find(|c| c.tenant_id == create.tenant_id && c.key == create.key)
                 .map(|c| c.id)
@@ -206,8 +226,9 @@ impl TenantConfigRepository for InMemoryTenantConfigRepository {
 
         if let Some(id) = existing_id {
             // Update existing config
-            let mut configs = self.configs.lock();
-            let config = configs
+            let mut inner = self.inner.lock();
+            let config = inner
+                .configs
                 .get_mut(&id)
                 .ok_or_else(|| ApiError::NotFound(format!("Config {} not found", id)))?;
             config.value = create.value;
@@ -218,9 +239,9 @@ impl TenantConfigRepository for InMemoryTenantConfigRepository {
             Ok(config.clone())
         } else {
             // Create new config
-            let mut next_id = self.next_id.lock();
-            let id = *next_id;
-            *next_id += 1;
+            let mut inner = self.inner.lock();
+            let id = inner.next_id;
+            inner.next_id += 1;
 
             let now = chrono::Utc::now();
             let config = TenantConfig {
@@ -233,38 +254,45 @@ impl TenantConfigRepository for InMemoryTenantConfigRepository {
                 updated_at: now,
             };
 
-            self.configs.lock().insert(id, config.clone());
-
-            let mut tenant_configs = self.tenant_configs.lock();
-            tenant_configs.entry(create.tenant_id).or_default().push(id);
+            inner.configs.insert(id, config.clone());
+            inner
+                .tenant_configs
+                .entry(create.tenant_id)
+                .or_default()
+                .push(id);
 
             Ok(config)
         }
     }
 
     async fn get(&self, tenant_id: i64, key: &str) -> Result<Option<TenantConfig>, ApiError> {
-        let configs = self.configs.lock();
-        Ok(configs
+        let inner = self.inner.lock();
+        Ok(inner
+            .configs
             .values()
             .find(|c| c.tenant_id == tenant_id && c.key == key)
             .cloned())
     }
 
     async fn get_all(&self, tenant_id: i64) -> Result<Vec<TenantConfig>, ApiError> {
-        let tenant_configs = self.tenant_configs.lock();
-        let configs = self.configs.lock();
+        let inner = self.inner.lock();
 
-        let ids = tenant_configs.get(&tenant_id).cloned().unwrap_or_default();
+        let ids = inner
+            .tenant_configs
+            .get(&tenant_id)
+            .cloned()
+            .unwrap_or_default();
         Ok(ids
             .iter()
-            .filter_map(|id| configs.get(id).cloned())
+            .filter_map(|id| inner.configs.get(id).cloned())
             .collect())
     }
 
     async fn update(&self, id: i64, update: UpdateTenantConfig) -> Result<TenantConfig, ApiError> {
-        let mut configs = self.configs.lock();
+        let mut inner = self.inner.lock();
 
-        let config = configs
+        let config = inner
+            .configs
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Config {} not found", id)))?;
 
@@ -280,18 +308,17 @@ impl TenantConfigRepository for InMemoryTenantConfigRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        let mut configs = self.configs.lock();
+        let mut inner = self.inner.lock();
 
-        if !configs.contains_key(&id) {
+        if !inner.configs.contains_key(&id) {
             return Err(ApiError::NotFound(format!("Config {} not found", id)));
         }
 
-        let tenant_id = configs.get(&id).map(|c| c.tenant_id);
-        configs.remove(&id);
+        let tenant_id = inner.configs.get(&id).map(|c| c.tenant_id);
+        inner.configs.remove(&id);
 
         if let Some(tid) = tenant_id {
-            let mut tenant_configs = self.tenant_configs.lock();
-            if let Some(ids) = tenant_configs.get_mut(&tid) {
+            if let Some(ids) = inner.tenant_configs.get_mut(&tid) {
                 ids.retain(|x| *x != id);
             }
         }
@@ -300,13 +327,11 @@ impl TenantConfigRepository for InMemoryTenantConfigRepository {
     }
 
     async fn delete_by_tenant(&self, tenant_id: i64) -> Result<(), ApiError> {
-        // Use a single lock scope to prevent race conditions
-        let mut tenant_configs = self.tenant_configs.lock();
-        let mut configs = self.configs.lock();
+        let mut inner = self.inner.lock();
 
-        let ids = tenant_configs.remove(&tenant_id).unwrap_or_default();
+        let ids = inner.tenant_configs.remove(&tenant_id).unwrap_or_default();
         for id in ids {
-            configs.remove(&id);
+            inner.configs.remove(&id);
         }
 
         Ok(())

@@ -174,17 +174,24 @@ fn generate_request_number(count: i64) -> String {
     format!("PR-{:06}", count)
 }
 
+/// Inner state for InMemoryPurchaseOrderRepository
+struct InMemoryPurchaseOrderInner {
+    orders: std::collections::HashMap<i64, PurchaseOrder>,
+    next_id: i64,
+}
+
 /// In-memory purchase order repository
 pub struct InMemoryPurchaseOrderRepository {
-    orders: Mutex<std::collections::HashMap<i64, PurchaseOrder>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryPurchaseOrderInner>,
 }
 
 impl InMemoryPurchaseOrderRepository {
     pub fn new() -> Self {
         Self {
-            orders: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryPurchaseOrderInner {
+                orders: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -198,9 +205,9 @@ impl Default for InMemoryPurchaseOrderRepository {
 #[async_trait]
 impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
     async fn create(&self, create: CreatePurchaseOrder) -> Result<PurchaseOrder, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let order_number = generate_order_number(id);
         let (subtotal, tax_amount, discount_amount, total_amount) = calculate_totals(&create.lines);
@@ -223,17 +230,19 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
             updated_at: now,
         };
 
-        self.orders.lock().insert(id, order.clone());
+        inner.orders.insert(id, order.clone());
         Ok(order)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseOrder>, ApiError> {
-        Ok(self.orders.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.orders.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseOrder>, ApiError> {
-        let orders = self.orders.lock();
-        Ok(orders
+        let inner = self.inner.lock();
+        Ok(inner
+            .orders
             .values()
             .filter(|o| o.tenant_id == tenant_id)
             .cloned()
@@ -241,8 +250,9 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
     }
 
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<PurchaseOrder>, ApiError> {
-        let orders = self.orders.lock();
-        Ok(orders
+        let inner = self.inner.lock();
+        Ok(inner
+            .orders
             .values()
             .filter(|o| o.cari_id == cari_id)
             .cloned()
@@ -254,8 +264,9 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
         tenant_id: i64,
         status: PurchaseOrderStatus,
     ) -> Result<Vec<PurchaseOrder>, ApiError> {
-        let orders = self.orders.lock();
-        Ok(orders
+        let inner = self.inner.lock();
+        Ok(inner
+            .orders
             .values()
             .filter(|o| o.tenant_id == tenant_id && o.status == status)
             .cloned()
@@ -267,8 +278,9 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
         id: i64,
         status: PurchaseOrderStatus,
     ) -> Result<PurchaseOrder, ApiError> {
-        let mut orders = self.orders.lock();
-        let order = orders
+        let mut inner = self.inner.lock();
+        let order = inner
+            .orders
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Purchase order {} not found", id)))?;
         order.status = status;
@@ -286,22 +298,30 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.orders.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.orders.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryPurchaseOrderLineRepository
+struct InMemoryPurchaseOrderLineInner {
+    lines: std::collections::HashMap<i64, Vec<PurchaseOrderLine>>,
+    next_id: i64,
+}
+
 /// In-memory purchase order line repository
 pub struct InMemoryPurchaseOrderLineRepository {
-    lines: Mutex<std::collections::HashMap<i64, Vec<PurchaseOrderLine>>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryPurchaseOrderLineInner>,
 }
 
 impl InMemoryPurchaseOrderLineRepository {
     pub fn new() -> Self {
         Self {
-            lines: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryPurchaseOrderLineInner {
+                lines: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -319,12 +339,12 @@ impl PurchaseOrderLineRepository for InMemoryPurchaseOrderLineRepository {
         order_id: i64,
         create_lines: Vec<CreatePurchaseOrderLine>,
     ) -> Result<Vec<PurchaseOrderLine>, ApiError> {
-        let mut next_id = self.next_id.lock();
+        let mut inner = self.inner.lock();
         let mut lines = Vec::new();
 
         for (i, create) in create_lines.into_iter().enumerate() {
-            let id = *next_id;
-            *next_id += 1;
+            let id = inner.next_id;
+            inner.next_id += 1;
 
             let line_total = create.calculate_line_total();
 
@@ -343,22 +363,18 @@ impl PurchaseOrderLineRepository for InMemoryPurchaseOrderLineRepository {
             });
         }
 
-        self.lines.lock().insert(order_id, lines.clone());
+        inner.lines.insert(order_id, lines.clone());
         Ok(lines)
     }
 
     async fn find_by_order(&self, order_id: i64) -> Result<Vec<PurchaseOrderLine>, ApiError> {
-        Ok(self
-            .lines
-            .lock()
-            .get(&order_id)
-            .cloned()
-            .unwrap_or_default())
+        let inner = self.inner.lock();
+        Ok(inner.lines.get(&order_id).cloned().unwrap_or_default())
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseOrderLine>, ApiError> {
-        let lines = self.lines.lock();
-        for line_set in lines.values() {
+        let inner = self.inner.lock();
+        for line_set in inner.lines.values() {
             if let Some(line) = line_set.iter().find(|l| l.id == id) {
                 return Ok(Some(line.clone()));
             }
@@ -367,22 +383,30 @@ impl PurchaseOrderLineRepository for InMemoryPurchaseOrderLineRepository {
     }
 
     async fn delete_by_order(&self, order_id: i64) -> Result<(), ApiError> {
-        self.lines.lock().remove(&order_id);
+        let mut inner = self.inner.lock();
+        inner.lines.remove(&order_id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryGoodsReceiptRepository
+struct InMemoryGoodsReceiptInner {
+    receipts: std::collections::HashMap<i64, GoodsReceipt>,
+    next_id: i64,
+}
+
 /// In-memory goods receipt repository
 pub struct InMemoryGoodsReceiptRepository {
-    receipts: Mutex<std::collections::HashMap<i64, GoodsReceipt>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryGoodsReceiptInner>,
 }
 
 impl InMemoryGoodsReceiptRepository {
     pub fn new() -> Self {
         Self {
-            receipts: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryGoodsReceiptInner {
+                receipts: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -396,9 +420,9 @@ impl Default for InMemoryGoodsReceiptRepository {
 #[async_trait]
 impl GoodsReceiptRepository for InMemoryGoodsReceiptRepository {
     async fn create(&self, create: CreateGoodsReceipt) -> Result<GoodsReceipt, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let receipt_number = generate_receipt_number(id);
         let now = chrono::Utc::now();
@@ -414,17 +438,19 @@ impl GoodsReceiptRepository for InMemoryGoodsReceiptRepository {
             created_at: now,
         };
 
-        self.receipts.lock().insert(id, receipt.clone());
+        inner.receipts.insert(id, receipt.clone());
         Ok(receipt)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<GoodsReceipt>, ApiError> {
-        Ok(self.receipts.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.receipts.get(&id).cloned())
     }
 
     async fn find_by_order(&self, order_id: i64) -> Result<Vec<GoodsReceipt>, ApiError> {
-        let receipts = self.receipts.lock();
-        Ok(receipts
+        let inner = self.inner.lock();
+        Ok(inner
+            .receipts
             .values()
             .filter(|r| r.purchase_order_id == order_id)
             .cloned()
@@ -436,8 +462,9 @@ impl GoodsReceiptRepository for InMemoryGoodsReceiptRepository {
         id: i64,
         status: GoodsReceiptStatus,
     ) -> Result<GoodsReceipt, ApiError> {
-        let mut receipts = self.receipts.lock();
-        let receipt = receipts
+        let mut inner = self.inner.lock();
+        let receipt = inner
+            .receipts
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Goods receipt {} not found", id)))?;
         receipt.status = status;
@@ -445,22 +472,30 @@ impl GoodsReceiptRepository for InMemoryGoodsReceiptRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.receipts.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.receipts.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryGoodsReceiptLineRepository
+struct InMemoryGoodsReceiptLineInner {
+    lines: std::collections::HashMap<i64, Vec<GoodsReceiptLine>>,
+    next_id: i64,
+}
+
 /// In-memory goods receipt line repository
 pub struct InMemoryGoodsReceiptLineRepository {
-    lines: Mutex<std::collections::HashMap<i64, Vec<GoodsReceiptLine>>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryGoodsReceiptLineInner>,
 }
 
 impl InMemoryGoodsReceiptLineRepository {
     pub fn new() -> Self {
         Self {
-            lines: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryGoodsReceiptLineInner {
+                lines: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -478,12 +513,12 @@ impl GoodsReceiptLineRepository for InMemoryGoodsReceiptLineRepository {
         receipt_id: i64,
         create_lines: Vec<CreateGoodsReceiptLine>,
     ) -> Result<Vec<GoodsReceiptLine>, ApiError> {
-        let mut next_id = self.next_id.lock();
+        let mut inner = self.inner.lock();
         let mut lines = Vec::new();
 
         for create in create_lines {
-            let id = *next_id;
-            *next_id += 1;
+            let id = inner.next_id;
+            inner.next_id += 1;
 
             lines.push(GoodsReceiptLine {
                 id,
@@ -496,36 +531,40 @@ impl GoodsReceiptLineRepository for InMemoryGoodsReceiptLineRepository {
             });
         }
 
-        self.lines.lock().insert(receipt_id, lines.clone());
+        inner.lines.insert(receipt_id, lines.clone());
         Ok(lines)
     }
 
     async fn find_by_receipt(&self, receipt_id: i64) -> Result<Vec<GoodsReceiptLine>, ApiError> {
-        Ok(self
-            .lines
-            .lock()
-            .get(&receipt_id)
-            .cloned()
-            .unwrap_or_default())
+        let inner = self.inner.lock();
+        Ok(inner.lines.get(&receipt_id).cloned().unwrap_or_default())
     }
 
     async fn delete_by_receipt(&self, receipt_id: i64) -> Result<(), ApiError> {
-        self.lines.lock().remove(&receipt_id);
+        let mut inner = self.inner.lock();
+        inner.lines.remove(&receipt_id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryPurchaseRequestRepository
+struct InMemoryPurchaseRequestInner {
+    requests: std::collections::HashMap<i64, PurchaseRequest>,
+    next_id: i64,
+}
+
 /// In-memory purchase request repository
 pub struct InMemoryPurchaseRequestRepository {
-    requests: Mutex<std::collections::HashMap<i64, PurchaseRequest>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryPurchaseRequestInner>,
 }
 
 impl InMemoryPurchaseRequestRepository {
     pub fn new() -> Self {
         Self {
-            requests: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryPurchaseRequestInner {
+                requests: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -539,9 +578,9 @@ impl Default for InMemoryPurchaseRequestRepository {
 #[async_trait]
 impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
     async fn create(&self, create: CreatePurchaseRequest) -> Result<PurchaseRequest, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let request_number = generate_request_number(id);
         let now = chrono::Utc::now();
@@ -559,17 +598,19 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
             updated_at: now,
         };
 
-        self.requests.lock().insert(id, request.clone());
+        inner.requests.insert(id, request.clone());
         Ok(request)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseRequest>, ApiError> {
-        Ok(self.requests.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.requests.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
-        let requests = self.requests.lock();
-        Ok(requests
+        let inner = self.inner.lock();
+        Ok(inner
+            .requests
             .values()
             .filter(|r| r.tenant_id == tenant_id)
             .cloned()
@@ -582,13 +623,15 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<PurchaseRequest>, ApiError> {
-        let requests = self.requests.lock();
-        let total = requests
+        let inner = self.inner.lock();
+        let total = inner
+            .requests
             .values()
             .filter(|r| r.tenant_id == tenant_id)
             .count() as u64;
 
-        let items: Vec<PurchaseRequest> = requests
+        let items: Vec<PurchaseRequest> = inner
+            .requests
             .values()
             .filter(|r| r.tenant_id == tenant_id)
             .skip(((page.saturating_sub(1)) * per_page) as usize)
@@ -604,8 +647,9 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         tenant_id: i64,
         status: PurchaseRequestStatus,
     ) -> Result<Vec<PurchaseRequest>, ApiError> {
-        let requests = self.requests.lock();
-        Ok(requests
+        let inner = self.inner.lock();
+        Ok(inner
+            .requests
             .values()
             .filter(|r| r.tenant_id == tenant_id && r.status == status)
             .cloned()
@@ -619,13 +663,15 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<PurchaseRequest>, ApiError> {
-        let requests = self.requests.lock();
-        let total = requests
+        let inner = self.inner.lock();
+        let total = inner
+            .requests
             .values()
             .filter(|r| r.tenant_id == tenant_id && r.status == status)
             .count() as u64;
 
-        let items: Vec<PurchaseRequest> = requests
+        let items: Vec<PurchaseRequest> = inner
+            .requests
             .values()
             .filter(|r| r.tenant_id == tenant_id && r.status == status)
             .skip(((page.saturating_sub(1)) * per_page) as usize)
@@ -637,8 +683,9 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
     }
 
     async fn find_by_requester(&self, requested_by: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
-        let requests = self.requests.lock();
-        Ok(requests
+        let inner = self.inner.lock();
+        Ok(inner
+            .requests
             .values()
             .filter(|r| r.requested_by == requested_by)
             .cloned()
@@ -646,8 +693,9 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
     }
 
     async fn count_by_tenant(&self, tenant_id: i64) -> Result<u64, ApiError> {
-        let requests = self.requests.lock();
-        Ok(requests
+        let inner = self.inner.lock();
+        Ok(inner
+            .requests
             .values()
             .filter(|r| r.tenant_id == tenant_id)
             .count() as u64)
@@ -658,8 +706,9 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         tenant_id: i64,
         status: PurchaseRequestStatus,
     ) -> Result<u64, ApiError> {
-        let requests = self.requests.lock();
-        Ok(requests
+        let inner = self.inner.lock();
+        Ok(inner
+            .requests
             .values()
             .filter(|r| r.tenant_id == tenant_id && r.status == status)
             .count() as u64)
@@ -670,8 +719,9 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         id: i64,
         update: UpdatePurchaseRequest,
     ) -> Result<PurchaseRequest, ApiError> {
-        let mut requests = self.requests.lock();
-        let request = requests
+        let mut inner = self.inner.lock();
+        let request = inner
+            .requests
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Purchase request {} not found", id)))?;
 
@@ -697,8 +747,9 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         id: i64,
         status: PurchaseRequestStatus,
     ) -> Result<PurchaseRequest, ApiError> {
-        let mut requests = self.requests.lock();
-        let request = requests
+        let mut inner = self.inner.lock();
+        let request = inner
+            .requests
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Purchase request {} not found", id)))?;
         request.status = status;
@@ -707,22 +758,30 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.requests.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.requests.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryPurchaseRequestLineRepository
+struct InMemoryPurchaseRequestLineInner {
+    lines: std::collections::HashMap<i64, Vec<PurchaseRequestLine>>,
+    next_id: i64,
+}
+
 /// In-memory purchase request line repository
 pub struct InMemoryPurchaseRequestLineRepository {
-    lines: Mutex<std::collections::HashMap<i64, Vec<PurchaseRequestLine>>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryPurchaseRequestLineInner>,
 }
 
 impl InMemoryPurchaseRequestLineRepository {
     pub fn new() -> Self {
         Self {
-            lines: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryPurchaseRequestLineInner {
+                lines: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -740,12 +799,12 @@ impl PurchaseRequestLineRepository for InMemoryPurchaseRequestLineRepository {
         request_id: i64,
         create_lines: Vec<CreatePurchaseRequestLine>,
     ) -> Result<Vec<PurchaseRequestLine>, ApiError> {
-        let mut next_id = self.next_id.lock();
+        let mut inner = self.inner.lock();
         let mut lines = Vec::new();
 
         for (i, create) in create_lines.into_iter().enumerate() {
-            let id = *next_id;
-            *next_id += 1;
+            let id = inner.next_id;
+            inner.next_id += 1;
 
             lines.push(PurchaseRequestLine {
                 id,
@@ -758,21 +817,18 @@ impl PurchaseRequestLineRepository for InMemoryPurchaseRequestLineRepository {
             });
         }
 
-        self.lines.lock().insert(request_id, lines.clone());
+        inner.lines.insert(request_id, lines.clone());
         Ok(lines)
     }
 
     async fn find_by_request(&self, request_id: i64) -> Result<Vec<PurchaseRequestLine>, ApiError> {
-        Ok(self
-            .lines
-            .lock()
-            .get(&request_id)
-            .cloned()
-            .unwrap_or_default())
+        let inner = self.inner.lock();
+        Ok(inner.lines.get(&request_id).cloned().unwrap_or_default())
     }
 
     async fn delete_by_request(&self, request_id: i64) -> Result<(), ApiError> {
-        self.lines.lock().remove(&request_id);
+        let mut inner = self.inner.lock();
+        inner.lines.remove(&request_id);
         Ok(())
     }
 }

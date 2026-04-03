@@ -1,6 +1,7 @@
 //! Sales domain models
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Sales order status
@@ -38,10 +39,10 @@ pub struct SalesOrder {
     pub status: SalesOrderStatus,
     pub order_date: DateTime<Utc>,
     pub delivery_date: Option<DateTime<Utc>>,
-    pub subtotal: f64,
-    pub tax_amount: f64,
-    pub discount_amount: f64,
-    pub total_amount: f64,
+    pub subtotal: Decimal,
+    pub tax_amount: Decimal,
+    pub discount_amount: Decimal,
+    pub total_amount: Decimal,
     pub notes: Option<String>,
     pub shipping_address: Option<String>,
     pub billing_address: Option<String>,
@@ -56,11 +57,11 @@ pub struct SalesOrderLine {
     pub order_id: i64,
     pub product_id: Option<i64>,
     pub description: String,
-    pub quantity: f64,
-    pub unit_price: f64,
-    pub tax_rate: f64,
-    pub discount_rate: f64,
-    pub line_total: f64,
+    pub quantity: Decimal,
+    pub unit_price: Decimal,
+    pub tax_rate: Decimal,
+    pub discount_rate: Decimal,
+    pub line_total: Decimal,
     pub sort_order: i32,
 }
 
@@ -73,10 +74,10 @@ pub struct Quotation {
     pub cari_id: i64,
     pub status: QuotationStatus,
     pub valid_until: DateTime<Utc>,
-    pub subtotal: f64,
-    pub tax_amount: f64,
-    pub discount_amount: f64,
-    pub total_amount: f64,
+    pub subtotal: Decimal,
+    pub tax_amount: Decimal,
+    pub discount_amount: Decimal,
+    pub total_amount: Decimal,
     pub notes: Option<String>,
     pub terms: Option<String>,
     pub sales_order_id: Option<i64>,
@@ -91,11 +92,11 @@ pub struct QuotationLine {
     pub quotation_id: i64,
     pub product_id: Option<i64>,
     pub description: String,
-    pub quantity: f64,
-    pub unit_price: f64,
-    pub tax_rate: f64,
-    pub discount_rate: f64,
-    pub line_total: f64,
+    pub quantity: Decimal,
+    pub unit_price: Decimal,
+    pub tax_rate: Decimal,
+    pub discount_rate: Decimal,
+    pub line_total: Decimal,
     pub sort_order: i32,
 }
 
@@ -131,10 +132,10 @@ impl CreateSalesOrder {
 pub struct CreateSalesOrderLine {
     pub product_id: Option<i64>,
     pub description: String,
-    pub quantity: f64,
-    pub unit_price: f64,
-    pub tax_rate: f64,
-    pub discount_rate: f64,
+    pub quantity: Decimal,
+    pub unit_price: Decimal,
+    pub tax_rate: Decimal,
+    pub discount_rate: Decimal,
 }
 
 impl CreateSalesOrderLine {
@@ -143,10 +144,10 @@ impl CreateSalesOrderLine {
         if self.description.trim().is_empty() {
             errors.push("Description is required".to_string());
         }
-        if self.quantity <= 0.0 {
+        if self.quantity <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
-        if self.unit_price < 0.0 {
+        if self.unit_price < Decimal::ZERO {
             errors.push("Unit price cannot be negative".to_string());
         }
         if errors.is_empty() {
@@ -156,11 +157,11 @@ impl CreateSalesOrderLine {
         }
     }
 
-    pub fn calculate_line_total(&self) -> f64 {
+    pub fn calculate_line_total(&self) -> Decimal {
         let subtotal = self.quantity * self.unit_price;
-        let discount = subtotal * (self.discount_rate / 100.0);
+        let discount = subtotal * (self.discount_rate / Decimal::ONE_HUNDRED);
         let after_discount = subtotal - discount;
-        let tax = after_discount * (self.tax_rate / 100.0);
+        let tax = after_discount * (self.tax_rate / Decimal::ONE_HUNDRED);
         after_discount + tax
     }
 }
@@ -198,10 +199,10 @@ impl CreateQuotation {
 pub struct CreateQuotationLine {
     pub product_id: Option<i64>,
     pub description: String,
-    pub quantity: f64,
-    pub unit_price: f64,
-    pub tax_rate: f64,
-    pub discount_rate: f64,
+    pub quantity: Decimal,
+    pub unit_price: Decimal,
+    pub tax_rate: Decimal,
+    pub discount_rate: Decimal,
 }
 
 impl CreateQuotationLine {
@@ -210,7 +211,7 @@ impl CreateQuotationLine {
         if self.description.trim().is_empty() {
             errors.push("Description is required".to_string());
         }
-        if self.quantity <= 0.0 {
+        if self.quantity <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
         if errors.is_empty() {
@@ -220,11 +221,11 @@ impl CreateQuotationLine {
         }
     }
 
-    pub fn calculate_line_total(&self) -> f64 {
+    pub fn calculate_line_total(&self) -> Decimal {
         let subtotal = self.quantity * self.unit_price;
-        let discount = subtotal * (self.discount_rate / 100.0);
+        let discount = subtotal * (self.discount_rate / Decimal::ONE_HUNDRED);
         let after_discount = subtotal - discount;
-        let tax = after_discount * (self.tax_rate / 100.0);
+        let tax = after_discount * (self.tax_rate / Decimal::ONE_HUNDRED);
         after_discount + tax
     }
 }
@@ -238,10 +239,10 @@ pub struct SalesOrderResponse {
     pub status: SalesOrderStatus,
     pub order_date: DateTime<Utc>,
     pub delivery_date: Option<DateTime<Utc>>,
-    pub subtotal: f64,
-    pub tax_amount: f64,
-    pub discount_amount: f64,
-    pub total_amount: f64,
+    pub subtotal: Decimal,
+    pub tax_amount: Decimal,
+    pub discount_amount: Decimal,
+    pub total_amount: Decimal,
     pub notes: Option<String>,
     pub shipping_address: Option<String>,
     pub billing_address: Option<String>,
@@ -277,10 +278,10 @@ pub struct QuotationResponse {
     pub cari_id: i64,
     pub status: QuotationStatus,
     pub valid_until: DateTime<Utc>,
-    pub subtotal: f64,
-    pub tax_amount: f64,
-    pub discount_amount: f64,
-    pub total_amount: f64,
+    pub subtotal: Decimal,
+    pub tax_amount: Decimal,
+    pub discount_amount: Decimal,
+    pub total_amount: Decimal,
     pub notes: Option<String>,
     pub terms: Option<String>,
     pub sales_order_id: Option<i64>,
@@ -311,6 +312,7 @@ impl From<(Quotation, Vec<QuotationLine>)> for QuotationResponse {
 mod tests {
     use super::*;
     use chrono::Duration;
+    use rust_decimal_macros::dec;
 
     #[test]
     fn test_create_sales_order_validation() {
@@ -325,10 +327,10 @@ mod tests {
             lines: vec![CreateSalesOrderLine {
                 product_id: Some(1),
                 description: "Test".to_string(),
-                quantity: 1.0,
-                unit_price: 100.0,
-                tax_rate: 18.0,
-                discount_rate: 0.0,
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
             }],
         };
         assert!(valid.validate().is_ok());
@@ -357,10 +359,10 @@ mod tests {
             lines: vec![CreateQuotationLine {
                 product_id: Some(1),
                 description: "Test".to_string(),
-                quantity: 1.0,
-                unit_price: 100.0,
-                tax_rate: 18.0,
-                discount_rate: 0.0,
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
             }],
         };
         assert!(valid.validate().is_ok());

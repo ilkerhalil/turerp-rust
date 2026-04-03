@@ -1,5 +1,6 @@
 //! Accounting service for business logic
 use chrono::Utc;
+use rust_decimal::Decimal;
 
 use crate::domain::accounting::model::{
     Account, AccountBalance, AccountType, CreateAccount, CreateJournalEntry, JournalEntry,
@@ -136,8 +137,8 @@ impl AccountingService {
         let mut account_balances: Vec<AccountBalance> = Vec::new();
 
         for account in accounts {
-            let mut debit_total = 0.0;
-            let mut credit_total = 0.0;
+            let mut debit_total = Decimal::ZERO;
+            let mut credit_total = Decimal::ZERO;
 
             for entry in &posted_entries {
                 let lines = self.line_repo.find_by_entry(entry.id).await?;
@@ -167,8 +168,8 @@ impl AccountingService {
             });
         }
 
-        let total_debits: f64 = account_balances.iter().map(|b| b.debit_balance).sum();
-        let total_credits: f64 = account_balances.iter().map(|b| b.credit_balance).sum();
+        let total_debits: Decimal = account_balances.iter().map(|b| b.debit_balance).sum();
+        let total_credits: Decimal = account_balances.iter().map(|b| b.credit_balance).sum();
 
         Ok(TrialBalance {
             period_start,
@@ -187,6 +188,7 @@ mod tests {
     use crate::domain::accounting::repository::{
         InMemoryAccountRepository, InMemoryJournalEntryRepository, InMemoryJournalLineRepository,
     };
+    use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> AccountingService {
@@ -225,15 +227,15 @@ mod tests {
             lines: vec![
                 crate::domain::accounting::model::CreateJournalLine {
                     account_id: 1,
-                    debit: 0.0,
-                    credit: 100.0,
+                    debit: Decimal::ZERO,
+                    credit: dec!(100.0),
                     description: None,
                     reference: None,
                 },
                 crate::domain::accounting::model::CreateJournalLine {
                     account_id: 8,
-                    debit: 100.0,
-                    credit: 0.0,
+                    debit: dec!(100.0),
+                    credit: Decimal::ZERO,
                     description: None,
                     reference: None,
                 },
@@ -255,15 +257,15 @@ mod tests {
             lines: vec![
                 crate::domain::accounting::model::CreateJournalLine {
                     account_id: 1,
-                    debit: 50.0,
-                    credit: 0.0,
+                    debit: dec!(50.0),
+                    credit: Decimal::ZERO,
                     description: None,
                     reference: None,
                 },
                 crate::domain::accounting::model::CreateJournalLine {
                     account_id: 11,
-                    debit: 0.0,
-                    credit: 50.0,
+                    debit: Decimal::ZERO,
+                    credit: dec!(50.0),
                     description: None,
                     reference: None,
                 },

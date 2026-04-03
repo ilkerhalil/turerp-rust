@@ -1,6 +1,7 @@
 //! Project domain models
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Project status
@@ -24,8 +25,8 @@ pub struct Project {
     pub status: ProjectStatus,
     pub start_date: Option<DateTime<Utc>>,
     pub end_date: Option<DateTime<Utc>>,
-    pub budget: f64,
-    pub actual_cost: f64,
+    pub budget: Decimal,
+    pub actual_cost: Decimal,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -38,9 +39,9 @@ pub struct WbsItem {
     pub parent_id: Option<i64>,
     pub name: String,
     pub code: String,
-    pub planned_hours: f64,
-    pub actual_hours: f64,
-    pub progress: f64,
+    pub planned_hours: Decimal,
+    pub actual_hours: Decimal,
+    pub progress: Decimal,
     pub sort_order: i32,
 }
 
@@ -51,7 +52,7 @@ pub struct ProjectCost {
     pub project_id: i64,
     pub wbs_item_id: Option<i64>,
     pub cost_type: CostType,
-    pub amount: f64,
+    pub amount: Decimal,
     pub description: String,
     pub incurred_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
@@ -72,11 +73,11 @@ pub enum CostType {
 pub struct ProjectProfitability {
     pub project_id: i64,
     pub project_name: String,
-    pub budget: f64,
-    pub actual_cost: f64,
-    pub revenue: f64,
-    pub profit: f64,
-    pub profit_margin: f64,
+    pub budget: Decimal,
+    pub actual_cost: Decimal,
+    pub revenue: Decimal,
+    pub profit: Decimal,
+    pub profit_margin: Decimal,
 }
 
 /// Create project request
@@ -88,7 +89,7 @@ pub struct CreateProject {
     pub cari_id: Option<i64>,
     pub start_date: Option<DateTime<Utc>>,
     pub end_date: Option<DateTime<Utc>>,
-    pub budget: f64,
+    pub budget: Decimal,
 }
 
 impl CreateProject {
@@ -97,7 +98,7 @@ impl CreateProject {
         if self.name.trim().is_empty() {
             errors.push("Project name is required".to_string());
         }
-        if self.budget < 0.0 {
+        if self.budget < Decimal::ZERO {
             errors.push("Budget cannot be negative".to_string());
         }
         if errors.is_empty() {
@@ -115,7 +116,7 @@ pub struct CreateWbsItem {
     pub parent_id: Option<i64>,
     pub name: String,
     pub code: String,
-    pub planned_hours: f64,
+    pub planned_hours: Decimal,
 }
 
 impl CreateWbsItem {
@@ -141,7 +142,7 @@ pub struct CreateProjectCost {
     pub project_id: i64,
     pub wbs_item_id: Option<i64>,
     pub cost_type: CostType,
-    pub amount: f64,
+    pub amount: Decimal,
     pub description: String,
     pub incurred_at: DateTime<Utc>,
 }
@@ -149,7 +150,7 @@ pub struct CreateProjectCost {
 impl CreateProjectCost {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        if self.amount <= 0.0 {
+        if self.amount <= Decimal::ZERO {
             errors.push("Amount must be positive".to_string());
         }
         if self.description.trim().is_empty() {
@@ -166,6 +167,7 @@ impl CreateProjectCost {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal_macros::dec;
 
     #[test]
     fn test_create_project_validation() {
@@ -176,7 +178,7 @@ mod tests {
             cari_id: None,
             start_date: Some(Utc::now()),
             end_date: None,
-            budget: 10000.0,
+            budget: dec!(10000),
         };
         assert!(valid.validate().is_ok());
 
@@ -187,7 +189,7 @@ mod tests {
             cari_id: None,
             start_date: None,
             end_date: None,
-            budget: -100.0,
+            budget: dec!(-100),
         };
         assert!(invalid.validate().is_err());
     }

@@ -59,7 +59,7 @@ async fn test_sql_injection_in_login_username() {
     for payload in malicious_payloads {
         let req = test::TestRequest::post()
             .uri("/api/auth/login")
-            .set_json(&json!({
+            .set_json(json!({
                 "username": payload,
                 "password": "anypassword"
             }))
@@ -91,7 +91,7 @@ async fn test_sql_injection_in_registration() {
         let unique_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
         let req = test::TestRequest::post()
             .uri("/api/auth/register")
-            .set_json(&json!({
+            .set_json(json!({
                 "username": format!("{}_{}", payload, unique_id),
                 "email": format!("{}@test.com", unique_id),
                 "password": "ValidPass123!",
@@ -169,7 +169,7 @@ async fn test_valid_password_accepted() {
     let unique_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
     let req = test::TestRequest::post()
         .uri("/api/auth/register")
-        .set_json(&json!({
+        .set_json(json!({
             "username": format!("testuser_{}", unique_id),
             "email": format!("{}@test.com", unique_id),
             "password": "StrongP@ssw0rd!",  // 14 chars, meets all requirements
@@ -229,7 +229,7 @@ async fn test_user_cannot_access_other_users_data() {
     let password = "ValidPass123!"; // 13 chars, meets all requirements
     let reg_resp = test::TestRequest::post()
         .uri("/api/auth/register")
-        .set_json(&json!({
+        .set_json(json!({
             "username": format!("user1_{}", unique_id1),
             "email": format!("{}@test.com", unique_id1),
             "password": password,
@@ -250,7 +250,7 @@ async fn test_user_cannot_access_other_users_data() {
     // Login as user 1
     let login_req = test::TestRequest::post()
         .uri("/api/auth/login")
-        .set_json(&json!({
+        .set_json(json!({
             "username": format!("user1_{}", unique_id1),
             "password": password
         }))
@@ -304,7 +304,7 @@ async fn test_input_validation_valid_data() {
     let unique_id = uuid::Uuid::new_v4().to_string()[..8].to_string();
     let req = test::TestRequest::post()
         .uri("/api/auth/register")
-        .set_json(&json!({
+        .set_json(json!({
             "username": format!("validuser_{}", unique_id),
             "email": format!("{}@example.com", unique_id),
             "password": "ValidPass123!",  // 13 chars, meets all requirements

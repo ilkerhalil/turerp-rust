@@ -177,12 +177,12 @@ mod tests {
 
     #[test]
     fn test_valid_subdomain() {
-        assert!(valid_subdomain(&"testco"));
-        assert!(valid_subdomain(&"test-co"));
-        assert!(valid_subdomain(&"test123"));
-        assert!(!valid_subdomain(&"TestCo"));
-        assert!(!valid_subdomain(&"test_co"));
-        assert!(!valid_subdomain(&"test co"));
+        assert!(valid_subdomain("testco"));
+        assert!(valid_subdomain("test-co"));
+        assert!(valid_subdomain("test123"));
+        assert!(!valid_subdomain("TestCo"));
+        assert!(!valid_subdomain("test_co"));
+        assert!(!valid_subdomain("test co"));
     }
 
     #[test]

@@ -220,7 +220,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ---
 
-## Current Status: Phase 10 - Complete ✅ (Code Review Fixes)
+## Current Status: Phase 11 - Complete ✅ (Decimal Migration & Code Quality)
 
 ### Completed Modules
 | Module | Status | Notes |
@@ -228,18 +228,18 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Auth | ✅ Complete | JWT, bcrypt, rate limiting, OpenAPI, role-based auth |
 | Tenant | ✅ Complete | Subdomain routing, PostgreSQL repo, TenantConfig |
 | User | ✅ Complete | CRUD + roles + validation tests + admin auth |
-| Cari | ✅ Complete | Customer/Vendor + PostgreSQL repo |
-| Product | ✅ Complete | Categories, units, variants |
-| Stock | ✅ Complete | Warehouses, movements |
-| Invoice | ✅ Complete | Payments, status |
-| Sales | ✅ Complete | Orders, quotations |
+| Cari | ✅ Complete | Customer/Vendor + PostgreSQL repo, Decimal |
+| Product | ✅ Complete | Categories, units, variants, Decimal |
+| Stock | ✅ Complete | Warehouses, movements, Decimal |
+| Invoice | ✅ Complete | Payments, status, Decimal |
+| Sales | ✅ Complete | Orders, quotations, Decimal |
 | Purchase | ✅ Complete | Orders, goods receipt, purchase requests, Decimal |
-| HR | ✅ Complete | Employees, attendance, leave |
-| Accounting | ✅ Complete | Journal entries, trial balance |
+| HR | ✅ Complete | Employees, attendance, leave, Decimal |
+| Accounting | ✅ Complete | Journal entries, trial balance, Decimal |
 | Assets | ✅ Complete | Fixed assets, depreciation, maintenance |
-| Project | ✅ Complete | WBS, costs, profitability |
-| Manufacturing | ✅ Complete | Work orders, BOM, routing, NCR |
-| CRM | ✅ Complete | Leads, opportunities, tickets |
+| Project | ✅ Complete | WBS, costs, profitability, Decimal |
+| Manufacturing | ✅ Complete | Work orders, BOM, routing, NCR, Decimal |
+| CRM | ✅ Complete | Leads, opportunities, tickets, Decimal |
 | Feature Flags | ✅ Complete | CRUD, tenant-specific, API v1, admin auth |
 | Product Variants | ✅ Complete | CRUD, API v1 |
 | Purchase Requests | ✅ Complete | CRUD, approval workflow, API v1, state machine, pagination |
@@ -278,7 +278,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - ✅ Tenant isolation enforced at API layer
 - ✅ Secure public path matching (exact match, no bypass)
 - ✅ Encryption key memory security (zeroize on drop)
-- ✅ Decimal precision for financial values (no floating-point errors)
+- ✅ Decimal precision for financial values (all modules)
 - ✅ Required tenant_id in registration (no default tenant exposure)
 - ✅ Thread-safe in-memory repositories (single mutex pattern)
 - ✅ #[must_use] attributes on important return types
@@ -567,8 +567,48 @@ turerp/
   - Bug: AdminUser extractor checked `claims.role == "Admin"` but JWT stores role as lowercase `"admin"`
   - Fix: Changed comparison to `claims.role == "admin"`
   - Impact: All admin-only endpoints were returning 403 Forbidden for valid admin users
+- [x] Fix all Clippy warnings (needless_borrows, manual_range_contains, etc.)
 - [ ] Add trusted proxy configuration for rate limiting
 - [ ] Improve error context in database operations
+
+---
+
+## Phase 11: Decimal Migration & Code Quality (Complete)
+
+### 11.1 Decimal Migration - Financial Precision
+- [x] Sales module - all monetary fields migrated to Decimal
+- [x] Invoice module - subtotal, tax, discount, total, quantity
+- [x] Stock module - quantity, reserved_quantity, avg_cost, total_value
+- [x] Product module - purchase_price, sale_price, tax_rate, price_modifier
+- [x] HR module - salary, hours, payroll calculations
+- [x] Accounting module - debit, credit, balances
+- [x] Project module - budget, costs, revenue, profit
+- [x] Manufacturing module - quantities, hours, scrap_percentage
+- [x] CRM module - opportunity value, campaign budget
+- [x] Cari module - credit_limit, current_balance
+- [x] All tests updated to use `rust_decimal_macros::dec!`
+
+### 11.2 Mutex Consolidation - Thread Safety
+- [x] Sales repositories - single inner struct pattern
+- [x] Accounting repositories - atomic state updates
+- [x] Stock repositories - reduced lock contention
+- [x] Manufacturing repositories - consistent state
+- [x] HR repositories - thread-safe operations
+- [x] Cari repository - atomic updates
+- [x] Project repositories - single lock acquisition
+- [x] Tenant repositories - config isolation
+- [x] CRM repositories - thread-safe CRUD
+- [x] Invoice repositories - payment tracking
+- [x] Product repositories - variant handling
+- [x] Purchase repositories - order management
+
+### 11.3 Clippy Fixes - Code Quality
+- [x] needless_borrows_for_generic_args in security_test.rs
+- [x] manual_range_contains in hr/model.rs
+- [x] needless_borrow in tenant/model.rs
+- [x] len_zero in tenant/service.rs
+- [x] unnecessary_literal_unwrap in error.rs
+- [x] default_constructed_unit_structs in middleware/tenant.rs
 
 ---
 

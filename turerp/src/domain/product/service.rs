@@ -237,6 +237,7 @@ mod tests {
         InMemoryCategoryRepository, InMemoryProductRepository, InMemoryProductVariantRepository,
         InMemoryUnitRepository,
     };
+    use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> ProductService {
@@ -267,9 +268,9 @@ mod tests {
             category_id: None,
             unit_id: None,
             barcode: None,
-            purchase_price: 100.0,
-            sale_price: 150.0,
-            tax_rate: 18.0,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
         };
 
         let result = service.create_product(create).await;
@@ -289,9 +290,9 @@ mod tests {
             category_id: None,
             unit_id: None,
             barcode: None,
-            purchase_price: 100.0,
-            sale_price: 150.0,
-            tax_rate: 18.0,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
         };
 
         service.create_product(create.clone()).await.unwrap();
@@ -312,9 +313,9 @@ mod tests {
             category_id: None,
             unit_id: None,
             barcode: None,
-            purchase_price: 100.0,
-            sale_price: 150.0,
-            tax_rate: 18.0,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
         };
 
         service.create_product(create).await.unwrap();
@@ -369,9 +370,9 @@ mod tests {
             category_id: None,
             unit_id: None,
             barcode: None,
-            purchase_price: 100.0,
-            sale_price: 150.0,
-            tax_rate: 18.0,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
         };
         let product = service.create_product(product_create).await.unwrap();
 
@@ -381,7 +382,7 @@ mod tests {
             name: "Red Large".to_string(),
             sku: Some("P001-RED-L".to_string()),
             barcode: None,
-            price_modifier: 10.0,
+            price_modifier: dec!(10.0),
         };
 
         let result = service.create_variant(variant_create).await;
@@ -404,9 +405,9 @@ mod tests {
             category_id: None,
             unit_id: None,
             barcode: None,
-            purchase_price: 100.0,
-            sale_price: 150.0,
-            tax_rate: 18.0,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
         };
         let product = service.create_product(product_create).await.unwrap();
 
@@ -416,14 +417,14 @@ mod tests {
             name: "Red Large".to_string(),
             sku: Some("P001-RED-L".to_string()),
             barcode: None,
-            price_modifier: 10.0,
+            price_modifier: dec!(10.0),
         };
         let variant_create2 = CreateProductVariant {
             product_id: product.id,
             name: "Blue Small".to_string(),
             sku: Some("P001-BLU-S".to_string()),
             barcode: None,
-            price_modifier: -5.0,
+            price_modifier: dec!(-5.0),
         };
 
         service.create_variant(variant_create1).await.unwrap();
@@ -446,9 +447,9 @@ mod tests {
             category_id: None,
             unit_id: None,
             barcode: None,
-            purchase_price: 100.0,
-            sale_price: 150.0,
-            tax_rate: 18.0,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
         };
         let product = service.create_product(product_create).await.unwrap();
 
@@ -458,7 +459,7 @@ mod tests {
             name: "Original Name".to_string(),
             sku: None,
             barcode: None,
-            price_modifier: 0.0,
+            price_modifier: dec!(0.0),
         };
         let variant = service.create_variant(variant_create).await.unwrap();
 
@@ -467,14 +468,14 @@ mod tests {
             name: Some("Updated Name".to_string()),
             sku: Some("NEW-SKU".to_string()),
             barcode: None,
-            price_modifier: Some(15.0),
+            price_modifier: Some(dec!(15.0)),
             is_active: None,
         };
 
         let updated = service.update_variant(variant.id, update).await.unwrap();
         assert_eq!(updated.name, "Updated Name");
         assert_eq!(updated.sku, Some("NEW-SKU".to_string()));
-        assert_eq!(updated.price_modifier, 15.0);
+        assert_eq!(updated.price_modifier, dec!(15.0));
     }
 
     #[tokio::test]
@@ -490,9 +491,9 @@ mod tests {
             category_id: None,
             unit_id: None,
             barcode: None,
-            purchase_price: 100.0,
-            sale_price: 150.0,
-            tax_rate: 18.0,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
         };
         let product = service.create_product(product_create).await.unwrap();
 
@@ -502,7 +503,7 @@ mod tests {
             name: "Test Variant".to_string(),
             sku: None,
             barcode: None,
-            price_modifier: 0.0,
+            price_modifier: dec!(0.0),
         };
         let variant = service.create_variant(variant_create).await.unwrap();
 

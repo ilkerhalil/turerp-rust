@@ -1,5 +1,7 @@
 //! CRM service for business logic
 
+use rust_decimal::Decimal;
+
 use crate::domain::crm::model::{
     Campaign, CampaignStatus, CreateCampaign, CreateLead, CreateOpportunity, CreateTicket, Lead,
     LeadStatus, Opportunity, OpportunityStatus, Ticket, TicketStatus,
@@ -198,15 +200,15 @@ impl CrmService {
     }
 
     // Dashboard metrics
-    pub async fn get_sales_pipeline_value(&self, tenant_id: i64) -> Result<f64, ApiError> {
+    pub async fn get_sales_pipeline_value(&self, tenant_id: i64) -> Result<Decimal, ApiError> {
         let opportunities = self.opportunity_repo.find_by_tenant(tenant_id).await?;
         let open_opps: Vec<_> = opportunities
             .into_iter()
             .filter(|o| o.status == OpportunityStatus::Open)
             .collect();
-        let weighted_value: f64 = open_opps
+        let weighted_value: Decimal = open_opps
             .iter()
-            .map(|o| o.value * (o.probability / 100.0))
+            .map(|o| o.value * (o.probability / Decimal::ONE_HUNDRED))
             .sum();
         Ok(weighted_value)
     }
@@ -229,6 +231,7 @@ mod tests {
         InMemoryCampaignRepository, InMemoryLeadRepository, InMemoryOpportunityRepository,
         InMemoryTicketRepository,
     };
+    use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> CrmService {
@@ -265,8 +268,8 @@ mod tests {
             lead_id: None,
             name: "Big Deal".to_string(),
             customer_id: Some(1),
-            value: 50000.0,
-            probability: 75.0,
+            value: dec!(50000),
+            probability: dec!(75),
             expected_close_date: Some(chrono::Utc::now()),
             assigned_to: None,
             notes: None,
@@ -283,7 +286,7 @@ mod tests {
             name: "Summer Sale".to_string(),
             description: Some("Annual campaign".to_string()),
             campaign_type: "Email".to_string(),
-            budget: 10000.0,
+            budget: dec!(10000),
             start_date: Some(chrono::Utc::now()),
             end_date: None,
         };
@@ -319,8 +322,8 @@ mod tests {
                 lead_id: None,
                 name: "Deal 1".to_string(),
                 customer_id: None,
-                value: 100000.0,
-                probability: 50.0,
+                value: dec!(100000),
+                probability: dec!(50),
                 expected_close_date: None,
                 assigned_to: None,
                 notes: None,
@@ -329,7 +332,7 @@ mod tests {
             .unwrap();
 
         let value = service.get_sales_pipeline_value(1).await.unwrap();
-        assert_eq!(value, 50000.0); // 100000 * 50%
+        assert_eq!(value, dec!(50000)); // 100000 * 50%
     }
 
     #[tokio::test]

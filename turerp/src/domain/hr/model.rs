@@ -1,6 +1,7 @@
 //! HR domain models
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Employee entity
@@ -19,7 +20,7 @@ pub struct Employee {
     pub hire_date: DateTime<Utc>,
     pub termination_date: Option<DateTime<Utc>>,
     pub status: EmployeeStatus,
-    pub salary: f64,
+    pub salary: Decimal,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -41,7 +42,7 @@ pub struct Attendance {
     pub date: DateTime<Utc>,
     pub check_in: Option<DateTime<Utc>>,
     pub check_out: Option<DateTime<Utc>>,
-    pub hours_worked: f64,
+    pub hours_worked: Decimal,
     pub status: AttendanceStatus,
     pub notes: Option<String>,
 }
@@ -63,7 +64,7 @@ pub struct LeaveType {
     pub tenant_id: i64,
     pub name: String,
     pub description: Option<String>,
-    pub max_days_per_year: f64,
+    pub max_days_per_year: Decimal,
     pub requires_approval: bool,
 }
 
@@ -76,7 +77,7 @@ pub struct LeaveRequest {
     pub status: LeaveRequestStatus,
     pub start_date: DateTime<Utc>,
     pub end_date: DateTime<Utc>,
-    pub total_days: f64,
+    pub total_days: Decimal,
     pub reason: Option<String>,
     pub approved_by: Option<i64>,
     pub approved_at: Option<DateTime<Utc>>,
@@ -100,12 +101,12 @@ pub struct Payroll {
     pub employee_id: i64,
     pub period_start: DateTime<Utc>,
     pub period_end: DateTime<Utc>,
-    pub basic_salary: f64,
-    pub overtime_hours: f64,
-    pub overtime_pay: f64,
-    pub bonuses: f64,
-    pub deductions: f64,
-    pub net_salary: f64,
+    pub basic_salary: Decimal,
+    pub overtime_hours: Decimal,
+    pub overtime_pay: Decimal,
+    pub bonuses: Decimal,
+    pub deductions: Decimal,
+    pub net_salary: Decimal,
     pub status: PayrollStatus,
     pub paid_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -133,7 +134,7 @@ pub struct CreateEmployee {
     pub department: Option<String>,
     pub position: Option<String>,
     pub hire_date: DateTime<Utc>,
-    pub salary: f64,
+    pub salary: Decimal,
 }
 
 impl CreateEmployee {
@@ -151,7 +152,7 @@ impl CreateEmployee {
         if self.email.trim().is_empty() {
             errors.push("Email is required".to_string());
         }
-        if self.salary < 0.0 {
+        if self.salary < Decimal::ZERO {
             errors.push("Salary cannot be negative".to_string());
         }
         if errors.is_empty() {
@@ -187,13 +188,13 @@ impl CreateAttendance {
         }
     }
 
-    pub fn calculate_hours(&self) -> f64 {
+    pub fn calculate_hours(&self) -> Decimal {
         match (self.check_in, self.check_out) {
             (Some(in_time), Some(out_time)) => {
                 let duration = out_time.signed_duration_since(in_time);
-                duration.num_seconds() as f64 / 3600.0
+                Decimal::from(duration.num_seconds()) / Decimal::from(3600)
             }
-            _ => 0.0,
+            _ => Decimal::ZERO,
         }
     }
 }
@@ -221,9 +222,9 @@ impl CreateLeaveRequest {
         }
     }
 
-    pub fn calculate_total_days(&self) -> f64 {
+    pub fn calculate_total_days(&self) -> Decimal {
         let duration = self.end_date.signed_duration_since(self.start_date);
-        duration.num_days() as f64 + 1.0
+        Decimal::from(duration.num_days()) + Decimal::ONE
     }
 }
 
@@ -241,7 +242,7 @@ pub struct EmployeeResponse {
     pub position: Option<String>,
     pub hire_date: DateTime<Utc>,
     pub status: EmployeeStatus,
-    pub salary: f64,
+    pub salary: Decimal,
 }
 
 impl From<Employee> for EmployeeResponse {
@@ -282,7 +283,7 @@ mod tests {
             department: Some("IT".to_string()),
             position: Some("Developer".to_string()),
             hire_date: Utc::now(),
-            salary: 5000.0,
+            salary: Decimal::new(500000, 2), // 5000.00
         };
         assert!(valid.validate().is_ok());
 
@@ -297,21 +298,25 @@ mod tests {
             department: None,
             position: None,
             hire_date: Utc::now(),
-            salary: 5000.0,
+            salary: Decimal::new(500000, 2), // 5000.00
         };
         assert!(invalid.validate().is_err());
     }
 
     #[test]
     fn test_create_attendance_hours() {
+        use rust_decimal_macros::dec;
+
+        let check_in = Utc::now();
         let attendance = CreateAttendance {
             employee_id: 1,
-            date: Utc::now(),
-            check_in: Some(Utc::now()),
-            check_out: Some(Utc::now() + chrono::Duration::hours(8)),
+            date: check_in,
+            check_in: Some(check_in),
+            check_out: Some(check_in + chrono::Duration::hours(8)),
             notes: None,
         };
         let hours = attendance.calculate_hours();
-        assert!(hours >= 7.9 && hours <= 8.1);
+        // 8 hours with small tolerance for test timing
+        assert!(hours >= dec!(7.9) && hours <= dec!(8.1));
     }
 }

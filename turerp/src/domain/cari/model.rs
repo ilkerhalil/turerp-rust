@@ -1,6 +1,7 @@
 //! Cari (Customer/Vendor) domain model
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
@@ -88,8 +89,8 @@ pub struct Cari {
     pub city: Option<String>,
     pub country: Option<String>,
     pub postal_code: Option<String>,
-    pub credit_limit: f64,
-    pub current_balance: f64,
+    pub credit_limit: Decimal,
+    pub current_balance: Decimal,
     pub status: CariStatus,
     pub tenant_id: i64,
     pub created_by: i64,
@@ -121,8 +122,8 @@ impl Cari {
             city: None,
             country: None,
             postal_code: None,
-            credit_limit: 0.0,
-            current_balance: 0.0,
+            credit_limit: Decimal::ZERO,
+            current_balance: Decimal::ZERO,
             status: CariStatus::Active,
             tenant_id,
             created_by,
@@ -181,15 +182,15 @@ pub struct CreateCari {
     pub postal_code: Option<String>,
 
     #[serde(default = "default_credit_limit")]
-    pub credit_limit: f64,
+    pub credit_limit: Decimal,
 
     pub tenant_id: i64,
 
     pub created_by: i64,
 }
 
-fn default_credit_limit() -> f64 {
-    0.0
+fn default_credit_limit() -> Decimal {
+    Decimal::ZERO
 }
 
 /// Data for updating an existing cari
@@ -243,7 +244,7 @@ pub struct UpdateCari {
     pub postal_code: Option<String>,
 
     #[serde(default)]
-    pub credit_limit: Option<f64>,
+    pub credit_limit: Option<Decimal>,
 
     #[serde(default)]
     pub status: Option<CariStatus>,
@@ -265,8 +266,8 @@ pub struct CariResponse {
     pub city: Option<String>,
     pub country: Option<String>,
     pub postal_code: Option<String>,
-    pub credit_limit: f64,
-    pub current_balance: f64,
+    pub credit_limit: Decimal,
+    pub current_balance: Decimal,
     pub status: CariStatus,
     pub tenant_id: i64,
     pub created_at: DateTime<Utc>,
@@ -302,6 +303,7 @@ impl From<Cari> for CariResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal_macros::dec;
     use std::str::FromStr;
 
     #[test]
@@ -322,7 +324,7 @@ mod tests {
     fn test_cari_status_default() {
         let cari = Cari::new(1, "C001".into(), "Test".into(), CariType::Customer, 1, 1);
         assert_eq!(cari.status, CariStatus::Active);
-        assert_eq!(cari.credit_limit, 0.0);
+        assert_eq!(cari.credit_limit, Decimal::ZERO);
     }
 
     #[test]
@@ -350,7 +352,7 @@ mod tests {
             city: None,
             country: None,
             postal_code: None,
-            credit_limit: 1000.0,
+            credit_limit: dec!(1000),
             tenant_id: 1,
             created_by: 1,
         };
@@ -373,7 +375,7 @@ mod tests {
             city: None,
             country: None,
             postal_code: None,
-            credit_limit: 0.0,
+            credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
         };

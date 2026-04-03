@@ -1,6 +1,7 @@
 //! CRM domain models
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 // ==================== LEADS ====================
@@ -82,8 +83,8 @@ pub struct Opportunity {
     pub lead_id: Option<i64>,
     pub name: String,
     pub customer_id: Option<i64>,
-    pub value: f64,
-    pub probability: f64,
+    pub value: Decimal,
+    pub probability: Decimal,
     pub expected_close_date: Option<DateTime<Utc>>,
     pub status: OpportunityStatus,
     pub assigned_to: Option<i64>,
@@ -99,8 +100,8 @@ pub struct CreateOpportunity {
     pub lead_id: Option<i64>,
     pub name: String,
     pub customer_id: Option<i64>,
-    pub value: f64,
-    pub probability: f64,
+    pub value: Decimal,
+    pub probability: Decimal,
     pub expected_close_date: Option<DateTime<Utc>>,
     pub assigned_to: Option<i64>,
     pub notes: Option<String>,
@@ -112,10 +113,10 @@ impl CreateOpportunity {
         if self.name.trim().is_empty() {
             errors.push("Opportunity name is required".to_string());
         }
-        if self.value < 0.0 {
+        if self.value < Decimal::ZERO {
             errors.push("Value cannot be negative".to_string());
         }
-        if self.probability < 0.0 || self.probability > 100.0 {
+        if self.probability < Decimal::ZERO || self.probability > Decimal::ONE_HUNDRED {
             errors.push("Probability must be between 0 and 100".to_string());
         }
         if errors.is_empty() {
@@ -147,8 +148,8 @@ pub struct Campaign {
     pub description: Option<String>,
     pub campaign_type: String,
     pub status: CampaignStatus,
-    pub budget: f64,
-    pub actual_cost: f64,
+    pub budget: Decimal,
+    pub actual_cost: Decimal,
     pub start_date: Option<DateTime<Utc>>,
     pub end_date: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -162,7 +163,7 @@ pub struct CreateCampaign {
     pub name: String,
     pub description: Option<String>,
     pub campaign_type: String,
-    pub budget: f64,
+    pub budget: Decimal,
     pub start_date: Option<DateTime<Utc>>,
     pub end_date: Option<DateTime<Utc>>,
 }
@@ -176,7 +177,7 @@ impl CreateCampaign {
         if self.campaign_type.trim().is_empty() {
             errors.push("Campaign type is required".to_string());
         }
-        if self.budget < 0.0 {
+        if self.budget < Decimal::ZERO {
             errors.push("Budget cannot be negative".to_string());
         }
         if errors.is_empty() {
@@ -258,6 +259,7 @@ impl CreateTicket {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal_macros::dec;
 
     #[test]
     fn test_create_lead_validation() {
@@ -293,8 +295,8 @@ mod tests {
             lead_id: None,
             name: "Big Deal".to_string(),
             customer_id: Some(1),
-            value: 50000.0,
-            probability: 75.0,
+            value: dec!(50000),
+            probability: dec!(75),
             expected_close_date: Some(Utc::now()),
             assigned_to: None,
             notes: None,
@@ -306,8 +308,8 @@ mod tests {
             lead_id: None,
             name: "".to_string(),
             customer_id: None,
-            value: -100.0,
-            probability: 150.0,
+            value: dec!(-100),
+            probability: dec!(150),
             expected_close_date: None,
             assigned_to: None,
             notes: None,
@@ -322,7 +324,7 @@ mod tests {
             name: "Summer Sale".to_string(),
             description: Some("Annual summer campaign".to_string()),
             campaign_type: "Email".to_string(),
-            budget: 10000.0,
+            budget: dec!(10000),
             start_date: Some(Utc::now()),
             end_date: None,
         };
@@ -333,7 +335,7 @@ mod tests {
             name: "".to_string(),
             description: None,
             campaign_type: "".to_string(),
-            budget: -500.0,
+            budget: dec!(-500),
             start_date: None,
             end_date: None,
         };

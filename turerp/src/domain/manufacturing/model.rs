@@ -1,6 +1,7 @@
 //! Manufacturing domain models
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Work order status
@@ -30,7 +31,7 @@ pub struct WorkOrder {
     pub tenant_id: i64,
     pub name: String,
     pub product_id: i64,
-    pub quantity: f64,
+    pub quantity: Decimal,
     pub bom_id: Option<i64>,
     pub routing_id: Option<i64>,
     pub status: WorkOrderStatus,
@@ -51,8 +52,8 @@ pub struct WorkOrderOperation {
     pub operation_sequence: i32,
     pub operation_name: String,
     pub work_center_id: Option<i64>,
-    pub planned_hours: f64,
-    pub actual_hours: f64,
+    pub planned_hours: Decimal,
+    pub actual_hours: Decimal,
     pub status: String,
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
@@ -64,8 +65,8 @@ pub struct WorkOrderMaterial {
     pub id: i64,
     pub work_order_id: i64,
     pub product_id: i64,
-    pub quantity_required: f64,
-    pub quantity_issued: f64,
+    pub quantity_required: Decimal,
+    pub quantity_issued: Decimal,
     pub is_issued: bool,
 }
 
@@ -75,7 +76,7 @@ pub struct CreateWorkOrder {
     pub tenant_id: i64,
     pub name: String,
     pub product_id: i64,
-    pub quantity: f64,
+    pub quantity: Decimal,
     pub bom_id: Option<i64>,
     pub routing_id: Option<i64>,
     pub priority: WorkOrderPriority,
@@ -92,7 +93,7 @@ impl CreateWorkOrder {
         if self.product_id <= 0 {
             errors.push("Product ID is required".to_string());
         }
-        if self.quantity <= 0.0 {
+        if self.quantity <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
         if errors.is_empty() {
@@ -110,7 +111,7 @@ pub struct CreateWorkOrderOperation {
     pub operation_sequence: i32,
     pub operation_name: String,
     pub work_center_id: Option<i64>,
-    pub planned_hours: f64,
+    pub planned_hours: Decimal,
 }
 
 impl CreateWorkOrderOperation {
@@ -119,7 +120,7 @@ impl CreateWorkOrderOperation {
         if self.operation_name.trim().is_empty() {
             errors.push("Operation name is required".to_string());
         }
-        if self.planned_hours < 0.0 {
+        if self.planned_hours < Decimal::ZERO {
             errors.push("Planned hours cannot be negative".to_string());
         }
         if errors.is_empty() {
@@ -135,7 +136,7 @@ impl CreateWorkOrderOperation {
 pub struct CreateWorkOrderMaterial {
     pub work_order_id: i64,
     pub product_id: i64,
-    pub quantity_required: f64,
+    pub quantity_required: Decimal,
 }
 
 impl CreateWorkOrderMaterial {
@@ -144,7 +145,7 @@ impl CreateWorkOrderMaterial {
         if self.product_id <= 0 {
             errors.push("Product ID is required".to_string());
         }
-        if self.quantity_required <= 0.0 {
+        if self.quantity_required <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
         if errors.is_empty() {
@@ -178,9 +179,9 @@ pub struct BillOfMaterialsLine {
     pub id: i64,
     pub bom_id: i64,
     pub component_product_id: i64,
-    pub quantity: f64,
+    pub quantity: Decimal,
     pub unit_id: Option<i64>,
-    pub scrap_percentage: f64,
+    pub scrap_percentage: Decimal,
     pub is_optional: bool,
     pub notes: Option<String>,
 }
@@ -219,9 +220,9 @@ impl CreateBillOfMaterials {
 pub struct CreateBillOfMaterialsLine {
     pub bom_id: i64,
     pub component_product_id: i64,
-    pub quantity: f64,
+    pub quantity: Decimal,
     pub unit_id: Option<i64>,
-    pub scrap_percentage: f64,
+    pub scrap_percentage: Decimal,
     pub is_optional: bool,
     pub notes: Option<String>,
 }
@@ -232,10 +233,10 @@ impl CreateBillOfMaterialsLine {
         if self.component_product_id <= 0 {
             errors.push("Component product ID is required".to_string());
         }
-        if self.quantity <= 0.0 {
+        if self.quantity <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
-        if self.scrap_percentage < 0.0 || self.scrap_percentage > 100.0 {
+        if self.scrap_percentage < Decimal::ZERO || self.scrap_percentage > Decimal::ONE_HUNDRED {
             errors.push("Scrap percentage must be between 0 and 100".to_string());
         }
         if errors.is_empty() {
@@ -269,8 +270,8 @@ pub struct RoutingOperation {
     pub sequence: i32,
     pub operation_name: String,
     pub work_center_id: Option<i64>,
-    pub setup_hours: f64,
-    pub run_hours: f64,
+    pub setup_hours: Decimal,
+    pub run_hours: Decimal,
     pub description: Option<String>,
 }
 
@@ -291,8 +292,8 @@ pub struct CreateRoutingOperation {
     pub sequence: i32,
     pub operation_name: String,
     pub work_center_id: Option<i64>,
-    pub setup_hours: f64,
-    pub run_hours: f64,
+    pub setup_hours: Decimal,
+    pub run_hours: Decimal,
     pub description: Option<String>,
 }
 
@@ -305,10 +306,10 @@ impl CreateRoutingOperation {
         if self.operation_name.trim().is_empty() {
             errors.push("Operation name is required".to_string());
         }
-        if self.setup_hours < 0.0 {
+        if self.setup_hours < Decimal::ZERO {
             errors.push("Setup hours cannot be negative".to_string());
         }
-        if self.run_hours < 0.0 {
+        if self.run_hours < Decimal::ZERO {
             errors.push("Run hours cannot be negative".to_string());
         }
         if errors.is_empty() {
@@ -356,9 +357,9 @@ pub struct Inspection {
     pub work_order_id: Option<i64>,
     pub product_id: i64,
     pub inspection_type: String,
-    pub quantity_inspected: f64,
-    pub quantity_passed: f64,
-    pub quantity_failed: f64,
+    pub quantity_inspected: Decimal,
+    pub quantity_passed: Decimal,
+    pub quantity_failed: Decimal,
     pub status: InspectionStatus,
     pub inspector_id: Option<i64>,
     pub inspected_at: Option<DateTime<Utc>>,
@@ -404,6 +405,7 @@ pub struct NonConformanceReport {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal_macros::dec;
 
     #[test]
     fn test_create_work_order_validation() {
@@ -411,7 +413,7 @@ mod tests {
             tenant_id: 1,
             name: "WO-001".to_string(),
             product_id: 1,
-            quantity: 100.0,
+            quantity: dec!(100),
             bom_id: None,
             routing_id: None,
             priority: WorkOrderPriority::Normal,
@@ -424,7 +426,7 @@ mod tests {
             tenant_id: 1,
             name: "".to_string(),
             product_id: 0,
-            quantity: -10.0,
+            quantity: dec!(-10),
             bom_id: None,
             routing_id: None,
             priority: WorkOrderPriority::Normal,
@@ -464,9 +466,9 @@ mod tests {
         let valid = CreateBillOfMaterialsLine {
             bom_id: 1,
             component_product_id: 2,
-            quantity: 5.0,
+            quantity: dec!(5),
             unit_id: Some(1),
-            scrap_percentage: 5.0,
+            scrap_percentage: dec!(5),
             is_optional: false,
             notes: None,
         };
@@ -475,9 +477,9 @@ mod tests {
         let invalid = CreateBillOfMaterialsLine {
             bom_id: 1,
             component_product_id: 0,
-            quantity: -1.0,
+            quantity: dec!(-1),
             unit_id: None,
-            scrap_percentage: 150.0,
+            scrap_percentage: dec!(150),
             is_optional: false,
             notes: None,
         };

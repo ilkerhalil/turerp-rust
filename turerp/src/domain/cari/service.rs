@@ -1,4 +1,5 @@
 //! Cari service for business logic
+use rust_decimal::Decimal;
 use validator::Validate;
 
 use crate::domain::cari::model::{CariResponse, CreateCari, UpdateCari};
@@ -132,7 +133,7 @@ impl CariService {
         &self,
         id: i64,
         tenant_id: i64,
-        amount: f64,
+        amount: Decimal,
     ) -> Result<(), ApiError> {
         // Verify cari exists
         let cari = self
@@ -142,7 +143,7 @@ impl CariService {
             .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", id)))?;
 
         // Check credit limit for negative amounts (debit operations)
-        if amount < 0.0 {
+        if amount < Decimal::ZERO {
             let new_balance = cari.current_balance + amount;
             if new_balance < -cari.credit_limit {
                 return Err(ApiError::BadRequest(format!(
@@ -161,6 +162,7 @@ mod tests {
     use super::*;
     use crate::domain::cari::model::CariType;
     use crate::domain::cari::repository::InMemoryCariRepository;
+    use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> CariService {
@@ -185,7 +187,7 @@ mod tests {
             city: None,
             country: None,
             postal_code: None,
-            credit_limit: 1000.0,
+            credit_limit: dec!(1000),
             tenant_id: 1,
             created_by: 1,
         };
@@ -214,7 +216,7 @@ mod tests {
             city: None,
             country: None,
             postal_code: None,
-            credit_limit: 0.0,
+            credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
         };
@@ -243,7 +245,7 @@ mod tests {
             city: None,
             country: None,
             postal_code: None,
-            credit_limit: 0.0,
+            credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
         };
@@ -282,7 +284,7 @@ mod tests {
             city: None,
             country: None,
             postal_code: None,
-            credit_limit: 0.0,
+            credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
         };
@@ -300,7 +302,7 @@ mod tests {
             city: None,
             country: None,
             postal_code: None,
-            credit_limit: 0.0,
+            credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
         };
@@ -331,7 +333,7 @@ mod tests {
             city: None,
             country: None,
             postal_code: None,
-            credit_limit: 0.0,
+            credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
         };
@@ -340,7 +342,7 @@ mod tests {
 
         let update = UpdateCari {
             name: Some("Updated Name".to_string()),
-            credit_limit: Some(5000.0),
+            credit_limit: Some(dec!(5000)),
             ..Default::default()
         };
 
@@ -366,7 +368,7 @@ mod tests {
             city: None,
             country: None,
             postal_code: None,
-            credit_limit: 0.0,
+            credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
         };

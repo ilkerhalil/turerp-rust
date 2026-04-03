@@ -1,5 +1,7 @@
 //! Project service for business logic
 
+use rust_decimal::Decimal;
+
 use crate::domain::project::model::{
     CreateProject, CreateProjectCost, CreateWbsItem, Project, ProjectCost, ProjectProfitability,
     ProjectStatus, WbsItem,
@@ -56,8 +58,8 @@ impl ProjectService {
     pub async fn update_wbs_progress(
         &self,
         id: i64,
-        progress: f64,
-        hours: f64,
+        progress: Decimal,
+        hours: Decimal,
     ) -> Result<WbsItem, ApiError> {
         self.wbs_repo.update_progress(id, progress, hours).await
     }
@@ -73,15 +75,15 @@ impl ProjectService {
     pub async fn get_profitability(
         &self,
         project_id: i64,
-        revenue: f64,
+        revenue: Decimal,
     ) -> Result<ProjectProfitability, ApiError> {
         let project = self.get_project(project_id).await?;
         let actual_cost = self.cost_repo.find_total_by_project(project_id).await?;
         let profit = revenue - actual_cost;
-        let margin = if revenue > 0.0 {
-            (profit / revenue) * 100.0
+        let margin = if revenue > Decimal::ZERO {
+            (profit / revenue) * Decimal::ONE_HUNDRED
         } else {
-            0.0
+            Decimal::ZERO
         };
         Ok(ProjectProfitability {
             project_id,
@@ -102,6 +104,7 @@ mod tests {
     use crate::domain::project::repository::{
         InMemoryProjectCostRepository, InMemoryProjectRepository, InMemoryWbsItemRepository,
     };
+    use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> ProjectService {
@@ -121,7 +124,7 @@ mod tests {
             cari_id: None,
             start_date: None,
             end_date: None,
-            budget: 10000.0,
+            budget: dec!(10000),
         };
         let result = service.create_project(create).await;
         assert!(result.is_ok());
@@ -139,7 +142,7 @@ mod tests {
                 cari_id: None,
                 start_date: None,
                 end_date: None,
-                budget: 1000.0,
+                budget: dec!(1000),
             })
             .await
             .unwrap();
@@ -149,11 +152,11 @@ mod tests {
                 parent_id: None,
                 name: "Phase 1".to_string(),
                 code: "1.0".to_string(),
-                planned_hours: 40.0,
+                planned_hours: dec!(40),
             })
             .await
             .unwrap();
-        assert_eq!(wbs.planned_hours, 40.0);
+        assert_eq!(wbs.planned_hours, dec!(40));
     }
 
     #[tokio::test]
@@ -167,7 +170,7 @@ mod tests {
                 cari_id: None,
                 start_date: None,
                 end_date: None,
-                budget: 1000.0,
+                budget: dec!(1000),
             })
             .await
             .unwrap();
@@ -176,12 +179,12 @@ mod tests {
                 project_id: project.id,
                 wbs_item_id: None,
                 cost_type: CostType::Labor,
-                amount: 500.0,
+                amount: dec!(500),
                 description: "Work".to_string(),
                 incurred_at: chrono::Utc::now(),
             })
             .await
             .unwrap();
-        assert_eq!(cost.amount, 500.0);
+        assert_eq!(cost.amount, dec!(500));
     }
 }

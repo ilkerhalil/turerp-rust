@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
+use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::domain::hr::model::{
@@ -79,17 +80,24 @@ pub type BoxLeaveRequestRepository = Arc<dyn LeaveRequestRepository>;
 pub type BoxLeaveTypeRepository = Arc<dyn LeaveTypeRepository>;
 pub type BoxPayrollRepository = Arc<dyn PayrollRepository>;
 
+/// Inner state for InMemoryEmployeeRepository
+struct InMemoryEmployeeInner {
+    employees: std::collections::HashMap<i64, Employee>,
+    next_id: i64,
+}
+
 /// In-memory employee repository
 pub struct InMemoryEmployeeRepository {
-    employees: Mutex<std::collections::HashMap<i64, Employee>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryEmployeeInner>,
 }
 
 impl InMemoryEmployeeRepository {
     pub fn new() -> Self {
         Self {
-            employees: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryEmployeeInner {
+                employees: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -103,9 +111,9 @@ impl Default for InMemoryEmployeeRepository {
 #[async_trait]
 impl EmployeeRepository for InMemoryEmployeeRepository {
     async fn create(&self, create: CreateEmployee) -> Result<Employee, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
         let now = chrono::Utc::now();
 
         let employee = Employee {
@@ -127,17 +135,19 @@ impl EmployeeRepository for InMemoryEmployeeRepository {
             updated_at: now,
         };
 
-        self.employees.lock().insert(id, employee.clone());
+        inner.employees.insert(id, employee.clone());
         Ok(employee)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Employee>, ApiError> {
-        Ok(self.employees.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.employees.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Employee>, ApiError> {
-        let employees = self.employees.lock();
-        Ok(employees
+        let inner = self.inner.lock();
+        Ok(inner
+            .employees
             .values()
             .filter(|e| e.tenant_id == tenant_id)
             .cloned()
@@ -145,16 +155,18 @@ impl EmployeeRepository for InMemoryEmployeeRepository {
     }
 
     async fn find_by_user(&self, user_id: i64) -> Result<Option<Employee>, ApiError> {
-        let employees = self.employees.lock();
-        Ok(employees
+        let inner = self.inner.lock();
+        Ok(inner
+            .employees
             .values()
             .find(|e| e.user_id == Some(user_id))
             .cloned())
     }
 
     async fn update_status(&self, id: i64, status: EmployeeStatus) -> Result<Employee, ApiError> {
-        let mut employees = self.employees.lock();
-        let employee = employees
+        let mut inner = self.inner.lock();
+        let employee = inner
+            .employees
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Employee {} not found", id)))?;
         employee.status = status;
@@ -163,22 +175,30 @@ impl EmployeeRepository for InMemoryEmployeeRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.employees.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.employees.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryAttendanceRepository
+struct InMemoryAttendanceInner {
+    records: std::collections::HashMap<i64, Attendance>,
+    next_id: i64,
+}
+
 /// In-memory attendance repository
 pub struct InMemoryAttendanceRepository {
-    records: Mutex<std::collections::HashMap<i64, Attendance>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryAttendanceInner>,
 }
 
 impl InMemoryAttendanceRepository {
     pub fn new() -> Self {
         Self {
-            records: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryAttendanceInner {
+                records: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -196,14 +216,14 @@ impl AttendanceRepository for InMemoryAttendanceRepository {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let hours_worked = create.calculate_hours();
         let status = if create.check_in.is_none() && create.check_out.is_none() {
             AttendanceStatus::Absent
-        } else if hours_worked < 4.0 {
+        } else if hours_worked < Decimal::new(4, 0) {
             AttendanceStatus::Late
         } else {
             AttendanceStatus::Present
@@ -220,17 +240,19 @@ impl AttendanceRepository for InMemoryAttendanceRepository {
             notes: create.notes,
         };
 
-        self.records.lock().insert(id, record.clone());
+        inner.records.insert(id, record.clone());
         Ok(record)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Attendance>, ApiError> {
-        Ok(self.records.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.records.get(&id).cloned())
     }
 
     async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<Attendance>, ApiError> {
-        let records = self.records.lock();
-        Ok(records
+        let inner = self.inner.lock();
+        Ok(inner
+            .records
             .values()
             .filter(|r| r.employee_id == employee_id)
             .cloned()
@@ -238,8 +260,9 @@ impl AttendanceRepository for InMemoryAttendanceRepository {
     }
 
     async fn find_by_date(&self, date: chrono::DateTime<Utc>) -> Result<Vec<Attendance>, ApiError> {
-        let records = self.records.lock();
-        Ok(records
+        let inner = self.inner.lock();
+        Ok(inner
+            .records
             .values()
             .filter(|r| r.date.date_naive() == date.date_naive())
             .cloned()
@@ -247,22 +270,30 @@ impl AttendanceRepository for InMemoryAttendanceRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.records.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.records.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryLeaveRequestRepository
+struct InMemoryLeaveRequestInner {
+    requests: std::collections::HashMap<i64, LeaveRequest>,
+    next_id: i64,
+}
+
 /// In-memory leave request repository
 pub struct InMemoryLeaveRequestRepository {
-    requests: Mutex<std::collections::HashMap<i64, LeaveRequest>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryLeaveRequestInner>,
 }
 
 impl InMemoryLeaveRequestRepository {
     pub fn new() -> Self {
         Self {
-            requests: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryLeaveRequestInner {
+                requests: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -280,9 +311,9 @@ impl LeaveRequestRepository for InMemoryLeaveRequestRepository {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let request = LeaveRequest {
             id,
@@ -298,17 +329,19 @@ impl LeaveRequestRepository for InMemoryLeaveRequestRepository {
             created_at: chrono::Utc::now(),
         };
 
-        self.requests.lock().insert(id, request.clone());
+        inner.requests.insert(id, request.clone());
         Ok(request)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<LeaveRequest>, ApiError> {
-        Ok(self.requests.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.requests.get(&id).cloned())
     }
 
     async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<LeaveRequest>, ApiError> {
-        let requests = self.requests.lock();
-        Ok(requests
+        let inner = self.inner.lock();
+        Ok(inner
+            .requests
             .values()
             .filter(|r| r.employee_id == employee_id)
             .cloned()
@@ -321,8 +354,9 @@ impl LeaveRequestRepository for InMemoryLeaveRequestRepository {
         status: LeaveRequestStatus,
         approver_id: Option<i64>,
     ) -> Result<LeaveRequest, ApiError> {
-        let mut requests = self.requests.lock();
-        let request = requests
+        let mut inner = self.inner.lock();
+        let request = inner
+            .requests
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Leave request {} not found", id)))?;
         request.status = status;
@@ -334,32 +368,61 @@ impl LeaveRequestRepository for InMemoryLeaveRequestRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.requests.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.requests.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryLeaveTypeRepository
+struct InMemoryLeaveTypeInner {
+    types: std::collections::HashMap<i64, LeaveType>,
+    next_id: i64,
+}
+
 /// In-memory leave type repository
 pub struct InMemoryLeaveTypeRepository {
-    types: Mutex<std::collections::HashMap<i64, LeaveType>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryLeaveTypeInner>,
 }
 
 impl InMemoryLeaveTypeRepository {
     pub fn new() -> Self {
         let repo = Self {
-            types: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryLeaveTypeInner {
+                types: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         };
         // Add default leave types
         let defaults = vec![
-            (1, 1, "Annual Leave", "Yearly vacation", 20.0, true),
-            (2, 1, "Sick Leave", "Medical leave", 10.0, false),
-            (3, 1, "Personal Leave", "Personal matters", 5.0, true),
+            (
+                1,
+                1,
+                "Annual Leave",
+                "Yearly vacation",
+                Decimal::new(20, 0),
+                true,
+            ),
+            (
+                2,
+                1,
+                "Sick Leave",
+                "Medical leave",
+                Decimal::new(10, 0),
+                false,
+            ),
+            (
+                3,
+                1,
+                "Personal Leave",
+                "Personal matters",
+                Decimal::new(5, 0),
+                true,
+            ),
         ];
-        let mut types = repo.types.lock();
+        let mut inner = repo.inner.lock();
         for (id, tid, name, desc, max, req) in defaults {
-            types.insert(
+            inner.types.insert(
                 id,
                 LeaveType {
                     id,
@@ -371,8 +434,8 @@ impl InMemoryLeaveTypeRepository {
                 },
             );
         }
-        *repo.next_id.lock() = 4;
-        drop(types);
+        inner.next_id = 4;
+        drop(inner);
         repo
     }
 }
@@ -386,22 +449,24 @@ impl Default for InMemoryLeaveTypeRepository {
 #[async_trait]
 impl LeaveTypeRepository for InMemoryLeaveTypeRepository {
     async fn create(&self, leave_type: LeaveType) -> Result<LeaveType, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
         let mut lt = leave_type;
         lt.id = id;
-        self.types.lock().insert(id, lt.clone());
+        inner.types.insert(id, lt.clone());
         Ok(lt)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<LeaveType>, ApiError> {
-        Ok(self.types.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.types.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<LeaveType>, ApiError> {
-        let types = self.types.lock();
-        Ok(types
+        let inner = self.inner.lock();
+        Ok(inner
+            .types
             .values()
             .filter(|t| t.tenant_id == tenant_id)
             .cloned()
@@ -409,22 +474,30 @@ impl LeaveTypeRepository for InMemoryLeaveTypeRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.types.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.types.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryPayrollRepository
+struct InMemoryPayrollInner {
+    records: std::collections::HashMap<i64, Payroll>,
+    next_id: i64,
+}
+
 /// In-memory payroll repository
 pub struct InMemoryPayrollRepository {
-    records: Mutex<std::collections::HashMap<i64, Payroll>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryPayrollInner>,
 }
 
 impl InMemoryPayrollRepository {
     pub fn new() -> Self {
         Self {
-            records: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryPayrollInner {
+                records: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -438,22 +511,24 @@ impl Default for InMemoryPayrollRepository {
 #[async_trait]
 impl PayrollRepository for InMemoryPayrollRepository {
     async fn create(&self, payroll: Payroll) -> Result<Payroll, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
         let mut p = payroll;
         p.id = id;
-        self.records.lock().insert(id, p.clone());
+        inner.records.insert(id, p.clone());
         Ok(p)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Payroll>, ApiError> {
-        Ok(self.records.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.records.get(&id).cloned())
     }
 
     async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<Payroll>, ApiError> {
-        let records = self.records.lock();
-        Ok(records
+        let inner = self.inner.lock();
+        Ok(inner
+            .records
             .values()
             .filter(|p| p.employee_id == employee_id)
             .cloned()
@@ -466,8 +541,9 @@ impl PayrollRepository for InMemoryPayrollRepository {
         start: chrono::DateTime<Utc>,
         end: chrono::DateTime<Utc>,
     ) -> Result<Vec<Payroll>, ApiError> {
-        let records = self.records.lock();
-        Ok(records
+        let inner = self.inner.lock();
+        Ok(inner
+            .records
             .values()
             .filter(|p| p.tenant_id == tenant_id && p.period_start >= start && p.period_end <= end)
             .cloned()
@@ -475,8 +551,9 @@ impl PayrollRepository for InMemoryPayrollRepository {
     }
 
     async fn update_status(&self, id: i64, status: PayrollStatus) -> Result<Payroll, ApiError> {
-        let mut records = self.records.lock();
-        let payroll = records
+        let mut inner = self.inner.lock();
+        let payroll = inner
+            .records
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Payroll {} not found", id)))?;
         payroll.status = status;
@@ -484,8 +561,9 @@ impl PayrollRepository for InMemoryPayrollRepository {
     }
 
     async fn mark_paid(&self, id: i64) -> Result<Payroll, ApiError> {
-        let mut records = self.records.lock();
-        let payroll = records
+        let mut inner = self.inner.lock();
+        let payroll = inner
+            .records
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Payroll {} not found", id)))?;
         payroll.status = PayrollStatus::Paid;

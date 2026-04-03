@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
+use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::domain::accounting::model::{
@@ -70,17 +71,24 @@ fn generate_entry_number(count: i64) -> String {
     format!("JE-{:06}", count)
 }
 
+/// Inner state for InMemoryAccountRepository
+struct InMemoryAccountInner {
+    accounts: std::collections::HashMap<i64, Account>,
+    next_id: i64,
+}
+
 /// In-memory account repository
 pub struct InMemoryAccountRepository {
-    accounts: Mutex<std::collections::HashMap<i64, Account>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryAccountInner>,
 }
 
 impl InMemoryAccountRepository {
     pub fn new() -> Self {
         let repo = Self {
-            accounts: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryAccountInner {
+                accounts: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         };
         repo.seed_defaults();
         repo
@@ -174,9 +182,9 @@ impl InMemoryAccountRepository {
             ),
         ];
 
-        let mut accounts = self.accounts.lock();
+        let mut inner = self.inner.lock();
         for (id, code, name, at, st) in defaults {
-            accounts.insert(
+            inner.accounts.insert(
                 id,
                 Account {
                     id,
@@ -192,7 +200,7 @@ impl InMemoryAccountRepository {
                 },
             );
         }
-        *self.next_id.lock() = 13;
+        inner.next_id = 13;
     }
 }
 
@@ -209,9 +217,9 @@ impl AccountRepository for InMemoryAccountRepository {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let account = Account {
             id,
@@ -226,17 +234,19 @@ impl AccountRepository for InMemoryAccountRepository {
             created_at: Utc::now(),
         };
 
-        self.accounts.lock().insert(id, account.clone());
+        inner.accounts.insert(id, account.clone());
         Ok(account)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Account>, ApiError> {
-        Ok(self.accounts.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.accounts.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Account>, ApiError> {
-        let accounts = self.accounts.lock();
-        Ok(accounts
+        let inner = self.inner.lock();
+        Ok(inner
+            .accounts
             .values()
             .filter(|a| a.tenant_id == tenant_id)
             .cloned()
@@ -244,8 +254,9 @@ impl AccountRepository for InMemoryAccountRepository {
     }
 
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Account>, ApiError> {
-        let accounts = self.accounts.lock();
-        Ok(accounts
+        let inner = self.inner.lock();
+        Ok(inner
+            .accounts
             .values()
             .find(|a| a.tenant_id == tenant_id && a.code == code)
             .cloned())
@@ -256,8 +267,9 @@ impl AccountRepository for InMemoryAccountRepository {
         tenant_id: i64,
         account_type: AccountType,
     ) -> Result<Vec<Account>, ApiError> {
-        let accounts = self.accounts.lock();
-        Ok(accounts
+        let inner = self.inner.lock();
+        Ok(inner
+            .accounts
             .values()
             .filter(|a| a.tenant_id == tenant_id && a.account_type == account_type)
             .cloned()
@@ -270,8 +282,9 @@ impl AccountRepository for InMemoryAccountRepository {
         name: Option<String>,
         is_active: Option<bool>,
     ) -> Result<Account, ApiError> {
-        let mut accounts = self.accounts.lock();
-        let account = accounts
+        let mut inner = self.inner.lock();
+        let account = inner
+            .accounts
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Account {} not found", id)))?;
         if let Some(n) = name {
@@ -284,22 +297,30 @@ impl AccountRepository for InMemoryAccountRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.accounts.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.accounts.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryJournalEntryRepository
+struct InMemoryJournalEntryInner {
+    entries: std::collections::HashMap<i64, JournalEntry>,
+    next_id: i64,
+}
+
 /// In-memory journal entry repository
 pub struct InMemoryJournalEntryRepository {
-    entries: Mutex<std::collections::HashMap<i64, JournalEntry>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryJournalEntryInner>,
 }
 
 impl InMemoryJournalEntryRepository {
     pub fn new() -> Self {
         Self {
-            entries: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryJournalEntryInner {
+                entries: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -317,12 +338,12 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
-        let total_debit: f64 = create.lines.iter().map(|l| l.debit).sum();
-        let total_credit: f64 = create.lines.iter().map(|l| l.credit).sum();
+        let total_debit: Decimal = create.lines.iter().map(|l| l.debit).sum();
+        let total_credit: Decimal = create.lines.iter().map(|l| l.credit).sum();
 
         let entry = JournalEntry {
             id,
@@ -339,17 +360,19 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
             posted_at: None,
         };
 
-        self.entries.lock().insert(id, entry.clone());
+        inner.entries.insert(id, entry.clone());
         Ok(entry)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<JournalEntry>, ApiError> {
-        Ok(self.entries.lock().get(&id).cloned())
+        let inner = self.inner.lock();
+        Ok(inner.entries.get(&id).cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<JournalEntry>, ApiError> {
-        let entries = self.entries.lock();
-        Ok(entries
+        let inner = self.inner.lock();
+        Ok(inner
+            .entries
             .values()
             .filter(|e| e.tenant_id == tenant_id)
             .cloned()
@@ -362,8 +385,9 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<JournalEntry>, ApiError> {
-        let entries = self.entries.lock();
-        Ok(entries
+        let inner = self.inner.lock();
+        Ok(inner
+            .entries
             .values()
             .filter(|e| e.tenant_id == tenant_id && e.date >= start && e.date <= end)
             .cloned()
@@ -371,8 +395,9 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
     }
 
     async fn post(&self, id: i64) -> Result<JournalEntry, ApiError> {
-        let mut entries = self.entries.lock();
-        let entry = entries
+        let mut inner = self.inner.lock();
+        let entry = inner
+            .entries
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))?;
         if entry.status == JournalEntryStatus::Posted {
@@ -384,8 +409,9 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
     }
 
     async fn void(&self, id: i64) -> Result<JournalEntry, ApiError> {
-        let mut entries = self.entries.lock();
-        let entry = entries
+        let mut inner = self.inner.lock();
+        let entry = inner
+            .entries
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))?;
         entry.status = JournalEntryStatus::Voided;
@@ -393,22 +419,30 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        self.entries.lock().remove(&id);
+        let mut inner = self.inner.lock();
+        inner.entries.remove(&id);
         Ok(())
     }
 }
 
+/// Inner state for InMemoryJournalLineRepository
+struct InMemoryJournalLineInner {
+    lines: std::collections::HashMap<i64, Vec<JournalLine>>,
+    next_id: i64,
+}
+
 /// In-memory journal line repository
 pub struct InMemoryJournalLineRepository {
-    lines: Mutex<std::collections::HashMap<i64, Vec<JournalLine>>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryJournalLineInner>,
 }
 
 impl InMemoryJournalLineRepository {
     pub fn new() -> Self {
         Self {
-            lines: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryJournalLineInner {
+                lines: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -431,12 +465,12 @@ impl JournalLineRepository for InMemoryJournalLineRepository {
                 .map_err(|e| ApiError::Validation(e.join(", ")))?;
         }
 
-        let mut next_id = self.next_id.lock();
+        let mut inner = self.inner.lock();
         let mut lines = Vec::new();
 
         for create in create_lines {
-            let id = *next_id;
-            *next_id += 1;
+            let id = inner.next_id;
+            inner.next_id += 1;
             lines.push(JournalLine {
                 id,
                 entry_id,
@@ -448,21 +482,18 @@ impl JournalLineRepository for InMemoryJournalLineRepository {
             });
         }
 
-        self.lines.lock().insert(entry_id, lines.clone());
+        inner.lines.insert(entry_id, lines.clone());
         Ok(lines)
     }
 
     async fn find_by_entry(&self, entry_id: i64) -> Result<Vec<JournalLine>, ApiError> {
-        Ok(self
-            .lines
-            .lock()
-            .get(&entry_id)
-            .cloned()
-            .unwrap_or_default())
+        let inner = self.inner.lock();
+        Ok(inner.lines.get(&entry_id).cloned().unwrap_or_default())
     }
 
     async fn delete_by_entry(&self, entry_id: i64) -> Result<(), ApiError> {
-        self.lines.lock().remove(&entry_id);
+        let mut inner = self.inner.lock();
+        inner.lines.remove(&entry_id);
         Ok(())
     }
 }

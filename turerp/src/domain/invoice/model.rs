@@ -1,6 +1,7 @@
 //! Invoice domain models
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Invoice status
@@ -37,11 +38,11 @@ pub struct Invoice {
     pub cari_id: i64,
     pub issue_date: DateTime<Utc>,
     pub due_date: DateTime<Utc>,
-    pub subtotal: f64,
-    pub tax_amount: f64,
-    pub discount_amount: f64,
-    pub total_amount: f64,
-    pub paid_amount: f64,
+    pub subtotal: Decimal,
+    pub tax_amount: Decimal,
+    pub discount_amount: Decimal,
+    pub total_amount: Decimal,
+    pub paid_amount: Decimal,
     pub currency: String,
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
@@ -55,11 +56,11 @@ pub struct InvoiceLine {
     pub invoice_id: i64,
     pub product_id: Option<i64>,
     pub description: String,
-    pub quantity: f64,
-    pub unit_price: f64,
-    pub tax_rate: f64,
-    pub discount_rate: f64,
-    pub line_total: f64,
+    pub quantity: Decimal,
+    pub unit_price: Decimal,
+    pub tax_rate: Decimal,
+    pub discount_rate: Decimal,
+    pub line_total: Decimal,
     pub sort_order: i32,
 }
 
@@ -69,7 +70,7 @@ pub struct Payment {
     pub id: i64,
     pub tenant_id: i64,
     pub invoice_id: i64,
-    pub amount: f64,
+    pub amount: Decimal,
     pub payment_date: DateTime<Utc>,
     pub payment_method: String,
     pub reference_number: Option<String>,
@@ -117,10 +118,10 @@ impl CreateInvoice {
 pub struct CreateInvoiceLine {
     pub product_id: Option<i64>,
     pub description: String,
-    pub quantity: f64,
-    pub unit_price: f64,
-    pub tax_rate: f64,
-    pub discount_rate: f64,
+    pub quantity: Decimal,
+    pub unit_price: Decimal,
+    pub tax_rate: Decimal,
+    pub discount_rate: Decimal,
 }
 
 impl CreateInvoiceLine {
@@ -130,16 +131,16 @@ impl CreateInvoiceLine {
         if self.description.trim().is_empty() {
             errors.push("Description is required".to_string());
         }
-        if self.quantity <= 0.0 {
+        if self.quantity <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
-        if self.unit_price < 0.0 {
+        if self.unit_price < Decimal::ZERO {
             errors.push("Unit price cannot be negative".to_string());
         }
-        if self.tax_rate < 0.0 || self.tax_rate > 100.0 {
+        if self.tax_rate < Decimal::ZERO || self.tax_rate > Decimal::ONE_HUNDRED {
             errors.push("Tax rate must be between 0 and 100".to_string());
         }
-        if self.discount_rate < 0.0 || self.discount_rate > 100.0 {
+        if self.discount_rate < Decimal::ZERO || self.discount_rate > Decimal::ONE_HUNDRED {
             errors.push("Discount rate must be between 0 and 100".to_string());
         }
 
@@ -150,11 +151,11 @@ impl CreateInvoiceLine {
         }
     }
 
-    pub fn calculate_line_total(&self) -> f64 {
+    pub fn calculate_line_total(&self) -> Decimal {
         let subtotal = self.quantity * self.unit_price;
-        let discount = subtotal * (self.discount_rate / 100.0);
+        let discount = subtotal * (self.discount_rate / Decimal::ONE_HUNDRED);
         let after_discount = subtotal - discount;
-        let tax = after_discount * (self.tax_rate / 100.0);
+        let tax = after_discount * (self.tax_rate / Decimal::ONE_HUNDRED);
         after_discount + tax
     }
 }
@@ -164,7 +165,7 @@ impl CreateInvoiceLine {
 pub struct CreatePayment {
     pub tenant_id: i64,
     pub invoice_id: i64,
-    pub amount: f64,
+    pub amount: Decimal,
     pub payment_date: DateTime<Utc>,
     pub payment_method: String,
     pub reference_number: Option<String>,
@@ -175,7 +176,7 @@ impl CreatePayment {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
 
-        if self.amount <= 0.0 {
+        if self.amount <= Decimal::ZERO {
             errors.push("Payment amount must be positive".to_string());
         }
         if self.payment_method.trim().is_empty() {
@@ -200,11 +201,11 @@ pub struct InvoiceResponse {
     pub cari_id: i64,
     pub issue_date: DateTime<Utc>,
     pub due_date: DateTime<Utc>,
-    pub subtotal: f64,
-    pub tax_amount: f64,
-    pub discount_amount: f64,
-    pub total_amount: f64,
-    pub paid_amount: f64,
+    pub subtotal: Decimal,
+    pub tax_amount: Decimal,
+    pub discount_amount: Decimal,
+    pub total_amount: Decimal,
+    pub paid_amount: Decimal,
     pub currency: String,
     pub notes: Option<String>,
     pub lines: Vec<InvoiceLine>,
@@ -236,6 +237,7 @@ impl From<(Invoice, Vec<InvoiceLine>)> for InvoiceResponse {
 mod tests {
     use super::*;
     use chrono::Utc;
+    use rust_decimal_macros::dec;
 
     #[test]
     fn test_create_invoice_validation() {
@@ -251,10 +253,10 @@ mod tests {
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
                 description: "Test Product".to_string(),
-                quantity: 1.0,
-                unit_price: 100.0,
-                tax_rate: 18.0,
-                discount_rate: 0.0,
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
             }],
         };
         assert!(valid.validate().is_ok());
@@ -277,16 +279,16 @@ mod tests {
         let line = CreateInvoiceLine {
             product_id: Some(1),
             description: "Test".to_string(),
-            quantity: 2.0,
-            unit_price: 100.0,
-            tax_rate: 18.0,
-            discount_rate: 10.0,
+            quantity: dec!(2),
+            unit_price: dec!(100),
+            tax_rate: dec!(18),
+            discount_rate: dec!(10),
         };
         // 2 * 100 = 200
         // 10% discount = 20
         // After discount = 180
         // 18% tax = 32.4
         // Total = 212.4
-        assert!((line.calculate_line_total() - 212.4).abs() < 0.01);
+        assert_eq!(line.calculate_line_total(), dec!(212.4));
     }
 }

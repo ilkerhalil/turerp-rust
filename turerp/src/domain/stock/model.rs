@@ -1,6 +1,7 @@
 //! Stock domain models
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Warehouse entity
@@ -21,8 +22,8 @@ pub struct StockLevel {
     pub id: i64,
     pub warehouse_id: i64,
     pub product_id: i64,
-    pub quantity: f64,
-    pub reserved_quantity: f64,
+    pub quantity: Decimal,
+    pub reserved_quantity: Decimal,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -46,7 +47,7 @@ pub struct StockMovement {
     pub warehouse_id: i64,
     pub product_id: i64,
     pub movement_type: MovementType,
-    pub quantity: f64,
+    pub quantity: Decimal,
     pub reference_type: Option<String>,
     pub reference_id: Option<i64>,
     pub notes: Option<String>,
@@ -59,9 +60,9 @@ pub struct StockMovement {
 pub struct StockValuation {
     pub product_id: i64,
     pub warehouse_id: i64,
-    pub total_quantity: f64,
-    pub avg_cost: f64,
-    pub total_value: f64,
+    pub total_quantity: Decimal,
+    pub avg_cost: Decimal,
+    pub total_value: Decimal,
 }
 
 /// Create warehouse request
@@ -96,7 +97,7 @@ pub struct CreateStockMovement {
     pub warehouse_id: i64,
     pub product_id: i64,
     pub movement_type: MovementType,
-    pub quantity: f64,
+    pub quantity: Decimal,
     pub reference_type: Option<String>,
     pub reference_id: Option<i64>,
     pub notes: Option<String>,
@@ -106,7 +107,7 @@ pub struct CreateStockMovement {
 impl CreateStockMovement {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        if self.quantity <= 0.0 {
+        if self.quantity <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
         if errors.is_empty() {
@@ -121,9 +122,9 @@ impl CreateStockMovement {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StockSummary {
     pub product_id: i64,
-    pub total_quantity: f64,
-    pub reserved_quantity: f64,
-    pub available_quantity: f64,
+    pub total_quantity: Decimal,
+    pub reserved_quantity: Decimal,
+    pub available_quantity: Decimal,
     pub warehouses: Vec<WarehouseStock>,
 }
 
@@ -132,13 +133,14 @@ pub struct StockSummary {
 pub struct WarehouseStock {
     pub warehouse_id: i64,
     pub warehouse_name: String,
-    pub quantity: f64,
-    pub reserved_quantity: f64,
+    pub quantity: Decimal,
+    pub reserved_quantity: Decimal,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal_macros::dec;
 
     #[test]
     fn test_create_warehouse_validation() {
@@ -165,7 +167,7 @@ mod tests {
             warehouse_id: 1,
             product_id: 1,
             movement_type: MovementType::Purchase,
-            quantity: 100.0,
+            quantity: dec!(100),
             reference_type: Some("PO".to_string()),
             reference_id: Some(1),
             notes: None,
@@ -177,7 +179,7 @@ mod tests {
             warehouse_id: 1,
             product_id: 1,
             movement_type: MovementType::Sale,
-            quantity: -10.0,
+            quantity: dec!(-10),
             reference_type: None,
             reference_id: None,
             notes: None,

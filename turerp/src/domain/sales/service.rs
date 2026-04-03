@@ -246,6 +246,7 @@ mod tests {
         InMemorySalesOrderLineRepository, InMemorySalesOrderRepository,
     };
     use chrono::Duration;
+    use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> SalesService {
@@ -278,10 +279,10 @@ mod tests {
             lines: vec![CreateSalesOrderLine {
                 product_id: Some(1),
                 description: "Test Product".to_string(),
-                quantity: 2.0,
-                unit_price: 100.0,
-                tax_rate: 18.0,
-                discount_rate: 0.0,
+                quantity: dec!(2),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
             }],
         };
 
@@ -304,10 +305,10 @@ mod tests {
             lines: vec![CreateQuotationLine {
                 product_id: Some(1),
                 description: "Test Product".to_string(),
-                quantity: 1.0,
-                unit_price: 100.0,
-                tax_rate: 18.0,
-                discount_rate: 10.0,
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(10),
             }],
         };
 
@@ -329,10 +330,10 @@ mod tests {
             lines: vec![CreateQuotationLine {
                 product_id: Some(1),
                 description: "Test".to_string(),
-                quantity: 1.0,
-                unit_price: 100.0,
-                tax_rate: 18.0,
-                discount_rate: 0.0,
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
             }],
         };
 

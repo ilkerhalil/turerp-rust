@@ -1,6 +1,7 @@
 //! Product domain models
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Product entity
@@ -14,9 +15,9 @@ pub struct Product {
     pub category_id: Option<i64>,
     pub unit_id: Option<i64>,
     pub barcode: Option<String>,
-    pub purchase_price: f64,
-    pub sale_price: f64,
-    pub tax_rate: f64,
+    pub purchase_price: Decimal,
+    pub sale_price: Decimal,
+    pub tax_rate: Decimal,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -51,7 +52,7 @@ pub struct ProductVariant {
     pub name: String,
     pub sku: Option<String>,
     pub barcode: Option<String>,
-    pub price_modifier: f64,
+    pub price_modifier: Decimal,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
 }
@@ -63,7 +64,7 @@ pub struct CreateProductVariant {
     pub name: String,
     pub sku: Option<String>,
     pub barcode: Option<String>,
-    pub price_modifier: f64,
+    pub price_modifier: Decimal,
 }
 
 impl CreateProductVariant {
@@ -88,7 +89,7 @@ pub struct UpdateProductVariant {
     pub name: Option<String>,
     pub sku: Option<String>,
     pub barcode: Option<String>,
-    pub price_modifier: Option<f64>,
+    pub price_modifier: Option<Decimal>,
     pub is_active: Option<bool>,
 }
 
@@ -100,7 +101,7 @@ pub struct ProductVariantResponse {
     pub name: String,
     pub sku: Option<String>,
     pub barcode: Option<String>,
-    pub price_modifier: f64,
+    pub price_modifier: Decimal,
     pub is_active: bool,
 }
 
@@ -128,9 +129,9 @@ pub struct CreateProduct {
     pub category_id: Option<i64>,
     pub unit_id: Option<i64>,
     pub barcode: Option<String>,
-    pub purchase_price: f64,
-    pub sale_price: f64,
-    pub tax_rate: f64,
+    pub purchase_price: Decimal,
+    pub sale_price: Decimal,
+    pub tax_rate: Decimal,
 }
 
 impl CreateProduct {
@@ -143,13 +144,13 @@ impl CreateProduct {
         if self.name.trim().is_empty() {
             errors.push("Product name is required".to_string());
         }
-        if self.purchase_price < 0.0 {
+        if self.purchase_price < Decimal::ZERO {
             errors.push("Purchase price cannot be negative".to_string());
         }
-        if self.sale_price < 0.0 {
+        if self.sale_price < Decimal::ZERO {
             errors.push("Sale price cannot be negative".to_string());
         }
-        if self.tax_rate < 0.0 || self.tax_rate > 100.0 {
+        if self.tax_rate < Decimal::ZERO || self.tax_rate > Decimal::ONE_HUNDRED {
             errors.push("Tax rate must be between 0 and 100".to_string());
         }
 
@@ -170,9 +171,9 @@ pub struct UpdateProduct {
     pub category_id: Option<i64>,
     pub unit_id: Option<i64>,
     pub barcode: Option<String>,
-    pub purchase_price: Option<f64>,
-    pub sale_price: Option<f64>,
-    pub tax_rate: Option<f64>,
+    pub purchase_price: Option<Decimal>,
+    pub sale_price: Option<Decimal>,
+    pub tax_rate: Option<Decimal>,
     pub is_active: Option<bool>,
 }
 
@@ -234,9 +235,9 @@ pub struct ProductResponse {
     pub category_id: Option<i64>,
     pub unit_id: Option<i64>,
     pub barcode: Option<String>,
-    pub purchase_price: f64,
-    pub sale_price: f64,
-    pub tax_rate: f64,
+    pub purchase_price: Decimal,
+    pub sale_price: Decimal,
+    pub tax_rate: Decimal,
     pub is_active: bool,
 }
 
@@ -261,6 +262,7 @@ impl From<Product> for ProductResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rust_decimal_macros::dec;
 
     #[test]
     fn test_create_product_validation() {
@@ -272,9 +274,9 @@ mod tests {
             category_id: None,
             unit_id: None,
             barcode: None,
-            purchase_price: 100.0,
-            sale_price: 150.0,
-            tax_rate: 18.0,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
         };
         assert!(valid.validate().is_ok());
 
@@ -286,9 +288,9 @@ mod tests {
             category_id: None,
             unit_id: None,
             barcode: None,
-            purchase_price: -10.0,
-            sale_price: 150.0,
-            tax_rate: 18.0,
+            purchase_price: dec!(-10.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
         };
         assert!(invalid.validate().is_err());
     }

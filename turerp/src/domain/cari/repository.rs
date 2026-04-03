@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use parking_lot::Mutex;
+use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::domain::cari::model::{Cari, CreateCari, UpdateCari};
@@ -42,23 +43,35 @@ pub trait CariRepository: Send + Sync {
     async fn code_exists(&self, code: &str, tenant_id: i64) -> Result<bool, ApiError>;
 
     /// Update balance
-    async fn update_balance(&self, id: i64, tenant_id: i64, amount: f64) -> Result<(), ApiError>;
+    async fn update_balance(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        amount: Decimal,
+    ) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed repository
 pub type BoxCariRepository = Arc<dyn CariRepository>;
 
+/// Inner state for InMemoryCariRepository
+struct InMemoryCariInner {
+    cari: std::collections::HashMap<i64, Cari>,
+    next_id: i64,
+}
+
 /// In-memory cari repository for testing
 pub struct InMemoryCariRepository {
-    cari: Mutex<std::collections::HashMap<i64, Cari>>,
-    next_id: Mutex<i64>,
+    inner: Mutex<InMemoryCariInner>,
 }
 
 impl InMemoryCariRepository {
     pub fn new() -> Self {
         Self {
-            cari: Mutex::new(std::collections::HashMap::new()),
-            next_id: Mutex::new(1),
+            inner: Mutex::new(InMemoryCariInner {
+                cari: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
         }
     }
 }
@@ -72,9 +85,9 @@ impl Default for InMemoryCariRepository {
 #[async_trait]
 impl CariRepository for InMemoryCariRepository {
     async fn create(&self, create: CreateCari) -> Result<Cari, ApiError> {
-        let mut next_id = self.next_id.lock();
-        let id = *next_id;
-        *next_id += 1;
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
         let now = chrono::Utc::now();
 
@@ -93,7 +106,7 @@ impl CariRepository for InMemoryCariRepository {
             country: create.country,
             postal_code: create.postal_code,
             credit_limit: create.credit_limit,
-            current_balance: 0.0,
+            current_balance: Decimal::ZERO,
             status: crate::domain::cari::model::CariStatus::Active,
             tenant_id: create.tenant_id,
             created_by: create.created_by,
@@ -101,29 +114,32 @@ impl CariRepository for InMemoryCariRepository {
             updated_at: None,
         };
 
-        self.cari.lock().insert(id, new_cari.clone());
+        inner.cari.insert(id, new_cari.clone());
         Ok(new_cari)
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Cari>, ApiError> {
-        let cari = self.cari.lock();
-        Ok(cari
+        let inner = self.inner.lock();
+        Ok(inner
+            .cari
             .values()
             .find(|c| c.id == id && c.tenant_id == tenant_id)
             .cloned())
     }
 
     async fn find_by_code(&self, code: &str, tenant_id: i64) -> Result<Option<Cari>, ApiError> {
-        let cari = self.cari.lock();
-        Ok(cari
+        let inner = self.inner.lock();
+        Ok(inner
+            .cari
             .values()
             .find(|c| c.code == code && c.tenant_id == tenant_id)
             .cloned())
     }
 
     async fn find_all(&self, tenant_id: i64) -> Result<Vec<Cari>, ApiError> {
-        let cari = self.cari.lock();
-        Ok(cari
+        let inner = self.inner.lock();
+        Ok(inner
+            .cari
             .values()
             .filter(|c| c.tenant_id == tenant_id)
             .cloned()
@@ -135,8 +151,9 @@ impl CariRepository for InMemoryCariRepository {
         cari_type: crate::domain::cari::model::CariType,
         tenant_id: i64,
     ) -> Result<Vec<Cari>, ApiError> {
-        let cari = self.cari.lock();
-        Ok(cari
+        let inner = self.inner.lock();
+        Ok(inner
+            .cari
             .values()
             .filter(|c| c.tenant_id == tenant_id && c.cari_type == cari_type)
             .cloned()
@@ -144,9 +161,10 @@ impl CariRepository for InMemoryCariRepository {
     }
 
     async fn search(&self, query: &str, tenant_id: i64) -> Result<Vec<Cari>, ApiError> {
-        let cari = self.cari.lock();
+        let inner = self.inner.lock();
         let query_lower = query.to_lowercase();
-        Ok(cari
+        Ok(inner
+            .cari
             .values()
             .filter(|c| {
                 c.tenant_id == tenant_id
@@ -158,9 +176,10 @@ impl CariRepository for InMemoryCariRepository {
     }
 
     async fn update(&self, id: i64, tenant_id: i64, update: UpdateCari) -> Result<Cari, ApiError> {
-        let mut cari_map = self.cari.lock();
+        let mut inner = self.inner.lock();
 
-        let cari = cari_map
+        let cari = inner
+            .cari
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", id)))?;
 
@@ -217,9 +236,10 @@ impl CariRepository for InMemoryCariRepository {
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        let mut cari_map = self.cari.lock();
+        let mut inner = self.inner.lock();
 
-        let cari = cari_map
+        let cari = inner
+            .cari
             .get(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", id)))?;
 
@@ -227,21 +247,28 @@ impl CariRepository for InMemoryCariRepository {
             return Err(ApiError::NotFound(format!("Cari {} not found", id)));
         }
 
-        cari_map.remove(&id);
+        inner.cari.remove(&id);
         Ok(())
     }
 
     async fn code_exists(&self, code: &str, tenant_id: i64) -> Result<bool, ApiError> {
-        let cari = self.cari.lock();
-        Ok(cari
+        let inner = self.inner.lock();
+        Ok(inner
+            .cari
             .values()
             .any(|c| c.code == code && c.tenant_id == tenant_id))
     }
 
-    async fn update_balance(&self, id: i64, tenant_id: i64, amount: f64) -> Result<(), ApiError> {
-        let mut cari_map = self.cari.lock();
+    async fn update_balance(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        amount: Decimal,
+    ) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
 
-        let cari = cari_map
+        let cari = inner
+            .cari
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", id)))?;
 

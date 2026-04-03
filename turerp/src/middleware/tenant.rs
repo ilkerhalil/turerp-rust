@@ -129,6 +129,6 @@ mod tests {
 
     #[test]
     fn test_default_middleware() {
-        let _middleware = TenantMiddleware::default();
+        let _middleware = TenantMiddleware;
     }
 }
