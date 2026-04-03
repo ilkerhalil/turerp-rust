@@ -1,6 +1,7 @@
 //! Purchase domain models
 
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Purchase order status
@@ -98,10 +99,10 @@ pub struct PurchaseOrder {
     pub status: PurchaseOrderStatus,
     pub order_date: DateTime<Utc>,
     pub expected_delivery_date: Option<DateTime<Utc>>,
-    pub subtotal: f64,
-    pub tax_amount: f64,
-    pub discount_amount: f64,
-    pub total_amount: f64,
+    pub subtotal: Decimal,
+    pub tax_amount: Decimal,
+    pub discount_amount: Decimal,
+    pub total_amount: Decimal,
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -114,12 +115,12 @@ pub struct PurchaseOrderLine {
     pub order_id: i64,
     pub product_id: Option<i64>,
     pub description: String,
-    pub quantity: f64,
-    pub received_quantity: f64,
-    pub unit_price: f64,
-    pub tax_rate: f64,
-    pub discount_rate: f64,
-    pub line_total: f64,
+    pub quantity: Decimal,
+    pub received_quantity: Decimal,
+    pub unit_price: Decimal,
+    pub tax_rate: Decimal,
+    pub discount_rate: Decimal,
+    pub line_total: Decimal,
     pub sort_order: i32,
 }
 
@@ -145,7 +146,7 @@ pub struct PurchaseRequestLine {
     pub request_id: i64,
     pub product_id: Option<i64>,
     pub description: String,
-    pub quantity: f64,
+    pub quantity: Decimal,
     pub notes: Option<String>,
     pub sort_order: i32,
 }
@@ -170,7 +171,7 @@ pub struct GoodsReceiptLine {
     pub receipt_id: i64,
     pub order_line_id: i64,
     pub product_id: Option<i64>,
-    pub quantity: f64,
+    pub quantity: Decimal,
     pub condition: String,
     pub notes: Option<String>,
 }
@@ -208,7 +209,7 @@ impl CreatePurchaseRequest {
 pub struct CreatePurchaseRequestLine {
     pub product_id: Option<i64>,
     pub description: String,
-    pub quantity: f64,
+    pub quantity: Decimal,
     pub notes: Option<String>,
 }
 
@@ -218,7 +219,7 @@ impl CreatePurchaseRequestLine {
         if self.description.trim().is_empty() {
             errors.push("Description is required".to_string());
         }
-        if self.quantity <= 0.0 {
+        if self.quantity <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
         if errors.is_empty() {
@@ -243,7 +244,7 @@ pub struct UpdatePurchaseRequest {
 pub struct UpdatePurchaseRequestLine {
     pub product_id: Option<i64>,
     pub description: Option<String>,
-    pub quantity: Option<f64>,
+    pub quantity: Option<Decimal>,
     pub notes: Option<String>,
 }
 
@@ -309,10 +310,10 @@ impl CreatePurchaseOrder {
 pub struct CreatePurchaseOrderLine {
     pub product_id: Option<i64>,
     pub description: String,
-    pub quantity: f64,
-    pub unit_price: f64,
-    pub tax_rate: f64,
-    pub discount_rate: f64,
+    pub quantity: Decimal,
+    pub unit_price: Decimal,
+    pub tax_rate: Decimal,
+    pub discount_rate: Decimal,
 }
 
 impl CreatePurchaseOrderLine {
@@ -321,10 +322,10 @@ impl CreatePurchaseOrderLine {
         if self.description.trim().is_empty() {
             errors.push("Description is required".to_string());
         }
-        if self.quantity <= 0.0 {
+        if self.quantity <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
-        if self.unit_price < 0.0 {
+        if self.unit_price < Decimal::ZERO {
             errors.push("Unit price cannot be negative".to_string());
         }
         if errors.is_empty() {
@@ -334,11 +335,11 @@ impl CreatePurchaseOrderLine {
         }
     }
 
-    pub fn calculate_line_total(&self) -> f64 {
+    pub fn calculate_line_total(&self) -> Decimal {
         let subtotal = self.quantity * self.unit_price;
-        let discount = subtotal * (self.discount_rate / 100.0);
+        let discount = subtotal * (self.discount_rate / Decimal::ONE_HUNDRED);
         let after_discount = subtotal - discount;
-        let tax = after_discount * (self.tax_rate / 100.0);
+        let tax = after_discount * (self.tax_rate / Decimal::ONE_HUNDRED);
         after_discount + tax
     }
 }
@@ -372,7 +373,7 @@ impl CreateGoodsReceipt {
 pub struct CreateGoodsReceiptLine {
     pub order_line_id: i64,
     pub product_id: Option<i64>,
-    pub quantity: f64,
+    pub quantity: Decimal,
     pub condition: String,
     pub notes: Option<String>,
 }
@@ -380,7 +381,7 @@ pub struct CreateGoodsReceiptLine {
 impl CreateGoodsReceiptLine {
     pub fn validate(&self) -> Result<(), Vec<String>> {
         let mut errors = Vec::new();
-        if self.quantity <= 0.0 {
+        if self.quantity <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
         if self.condition.trim().is_empty() {
@@ -403,10 +404,10 @@ pub struct PurchaseOrderResponse {
     pub status: PurchaseOrderStatus,
     pub order_date: DateTime<Utc>,
     pub expected_delivery_date: Option<DateTime<Utc>>,
-    pub subtotal: f64,
-    pub tax_amount: f64,
-    pub discount_amount: f64,
-    pub total_amount: f64,
+    pub subtotal: Decimal,
+    pub tax_amount: Decimal,
+    pub discount_amount: Decimal,
+    pub total_amount: Decimal,
     pub notes: Option<String>,
     pub lines: Vec<PurchaseOrderLine>,
 }
@@ -462,6 +463,8 @@ mod tests {
 
     #[test]
     fn test_create_purchase_order_validation() {
+        use rust_decimal_macros::dec;
+
         let valid = CreatePurchaseOrder {
             tenant_id: 1,
             cari_id: 1,
@@ -471,10 +474,10 @@ mod tests {
             lines: vec![CreatePurchaseOrderLine {
                 product_id: Some(1),
                 description: "Test".to_string(),
-                quantity: 1.0,
-                unit_price: 100.0,
-                tax_rate: 18.0,
-                discount_rate: 0.0,
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
             }],
         };
         assert!(valid.validate().is_ok());
@@ -492,6 +495,8 @@ mod tests {
 
     #[test]
     fn test_create_goods_receipt_validation() {
+        use rust_decimal_macros::dec;
+
         let valid = CreateGoodsReceipt {
             tenant_id: 1,
             purchase_order_id: 1,
@@ -500,7 +505,7 @@ mod tests {
             lines: vec![CreateGoodsReceiptLine {
                 order_line_id: 1,
                 product_id: Some(1),
-                quantity: 10.0,
+                quantity: dec!(10),
                 condition: "Good".to_string(),
                 notes: None,
             }],

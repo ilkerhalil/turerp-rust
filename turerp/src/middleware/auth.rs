@@ -199,7 +199,7 @@ impl actix_web::FromRequest for AdminUser {
 
         match claims {
             Ok(claims) => {
-                if claims.role == "Admin" {
+                if claims.role == "admin" {
                     std::future::ready(Ok(AdminUser(claims)))
                 } else {
                     std::future::ready(Err(actix_web::error::ErrorForbidden(

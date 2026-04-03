@@ -16,6 +16,9 @@ pub enum ApiError {
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
 
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Bad request: {0}")]
     BadRequest(String),
 
@@ -58,6 +61,9 @@ impl ResponseError for ApiError {
             }
             ApiError::Unauthorized(msg) => {
                 HttpResponse::Unauthorized().json(ErrorResponse { error: msg.clone() })
+            }
+            ApiError::Forbidden(msg) => {
+                HttpResponse::Forbidden().json(ErrorResponse { error: msg.clone() })
             }
             ApiError::BadRequest(msg) => {
                 HttpResponse::BadRequest().json(ErrorResponse { error: msg.clone() })
@@ -109,6 +115,9 @@ mod tests {
         let err = ApiError::Unauthorized("Invalid token".to_string());
         assert_eq!(err.to_string(), "Unauthorized: Invalid token");
 
+        let err = ApiError::Forbidden("Admin access required".to_string());
+        assert_eq!(err.to_string(), "Forbidden: Admin access required");
+
         let err = ApiError::BadRequest("Invalid input".to_string());
         assert_eq!(err.to_string(), "Bad request: Invalid input");
 
@@ -128,6 +137,10 @@ mod tests {
         // Unauthorized -> 401
         let response = ApiError::Unauthorized("Token expired".to_string()).error_response();
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+        // Forbidden -> 403
+        let response = ApiError::Forbidden("Admin access required".to_string()).error_response();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
 
         // InvalidCredentials -> 401
         let response = ApiError::InvalidCredentials.error_response();
@@ -209,6 +222,9 @@ mod tests {
         assert!(!ApiError::Database("err".to_string()).to_string().is_empty());
         assert!(!ApiError::NotFound("err".to_string()).to_string().is_empty());
         assert!(!ApiError::Unauthorized("err".to_string())
+            .to_string()
+            .is_empty());
+        assert!(!ApiError::Forbidden("err".to_string())
             .to_string()
             .is_empty());
         assert!(!ApiError::BadRequest("err".to_string())

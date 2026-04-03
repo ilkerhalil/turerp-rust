@@ -2,6 +2,7 @@
 
 use async_trait::async_trait;
 use parking_lot::Mutex;
+use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
@@ -33,7 +34,7 @@ pub trait PurchaseOrderRepository: Send + Sync {
     async fn update_line_received_quantity(
         &self,
         line_id: i64,
-        received_qty: f64,
+        received_qty: Decimal,
     ) -> Result<PurchaseOrderLine, ApiError>;
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
 }
@@ -141,16 +142,16 @@ pub trait PurchaseRequestLineRepository: Send + Sync {
     async fn delete_by_request(&self, request_id: i64) -> Result<(), ApiError>;
 }
 
-fn calculate_totals(lines: &[CreatePurchaseOrderLine]) -> (f64, f64, f64, f64) {
-    let mut subtotal = 0.0;
-    let mut tax_amount = 0.0;
-    let mut discount_amount = 0.0;
+fn calculate_totals(lines: &[CreatePurchaseOrderLine]) -> (Decimal, Decimal, Decimal, Decimal) {
+    let mut subtotal = Decimal::ZERO;
+    let mut tax_amount = Decimal::ZERO;
+    let mut discount_amount = Decimal::ZERO;
 
     for line in lines {
         let line_subtotal = line.quantity * line.unit_price;
-        let line_discount = line_subtotal * (line.discount_rate / 100.0);
+        let line_discount = line_subtotal * (line.discount_rate / Decimal::ONE_HUNDRED);
         let after_discount = line_subtotal - line_discount;
-        let line_tax = after_discount * (line.tax_rate / 100.0);
+        let line_tax = after_discount * (line.tax_rate / Decimal::ONE_HUNDRED);
 
         subtotal += line_subtotal;
         discount_amount += line_discount;
@@ -278,7 +279,7 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
     async fn update_line_received_quantity(
         &self,
         _line_id: i64,
-        _received_qty: f64,
+        _received_qty: Decimal,
     ) -> Result<PurchaseOrderLine, ApiError> {
         // This would need access to lines - simplified for now
         Err(ApiError::NotFound("Line not found".to_string()))
@@ -333,7 +334,7 @@ impl PurchaseOrderLineRepository for InMemoryPurchaseOrderLineRepository {
                 product_id: create.product_id,
                 description: create.description,
                 quantity: create.quantity,
-                received_quantity: 0.0,
+                received_quantity: Decimal::ZERO,
                 unit_price: create.unit_price,
                 tax_rate: create.tax_rate,
                 discount_rate: create.discount_rate,

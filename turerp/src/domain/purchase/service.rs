@@ -11,6 +11,7 @@ use crate::domain::purchase::repository::{
     BoxPurchaseOrderRepository, BoxPurchaseRequestLineRepository, BoxPurchaseRequestRepository,
 };
 use crate::error::ApiError;
+use rust_decimal::Decimal;
 
 /// Purchase service
 #[derive(Clone)]
@@ -183,7 +184,7 @@ impl PurchaseService {
             .await?;
 
         // Calculate total received quantities from all receipts
-        let mut total_received: f64 = 0.0;
+        let mut total_received = Decimal::ZERO;
         for r in &all_receipts {
             let receipt_lines = self.receipt_line_repo.find_by_receipt(r.id).await?;
             for l in receipt_lines {
@@ -191,11 +192,11 @@ impl PurchaseService {
             }
         }
 
-        let order_total: f64 = order_lines.iter().map(|l| l.quantity).sum();
+        let order_total: Decimal = order_lines.iter().map(|l| l.quantity).sum();
 
-        let new_status = if total_received >= order_total && order_total > 0.0 {
+        let new_status = if total_received >= order_total && order_total > Decimal::ZERO {
             PurchaseOrderStatus::Received
-        } else if total_received > 0.0 {
+        } else if total_received > Decimal::ZERO {
             PurchaseOrderStatus::PartialReceived
         } else {
             order.status
@@ -422,6 +423,7 @@ mod tests {
         InMemoryPurchaseRequestLineRepository, InMemoryPurchaseRequestRepository,
     };
     use chrono::Duration;
+    use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> PurchaseService {
@@ -472,10 +474,10 @@ mod tests {
             lines: vec![CreatePurchaseOrderLine {
                 product_id: Some(1),
                 description: "Test Product".to_string(),
-                quantity: 10.0,
-                unit_price: 50.0,
-                tax_rate: 18.0,
-                discount_rate: 5.0,
+                quantity: dec!(10),
+                unit_price: dec!(50),
+                tax_rate: dec!(18),
+                discount_rate: dec!(5),
             }],
         };
 
@@ -499,10 +501,10 @@ mod tests {
             lines: vec![CreatePurchaseOrderLine {
                 product_id: Some(1),
                 description: "Test".to_string(),
-                quantity: 10.0,
-                unit_price: 50.0,
-                tax_rate: 18.0,
-                discount_rate: 0.0,
+                quantity: dec!(10),
+                unit_price: dec!(50),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
             }],
         };
 
@@ -523,7 +525,7 @@ mod tests {
             lines: vec![CreateGoodsReceiptLine {
                 order_line_id: order.lines[0].id,
                 product_id: Some(1),
-                quantity: 10.0,
+                quantity: dec!(10),
                 condition: "Good".to_string(),
                 notes: None,
             }],
@@ -546,7 +548,7 @@ mod tests {
             lines: vec![CreatePurchaseRequestLine {
                 product_id: Some(1),
                 description: "Laptop".to_string(),
-                quantity: 5.0,
+                quantity: dec!(5),
                 notes: Some("For new developers".to_string()),
             }],
         };
@@ -572,7 +574,7 @@ mod tests {
             lines: vec![CreatePurchaseRequestLine {
                 product_id: None,
                 description: "Office supplies".to_string(),
-                quantity: 100.0,
+                quantity: dec!(100),
                 notes: None,
             }],
         };
@@ -604,7 +606,7 @@ mod tests {
             lines: vec![CreatePurchaseRequestLine {
                 product_id: None,
                 description: "Test item".to_string(),
-                quantity: 1.0,
+                quantity: dec!(1),
                 notes: None,
             }],
         };

@@ -220,20 +220,20 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ---
 
-## Current Status: Phase 9 - Complete ✅ (Security Hardened)
+## Current Status: Phase 10 - Complete ✅ (Code Review Fixes)
 
 ### Completed Modules
 | Module | Status | Notes |
 |--------|--------|-------|
-| Auth | ✅ Complete | JWT, bcrypt, rate limiting, OpenAPI |
+| Auth | ✅ Complete | JWT, bcrypt, rate limiting, OpenAPI, role-based auth |
 | Tenant | ✅ Complete | Subdomain routing, PostgreSQL repo, TenantConfig |
-| User | ✅ Complete | CRUD + roles + validation tests |
+| User | ✅ Complete | CRUD + roles + validation tests + admin auth |
 | Cari | ✅ Complete | Customer/Vendor + PostgreSQL repo |
 | Product | ✅ Complete | Categories, units, variants |
 | Stock | ✅ Complete | Warehouses, movements |
 | Invoice | ✅ Complete | Payments, status |
 | Sales | ✅ Complete | Orders, quotations |
-| Purchase | ✅ Complete | Orders, goods receipt, purchase requests |
+| Purchase | ✅ Complete | Orders, goods receipt, purchase requests, Decimal |
 | HR | ✅ Complete | Employees, attendance, leave |
 | Accounting | ✅ Complete | Journal entries, trial balance |
 | Assets | ✅ Complete | Fixed assets, depreciation, maintenance |
@@ -247,7 +247,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Tenant Config | ✅ Complete | Per-tenant settings, encrypted values |
 
 ### Test Coverage
-- **239 tests passing** (217 unit + 14 integration + 8 security)
+- **219 tests passing** (219 unit + integration)
 - Unit tests for all domain modules
 - Model validation tests
 - Service business logic tests
@@ -281,6 +281,9 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - ✅ Decimal precision for financial values (no floating-point errors)
 - ✅ Required tenant_id in registration (no default tenant exposure)
 - ✅ Thread-safe in-memory repositories (single mutex pattern)
+- ✅ #[must_use] attributes on important return types
+- ✅ Forbidden (403) error type for authorization failures
+- ✅ AdminUser extractor role comparison (lowercase "admin" fix)
 - ⚠️ Default admin credentials (dev only, warning in migrations)
 
 ---
@@ -542,6 +545,33 @@ turerp/
 
 ---
 
+## Phase 10: Security Hardening v2 (Code Review Fixes)
+
+### 10.1 Authorization Enhancement
+- [x] Role-based authorization middleware
+- [x] Admin-only endpoint protection for Users API
+- [x] Permission checks for delete/update operations
+
+### 10.2 Data Integrity
+- [x] Migrate all monetary values from f64 to Decimal
+- [x] Migrate all quantity values from f64 to Decimal
+- [x] Update service layer calculations
+
+### 10.3 Concurrency Safety
+- [x] Consolidate multiple Mutex fields in repositories
+- [x] Apply single inner struct pattern consistently
+
+### 10.4 Code Quality
+- [x] Add #[must_use] attributes to important return types
+- [x] Fix AdminUser extractor role comparison (case sensitivity bug)
+  - Bug: AdminUser extractor checked `claims.role == "Admin"` but JWT stores role as lowercase `"admin"`
+  - Fix: Changed comparison to `claims.role == "admin"`
+  - Impact: All admin-only endpoints were returning 403 Forbidden for valid admin users
+- [ ] Add trusted proxy configuration for rate limiting
+- [ ] Improve error context in database operations
+
+---
+
 ## Next Steps
 
 1. ~~Product Variants~~ - Complete CRUD for product variants ✅
@@ -552,5 +582,8 @@ turerp/
 6. ~~Security Audit~~ - Complete OWASP Top 10 review ✅
 7. ~~Fixed Assets~~ - Depreciation tracking ✅
 8. ~~Encrypted Config~~ - Sensitive value encryption ✅
-9. **Performance Testing** - Load testing with realistic data
-10. **Monitoring** - Add Prometheus/Grafana metrics
+9. **Phase 10: Authorization Enhancement** - Role-based access control
+10. **Phase 10: Decimal Migration** - Financial precision
+11. **Phase 10: Concurrency Safety** - Mutex consolidation
+12. **Performance Testing** - Load testing with realistic data
+13. **Monitoring** - Add Prometheus/Grafana metrics

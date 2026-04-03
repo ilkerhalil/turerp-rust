@@ -60,6 +60,7 @@ pub struct JwtService {
 }
 
 impl JwtService {
+    #[must_use]
     pub fn new(
         secret: String,
         access_token_expiration: i64,
@@ -74,6 +75,7 @@ impl JwtService {
     }
 
     /// Generate access and refresh tokens
+    #[must_use = "The generated tokens should be returned to the user"]
     pub fn generate_tokens(
         &self,
         user_id: i64,
@@ -119,6 +121,7 @@ impl JwtService {
     }
 
     /// Decode and validate a token
+    #[must_use = "The decoded claims should be used for authentication"]
     pub fn decode_token(&self, token: &str) -> Result<AuthClaims, ApiError> {
         let validation = Validation::new(self.algorithm);
 
@@ -136,6 +139,7 @@ impl JwtService {
     }
 
     /// Refresh tokens using a refresh token
+    #[must_use = "The refreshed tokens should be returned to the user"]
     pub fn refresh_tokens(&self, refresh_token: &str) -> Result<TokenPair, ApiError> {
         let claims = self.decode_token(refresh_token)?;
 
@@ -153,6 +157,7 @@ impl JwtService {
     }
 
     /// Get expiration time in seconds
+    #[must_use = "The expiration time should be used for client-side token management"]
     pub fn access_token_expiration(&self) -> i64 {
         self.access_token_expiration
     }

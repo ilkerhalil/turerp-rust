@@ -5,9 +5,9 @@ use actix_web::{web, HttpResponse};
 use crate::domain::user::model::{CreateUser, UpdateUser};
 use crate::domain::user::service::UserService;
 use crate::error::ApiResult;
-use crate::middleware::AuthUser;
+use crate::middleware::{AdminUser, AuthUser};
 
-/// Create user endpoint (requires authentication)
+/// Create user endpoint (requires admin role)
 #[utoipa::path(
     post,
     path = "/api/v1/users",
@@ -17,6 +17,7 @@ use crate::middleware::AuthUser;
         (status = 201, description = "User created successfully", body = UserResponse),
         (status = 400, description = "Validation error"),
         (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden - admin role required"),
         (status = 409, description = "User already exists")
     ),
     security(
@@ -24,7 +25,7 @@ use crate::middleware::AuthUser;
     )
 )]
 pub async fn create_user(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     user_service: web::Data<UserService>,
     payload: web::Json<CreateUser>,
 ) -> ApiResult<HttpResponse> {
@@ -82,7 +83,7 @@ pub async fn get_users(
     Ok(HttpResponse::Ok().json(users))
 }
 
-/// Update user endpoint (requires authentication)
+/// Update user endpoint (requires authentication, self or admin for role changes)
 #[utoipa::path(
     put,
     path = "/api/v1/users/{id}",
@@ -94,6 +95,7 @@ pub async fn get_users(
     responses(
         (status = 200, description = "User updated", body = UserResponse),
         (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden - can only update own profile or admin role required for role changes"),
         (status = 404, description = "User not found")
     ),
     security(
@@ -107,14 +109,33 @@ pub async fn update_user(
     payload: web::Json<UpdateUser>,
 ) -> ApiResult<HttpResponse> {
     let tenant_id = auth_user.0.tenant_id;
+    let user_id = auth_user.0.sub.parse::<i64>().unwrap_or(0);
     let id = *path;
-    let user = user_service
-        .update_user(id, tenant_id, payload.into_inner())
-        .await?;
+    let update = payload.into_inner();
+
+    // Check authorization: users can update their own profile, but only admins can change roles
+    let is_self = user_id == id;
+    let is_admin = auth_user.0.role == "admin";
+    let is_role_change = update.role.is_some();
+
+    if !is_self && !is_admin {
+        return Err(crate::error::ApiError::Forbidden(
+            "Can only update own profile".to_string(),
+        ));
+    }
+
+    // Non-admins cannot change roles
+    if is_role_change && !is_admin {
+        return Err(crate::error::ApiError::Forbidden(
+            "Only admins can change user roles".to_string(),
+        ));
+    }
+
+    let user = user_service.update_user(id, tenant_id, update).await?;
     Ok(HttpResponse::Ok().json(user))
 }
 
-/// Delete user endpoint (requires authentication)
+/// Delete user endpoint (requires admin role)
 #[utoipa::path(
     delete,
     path = "/api/v1/users/{id}",
@@ -125,6 +146,7 @@ pub async fn update_user(
     responses(
         (status = 204, description = "User deleted"),
         (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden - admin role required"),
         (status = 404, description = "User not found")
     ),
     security(
@@ -132,11 +154,13 @@ pub async fn update_user(
     )
 )]
 pub async fn delete_user(
-    auth_user: AuthUser,
+    _admin_user: AdminUser,
     user_service: web::Data<UserService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let tenant_id = auth_user.0.tenant_id;
+    // AdminUser extractor ensures only admins can access this endpoint
+    // The underscore prefix indicates we don't need the claims for this operation
+    let tenant_id = _admin_user.0.tenant_id;
     let id = *path;
     user_service.delete_user(id, tenant_id).await?;
     Ok(HttpResponse::NoContent().finish())

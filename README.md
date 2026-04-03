@@ -265,7 +265,7 @@ JWT Token → Kullanıcı Doğrulama → Rol Bazlı Erişim
 ## Test
 
 ```bash
-# Tüm testler (239 test)
+# Tüm testler (219 test)
 cargo test
 
 # Security testleri
@@ -320,7 +320,7 @@ Sistem OWASP Top 10 güvenlik açıklarına karşı test edilmiştir:
 - ✅ **SQL Injection Prevention** - Parametreli sorgular
 - ✅ **JWT Token Security** - Token doğrulama ve manipülasyon koruması
 - ✅ **Authentication Security** - Güçlü şifre politikaları, rate limiting
-- ✅ **Authorization** - Rol bazlı erişim kontrolü
+- ✅ **Authorization** - Rol bazlı erişim kontrolü (Admin, User, Viewer)
 - ✅ **Input Validation** - Tüm girişler doğrulanıyor
 - ✅ **HTTP Method Security** - İzin verilmeyen metodlar reddediliyor
 
@@ -332,6 +332,8 @@ Ek güvenlik önlemleri:
 - ✅ **Financial Precision** - `Decimal` tipi ile parasal hesaplamalar
 - ✅ **Tenant Isolation** - Zorunlu `tenant_id` ile tenant exposure önleme
 - ✅ **Thread Safety** - Single mutex pattern ile race condition önleme
+- ✅ **Role-Based Access** - AdminUser extractor ile endpoint koruması
+- ✅ **Must-Use Attributes** - Önemli dönüş değerleri için `#[must_use]`
 
 ### JWT Kimlik Doğrulama
 

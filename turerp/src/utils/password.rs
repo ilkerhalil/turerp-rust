@@ -57,11 +57,13 @@ impl std::fmt::Display for PasswordValidationError {
 impl std::error::Error for PasswordValidationError {}
 
 /// Validate password complexity
+#[must_use = "The validation result should be checked before proceeding"]
 pub fn validate_password(password: &str) -> Result<(), PasswordValidationError> {
     validate_password_with_requirements(password, &PasswordRequirements::default())
 }
 
 /// Validate password with custom requirements
+#[must_use = "The validation result should be checked before proceeding"]
 pub fn validate_password_with_requirements(
     password: &str,
     requirements: &PasswordRequirements,
@@ -101,11 +103,13 @@ pub fn validate_password_with_requirements(
 }
 
 /// Hash a password using bcrypt
+#[must_use = "The hashed password should be stored, not discarded"]
 pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
     hash(password, DEFAULT_COST)
 }
 
 /// Verify a password against a hash
+#[must_use = "The verification result should be checked for authentication"]
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, bcrypt::BcryptError> {
     verify(password, hash)
 }

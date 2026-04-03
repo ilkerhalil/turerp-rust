@@ -73,6 +73,7 @@ zeroize = "1.8"
 
 # Precise decimal for financial calculations
 rust_decimal = { version = "1.36", features = ["serde"] }
+rust_decimal_macros = "1.36"
 
 # Mocking for tests
 mockall = "0.12"
