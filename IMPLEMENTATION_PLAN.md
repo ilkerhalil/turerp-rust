@@ -192,21 +192,23 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Rate limiting (governor crate)
 
 ### 9.2 Testing & Security
-- [x] Unit tests (217 passing)
-- [x] Integration tests (14 passing)
-- [x] Security tests (8 passing)
+- [x] Unit tests (225 passing)
+- [x] Integration tests (38 passing)
+- [x] Security tests (27 passing - OWASP Top 10)
 - [x] Request ID middleware
+- [x] Audit logging middleware
 - [x] JWT authentication middleware
 - [x] Password complexity validation
 - [x] Production config validation
-- [x] Admin role authorization
+- [x] Admin role authorization (AdminUser extractor)
 - [x] Tenant isolation enforcement
-- [x] Security audit (OWASP Top 10)
 - [x] SQL injection tests
 - [x] Input validation tests
 - [x] JWT tampering tests
 - [x] Authentication security tests
 - [x] HTTP method security tests
+- [x] IDOR / tenant isolation tests
+- [x] Authorization tests (normal user cannot access admin endpoints)
 
 ### 9.3 Code Quality
 - [x] cargo check passes
@@ -220,7 +222,73 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ---
 
-## Current Status: Phase 11 - Complete ✅ (Decimal Migration & Code Quality)
+## Phase 10: Security Hardening v2
+
+### 10.1 Authorization Enhancement
+- [x] Role-based authorization middleware
+- [x] Admin-only endpoint protection for Users API
+- [x] Permission checks for delete/update operations
+
+### 10.2 Data Integrity
+- [x] Migrate all monetary values from f64 to Decimal
+- [x] Migrate all quantity values from f64 to Decimal
+- [x] Update service layer calculations
+
+### 10.3 Concurrency Safety
+- [x] Consolidate multiple Mutex fields in repositories
+- [x] Apply single inner struct pattern consistently
+
+### 10.4 Code Quality
+- [x] Add #[must_use] attributes to important return types
+- [x] Fix AdminUser extractor role comparison (case sensitivity bug)
+- [x] Fix all Clippy warnings (needless_borrows, manual_range_contains, etc.)
+- [x] Fix InvoiceStatus and ProjectStatus Default implementations (derive macro)
+- [ ] Add trusted proxy configuration for rate limiting
+- [ ] Improve error context in database operations
+
+---
+
+## Phase 11: Decimal Migration & Code Quality (Complete)
+
+### 11.1 Decimal Migration - Financial Precision
+- [x] Sales module - all monetary fields migrated to Decimal
+- [x] Invoice module - subtotal, tax, discount, total, quantity
+- [x] Stock module - quantity, reserved_quantity, avg_cost, total_value
+- [x] Product module - purchase_price, sale_price, tax_rate, price_modifier
+- [x] HR module - salary, hours, payroll calculations
+- [x] Accounting module - debit, credit, balances
+- [x] Project module - budget, costs, revenue, profit
+- [x] Manufacturing module - quantities, hours, scrap_percentage
+- [x] CRM module - opportunity value, campaign budget
+- [x] Cari module - credit_limit, current_balance
+- [x] All tests updated to use `rust_decimal_macros::dec!`
+
+### 11.2 Mutex Consolidation - Thread Safety
+- [x] Sales repositories - single inner struct pattern
+- [x] Accounting repositories - atomic state updates
+- [x] Stock repositories - reduced lock contention
+- [x] Manufacturing repositories - consistent state
+- [x] HR repositories - thread-safe operations
+- [x] Cari repository - atomic updates
+- [x] Project repositories - single lock acquisition
+- [x] Tenant repositories - config isolation
+- [x] CRM repositories - thread-safe CRUD
+- [x] Invoice repositories - payment tracking
+- [x] Product repositories - variant handling
+- [x] Purchase repositories - order management
+
+### 11.3 Clippy Fixes - Code Quality
+- [x] needless_borrows_for_generic_args in security_test.rs
+- [x] manual_range_contains in hr/model.rs
+- [x] needless_borrow in tenant/model.rs
+- [x] len_zero in tenant/service.rs
+- [x] unnecessary_literal_unwrap in error.rs
+- [x] default_constructed_unit_structs in middleware/tenant.rs
+- [x] derivable_impls for InvoiceStatus and ProjectStatus
+
+---
+
+## Current Status: Phase 11 - Complete ✅
 
 ### Completed Modules
 | Module | Status | Notes |
@@ -243,18 +311,17 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Feature Flags | ✅ Complete | CRUD, tenant-specific, API v1, admin auth |
 | Product Variants | ✅ Complete | CRUD, API v1 |
 | Purchase Requests | ✅ Complete | CRUD, approval workflow, API v1, state machine, pagination |
-| Tenant DB Routing | ✅ Complete | Multi-tenant isolation middleware |
-| Tenant Config | ✅ Complete | Per-tenant settings, encrypted values |
 
 ### Test Coverage
-- **219 tests passing** (219 unit + integration)
+- **290 tests passing** (225 unit + 38 integration + 27 security)
 - Unit tests for all domain modules
 - Model validation tests
 - Service business logic tests
 - Middleware tests
 - Config validation tests
 - Error handling tests
-- Security tests (OWASP Top 10)
+- Integration tests covering all business modules (38 tests)
+- Security tests - OWASP Top 10 (27 tests)
 
 ### Code Quality
 - ✅ cargo check passes
@@ -272,9 +339,10 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - ✅ Password complexity validation
 - ✅ Rate limiting (10 req/min per IP)
 - ✅ Request ID tracking
+- ✅ Audit logging middleware
 - ✅ Production config validation
 - ✅ SQL injection prevention (parameterized queries)
-- ✅ Admin role authorization for sensitive operations
+- ✅ Admin role authorization for sensitive operations (AdminUser extractor)
 - ✅ Tenant isolation enforced at API layer
 - ✅ Secure public path matching (exact match, no bypass)
 - ✅ Encryption key memory security (zeroize on drop)
@@ -288,31 +356,31 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ---
 
-## Pending Implementation
+## Remaining Work
 
 ### High Priority
 | Feature | Description | Status |
 |---------|-------------|--------|
-| Tenant DB Routing | Multi-tenant database isolation | ✅ Complete |
-| Security Audit | OWASP Top 10 review | ✅ Complete |
-| API Versioning | /v1/, /v2/ endpoints | ✅ Complete |
-| Feature Flags | A/B testing, gradual rollout | ✅ Complete |
+| Trusted Proxy Config | Configure trusted proxies for rate limiting behind load balancers | Planned |
+| DB Error Context | Improve error context in database operations | Planned |
 
 ### Medium Priority
 | Feature | Description | Status |
 |---------|-------------|--------|
-| Product Variants | Size, color, etc. | ✅ Complete |
-| Purchase Requests | Approval workflow, pagination | ✅ Complete |
-| Fixed Assets | Depreciation tracking | ✅ Complete |
-| Tenant-specific Config | Per-tenant settings | ✅ Complete |
-| Encrypted Config | Sensitive value encryption | ✅ Complete |
+| API Analytics | Request metrics and response time tracking | Planned |
+| Performance Testing | Load testing with realistic data | Planned |
+| Monitoring | Prometheus/Grafana metrics integration | Planned |
+| Database Indexes | Add indexes for frequently queried columns | Planned |
+| Pagination | Add pagination to all list endpoints | Planned |
 
 ### Low Priority
 | Feature | Description | Status |
 |---------|-------------|--------|
-| API Analytics | Request metrics | Planned |
-| Performance Testing | Load testing with realistic data | Planned |
-| Monitoring | Prometheus/Grafana metrics | Planned |
+| API Rate Limit Dashboard | Visual dashboard for rate limit metrics | Planned |
+| Health Check Details | Add dependency health checks (DB, cache) | Planned |
+| API Response Caching | Cache frequently accessed data | Planned |
+| Webhook System | Event-driven notifications | Planned |
+| Audit Log API | Queryable audit log endpoint | Planned |
 
 ---
 
@@ -394,6 +462,86 @@ zeroize = "1.8"
 - `PUT /api/tenants/{id}` - Update tenant
 - `DELETE /api/tenants/{id}` - Delete tenant
 
+### Cari
+- `GET /api/cari` - List cari accounts
+- `GET /api/cari/{id}` - Get cari account
+- `GET /api/cari/code/{code}` - Get cari by code
+- `POST /api/cari` - Create cari account
+- `PUT /api/cari/{id}` - Update cari account
+- `DELETE /api/cari/{id}` - Delete cari account
+- `GET /api/cari/{id}/orders` - Get customer's sales orders
+
+### Products (v1)
+- `GET /api/v1/products/{product_id}/variants` - List variants (auth)
+- `POST /api/v1/products/{product_id}/variants` - Create variant (auth)
+- `GET /api/v1/variants/{id}` - Get variant (auth)
+- `PUT /api/v1/variants/{id}` - Update variant (auth)
+- `DELETE /api/v1/variants/{id}` - Delete variant (auth)
+
+### Stock
+- `GET /api/stock/warehouses` - List warehouses
+- `POST /api/stock/warehouses` - Create warehouse
+- `GET /api/stock/warehouses/{id}` - Get warehouse
+- `PUT /api/stock/warehouses/{id}` - Update warehouse
+- `DELETE /api/stock/warehouses/{id}` - Delete warehouse
+- `GET /api/stock/movements` - List stock movements
+- `POST /api/stock/movements` - Create stock movement
+- `GET /api/stock/summary` - Stock summary
+
+### Invoices
+- `GET /api/invoices` - List invoices
+- `POST /api/invoices` - Create invoice
+- `GET /api/invoices/{id}` - Get invoice
+- `PUT /api/invoices/{id}` - Update invoice
+- `DELETE /api/invoices/{id}` - Delete invoice
+
+### Sales
+- `GET /api/sales` - List sales orders
+- `POST /api/sales` - Create sales order
+- `GET /api/sales/{id}` - Get sales order
+- `PUT /api/sales/{id}` - Update sales order
+- `DELETE /api/sales/{id}` - Delete sales order
+
+### HR
+- `GET /api/hr/employees` - List employees
+- `POST /api/hr/employees` - Create employee
+- `GET /api/hr/employees/{id}` - Get employee
+- `PUT /api/hr/employees/{id}` - Update employee
+- `DELETE /api/hr/employees/{id}` - Delete employee
+
+### Accounting
+- `GET /api/accounting/accounts` - List accounts
+- `POST /api/accounting/accounts` - Create account
+- `GET /api/accounting/accounts/tree` - Account tree
+- `GET /api/accounting/journal` - List journal entries
+- `POST /api/accounting/journal` - Create journal entry
+
+### Assets
+- `GET /api/assets` - List assets
+- `POST /api/assets` - Create asset
+- `GET /api/assets/{id}` - Get asset
+- `PUT /api/assets/{id}` - Update asset
+- `DELETE /api/assets/{id}` - Delete asset
+- `GET /api/assets/{id}/depreciation` - Depreciation schedule
+
+### Project
+- `GET /api/projects` - List projects
+- `POST /api/projects` - Create project
+- `GET /api/projects/{id}` - Get project
+- `PUT /api/projects/{id}` - Update project
+
+### Manufacturing
+- `GET /api/manufacturing/work-orders` - List work orders
+- `POST /api/manufacturing/work-orders` - Create work order
+- `GET /api/manufacturing/work-orders/{id}` - Get work order
+- `PUT /api/manufacturing/work-orders/{id}` - Update work order
+
+### CRM
+- `GET /api/crm/leads` - List leads
+- `POST /api/crm/leads` - Create lead
+- `GET /api/crm/opportunities` - List opportunities
+- `POST /api/crm/opportunities` - Create opportunity
+
 ### Feature Flags (v1)
 - `GET /api/v1/feature-flags` - List flags (auth, tenant-isolated)
 - `POST /api/v1/feature-flags` - Create flag (admin only)
@@ -413,13 +561,6 @@ zeroize = "1.8"
 - `POST /api/v1/purchase-requests/{id}/submit` - Submit for approval (auth)
 - `POST /api/v1/purchase-requests/{id}/approve` - Approve request (admin only)
 - `POST /api/v1/purchase-requests/{id}/reject` - Reject request (admin only)
-
-### Product Variants (v1)
-- `GET /api/v1/products/{product_id}/variants` - List variants (auth)
-- `POST /api/v1/products/{product_id}/variants` - Create variant (auth)
-- `GET /api/v1/variants/{id}` - Get variant (auth)
-- `PUT /api/v1/variants/{id}` - Update variant (auth)
-- `DELETE /api/v1/variants/{id}` - Delete variant (auth)
 
 ### Health Check
 - `GET /health` - Health check endpoint
@@ -488,6 +629,17 @@ turerp/
 │   │       ├── mod.rs
 │   │       ├── auth.rs
 │   │       ├── users.rs
+│   │       ├── cari.rs
+│   │       ├── stock.rs
+│   │       ├── invoice.rs
+│   │       ├── sales.rs
+│   │       ├── hr.rs
+│   │       ├── accounting.rs
+│   │       ├── assets.rs
+│   │       ├── project.rs
+│   │       ├── manufacturing.rs
+│   │       ├── crm.rs
+│   │       ├── tenant.rs
 │   │       ├── feature_flags.rs
 │   │       ├── product_variants.rs
 │   │       └── purchase_requests.rs
@@ -496,6 +648,7 @@ turerp/
 │   │   ├── auth.rs       # JWT authentication
 │   │   ├── rate_limit.rs # Rate limiting
 │   │   ├── request_id.rs # Request ID tracking
+│   │   ├── audit.rs      # Audit logging
 │   │   └── tenant.rs     # Tenant context middleware
 │   ├── domain/
 │   │   ├── auth/         # Auth domain
@@ -509,13 +662,13 @@ turerp/
 │   │   ├── purchase/     # Purchase domain (includes requests)
 │   │   ├── hr/           # HR domain
 │   │   ├── accounting/   # Accounting domain
-│   │   ├── assets/       # Fixed assets domain (NEW)
+│   │   ├── assets/       # Fixed assets domain
 │   │   ├── project/      # Project domain
 │   │   ├── manufacturing/# Manufacturing domain
 │   │   ├── crm/          # CRM domain
 │   │   └── feature/      # Feature flags domain
 │   ├── common/
-│   │   └── pagination.rs # Pagination utilities (NEW)
+│   │   └── pagination.rs # Pagination utilities
 │   ├── db/
 │   │   ├── mod.rs        # DB module
 │   │   ├── pool.rs       # Connection pool
@@ -523,107 +676,39 @@ turerp/
 │   └── utils/
 │       ├── jwt.rs        # JWT utilities
 │       ├── password.rs   # Password utilities
-│       └── encryption.rs # AES-256-GCM encryption (NEW)
+│       └── encryption.rs # AES-256-GCM encryption
 ├── migrations/
-│   └── 001_initial_schema.sql
+│   ├── 001_initial_schema.sql
+│   ├── 002_add_tenant_db_name.sql
+│   └── 003_business_modules.sql
 ├── tests/
-│   ├── api_integration_test.rs
-│   └── security_test.rs  # OWASP security tests (NEW)
-│   ├── db/
-│   │   ├── mod.rs        # DB module
-│   │   ├── pool.rs       # Connection pool
-│   │   └── tenant_registry.rs # Tenant pool registry
-│   └── utils/
-│       ├── jwt.rs        # JWT utilities
-│       └── password.rs   # Password utilities
-├── migrations/
-│   └── 001_initial_schema.sql
-├── tests/
-│   └── api_integration_test.rs
+│   ├── api_integration_test.rs   # Integration tests (38 tests)
+│   └── security_test.rs          # Security tests (27 tests)
 └── docker-compose.yml
 ```
 
 ---
 
-## Phase 10: Security Hardening v2 (Code Review Fixes)
+## Phase 12: Next Steps (Planned)
 
-### 10.1 Authorization Enhancement
-- [x] Role-based authorization middleware
-- [x] Admin-only endpoint protection for Users API
-- [x] Permission checks for delete/update operations
-
-### 10.2 Data Integrity
-- [x] Migrate all monetary values from f64 to Decimal
-- [x] Migrate all quantity values from f64 to Decimal
-- [x] Update service layer calculations
-
-### 10.3 Concurrency Safety
-- [x] Consolidate multiple Mutex fields in repositories
-- [x] Apply single inner struct pattern consistently
-
-### 10.4 Code Quality
-- [x] Add #[must_use] attributes to important return types
-- [x] Fix AdminUser extractor role comparison (case sensitivity bug)
-  - Bug: AdminUser extractor checked `claims.role == "Admin"` but JWT stores role as lowercase `"admin"`
-  - Fix: Changed comparison to `claims.role == "admin"`
-  - Impact: All admin-only endpoints were returning 403 Forbidden for valid admin users
-- [x] Fix all Clippy warnings (needless_borrows, manual_range_contains, etc.)
-- [ ] Add trusted proxy configuration for rate limiting
+### 12.1 Infrastructure
+- [ ] Trusted proxy configuration for rate limiting behind load balancers
 - [ ] Improve error context in database operations
+- [ ] Add database indexes for frequently queried columns
+- [ ] Add pagination to all list endpoints
 
----
+### 12.2 Monitoring & Observability
+- [ ] Prometheus metrics integration
+- [ ] Grafana dashboard templates
+- [ ] Request metrics and response time tracking
+- [ ] Health check endpoint with dependency status (DB connectivity)
 
-## Phase 11: Decimal Migration & Code Quality (Complete)
+### 12.3 Performance
+- [ ] Load testing with realistic data
+- [ ] Response caching for frequently accessed data
+- [ ] Database query optimization
 
-### 11.1 Decimal Migration - Financial Precision
-- [x] Sales module - all monetary fields migrated to Decimal
-- [x] Invoice module - subtotal, tax, discount, total, quantity
-- [x] Stock module - quantity, reserved_quantity, avg_cost, total_value
-- [x] Product module - purchase_price, sale_price, tax_rate, price_modifier
-- [x] HR module - salary, hours, payroll calculations
-- [x] Accounting module - debit, credit, balances
-- [x] Project module - budget, costs, revenue, profit
-- [x] Manufacturing module - quantities, hours, scrap_percentage
-- [x] CRM module - opportunity value, campaign budget
-- [x] Cari module - credit_limit, current_balance
-- [x] All tests updated to use `rust_decimal_macros::dec!`
-
-### 11.2 Mutex Consolidation - Thread Safety
-- [x] Sales repositories - single inner struct pattern
-- [x] Accounting repositories - atomic state updates
-- [x] Stock repositories - reduced lock contention
-- [x] Manufacturing repositories - consistent state
-- [x] HR repositories - thread-safe operations
-- [x] Cari repository - atomic updates
-- [x] Project repositories - single lock acquisition
-- [x] Tenant repositories - config isolation
-- [x] CRM repositories - thread-safe CRUD
-- [x] Invoice repositories - payment tracking
-- [x] Product repositories - variant handling
-- [x] Purchase repositories - order management
-
-### 11.3 Clippy Fixes - Code Quality
-- [x] needless_borrows_for_generic_args in security_test.rs
-- [x] manual_range_contains in hr/model.rs
-- [x] needless_borrow in tenant/model.rs
-- [x] len_zero in tenant/service.rs
-- [x] unnecessary_literal_unwrap in error.rs
-- [x] default_constructed_unit_structs in middleware/tenant.rs
-
----
-
-## Next Steps
-
-1. ~~Product Variants~~ - Complete CRUD for product variants ✅
-2. ~~Purchase Requests~~ - Implement approval workflow ✅
-3. ~~Tenant Database Routing~~ - Implement per-tenant database isolation ✅
-4. ~~Tenant-Specific Config~~ - Per-tenant settings ✅
-5. ~~Feature Flags Admin Auth~~ - Security hardening ✅
-6. ~~Security Audit~~ - Complete OWASP Top 10 review ✅
-7. ~~Fixed Assets~~ - Depreciation tracking ✅
-8. ~~Encrypted Config~~ - Sensitive value encryption ✅
-9. **Phase 10: Authorization Enhancement** - Role-based access control
-10. **Phase 10: Decimal Migration** - Financial precision
-11. **Phase 10: Concurrency Safety** - Mutex consolidation
-12. **Performance Testing** - Load testing with realistic data
-13. **Monitoring** - Add Prometheus/Grafana metrics
+### 12.4 Features
+- [ ] Audit log queryable API endpoint
+- [ ] Webhook system for event-driven notifications
+- [ ] API rate limit dashboard
