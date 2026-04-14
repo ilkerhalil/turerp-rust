@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::feature::{CreateFeatureFlag, FeatureFlagService, UpdateFeatureFlag};
 use crate::error::ApiResult;
 use crate::middleware::{AdminUser, AuthUser};
@@ -37,8 +38,9 @@ pub async fn create_flag(
     get,
     path = "/api/v1/feature-flags",
     tag = "Feature Flags",
+    params(PaginationParams),
     responses(
-        (status = 200, description = "Feature flags retrieved", body = Vec<FeatureFlagResponse>),
+        (status = 200, description = "Feature flags retrieved", body = PaginatedResult<FeatureFlagResponse>),
         (status = 401, description = "Not authenticated - missing or invalid JWT token")
     ),
     security(
@@ -48,13 +50,18 @@ pub async fn create_flag(
 pub async fn get_flags(
     auth_user: AuthUser,
     feature_service: web::Data<FeatureFlagService>,
-    _query: web::Query<GetFlagsParams>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
+    pagination
+        .validate()
+        .map_err(crate::error::ApiError::Validation)?;
     // Always use authenticated user's tenant for isolation
     // Regular users can only see their own tenant's feature flags
     let tenant_id = Some(auth_user.0.tenant_id);
-    let flags = feature_service.get_all(tenant_id).await?;
-    Ok(HttpResponse::Ok().json(flags))
+    let result = feature_service
+        .get_all_paginated(tenant_id, pagination.page, pagination.per_page)
+        .await?;
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get feature flag by ID endpoint (authenticated)

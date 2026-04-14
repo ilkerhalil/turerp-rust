@@ -770,7 +770,7 @@ async fn test_tenant_isolation_cari() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let caris = json.as_array().unwrap();
+    let caris = json["items"].as_array().unwrap();
     assert!(
         caris.is_empty(),
         "Tenant 2 should not see tenant 1's caris (IDOR)"
@@ -814,7 +814,7 @@ async fn test_tenant_isolation_employees() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let employees = json.as_array().unwrap();
+    let employees = json["items"].as_array().unwrap();
     assert!(
         employees.is_empty(),
         "Tenant 2 should not see tenant 1's employees (IDOR)"
@@ -857,7 +857,7 @@ async fn test_tenant_isolation_accounts() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let accounts = json.as_array().unwrap();
+    let accounts = json["items"].as_array().unwrap();
     assert!(
         accounts.is_empty(),
         "Tenant 2 should not see tenant 1's accounts (IDOR)"
@@ -897,7 +897,7 @@ async fn test_tenant_isolation_projects() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let projects = json.as_array().unwrap();
+    let projects = json["items"].as_array().unwrap();
     assert!(
         projects.is_empty(),
         "Tenant 2 should not see tenant 1's projects (IDOR)"
@@ -937,7 +937,7 @@ async fn test_tenant_isolation_crm_leads() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let leads = json.as_array().unwrap();
+    let leads = json["items"].as_array().unwrap();
     assert!(
         leads.is_empty(),
         "Tenant 2 should not see tenant 1's leads (IDOR)"

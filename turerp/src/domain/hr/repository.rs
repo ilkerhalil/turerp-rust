@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::hr::model::{
     Attendance, AttendanceStatus, CreateAttendance, CreateEmployee, CreateLeaveRequest, Employee,
     EmployeeStatus, LeaveRequest, LeaveRequestStatus, LeaveType, Payroll, PayrollStatus,
@@ -18,6 +19,12 @@ pub trait EmployeeRepository: Send + Sync {
     async fn create(&self, employee: CreateEmployee) -> Result<Employee, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<Employee>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Employee>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Employee>, ApiError>;
     async fn find_by_user(&self, user_id: i64) -> Result<Option<Employee>, ApiError>;
     async fn update_status(&self, id: i64, status: EmployeeStatus) -> Result<Employee, ApiError>;
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
@@ -152,6 +159,31 @@ impl EmployeeRepository for InMemoryEmployeeRepository {
             .filter(|e| e.tenant_id == tenant_id)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Employee>, ApiError> {
+        let inner = self.inner.lock();
+        let total = inner
+            .employees
+            .values()
+            .filter(|e| e.tenant_id == tenant_id)
+            .count() as u64;
+
+        let items: Vec<Employee> = inner
+            .employees
+            .values()
+            .filter(|e| e.tenant_id == tenant_id)
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .cloned()
+            .collect();
+
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_user(&self, user_id: i64) -> Result<Option<Employee>, ApiError> {

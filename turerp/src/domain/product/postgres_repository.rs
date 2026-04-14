@@ -5,6 +5,8 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::product::model::{
     Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
     ProductVariant, Unit, UpdateProduct, UpdateProductVariant,
@@ -16,19 +18,6 @@ use crate::domain::product::repository::{
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Product
@@ -51,6 +40,7 @@ struct ProductRow {
     is_active: bool,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    total_count: Option<i64>,
 }
 
 impl From<ProductRow> for Product {
@@ -157,6 +147,36 @@ impl ProductRepository for PostgresProductRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find products by tenant: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Product>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<ProductRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, code, name, description, category_id, unit_id,
+                   barcode, purchase_price, sale_price, tax_rate, is_active,
+                   created_at, updated_at, COUNT(*) OVER() as total_count
+            FROM products
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Product"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Product> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Product>, ApiError> {
@@ -273,6 +293,7 @@ struct CategoryRow {
     name: String,
     parent_id: Option<i64>,
     created_at: chrono::DateTime<chrono::Utc>,
+    total_count: Option<i64>,
 }
 
 impl From<CategoryRow> for Category {
@@ -355,6 +376,34 @@ impl CategoryRepository for PostgresCategoryRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find categories by tenant: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Category>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<CategoryRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, parent_id, created_at, COUNT(*) OVER() as total_count
+            FROM categories
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Category"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Category> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {

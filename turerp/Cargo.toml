@@ -71,6 +71,10 @@ parking_lot = "0.12"
 # Secure memory zeroing
 zeroize = "1.8"
 
+# Metrics
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
+
 # Precise decimal for financial calculations
 rust_decimal = { version = "1.36", features = ["serde"] }
 rust_decimal_macros = "1.36"

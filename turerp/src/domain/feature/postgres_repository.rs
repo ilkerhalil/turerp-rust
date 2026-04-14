@@ -5,6 +5,8 @@ use chrono::NaiveDateTime;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::feature::model::{
     CreateFeatureFlag, FeatureFlag, FeatureFlagStatus, UpdateFeatureFlag,
 };
@@ -12,19 +14,6 @@ use crate::domain::feature::repository::FeatureFlagRepository;
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 /// Parse a feature flag status string from the database
 fn parse_status(s: &str) -> FeatureFlagStatus {
@@ -50,6 +39,7 @@ struct FeatureFlagRow {
     tenant_id: Option<i64>,
     created_at: NaiveDateTime,
     updated_at: NaiveDateTime,
+    total_count: Option<i64>,
 }
 
 impl From<FeatureFlagRow> for FeatureFlag {
@@ -213,6 +203,65 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         };
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn get_all_paginated(
+        &self,
+        tenant_id: Option<i64>,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<FeatureFlag>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+
+        match tenant_id {
+            Some(tid) => {
+                let rows: Vec<FeatureFlagRow> = sqlx::query_as(
+                    r#"
+                    SELECT id, name, description, status, tenant_id, created_at, updated_at,
+                           COUNT(*) OVER() as total_count
+                    FROM feature_flags
+                    WHERE tenant_id = $1 OR tenant_id IS NULL
+                    ORDER BY id DESC
+                    LIMIT $2 OFFSET $3
+                    "#,
+                )
+                .bind(tid)
+                .bind(per_page as i64)
+                .bind(offset as i64)
+                .fetch_all(&*self.pool)
+                .await
+                .map_err(|e| {
+                    ApiError::Database(format!("Failed to get paginated feature flags: {}", e))
+                })?;
+
+                let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+                let items: Vec<FeatureFlag> = rows.into_iter().map(|r| r.into()).collect();
+                Ok(PaginatedResult::new(items, page, per_page, total))
+            }
+            None => {
+                let rows: Vec<FeatureFlagRow> = sqlx::query_as(
+                    r#"
+                    SELECT id, name, description, status, tenant_id, created_at, updated_at,
+                           COUNT(*) OVER() as total_count
+                    FROM feature_flags
+                    WHERE tenant_id IS NULL
+                    ORDER BY id DESC
+                    LIMIT $1 OFFSET $2
+                    "#,
+                )
+                .bind(per_page as i64)
+                .bind(offset as i64)
+                .fetch_all(&*self.pool)
+                .await
+                .map_err(|e| {
+                    ApiError::Database(format!("Failed to get paginated feature flags: {}", e))
+                })?;
+
+                let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+                let items: Vec<FeatureFlag> = rows.into_iter().map(|r| r.into()).collect();
+                Ok(PaginatedResult::new(items, page, per_page, total))
+            }
+        }
     }
 
     async fn update(

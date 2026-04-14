@@ -6,6 +6,7 @@ use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::purchase::model::{
     CreateGoodsReceipt, CreateGoodsReceiptLine, CreatePurchaseOrder, CreatePurchaseOrderLine,
     CreatePurchaseRequest, CreatePurchaseRequestLine, GoodsReceipt, GoodsReceiptLine,
@@ -21,19 +22,6 @@ use crate::domain::purchase::repository::{
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 /// Parse a string into PurchaseOrderStatus, defaulting to Draft on failure
 fn parse_purchase_order_status(s: &str) -> PurchaseOrderStatus {

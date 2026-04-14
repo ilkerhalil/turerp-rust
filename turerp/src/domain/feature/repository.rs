@@ -5,6 +5,7 @@
 use async_trait::async_trait;
 
 use super::model::{FeatureFlag, FeatureFlagStatus};
+use crate::common::pagination::PaginatedResult;
 
 /// Feature flag repository trait
 #[async_trait]
@@ -30,6 +31,14 @@ pub trait FeatureFlagRepository: Send + Sync {
         &self,
         tenant_id: Option<i64>,
     ) -> Result<Vec<FeatureFlag>, crate::error::ApiError>;
+
+    /// Get all feature flags with pagination (optionally filtered by tenant)
+    async fn get_all_paginated(
+        &self,
+        tenant_id: Option<i64>,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<FeatureFlag>, crate::error::ApiError>;
 
     /// Update a feature flag
     async fn update(
@@ -125,6 +134,28 @@ impl FeatureFlagRepository for InMemoryFeatureFlagRepository {
             .cloned()
             .collect();
         Ok(result)
+    }
+
+    async fn get_all_paginated(
+        &self,
+        tenant_id: Option<i64>,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<FeatureFlag>, crate::error::ApiError> {
+        let flags = self.flags.read().await;
+        let mut filtered: Vec<FeatureFlag> = flags
+            .iter()
+            .filter(|f| tenant_id.is_none() || f.tenant_id == tenant_id || f.tenant_id.is_none())
+            .cloned()
+            .collect();
+        filtered.sort_by_key(|f| f.id);
+        let total = filtered.len() as u64;
+        let items: Vec<FeatureFlag> = filtered
+            .into_iter()
+            .skip((page.saturating_sub(1) as usize) * (per_page as usize))
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update(

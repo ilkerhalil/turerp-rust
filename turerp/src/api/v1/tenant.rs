@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::tenant::model::{CreateTenant, UpdateTenant};
 use crate::domain::tenant::service::TenantService;
 use crate::error::ApiResult;
@@ -26,15 +27,22 @@ pub async fn create_tenant(
 /// Get all tenants (requires authentication)
 #[utoipa::path(
     get, path = "/api/v1/tenants", tag = "Tenant",
-    responses((status = 200, description = "List of tenants")),
+    params(PaginationParams),
+    responses((status = 200, description = "Paginated list of tenants")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_tenants(
     _auth_user: AuthUser,
     tenant_service: web::Data<TenantService>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let tenants = tenant_service.get_all_tenants().await?;
-    Ok(HttpResponse::Ok().json(tenants))
+    pagination
+        .validate()
+        .map_err(crate::error::ApiError::Validation)?;
+    let result = tenant_service
+        .get_all_tenants_paginated(pagination.page, pagination.per_page)
+        .await?;
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get tenant by ID (requires authentication)

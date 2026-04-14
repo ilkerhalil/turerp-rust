@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::manufacturing::model::{
     CreateBillOfMaterials, CreateBillOfMaterialsLine, CreateRouting, CreateRoutingOperation,
     CreateWorkOrder, CreateWorkOrderMaterial, CreateWorkOrderOperation, WorkOrderStatus,
@@ -39,11 +40,20 @@ pub async fn create_work_order(
 pub async fn get_work_orders(
     auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let orders = mfg_service
-        .get_work_orders_by_tenant(auth_user.0.tenant_id)
+    let pagination = query.into_inner();
+    pagination
+        .validate()
+        .map_err(crate::error::ApiError::Validation)?;
+    let result = mfg_service
+        .get_work_orders_by_tenant_paginated(
+            auth_user.0.tenant_id,
+            pagination.page,
+            pagination.per_page,
+        )
         .await?;
-    Ok(HttpResponse::Ok().json(orders))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get work order by ID

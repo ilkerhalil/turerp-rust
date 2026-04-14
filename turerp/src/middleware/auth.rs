@@ -24,6 +24,9 @@ pub const PUBLIC_PATHS: &[&str] = &[
     "/api/auth/refresh",
     // Other public paths
     "/health",
+    "/health/live",
+    "/health/ready",
+    "/metrics",
     "/swagger-ui",
     "/api-docs",
 ];

@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::user::model::{CreateUser, UpdateUser, User};
 use crate::error::ApiError;
 
@@ -40,6 +41,14 @@ pub trait UserRepository: Send + Sync {
 
     /// Find all users for a tenant
     async fn find_all(&self, tenant_id: i64) -> Result<Vec<User>, ApiError>;
+
+    /// Find all users for a tenant with pagination
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<User>, ApiError>;
 
     /// Update a user
     async fn update(&self, id: i64, tenant_id: i64, user: UpdateUser) -> Result<User, ApiError>;
@@ -155,6 +164,28 @@ impl UserRepository for InMemoryUserRepository {
             .filter(|u| u.tenant_id == tenant_id)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<User>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .users
+            .iter()
+            .filter(|u| u.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update(&self, id: i64, tenant_id: i64, update: UpdateUser) -> Result<User, ApiError> {

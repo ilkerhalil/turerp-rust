@@ -4,24 +4,13 @@ use async_trait::async_trait;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::user::model::{CreateUser, Role, UpdateUser, User};
 use crate::domain::user::repository::{BoxUserRepository, UserRepository};
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 /// Database row representation for User
 #[derive(Debug, FromRow)]
@@ -62,6 +51,49 @@ impl From<UserRow> for User {
             created_at: row.created_at,
             updated_at: row.updated_at,
         }
+    }
+}
+
+/// Database row representation for paginated user queries with total count
+#[derive(Debug, FromRow)]
+struct UserRowWithTotal {
+    id: i64,
+    username: String,
+    email: String,
+    full_name: String,
+    password: String,
+    tenant_id: i64,
+    role: String,
+    is_active: bool,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    total_count: i64,
+}
+
+impl From<UserRowWithTotal> for (User, i64) {
+    fn from(row: UserRowWithTotal) -> (User, i64) {
+        let role = row.role.parse().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Invalid role '{}' in database: {}, defaulting to User",
+                row.role,
+                e
+            );
+            Role::default()
+        });
+
+        let user = User {
+            id: row.id,
+            username: row.username,
+            email: row.email,
+            full_name: row.full_name,
+            hashed_password: row.password,
+            tenant_id: row.tenant_id,
+            role,
+            is_active: row.is_active,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        };
+        (user, row.total_count)
     }
 }
 
@@ -179,6 +211,40 @@ impl UserRepository for PostgresUserRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find all users: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<User>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+
+        let rows: Vec<UserRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM users
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "User"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<User> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(user, _)| user)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update(&self, id: i64, tenant_id: i64, update: UpdateUser) -> Result<User, ApiError> {

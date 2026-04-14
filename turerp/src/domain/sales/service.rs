@@ -1,7 +1,8 @@
 //! Sales service for business logic
+use crate::common::pagination::PaginatedResult;
 use crate::domain::sales::model::{
-    CreateQuotation, CreateSalesOrder, CreateSalesOrderLine, QuotationResponse, QuotationStatus,
-    SalesOrderResponse, SalesOrderStatus,
+    CreateQuotation, CreateSalesOrder, CreateSalesOrderLine, Quotation, QuotationResponse,
+    QuotationStatus, SalesOrder, SalesOrderResponse, SalesOrderStatus,
 };
 use crate::domain::sales::repository::{
     BoxQuotationLineRepository, BoxQuotationRepository, BoxSalesOrderLineRepository,
@@ -68,11 +69,22 @@ impl SalesService {
         Ok(SalesOrderResponse::from((order, lines)))
     }
 
-    pub async fn get_orders_by_tenant(
+    pub async fn get_orders_by_tenant(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
+        self.order_repo.find_by_tenant(tenant_id).await
+    }
+
+    pub async fn get_orders_by_tenant_paginated(
         &self,
         tenant_id: i64,
-    ) -> Result<Vec<crate::domain::sales::model::SalesOrder>, ApiError> {
-        self.order_repo.find_by_tenant(tenant_id).await
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<SalesOrder>, ApiError> {
+        crate::common::pagination::PaginationParams { page, per_page }
+            .validate()
+            .map_err(ApiError::Validation)?;
+        self.order_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
     }
 
     pub async fn get_orders_by_cari(
@@ -86,15 +98,30 @@ impl SalesService {
         &self,
         tenant_id: i64,
         status: SalesOrderStatus,
-    ) -> Result<Vec<crate::domain::sales::model::SalesOrder>, ApiError> {
+    ) -> Result<Vec<SalesOrder>, ApiError> {
         self.order_repo.find_by_status(tenant_id, status).await
+    }
+
+    pub async fn get_orders_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: SalesOrderStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<SalesOrder>, ApiError> {
+        crate::common::pagination::PaginationParams { page, per_page }
+            .validate()
+            .map_err(ApiError::Validation)?;
+        self.order_repo
+            .find_by_status_paginated(tenant_id, status, page, per_page)
+            .await
     }
 
     pub async fn update_order_status(
         &self,
         id: i64,
         status: SalesOrderStatus,
-    ) -> Result<crate::domain::sales::model::SalesOrder, ApiError> {
+    ) -> Result<SalesOrder, ApiError> {
         self.order_repo.update_status(id, status).await
     }
 
@@ -141,8 +168,22 @@ impl SalesService {
     pub async fn get_quotations_by_tenant(
         &self,
         tenant_id: i64,
-    ) -> Result<Vec<crate::domain::sales::model::Quotation>, ApiError> {
+    ) -> Result<Vec<Quotation>, ApiError> {
         self.quotation_repo.find_by_tenant(tenant_id).await
+    }
+
+    pub async fn get_quotations_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Quotation>, ApiError> {
+        crate::common::pagination::PaginationParams { page, per_page }
+            .validate()
+            .map_err(ApiError::Validation)?;
+        self.quotation_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
     }
 
     pub async fn get_quotations_by_cari(
@@ -156,15 +197,30 @@ impl SalesService {
         &self,
         tenant_id: i64,
         status: QuotationStatus,
-    ) -> Result<Vec<crate::domain::sales::model::Quotation>, ApiError> {
+    ) -> Result<Vec<Quotation>, ApiError> {
         self.quotation_repo.find_by_status(tenant_id, status).await
+    }
+
+    pub async fn get_quotations_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: QuotationStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Quotation>, ApiError> {
+        crate::common::pagination::PaginationParams { page, per_page }
+            .validate()
+            .map_err(ApiError::Validation)?;
+        self.quotation_repo
+            .find_by_status_paginated(tenant_id, status, page, per_page)
+            .await
     }
 
     pub async fn update_quotation_status(
         &self,
         id: i64,
         status: QuotationStatus,
-    ) -> Result<crate::domain::sales::model::Quotation, ApiError> {
+    ) -> Result<Quotation, ApiError> {
         self.quotation_repo.update_status(id, status).await
     }
 

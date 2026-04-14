@@ -5,6 +5,8 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::stock::model::{
     CreateStockMovement, CreateWarehouse, MovementType, StockLevel, StockMovement, Warehouse,
 };
@@ -15,19 +17,6 @@ use crate::domain::stock::repository::{
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 // ============================================================================
 // Warehouse Row and Repository
@@ -43,6 +32,7 @@ struct WarehouseRow {
     address: Option<String>,
     is_active: bool,
     created_at: chrono::DateTime<chrono::Utc>,
+    total_count: Option<i64>,
 }
 
 impl From<WarehouseRow> for Warehouse {
@@ -125,9 +115,37 @@ impl WarehouseRepository for PostgresWarehouseRepository {
         .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to find warehouses by tenant: {}", e)))?;
+        .map_err(|e| map_sqlx_error(e, "Warehouse"))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Warehouse>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<WarehouseRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, code, name, address, is_active, created_at, COUNT(*) OVER() as total_count
+            FROM warehouses
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Warehouse"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Warehouse> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update(

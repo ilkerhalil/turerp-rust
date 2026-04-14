@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::crm::model::{
     CampaignStatus, CreateCampaign, CreateLead, CreateOpportunity, CreateTicket, LeadStatus,
     OpportunityStatus, TicketStatus,
@@ -39,11 +40,12 @@ pub async fn create_lead(
 pub async fn get_leads(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let leads = crm_service
-        .get_leads_by_tenant(auth_user.0.tenant_id)
+    let result = crm_service
+        .get_leads_paginated(auth_user.0.tenant_id, query.page, query.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(leads))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get lead by ID
@@ -73,11 +75,17 @@ pub async fn get_leads_by_status(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<LeadStatus>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let leads = crm_service
-        .get_leads_by_status(auth_user.0.tenant_id, path.into_inner())
+    let result = crm_service
+        .get_leads_by_status_paginated(
+            auth_user.0.tenant_id,
+            path.into_inner(),
+            query.page,
+            query.per_page,
+        )
         .await?;
-    Ok(HttpResponse::Ok().json(leads))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Update lead status (requires admin role)
@@ -149,11 +157,12 @@ pub async fn create_opportunity(
 pub async fn get_opportunities(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let opportunities = crm_service
-        .get_opportunities_by_tenant(auth_user.0.tenant_id)
+    let result = crm_service
+        .get_opportunities_paginated(auth_user.0.tenant_id, query.page, query.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(opportunities))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get opportunity by ID
@@ -183,11 +192,17 @@ pub async fn get_opportunities_by_status(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<OpportunityStatus>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let opportunities = crm_service
-        .get_opportunities_by_status(auth_user.0.tenant_id, path.into_inner())
+    let result = crm_service
+        .get_opportunities_by_status_paginated(
+            auth_user.0.tenant_id,
+            path.into_inner(),
+            query.page,
+            query.per_page,
+        )
         .await?;
-    Ok(HttpResponse::Ok().json(opportunities))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Update opportunity status (requires admin role)
@@ -255,11 +270,12 @@ pub async fn create_campaign(
 pub async fn get_campaigns(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let campaigns = crm_service
-        .get_campaigns_by_tenant(auth_user.0.tenant_id)
+    let result = crm_service
+        .get_campaigns_paginated(auth_user.0.tenant_id, query.page, query.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(campaigns))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get campaign by ID
@@ -289,11 +305,17 @@ pub async fn get_campaigns_by_status(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<CampaignStatus>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let campaigns = crm_service
-        .get_campaigns_by_status(auth_user.0.tenant_id, path.into_inner())
+    let result = crm_service
+        .get_campaigns_by_status_paginated(
+            auth_user.0.tenant_id,
+            path.into_inner(),
+            query.page,
+            query.per_page,
+        )
         .await?;
-    Ok(HttpResponse::Ok().json(campaigns))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Update campaign status (requires admin role)
@@ -345,11 +367,12 @@ pub async fn create_ticket(
 pub async fn get_tickets(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let tickets = crm_service
-        .get_tickets_by_tenant(auth_user.0.tenant_id)
+    let result = crm_service
+        .get_tickets_paginated(auth_user.0.tenant_id, query.page, query.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(tickets))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get ticket by ID
@@ -379,11 +402,17 @@ pub async fn get_tickets_by_status(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<TicketStatus>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let tickets = crm_service
-        .get_tickets_by_status(auth_user.0.tenant_id, path.into_inner())
+    let result = crm_service
+        .get_tickets_by_status_paginated(
+            auth_user.0.tenant_id,
+            path.into_inner(),
+            query.page,
+            query.per_page,
+        )
         .await?;
-    Ok(HttpResponse::Ok().json(tickets))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Update ticket status (requires admin role)

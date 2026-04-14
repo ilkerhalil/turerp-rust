@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::user::model::{CreateUser, UpdateUser};
 use crate::domain::user::service::UserService;
 use crate::error::ApiResult;
@@ -65,8 +66,9 @@ pub async fn get_user(
     get,
     path = "/api/users",
     tag = "Users",
+    params(PaginationParams),
     responses(
-        (status = 200, description = "Users found", body = Vec<UserResponse>),
+        (status = 200, description = "Paginated list of users"),
         (status = 401, description = "Not authenticated - missing or invalid JWT token")
     ),
     security(
@@ -76,10 +78,16 @@ pub async fn get_user(
 pub async fn get_users(
     auth_user: AuthUser,
     user_service: web::Data<UserService>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
+    pagination
+        .validate()
+        .map_err(crate::error::ApiError::Validation)?;
     let tenant_id = auth_user.0.tenant_id;
-    let users = user_service.get_all_users(tenant_id).await?;
-    Ok(HttpResponse::Ok().json(users))
+    let result = user_service
+        .get_all_users_paginated(tenant_id, pagination.page, pagination.per_page)
+        .await?;
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Update user endpoint (requires authentication)

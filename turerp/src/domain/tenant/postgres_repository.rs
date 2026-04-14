@@ -4,24 +4,13 @@ use async_trait::async_trait;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::tenant::model::{CreateTenant, Tenant, UpdateTenant};
 use crate::domain::tenant::repository::{BoxTenantRepository, TenantRepository};
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 /// Database row representation for Tenant
 #[derive(Debug, FromRow)]
@@ -43,6 +32,31 @@ impl From<TenantRow> for Tenant {
             is_active: row.is_active,
             created_at: row.created_at,
         }
+    }
+}
+
+/// Database row representation for paginated tenant queries with total count
+#[derive(Debug, FromRow)]
+struct TenantRowWithTotal {
+    id: i64,
+    name: String,
+    subdomain: String,
+    is_active: bool,
+    created_at: chrono::DateTime<chrono::Utc>,
+    total_count: i64,
+}
+
+impl From<TenantRowWithTotal> for (Tenant, i64) {
+    fn from(row: TenantRowWithTotal) -> (Tenant, i64) {
+        let tenant = Tenant {
+            id: row.id,
+            name: row.name,
+            subdomain: row.subdomain.clone(),
+            db_name: crate::domain::tenant::model::generate_db_name(&row.subdomain),
+            is_active: row.is_active,
+            created_at: row.created_at,
+        };
+        (tenant, row.total_count)
     }
 }
 
@@ -127,6 +141,37 @@ impl TenantRepository for PostgresTenantRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find all tenants: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_all_paginated(
+        &self,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Tenant>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+
+        let rows: Vec<TenantRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, name, subdomain, is_active, created_at,
+                   COUNT(*) OVER() as total_count
+            FROM tenants
+            ORDER BY id DESC
+            LIMIT $1 OFFSET $2
+            "#,
+        )
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Tenant"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<Tenant> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(tenant, _)| tenant)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update(&self, id: i64, update: UpdateTenant) -> Result<Tenant, ApiError> {

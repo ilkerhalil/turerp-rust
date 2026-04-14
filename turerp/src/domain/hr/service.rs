@@ -2,6 +2,7 @@
 use chrono::Utc;
 use rust_decimal::Decimal;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::hr::model::{
     Attendance, CreateAttendance, CreateEmployee, CreateLeaveRequest, Employee, EmployeeResponse,
     EmployeeStatus, LeaveRequest, LeaveRequestStatus, LeaveType, Payroll, PayrollStatus,
@@ -66,6 +67,30 @@ impl HrService {
     ) -> Result<Vec<EmployeeResponse>, ApiError> {
         let employees = self.employee_repo.find_by_tenant(tenant_id).await?;
         Ok(employees.into_iter().map(EmployeeResponse::from).collect())
+    }
+
+    pub async fn get_employees_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<EmployeeResponse>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        let result = self
+            .employee_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await?;
+        Ok(PaginatedResult::new(
+            result
+                .items
+                .into_iter()
+                .map(EmployeeResponse::from)
+                .collect(),
+            result.page,
+            result.per_page,
+            result.total,
+        ))
     }
 
     pub async fn update_employee_status(

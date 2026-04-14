@@ -6,14 +6,18 @@
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
 use turerp::config::Config;
-use turerp::middleware::{AuditLoggingMiddleware, RateLimitMiddleware, RequestIdMiddleware};
+use turerp::middleware::{
+    audit::spawn_audit_writer, AuditLoggingMiddleware, MetricsMiddleware, RateLimitMiddleware,
+    RequestIdMiddleware,
+};
 
+use tokio::sync::mpsc;
 use turerp::api::{
-    v1_accounting_configure, v1_assets_configure, v1_auth_configure, v1_cari_configure,
-    v1_crm_configure, v1_feature_flags_configure, v1_hr_configure, v1_invoice_configure,
-    v1_manufacturing_configure, v1_product_variants_configure, v1_project_configure,
-    v1_purchase_requests_configure, v1_sales_configure, v1_stock_configure, v1_tenant_configure,
-    v1_users_configure, ApiDoc,
+    v1_accounting_configure, v1_assets_configure, v1_audit_configure, v1_auth_configure,
+    v1_cari_configure, v1_crm_configure, v1_feature_flags_configure, v1_hr_configure,
+    v1_invoice_configure, v1_manufacturing_configure, v1_product_variants_configure,
+    v1_project_configure, v1_purchase_requests_configure, v1_sales_configure, v1_stock_configure,
+    v1_tenant_configure, v1_users_configure, ApiDoc,
 };
 use turerp::setup_logging;
 use utoipa::OpenApi;
@@ -22,45 +26,82 @@ use utoipa_swagger_ui::SwaggerUi;
 #[cfg(feature = "postgres")]
 use turerp::app::AppState;
 
-/// Health check endpoint (in-memory mode)
-#[cfg(not(feature = "postgres"))]
-async fn health_check() -> actix_web::Result<actix_web::HttpResponse> {
+/// Liveness probe - always returns 200 if the process is running
+async fn health_live() -> actix_web::Result<actix_web::HttpResponse> {
     Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
         "status": "ok",
         "service": "turerp-erp",
+        "version": env!("CARGO_PKG_VERSION")
+    })))
+}
+
+/// Readiness probe (in-memory mode) - always ready
+#[cfg(not(feature = "postgres"))]
+async fn health_ready() -> actix_web::Result<actix_web::HttpResponse> {
+    Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
+        "status": "ok",
+        "service": "turerp-erp",
+        "version": env!("CARGO_PKG_VERSION"),
         "storage": "in-memory"
     })))
 }
 
-/// Health check endpoint (PostgreSQL mode)
+/// Readiness probe (PostgreSQL mode) - checks database connectivity
+#[cfg(feature = "postgres")]
+async fn health_ready(
+    app_state: web::Data<AppState>,
+) -> actix_web::Result<actix_web::HttpResponse> {
+    let pool: &sqlx::PgPool = &*app_state.db_pool;
+
+    let start = std::time::Instant::now();
+    let db_result = sqlx::query("SELECT 1").execute(pool).await;
+    let latency_ms = start.elapsed().as_millis();
+
+    match db_result {
+        Ok(_) => Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
+            "status": "ok",
+            "service": "turerp-erp",
+            "version": env!("CARGO_PKG_VERSION"),
+            "storage": "postgresql",
+            "database": "healthy",
+            "latency_ms": latency_ms
+        }))),
+        Err(e) => {
+            tracing::error!("Database health check failed: {}", e);
+            Ok(
+                actix_web::HttpResponse::ServiceUnavailable().json(serde_json::json!({
+                    "status": "unhealthy",
+                    "service": "turerp-erp",
+                    "version": env!("CARGO_PKG_VERSION"),
+                    "storage": "postgresql",
+                    "database": "unhealthy",
+                    "latency_ms": latency_ms
+                })),
+            )
+        }
+    }
+}
+
+/// Backwards-compatible health check endpoint (aliases to readiness)
+#[cfg(not(feature = "postgres"))]
+async fn health_check() -> actix_web::Result<actix_web::HttpResponse> {
+    health_ready().await
+}
+
+/// Backwards-compatible health check endpoint (aliases to readiness)
 #[cfg(feature = "postgres")]
 async fn health_check(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
-    // Get the pool from web::Data
-    let pool: &sqlx::PgPool = &*app_state.db_pool;
+    health_ready(app_state).await
+}
 
-    // Test database connectivity
-    let db_health = match sqlx::query("SELECT 1").execute(pool).await {
-        Ok(_) => "healthy",
-        Err(e) => {
-            tracing::error!("Database health check failed: {}", e);
-            "unhealthy"
-        }
-    };
-
-    let status = if db_health == "healthy" {
-        "ok"
-    } else {
-        "degraded"
-    };
-
-    Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
-        "status": status,
-        "service": "turerp-erp",
-        "storage": "postgresql",
-        "database": db_health
-    })))
+/// Metrics endpoint - exposes Prometheus-format metrics
+async fn metrics_endpoint() -> actix_web::Result<actix_web::HttpResponse> {
+    let body = turerp::middleware::render_metrics();
+    Ok(actix_web::HttpResponse::Ok()
+        .content_type("text/plain; version=0.0.4; charset=utf-8")
+        .body(body))
 }
 
 /// Configure CORS from config
@@ -119,6 +160,13 @@ async fn main() -> std::io::Result<()> {
         std::process::exit(1);
     }
 
+    // Install Prometheus metrics exporter
+    if config.metrics.enabled {
+        if let Err(e) = turerp::middleware::install_metrics_exporter() {
+            tracing::warn!("Failed to install metrics exporter: {}", e);
+        }
+    }
+
     // Log CORS warning in production
     if config.is_production() && config.cors.is_wildcard() {
         tracing::warn!(
@@ -144,16 +192,23 @@ async fn main() -> std::io::Result<()> {
         turerp::app::create_app_state(&config).await
     };
 
+    // Set up audit log channel for non-blocking persistence
+    let (audit_tx, audit_rx) = mpsc::unbounded_channel();
+    let audit_sender = std::sync::Arc::new(audit_tx);
+    let audit_svc = app_state.audit_service.get_ref().clone();
+    spawn_audit_writer(audit_rx, audit_svc);
+
     HttpServer::new(move || {
         #[cfg(feature = "postgres")]
         let app = App::new()
             // Security middlewares (ORDER MATTERS!)
             .wrap(RequestIdMiddleware) // 1. Request ID for tracing
-            .wrap(RateLimitMiddleware::new()) // 2. Rate limiting (before auth)
-            .wrap(AuditLoggingMiddleware) // 3. Audit logging
-            .wrap(middleware::Logger::default()) // 4. Access logging
-            .wrap(configure_cors(&config.cors)) // 5. CORS
-            .wrap(middleware::Compress::default()) // 6. Response compression (outermost)
+            .wrap(MetricsMiddleware::new()) // 2. Metrics collection
+            .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // 3. Rate limiting (before auth)
+            .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // 4. Audit logging with channel
+            .wrap(middleware::Logger::default()) // 5. Access logging
+            .wrap(configure_cors(&config.cors)) // 6. CORS
+            .wrap(middleware::Compress::default()) // 7. Response compression (outermost)
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
@@ -172,17 +227,19 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.feature_service.clone())
             .app_data(app_state.product_service.clone())
             .app_data(app_state.purchase_service.clone())
+            .app_data(app_state.audit_service.clone())
             .app_data(app_state.db_pool.clone());
 
         #[cfg(not(feature = "postgres"))]
         let app = App::new()
             // Security middlewares (ORDER MATTERS!)
             .wrap(RequestIdMiddleware) // 1. Request ID for tracing
-            .wrap(RateLimitMiddleware::new()) // 2. Rate limiting (before auth)
-            .wrap(AuditLoggingMiddleware) // 3. Audit logging
-            .wrap(middleware::Logger::default()) // 4. Access logging
-            .wrap(configure_cors(&config.cors)) // 5. CORS
-            .wrap(middleware::Compress::default()) // 6. Response compression (outermost)
+            .wrap(MetricsMiddleware::new()) // 2. Metrics collection
+            .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // 3. Rate limiting (before auth)
+            .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // 4. Audit logging with channel
+            .wrap(middleware::Logger::default()) // 5. Access logging
+            .wrap(configure_cors(&config.cors)) // 6. CORS
+            .wrap(middleware::Compress::default()) // 7. Response compression (outermost)
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
@@ -200,10 +257,14 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.assets_service.clone())
             .app_data(app_state.feature_service.clone())
             .app_data(app_state.product_service.clone())
-            .app_data(app_state.purchase_service.clone());
+            .app_data(app_state.purchase_service.clone())
+            .app_data(app_state.audit_service.clone());
 
         app // Health check
             .route("/health", web::get().to(health_check))
+            .route("/health/live", web::get().to(health_live))
+            .route("/health/ready", web::get().to(health_ready))
+            .route("/metrics", web::get().to(metrics_endpoint))
             // V1 API routes
             .service(
                 web::scope("/api")
@@ -222,7 +283,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_manufacturing_configure)
                     .configure(v1_crm_configure)
                     .configure(v1_tenant_configure)
-                    .configure(v1_assets_configure),
+                    .configure(v1_assets_configure)
+                    .configure(v1_audit_configure),
             )
             // Swagger UI
             .service(

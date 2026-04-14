@@ -5,24 +5,13 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::cari::model::{Cari, CariStatus, CariType, CreateCari, UpdateCari};
 use crate::domain::cari::repository::{BoxCariRepository, CariRepository};
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 /// Database row representation for Cari
 #[derive(Debug, FromRow)]
@@ -93,6 +82,78 @@ impl From<CariRow> for Cari {
             created_at: row.created_at,
             updated_at: row.updated_at,
         }
+    }
+}
+
+/// Database row representation for paginated cari queries with total count
+#[derive(Debug, FromRow)]
+struct CariRowWithTotal {
+    id: i64,
+    code: String,
+    name: String,
+    cari_type: String,
+    tax_number: Option<String>,
+    tax_office: Option<String>,
+    identity_number: Option<String>,
+    email: Option<String>,
+    phone: Option<String>,
+    address: Option<String>,
+    city: Option<String>,
+    country: Option<String>,
+    postal_code: Option<String>,
+    credit_limit: Decimal,
+    current_balance: Decimal,
+    status: String,
+    tenant_id: i64,
+    created_by: i64,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    total_count: i64,
+}
+
+impl From<CariRowWithTotal> for (Cari, i64) {
+    fn from(row: CariRowWithTotal) -> (Cari, i64) {
+        let cari_type = row.cari_type.parse().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Invalid cari_type '{}' in database: {}, defaulting to Customer",
+                row.cari_type,
+                e
+            );
+            CariType::default()
+        });
+
+        let status = row.status.parse().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Invalid status '{}' in database: {}, defaulting to Active",
+                row.status,
+                e
+            );
+            CariStatus::default()
+        });
+
+        let cari = Cari {
+            id: row.id,
+            code: row.code,
+            name: row.name,
+            cari_type,
+            tax_number: row.tax_number,
+            tax_office: row.tax_office,
+            identity_number: row.identity_number,
+            email: row.email,
+            phone: row.phone,
+            address: row.address,
+            city: row.city,
+            country: row.country,
+            postal_code: row.postal_code,
+            credit_limit: row.credit_limit,
+            current_balance: row.current_balance,
+            status,
+            tenant_id: row.tenant_id,
+            created_by: row.created_by,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        };
+        (cari, row.total_count)
     }
 }
 
@@ -258,6 +319,121 @@ impl CariRepository for PostgresCariRepository {
         .map_err(|e| ApiError::Database(format!("Failed to search cari: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Cari>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+
+        let rows: Vec<CariRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
+                   email, phone, address, city, country, postal_code,
+                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM cari
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Cari"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<Cari> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(cari, _)| cari)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn find_by_type_paginated(
+        &self,
+        cari_type: CariType,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Cari>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+        let cari_type_str = cari_type.to_string();
+
+        let rows: Vec<CariRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
+                   email, phone, address, city, country, postal_code,
+                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM cari
+            WHERE tenant_id = $1 AND cari_type = $2
+            ORDER BY id DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&cari_type_str)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Cari"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<Cari> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(cari, _)| cari)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn search_paginated(
+        &self,
+        query: &str,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Cari>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+        let pattern = format!("%{}%", query);
+
+        let rows: Vec<CariRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
+                   email, phone, address, city, country, postal_code,
+                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM cari
+            WHERE tenant_id = $1
+              AND (LOWER(code) LIKE LOWER($2) OR LOWER(name) LIKE LOWER($2))
+            ORDER BY id DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&pattern)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Cari"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<Cari> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(cari, _)| cari)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update(&self, id: i64, tenant_id: i64, update: UpdateCari) -> Result<Cari, ApiError> {

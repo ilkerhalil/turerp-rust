@@ -1,4 +1,5 @@
 //! Invoice service for business logic
+use crate::common::pagination::PaginatedResult;
 use crate::domain::invoice::model::{
     CreateInvoice, CreatePayment, Invoice, InvoiceResponse, InvoiceStatus, Payment,
 };
@@ -75,6 +76,37 @@ impl InvoiceService {
         status: InvoiceStatus,
     ) -> Result<Vec<Invoice>, ApiError> {
         self.invoice_repo.find_by_status(tenant_id, status).await
+    }
+
+    /// Get invoices by tenant with pagination
+    pub async fn get_invoices_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError> {
+        crate::common::pagination::PaginationParams { page, per_page }
+            .validate()
+            .map_err(ApiError::Validation)?;
+        self.invoice_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
+    }
+
+    /// Get invoices by status with pagination
+    pub async fn get_invoices_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: InvoiceStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError> {
+        crate::common::pagination::PaginationParams { page, per_page }
+            .validate()
+            .map_err(ApiError::Validation)?;
+        self.invoice_repo
+            .find_by_status_paginated(tenant_id, status, page, per_page)
+            .await
     }
 
     pub async fn update_invoice_status(

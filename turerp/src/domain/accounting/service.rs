@@ -2,6 +2,7 @@
 use chrono::Utc;
 use rust_decimal::Decimal;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::accounting::model::{
     Account, AccountBalance, AccountType, CreateAccount, CreateJournalEntry, JournalEntry,
     JournalEntryStatus, TrialBalance,
@@ -60,6 +61,19 @@ impl AccountingService {
         self.account_repo.find_by_tenant(tenant_id).await
     }
 
+    pub async fn get_accounts_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Account>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.account_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
+    }
+
     pub async fn get_accounts_by_type(
         &self,
         tenant_id: i64,
@@ -92,6 +106,19 @@ impl AccountingService {
         tenant_id: i64,
     ) -> Result<Vec<JournalEntry>, ApiError> {
         self.entry_repo.find_by_tenant(tenant_id).await
+    }
+
+    pub async fn get_journal_entries_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<JournalEntry>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.entry_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
     }
 
     pub async fn get_journal_entries_by_date_range(

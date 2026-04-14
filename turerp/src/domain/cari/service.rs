@@ -2,6 +2,7 @@
 use rust_decimal::Decimal;
 use validator::Validate;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::cari::model::{CariResponse, CreateCari, UpdateCari};
 use crate::domain::cari::repository::BoxCariRepository;
 use crate::error::ApiError;
@@ -92,6 +93,65 @@ impl CariService {
     ) -> Result<Vec<CariResponse>, ApiError> {
         let cari_list = self.repo.search(query, tenant_id).await?;
         Ok(cari_list.into_iter().map(|c| c.into()).collect())
+    }
+
+    /// Get all cari accounts for a tenant with pagination
+    pub async fn get_all_cari_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<CariResponse>, ApiError> {
+        let result = self
+            .repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await?;
+        Ok(PaginatedResult::new(
+            result.items.into_iter().map(|c| c.into()).collect(),
+            result.page,
+            result.per_page,
+            result.total,
+        ))
+    }
+
+    /// Get cari accounts by type with pagination
+    pub async fn get_cari_by_type_paginated(
+        &self,
+        cari_type: crate::domain::cari::model::CariType,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<CariResponse>, ApiError> {
+        let result = self
+            .repo
+            .find_by_type_paginated(cari_type, tenant_id, page, per_page)
+            .await?;
+        Ok(PaginatedResult::new(
+            result.items.into_iter().map(|c| c.into()).collect(),
+            result.page,
+            result.per_page,
+            result.total,
+        ))
+    }
+
+    /// Search cari accounts with pagination
+    pub async fn search_cari_paginated(
+        &self,
+        query: &str,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<CariResponse>, ApiError> {
+        let result = self
+            .repo
+            .search_paginated(query, tenant_id, page, per_page)
+            .await?;
+        Ok(PaginatedResult::new(
+            result.items.into_iter().map(|c| c.into()).collect(),
+            result.page,
+            result.per_page,
+            result.total,
+        ))
     }
 
     /// Update a cari account

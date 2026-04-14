@@ -36,6 +36,8 @@ pub mod app {
     use crate::domain::assets::repository::BoxAssetsRepository;
     use crate::domain::assets::service::AssetsService;
     use crate::domain::assets::AssetsRepository;
+    use crate::domain::audit::repository::BoxAuditLogRepository;
+    use crate::domain::audit::service::AuditService;
     use crate::domain::auth::AuthService;
     use crate::domain::cari::repository::BoxCariRepository;
     use crate::domain::cari::service::CariService;
@@ -91,6 +93,7 @@ pub mod app {
         InMemoryAccountRepository, InMemoryJournalEntryRepository, InMemoryJournalLineRepository,
     };
     use crate::domain::assets::repository::InMemoryAssetsRepository;
+    use crate::domain::audit::repository::InMemoryAuditLogRepository;
     use crate::domain::cari::repository::InMemoryCariRepository;
     use crate::domain::crm::repository::{
         InMemoryCampaignRepository, InMemoryLeadRepository, InMemoryOpportunityRepository,
@@ -139,6 +142,8 @@ pub mod app {
     use crate::domain::assets::postgres_repository::{
         PostgresAssetCategoryRepository, PostgresAssetsRepository,
     };
+    #[cfg(feature = "postgres")]
+    use crate::domain::audit::postgres_repository::PostgresAuditLogRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::cari::postgres_repository::PostgresCariRepository;
     #[cfg(feature = "postgres")]
@@ -212,6 +217,7 @@ pub mod app {
         pub feature_service: web::Data<FeatureFlagService>,
         pub product_service: web::Data<ProductService>,
         pub purchase_service: web::Data<PurchaseService>,
+        pub audit_service: web::Data<AuditService>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
     }
@@ -366,6 +372,10 @@ pub mod app {
                 request_line_repo,
             );
 
+            // Audit
+            let audit_repo = Arc::new(InMemoryAuditLogRepository::new()) as BoxAuditLogRepository;
+            let audit_service = AuditService::new(audit_repo);
+
             (
                 auth_service,
                 user_service,
@@ -384,6 +394,7 @@ pub mod app {
                 feature_service,
                 product_service,
                 purchase_service,
+                audit_service,
             )
         }};
     }
@@ -409,6 +420,7 @@ pub mod app {
             feature_service,
             product_service,
             purchase_service,
+            audit_service,
         ) = create_in_memory_services!(config);
 
         AppState {
@@ -429,6 +441,7 @@ pub mod app {
             feature_service: web::Data::new(feature_service),
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
+            audit_service: web::Data::new(audit_service),
         }
     }
 
@@ -565,6 +578,10 @@ pub mod app {
             request_line_repo,
         );
 
+        // Audit - PostgreSQL
+        let audit_repo = PostgresAuditLogRepository::new(pool.clone()).into_boxed();
+        let audit_service = AuditService::new(audit_repo);
+
         AppState {
             auth_service: web::Data::new(auth_service),
             user_service: web::Data::new(user_service),
@@ -583,6 +600,7 @@ pub mod app {
             feature_service: web::Data::new(feature_service),
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
+            audit_service: web::Data::new(audit_service),
             db_pool: web::Data::new(pool),
         }
     }
@@ -614,6 +632,7 @@ pub mod app {
             feature_service,
             product_service,
             purchase_service,
+            audit_service,
         ) = create_in_memory_services!(config);
 
         // For in-memory testing with postgres feature, create a mock pool
@@ -644,6 +663,7 @@ pub mod app {
             feature_service: web::Data::new(feature_service),
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
+            audit_service: web::Data::new(audit_service),
             db_pool,
         }
     }

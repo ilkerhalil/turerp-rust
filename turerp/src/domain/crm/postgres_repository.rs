@@ -5,6 +5,8 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::crm::model::{
     Campaign, CampaignStatus, CreateCampaign, CreateLead, CreateOpportunity, CreateTicket, Lead,
     LeadStatus, Opportunity, OpportunityStatus, Ticket, TicketPriority, TicketStatus,
@@ -16,19 +18,6 @@ use crate::domain::crm::repository::{
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 // ==================== LEAD ====================
 
@@ -48,6 +37,7 @@ struct LeadRow {
     notes: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    total_count: Option<i64>,
 }
 
 impl From<LeadRow> for Lead {
@@ -156,9 +146,39 @@ impl LeadRepository for PostgresLeadRepository {
         .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to find leads by tenant: {}", e)))?;
+        .map_err(|e| map_sqlx_error(e, "Lead"))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Lead>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<LeadRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, company, email, phone, source,
+                   status, assigned_to, converted_to_customer_id, notes, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM leads
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Lead"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Lead> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_status(
@@ -181,9 +201,42 @@ impl LeadRepository for PostgresLeadRepository {
         .bind(&status_str)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to find leads by status: {}", e)))?;
+        .map_err(|e| map_sqlx_error(e, "Lead"))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: LeadStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Lead>, ApiError> {
+        let status_str = status.to_string();
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<LeadRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, company, email, phone, source,
+                   status, assigned_to, converted_to_customer_id, notes, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM leads
+            WHERE tenant_id = $1 AND status = $2
+            ORDER BY id DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&status_str)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Lead"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Lead> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError> {
@@ -264,6 +317,7 @@ struct OpportunityRow {
     notes: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    total_count: Option<i64>,
 }
 
 impl From<OpportunityRow> for Opportunity {
@@ -373,11 +427,39 @@ impl OpportunityRepository for PostgresOpportunityRepository {
         .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| {
-            ApiError::Database(format!("Failed to find opportunities by tenant: {}", e))
-        })?;
+        .map_err(|e| map_sqlx_error(e, "Opportunity"))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Opportunity>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<OpportunityRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, lead_id, name, customer_id, value, probability,
+                   expected_close_date, status, assigned_to, notes, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM opportunities
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Opportunity"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Opportunity> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_status(
@@ -400,11 +482,42 @@ impl OpportunityRepository for PostgresOpportunityRepository {
         .bind(&status_str)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| {
-            ApiError::Database(format!("Failed to find opportunities by status: {}", e))
-        })?;
+        .map_err(|e| map_sqlx_error(e, "Opportunity"))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: OpportunityStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Opportunity>, ApiError> {
+        let status_str = status.to_string();
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<OpportunityRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, lead_id, name, customer_id, value, probability,
+                   expected_close_date, status, assigned_to, notes, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM opportunities
+            WHERE tenant_id = $1 AND status = $2
+            ORDER BY id DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&status_str)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Opportunity"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Opportunity> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_customer(&self, customer_id: i64) -> Result<Vec<Opportunity>, ApiError> {
@@ -489,6 +602,7 @@ struct CampaignRow {
     end_date: Option<chrono::DateTime<chrono::Utc>>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    total_count: Option<i64>,
 }
 
 impl From<CampaignRow> for Campaign {
@@ -596,9 +710,39 @@ impl CampaignRepository for PostgresCampaignRepository {
         .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to find campaigns by tenant: {}", e)))?;
+        .map_err(|e| map_sqlx_error(e, "Campaign"))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Campaign>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<CampaignRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, description, campaign_type, status,
+                   budget, actual_cost, start_date, end_date, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM campaigns
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Campaign"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Campaign> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_status(
@@ -621,9 +765,42 @@ impl CampaignRepository for PostgresCampaignRepository {
         .bind(&status_str)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to find campaigns by status: {}", e)))?;
+        .map_err(|e| map_sqlx_error(e, "Campaign"))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: CampaignStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Campaign>, ApiError> {
+        let status_str = status.to_string();
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<CampaignRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, description, campaign_type, status,
+                   budget, actual_cost, start_date, end_date, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM campaigns
+            WHERE tenant_id = $1 AND status = $2
+            ORDER BY id DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&status_str)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Campaign"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Campaign> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update_status(&self, id: i64, status: CampaignStatus) -> Result<Campaign, ApiError> {
@@ -685,6 +862,7 @@ struct TicketRow {
     resolved_at: Option<chrono::DateTime<chrono::Utc>>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    total_count: Option<i64>,
 }
 
 impl From<TicketRow> for Ticket {
@@ -808,9 +986,39 @@ impl TicketRepository for PostgresTicketRepository {
         .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to find tickets by tenant: {}", e)))?;
+        .map_err(|e| map_sqlx_error(e, "Ticket"))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Ticket>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<TicketRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, ticket_number, subject, description,
+                   customer_id, assigned_to, status, priority, category,
+                   resolved_at, created_at, updated_at, COUNT(*) OVER() as total_count
+            FROM tickets
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Ticket"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Ticket> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_number(
@@ -857,9 +1065,42 @@ impl TicketRepository for PostgresTicketRepository {
         .bind(&status_str)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to find tickets by status: {}", e)))?;
+        .map_err(|e| map_sqlx_error(e, "Ticket"))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: TicketStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Ticket>, ApiError> {
+        let status_str = status.to_string();
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<TicketRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, ticket_number, subject, description,
+                   customer_id, assigned_to, status, priority, category,
+                   resolved_at, created_at, updated_at, COUNT(*) OVER() as total_count
+            FROM tickets
+            WHERE tenant_id = $1 AND status = $2
+            ORDER BY id DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&status_str)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Ticket"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Ticket> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError> {

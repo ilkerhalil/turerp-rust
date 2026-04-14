@@ -13,6 +13,7 @@ pub use users::configure as users_configure;
 // V1 re-exports
 pub use v1::accounting_configure as v1_accounting_configure;
 pub use v1::assets_configure as v1_assets_configure;
+pub use v1::audit_configure as v1_audit_configure;
 pub use v1::auth_configure as v1_auth_configure;
 pub use v1::cari_configure as v1_cari_configure;
 pub use v1::crm_configure as v1_crm_configure;

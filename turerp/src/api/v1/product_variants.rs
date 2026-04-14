@@ -2,9 +2,64 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::product::{CreateProductVariant, ProductService, UpdateProductVariant};
 use crate::error::ApiResult;
 use crate::middleware::AuthUser;
+
+// --- Products ---
+
+/// Get all products (paginated)
+#[utoipa::path(
+    get,
+    path = "/api/v1/products",
+    tag = "Products",
+    params(PaginationParams),
+    responses(
+        (status = 200, description = "Paginated list of products"),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn get_products(
+    auth_user: AuthUser,
+    service: web::Data<ProductService>,
+    query: web::Query<PaginationParams>,
+) -> ApiResult<HttpResponse> {
+    let result = service
+        .get_products_paginated(auth_user.0.tenant_id, query.page, query.per_page)
+        .await?;
+    Ok(HttpResponse::Ok().json(result))
+}
+
+// --- Categories ---
+
+/// Get all categories (paginated)
+#[utoipa::path(
+    get,
+    path = "/api/v1/categories",
+    tag = "Products",
+    params(PaginationParams),
+    responses(
+        (status = 200, description = "Paginated list of categories"),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn get_categories(
+    auth_user: AuthUser,
+    service: web::Data<ProductService>,
+    query: web::Query<PaginationParams>,
+) -> ApiResult<HttpResponse> {
+    let result = service
+        .get_categories_paginated(auth_user.0.tenant_id, query.page, query.per_page)
+        .await?;
+    Ok(HttpResponse::Ok().json(result))
+}
 
 /// Create product variant endpoint (requires authentication)
 #[utoipa::path(
@@ -149,15 +204,17 @@ pub async fn delete_variant(
 
 /// Configure product variant routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::resource("/v1/products/{product_id}/variants")
-            .route(web::get().to(get_variants_by_product))
-            .route(web::post().to(create_variant)),
-    )
-    .service(
-        web::resource("/v1/variants/{id}")
-            .route(web::get().to(get_variant))
-            .route(web::put().to(update_variant))
-            .route(web::delete().to(delete_variant)),
-    );
+    cfg.service(web::resource("/v1/products").route(web::get().to(get_products)))
+        .service(web::resource("/v1/categories").route(web::get().to(get_categories)))
+        .service(
+            web::resource("/v1/products/{product_id}/variants")
+                .route(web::get().to(get_variants_by_product))
+                .route(web::post().to(create_variant)),
+        )
+        .service(
+            web::resource("/v1/variants/{id}")
+                .route(web::get().to(get_variant))
+                .route(web::put().to(update_variant))
+                .route(web::delete().to(delete_variant)),
+        );
 }

@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::invoice::model::{
     CreateInvoice, CreatePayment, Invoice, InvoiceLine, InvoiceStatus, InvoiceType, Payment,
 };
@@ -27,6 +28,24 @@ pub trait InvoiceRepository: Send + Sync {
         tenant_id: i64,
         status: InvoiceStatus,
     ) -> Result<Vec<Invoice>, ApiError>;
+
+    /// Find invoices by tenant with pagination
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError>;
+
+    /// Find invoices by status with pagination
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: InvoiceStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError>;
+
     async fn update_status(&self, id: i64, status: InvoiceStatus) -> Result<Invoice, ApiError>;
     async fn update_paid_amount(&self, id: i64, paid_amount: Decimal) -> Result<Invoice, ApiError>;
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
@@ -218,6 +237,51 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
             .filter(|i| i.tenant_id == tenant_id && i.status == status)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .invoices
+            .values()
+            .filter(|i| i.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: InvoiceStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .invoices
+            .values()
+            .filter(|i| i.tenant_id == tenant_id && i.status == status)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update_status(&self, id: i64, status: InvoiceStatus) -> Result<Invoice, ApiError> {

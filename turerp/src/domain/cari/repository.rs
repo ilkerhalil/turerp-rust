@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::cari::model::{Cari, CreateCari, UpdateCari};
 use crate::error::ApiError;
 
@@ -32,6 +33,32 @@ pub trait CariRepository: Send + Sync {
 
     /// Search cari accounts by name or code
     async fn search(&self, query: &str, tenant_id: i64) -> Result<Vec<Cari>, ApiError>;
+
+    /// Find all cari accounts for a tenant with pagination
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Cari>, ApiError>;
+
+    /// Find cari accounts by type with pagination
+    async fn find_by_type_paginated(
+        &self,
+        cari_type: crate::domain::cari::model::CariType,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Cari>, ApiError>;
+
+    /// Search cari accounts by name or code with pagination
+    async fn search_paginated(
+        &self,
+        query: &str,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Cari>, ApiError>;
 
     /// Update a cari
     async fn update(&self, id: i64, tenant_id: i64, cari: UpdateCari) -> Result<Cari, ApiError>;
@@ -173,6 +200,79 @@ impl CariRepository for InMemoryCariRepository {
             })
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Cari>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .cari
+            .values()
+            .filter(|c| c.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn find_by_type_paginated(
+        &self,
+        cari_type: crate::domain::cari::model::CariType,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Cari>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .cari
+            .values()
+            .filter(|c| c.tenant_id == tenant_id && c.cari_type == cari_type)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn search_paginated(
+        &self,
+        query: &str,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Cari>, ApiError> {
+        let inner = self.inner.lock();
+        let query_lower = query.to_lowercase();
+        let all: Vec<_> = inner
+            .cari
+            .values()
+            .filter(|c| {
+                c.tenant_id == tenant_id
+                    && (c.code.to_lowercase().contains(&query_lower)
+                        || c.name.to_lowercase().contains(&query_lower))
+            })
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update(&self, id: i64, tenant_id: i64, update: UpdateCari) -> Result<Cari, ApiError> {

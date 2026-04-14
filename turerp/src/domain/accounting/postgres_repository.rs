@@ -6,6 +6,8 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::accounting::model::{
     Account, AccountSubType, AccountType, CreateAccount, CreateJournalEntry, CreateJournalLine,
     JournalEntry, JournalEntryStatus, JournalLine,
@@ -17,19 +19,6 @@ use crate::domain::accounting::repository::{
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // AccountRow / Account conversion
@@ -48,6 +37,7 @@ struct AccountRow {
     is_active: bool,
     allow_transaction: bool,
     created_at: DateTime<Utc>,
+    total_count: Option<i64>,
 }
 
 impl From<AccountRow> for Account {
@@ -104,6 +94,7 @@ struct JournalEntryRow {
     created_by: i64,
     created_at: DateTime<Utc>,
     posted_at: Option<DateTime<Utc>>,
+    total_count: Option<i64>,
 }
 
 impl From<JournalEntryRow> for JournalEntry {
@@ -244,6 +235,35 @@ impl AccountRepository for PostgresAccountRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find accounts by tenant: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Account>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<AccountRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at,
+                   COUNT(*) OVER() as total_count
+            FROM accounts
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Account"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Account> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Account>, ApiError> {
@@ -426,6 +446,35 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find journal entries by tenant: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<JournalEntry>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<JournalEntryRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at,
+                   COUNT(*) OVER() as total_count
+            FROM journal_entries
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "JournalEntry"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<JournalEntry> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_date_range(

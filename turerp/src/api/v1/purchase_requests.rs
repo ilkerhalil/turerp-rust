@@ -12,9 +12,9 @@ use crate::domain::purchase::{
 use crate::error::ApiResult;
 use crate::middleware::{AdminUser, AuthUser};
 
-/// Query parameters for listing purchase requests
-#[derive(Debug, Deserialize)]
-pub struct QueryParams {
+/// Query parameters for listing purchase requests (extends pagination with status filter)
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct PurchaseRequestQueryParams {
     /// Filter by status
     pub status: Option<String>,
     /// Page number (1-based)
@@ -33,7 +33,7 @@ fn default_per_page() -> u32 {
     20
 }
 
-impl QueryParams {
+impl PurchaseRequestQueryParams {
     /// Validate and sanitize query parameters
     pub fn validate(&self) -> Result<(), String> {
         if self.page == 0 {
@@ -95,7 +95,7 @@ pub async fn create_request(
 pub async fn get_requests(
     auth_user: AuthUser,
     service: web::Data<PurchaseService>,
-    query: web::Query<QueryParams>,
+    query: web::Query<PurchaseRequestQueryParams>,
 ) -> ApiResult<HttpResponse> {
     query
         .validate()

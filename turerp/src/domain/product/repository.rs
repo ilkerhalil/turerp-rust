@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::product::model::{
     Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
     ProductVariant, Unit, UpdateProduct, UpdateProductVariant,
@@ -16,6 +17,12 @@ pub trait ProductRepository: Send + Sync {
     async fn create(&self, product: CreateProduct) -> Result<Product, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<Product>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Product>, ApiError>;
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Product>, ApiError>;
     async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Product>, ApiError>;
     async fn update(&self, id: i64, product: UpdateProduct) -> Result<Product, ApiError>;
@@ -28,6 +35,12 @@ pub trait CategoryRepository: Send + Sync {
     async fn create(&self, category: CreateCategory) -> Result<Category, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<Category>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Category>, ApiError>;
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
 }
 
@@ -141,6 +154,28 @@ impl ProductRepository for InMemoryProductRepository {
             .iter()
             .filter_map(|id| inner.products.get(id).cloned())
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Product>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .products
+            .values()
+            .filter(|p| p.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Product>, ApiError> {
@@ -291,6 +326,28 @@ impl CategoryRepository for InMemoryCategoryRepository {
             .filter(|c| c.tenant_id == tenant_id)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Category>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .categories
+            .values()
+            .filter(|c| c.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {

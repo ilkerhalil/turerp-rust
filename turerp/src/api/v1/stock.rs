@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::stock::model::{CreateStockMovement, CreateWarehouse};
 use crate::domain::stock::service::StockService;
 use crate::error::ApiResult;
@@ -45,11 +46,12 @@ pub async fn create_warehouse(
 pub async fn get_warehouses(
     auth_user: AuthUser,
     stock_service: web::Data<StockService>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let warehouses = stock_service
-        .get_warehouses_by_tenant(auth_user.0.tenant_id)
+    let result = stock_service
+        .get_warehouses_paginated(auth_user.0.tenant_id, query.page, query.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(warehouses))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get warehouse by ID (requires authentication)

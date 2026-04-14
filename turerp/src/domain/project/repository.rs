@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::project::model::{
     CreateProject, CreateProjectCost, CreateWbsItem, Project, ProjectCost, ProjectStatus, WbsItem,
 };
@@ -16,6 +17,12 @@ pub trait ProjectRepository: Send + Sync {
     async fn create(&self, project: CreateProject) -> Result<Project, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<Project>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Project>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Project>, ApiError>;
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Project>, ApiError>;
     async fn find_by_status(
         &self,
@@ -118,6 +125,27 @@ impl ProjectRepository for InMemoryProjectRepository {
             .filter(|x| x.tenant_id == tenant_id)
             .cloned()
             .collect())
+    }
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Project>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .projects
+            .values()
+            .filter(|x| x.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Project>, ApiError> {
         let inner = self.inner.lock();

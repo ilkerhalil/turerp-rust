@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::hr::model::{
     CreateAttendance, CreateEmployee, CreateLeaveRequest, EmployeeStatus,
 };
@@ -36,11 +37,12 @@ pub async fn create_employee(
 pub async fn get_employees(
     auth_user: AuthUser,
     hr_service: web::Data<HrService>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let employees = hr_service
-        .get_employees_by_tenant(auth_user.0.tenant_id)
+    let result = hr_service
+        .get_employees_paginated(auth_user.0.tenant_id, query.page, query.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(employees))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get employee by ID

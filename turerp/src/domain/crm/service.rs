@@ -2,6 +2,7 @@
 
 use rust_decimal::Decimal;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::crm::model::{
     Campaign, CampaignStatus, CreateCampaign, CreateLead, CreateOpportunity, CreateTicket, Lead,
     LeadStatus, Opportunity, OpportunityStatus, Ticket, TicketStatus,
@@ -50,12 +51,39 @@ impl CrmService {
         self.lead_repo.find_by_tenant(tenant_id).await
     }
 
+    pub async fn get_leads_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Lead>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.lead_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
+    }
+
     pub async fn get_leads_by_status(
         &self,
         tenant_id: i64,
         status: LeadStatus,
     ) -> Result<Vec<Lead>, ApiError> {
         self.lead_repo.find_by_status(tenant_id, status).await
+    }
+
+    pub async fn get_leads_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: LeadStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Lead>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.lead_repo
+            .find_by_status_paginated(tenant_id, status, page, per_page)
+            .await
     }
 
     pub async fn update_lead_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError> {
@@ -90,6 +118,33 @@ impl CrmService {
         tenant_id: i64,
     ) -> Result<Vec<Opportunity>, ApiError> {
         self.opportunity_repo.find_by_tenant(tenant_id).await
+    }
+
+    pub async fn get_opportunities_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Opportunity>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.opportunity_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
+    }
+
+    pub async fn get_opportunities_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: OpportunityStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Opportunity>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.opportunity_repo
+            .find_by_status_paginated(tenant_id, status, page, per_page)
+            .await
     }
 
     pub async fn get_opportunities_by_status(
@@ -133,6 +188,33 @@ impl CrmService {
         self.campaign_repo.find_by_tenant(tenant_id).await
     }
 
+    pub async fn get_campaigns_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Campaign>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.campaign_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
+    }
+
+    pub async fn get_campaigns_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: CampaignStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Campaign>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.campaign_repo
+            .find_by_status_paginated(tenant_id, status, page, per_page)
+            .await
+    }
+
     pub async fn get_campaigns_by_status(
         &self,
         tenant_id: i64,
@@ -173,6 +255,33 @@ impl CrmService {
 
     pub async fn get_tickets_by_tenant(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError> {
         self.ticket_repo.find_by_tenant(tenant_id).await
+    }
+
+    pub async fn get_tickets_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Ticket>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.ticket_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
+    }
+
+    pub async fn get_tickets_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: TicketStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Ticket>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.ticket_repo
+            .find_by_status_paginated(tenant_id, status, page, per_page)
+            .await
     }
 
     pub async fn get_tickets_by_status(

@@ -2,6 +2,7 @@
 
 pub mod accounting;
 pub mod assets;
+pub mod audit;
 pub mod auth;
 pub mod cari;
 pub mod crm;
@@ -161,6 +162,13 @@ pub use user::repository::{
     BoxUserRepository, InMemoryUserRepository, RepositoryError, UserRepository,
 };
 pub use user::service::UserService;
+
+// Audit module re-exports
+pub use audit::model::{AuditLog, AuditLogQueryParams};
+pub use audit::repository::{
+    AuditLogRepository, BoxAuditLogRepository, InMemoryAuditLogRepository,
+};
+pub use audit::service::AuditService;
 
 // Feature module re-exports
 pub use feature::model::{

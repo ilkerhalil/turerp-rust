@@ -6,6 +6,8 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::sales::model::{
     CreateQuotation, CreateQuotationLine, CreateSalesOrder, CreateSalesOrderLine, Quotation,
     QuotationLine, QuotationStatus, SalesOrder, SalesOrderLine, SalesOrderStatus,
@@ -18,19 +20,6 @@ use crate::domain::sales::repository::{
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Row structs
@@ -86,6 +75,61 @@ impl From<SalesOrderRow> for SalesOrder {
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
         }
+    }
+}
+
+/// Database row representation for SalesOrder with total count (for pagination)
+#[derive(Debug, FromRow)]
+struct SalesOrderRowWithTotal {
+    id: i64,
+    tenant_id: i64,
+    order_number: String,
+    cari_id: i64,
+    status: String,
+    order_date: DateTime<Utc>,
+    delivery_date: Option<DateTime<Utc>>,
+    subtotal: Decimal,
+    tax_amount: Decimal,
+    discount_amount: Decimal,
+    total_amount: Decimal,
+    notes: Option<String>,
+    shipping_address: Option<String>,
+    billing_address: Option<String>,
+    created_at: DateTime<Utc>,
+    updated_at: Option<DateTime<Utc>>,
+    total_count: i64,
+}
+
+impl From<SalesOrderRowWithTotal> for (SalesOrder, i64) {
+    fn from(row: SalesOrderRowWithTotal) -> (SalesOrder, i64) {
+        let status = row.status.parse().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Invalid sales order status '{}' in database: {}, defaulting to Draft",
+                row.status,
+                e
+            );
+            SalesOrderStatus::Draft
+        });
+
+        let order = SalesOrder {
+            id: row.id,
+            tenant_id: row.tenant_id,
+            order_number: row.order_number,
+            cari_id: row.cari_id,
+            status,
+            order_date: row.order_date,
+            delivery_date: row.delivery_date,
+            subtotal: row.subtotal,
+            tax_amount: row.tax_amount,
+            discount_amount: row.discount_amount,
+            total_amount: row.total_amount,
+            notes: row.notes,
+            shipping_address: row.shipping_address,
+            billing_address: row.billing_address,
+            created_at: row.created_at,
+            updated_at: row.updated_at.unwrap_or(row.created_at),
+        };
+        (order, row.total_count)
     }
 }
 
@@ -169,6 +213,59 @@ impl From<QuotationRow> for Quotation {
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
         }
+    }
+}
+
+/// Database row representation for Quotation with total count (for pagination)
+#[derive(Debug, FromRow)]
+struct QuotationRowWithTotal {
+    id: i64,
+    tenant_id: i64,
+    quotation_number: String,
+    cari_id: i64,
+    status: String,
+    valid_until: DateTime<Utc>,
+    subtotal: Decimal,
+    tax_amount: Decimal,
+    discount_amount: Decimal,
+    total_amount: Decimal,
+    notes: Option<String>,
+    terms: Option<String>,
+    sales_order_id: Option<i64>,
+    created_at: DateTime<Utc>,
+    updated_at: Option<DateTime<Utc>>,
+    total_count: i64,
+}
+
+impl From<QuotationRowWithTotal> for (Quotation, i64) {
+    fn from(row: QuotationRowWithTotal) -> (Quotation, i64) {
+        let status = row.status.parse().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Invalid quotation status '{}' in database: {}, defaulting to Draft",
+                row.status,
+                e
+            );
+            QuotationStatus::Draft
+        });
+
+        let quotation = Quotation {
+            id: row.id,
+            tenant_id: row.tenant_id,
+            quotation_number: row.quotation_number,
+            cari_id: row.cari_id,
+            status,
+            valid_until: row.valid_until,
+            subtotal: row.subtotal,
+            tax_amount: row.tax_amount,
+            discount_amount: row.discount_amount,
+            total_amount: row.total_amount,
+            notes: row.notes,
+            terms: row.terms,
+            sales_order_id: row.sales_order_id,
+            created_at: row.created_at,
+            updated_at: row.updated_at.unwrap_or(row.created_at),
+        };
+        (quotation, row.total_count)
     }
 }
 
@@ -390,6 +487,81 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find sales orders by status: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<SalesOrder>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+
+        let rows: Vec<SalesOrderRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+                   delivery_date, subtotal, tax_amount, discount_amount, total_amount,
+                   notes, shipping_address, billing_address, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM sales_orders
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "SalesOrder"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<SalesOrder> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(order, _)| order)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: SalesOrderStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<SalesOrder>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+        let status_str = status.to_string();
+
+        let rows: Vec<SalesOrderRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+                   delivery_date, subtotal, tax_amount, discount_amount, total_amount,
+                   notes, shipping_address, billing_address, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM sales_orders
+            WHERE tenant_id = $1 AND status = $2
+            ORDER BY id DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&status_str)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "SalesOrder"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<SalesOrder> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(order, _)| order)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update_status(
@@ -679,6 +851,81 @@ impl QuotationRepository for PostgresQuotationRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find quotations by status: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Quotation>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+
+        let rows: Vec<QuotationRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
+                   subtotal, tax_amount, discount_amount, total_amount,
+                   notes, terms, sales_order_id, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM quotations
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Quotation"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<Quotation> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(quotation, _)| quotation)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: QuotationStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Quotation>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+        let status_str = status.to_string();
+
+        let rows: Vec<QuotationRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
+                   subtotal, tax_amount, discount_amount, total_amount,
+                   notes, terms, sales_order_id, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM quotations
+            WHERE tenant_id = $1 AND status = $2
+            ORDER BY id DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&status_str)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Quotation"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<Quotation> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(quotation, _)| quotation)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update_status(&self, id: i64, status: QuotationStatus) -> Result<Quotation, ApiError> {

@@ -1,4 +1,5 @@
 //! Product service for business logic
+use crate::common::pagination::PaginatedResult;
 use crate::domain::product::model::{
     Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
     ProductVariantResponse, Unit, UpdateProduct, UpdateProductVariant,
@@ -79,6 +80,19 @@ impl ProductService {
         self.product_repo.find_by_tenant(tenant_id).await
     }
 
+    pub async fn get_products_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Product>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.product_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
+    }
+
     pub async fn search_products(
         &self,
         tenant_id: i64,
@@ -119,6 +133,19 @@ impl ProductService {
         tenant_id: i64,
     ) -> Result<Vec<Category>, ApiError> {
         self.category_repo.find_by_tenant(tenant_id).await
+    }
+
+    pub async fn get_categories_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Category>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.category_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
     }
 
     pub async fn delete_category(&self, id: i64) -> Result<(), ApiError> {

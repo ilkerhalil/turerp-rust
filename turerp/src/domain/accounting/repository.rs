@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::accounting::model::{
     Account, AccountSubType, AccountType, CreateAccount, CreateJournalEntry, CreateJournalLine,
     JournalEntry, JournalEntryStatus, JournalLine,
@@ -18,6 +19,12 @@ pub trait AccountRepository: Send + Sync {
     async fn create(&self, account: CreateAccount) -> Result<Account, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<Account>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Account>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Account>, ApiError>;
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Account>, ApiError>;
     async fn find_by_type(
         &self,
@@ -39,6 +46,12 @@ pub trait JournalEntryRepository: Send + Sync {
     async fn create(&self, entry: CreateJournalEntry) -> Result<JournalEntry, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<JournalEntry>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<JournalEntry>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<JournalEntry>, ApiError>;
     async fn find_by_date_range(
         &self,
         tenant_id: i64,
@@ -253,6 +266,28 @@ impl AccountRepository for InMemoryAccountRepository {
             .collect())
     }
 
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Account>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .accounts
+            .values()
+            .filter(|a| a.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Account>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
@@ -377,6 +412,28 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
             .filter(|e| e.tenant_id == tenant_id)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<JournalEntry>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .entries
+            .values()
+            .filter(|e| e.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_date_range(

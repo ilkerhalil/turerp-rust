@@ -2,6 +2,7 @@
 
 pub mod accounting;
 pub mod assets;
+pub mod audit;
 pub mod auth;
 pub mod cari;
 pub mod crm;
@@ -20,6 +21,7 @@ pub mod users;
 // Explicit re-exports to avoid ambiguity
 pub use accounting::configure as accounting_configure;
 pub use assets::configure as assets_configure;
+pub use audit::configure as audit_configure;
 pub use auth::configure as auth_configure;
 pub use cari::configure as cari_configure;
 pub use crm::configure as crm_configure;

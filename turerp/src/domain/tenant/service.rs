@@ -1,4 +1,5 @@
 //! Tenant service for business logic
+use crate::common::pagination::PaginatedResult;
 use crate::domain::tenant::model::{
     CreateTenant, CreateTenantConfig, Tenant, TenantConfigResponse, UpdateTenant,
     UpdateTenantConfig,
@@ -58,6 +59,18 @@ impl TenantService {
     /// Get all tenants
     pub async fn get_all_tenants(&self) -> Result<Vec<Tenant>, ApiError> {
         self.repo.find_all().await
+    }
+
+    /// Get all tenants paginated
+    pub async fn get_all_tenants_paginated(
+        &self,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Tenant>, ApiError> {
+        crate::common::pagination::PaginationParams { page, per_page }
+            .validate()
+            .map_err(ApiError::Validation)?;
+        self.repo.find_all_paginated(page, per_page).await
     }
 
     /// Update a tenant

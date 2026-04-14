@@ -6,6 +6,8 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::hr::model::{
     Attendance, AttendanceStatus, CreateAttendance, CreateEmployee, CreateLeaveRequest, Employee,
     EmployeeStatus, LeaveRequest, LeaveRequestStatus, LeaveType, Payroll, PayrollStatus,
@@ -18,19 +20,6 @@ use crate::domain::hr::repository::{
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Employee row and repository
@@ -55,6 +44,7 @@ struct EmployeeRow {
     salary: Decimal,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    total_count: Option<i64>,
 }
 
 impl From<EmployeeRow> for Employee {
@@ -175,9 +165,39 @@ impl EmployeeRepository for PostgresEmployeeRepository {
         .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to find employees by tenant: {}", e)))?;
+        .map_err(|e| map_sqlx_error(e, "Employee"))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Employee>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<EmployeeRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
+                   email, phone, department, position, hire_date, termination_date,
+                   status, salary, created_at, updated_at, COUNT(*) OVER() as total_count
+            FROM employees
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Employee"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Employee> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_user(&self, user_id: i64) -> Result<Option<Employee>, ApiError> {

@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::accounting::model::{AccountType, CreateAccount, CreateJournalEntry};
 use crate::domain::accounting::service::AccountingService;
 use crate::error::ApiResult;
@@ -28,17 +29,19 @@ pub async fn create_account(
 /// Get all accounts
 #[utoipa::path(
     get, path = "/api/v1/accounting/accounts", tag = "Accounting",
+    params(PaginationParams),
     responses((status = 200, description = "List of accounts")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_accounts(
     auth_user: AuthUser,
     accounting_service: web::Data<AccountingService>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let accounts = accounting_service
-        .get_accounts_by_tenant(auth_user.0.tenant_id)
+    let result = accounting_service
+        .get_accounts_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(accounts))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get accounts by type
@@ -97,17 +100,19 @@ pub async fn create_journal_entry(
 /// Get all journal entries
 #[utoipa::path(
     get, path = "/api/v1/accounting/journal-entries", tag = "Accounting",
+    params(PaginationParams),
     responses((status = 200, description = "List of journal entries")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_journal_entries(
     auth_user: AuthUser,
     accounting_service: web::Data<AccountingService>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let entries = accounting_service
-        .get_journal_entries_by_tenant(auth_user.0.tenant_id)
+    let result = accounting_service
+        .get_journal_entries_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(entries))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get journal entry by ID

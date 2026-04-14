@@ -175,6 +175,85 @@ impl CorsConfig {
     }
 }
 
+/// Rate limiting configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct RateLimitConfig {
+    /// Trusted proxy IPs that may set X-Forwarded-For headers
+    pub trusted_proxies: Vec<String>,
+    /// Maximum requests per minute per IP
+    pub requests_per_minute: u32,
+    /// Maximum burst size
+    pub burst_size: u32,
+}
+
+/// Metrics configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct MetricsConfig {
+    /// Whether metrics collection is enabled
+    pub enabled: bool,
+    /// Path for the metrics endpoint
+    pub path: String,
+}
+
+impl Default for MetricsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            path: "/metrics".to_string(),
+        }
+    }
+}
+
+impl MetricsConfig {
+    pub fn from_env() -> Self {
+        Self {
+            enabled: std::env::var("TURERP_METRICS_ENABLED")
+                .ok()
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(true),
+            path: std::env::var("TURERP_METRICS_PATH")
+                .ok()
+                .unwrap_or_else(|| "/metrics".to_string()),
+        }
+    }
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            trusted_proxies: Vec::new(),
+            requests_per_minute: 10,
+            burst_size: 3,
+        }
+    }
+}
+
+impl RateLimitConfig {
+    pub fn from_env() -> Self {
+        let trusted_proxies = std::env::var("TURERP_TRUSTED_PROXIES")
+            .ok()
+            .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+            .unwrap_or_default();
+
+        Self {
+            trusted_proxies,
+            requests_per_minute: std::env::var("TURERP_RATE_LIMIT_REQUESTS_PER_MINUTE")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(10),
+            burst_size: std::env::var("TURERP_RATE_LIMIT_BURST")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(3),
+        }
+    }
+
+    /// Check if trusted proxies are configured
+    pub fn has_trusted_proxies(&self) -> bool {
+        !self.trusted_proxies.is_empty()
+    }
+}
+
 /// Application configuration
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
@@ -183,6 +262,8 @@ pub struct Config {
     pub database: DatabaseConfig,
     pub jwt: JwtConfig,
     pub cors: CorsConfig,
+    pub rate_limit: RateLimitConfig,
+    pub metrics: MetricsConfig,
 }
 
 impl Default for Config {
@@ -201,6 +282,8 @@ impl Default for Config {
                 refresh_token_expiration: 604800,
             },
             cors: CorsConfig::default(),
+            rate_limit: RateLimitConfig::default(),
+            metrics: MetricsConfig::default(),
         }
     }
 }
@@ -253,6 +336,8 @@ impl Config {
         let database = DatabaseConfig::from_env()?;
         let jwt = JwtConfig::from_env()?;
         let cors = CorsConfig::from_env()?;
+        let rate_limit = RateLimitConfig::from_env();
+        let metrics = MetricsConfig::from_env();
 
         Ok(Self {
             environment,
@@ -260,6 +345,8 @@ impl Config {
             database,
             jwt,
             cors,
+            rate_limit,
+            metrics,
         })
     }
 
@@ -290,6 +377,15 @@ impl Config {
                 tracing::warn!(
                     "CORS is configured to allow all origins (*) in production mode. \
                      Consider setting TURERP_CORS_ORIGINS to specific domains."
+                );
+            }
+
+            // Warn if rate limiting trusts X-Forwarded-For without trusted proxies
+            if !self.rate_limit.has_trusted_proxies() {
+                tracing::warn!(
+                    "No trusted proxies configured (TURERP_TRUSTED_PROXIES). \
+                     Rate limiting will use direct peer IP and ignore X-Forwarded-For headers. \
+                     If behind a load balancer, set TURERP_TRUSTED_PROXIES to trust forwarded headers."
                 );
             }
         }

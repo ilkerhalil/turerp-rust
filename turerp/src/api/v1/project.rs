@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::project::model::{CreateProject, CreateWbsItem, ProjectStatus};
 use crate::domain::project::service::ProjectService;
 use crate::error::ApiResult;
@@ -28,17 +29,19 @@ pub async fn create_project(
 /// Get all projects
 #[utoipa::path(
     get, path = "/api/v1/projects", tag = "Project",
+    params(PaginationParams),
     responses((status = 200, description = "List of projects")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_projects(
     auth_user: AuthUser,
     project_service: web::Data<ProjectService>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let projects = project_service
-        .get_projects_by_tenant(auth_user.0.tenant_id)
+    let result = project_service
+        .get_projects_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(projects))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get project by ID

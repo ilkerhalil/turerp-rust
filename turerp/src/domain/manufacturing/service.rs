@@ -2,6 +2,7 @@
 
 use rust_decimal::Decimal;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::manufacturing::model::{
     BillOfMaterials, BillOfMaterialsLine, CreateBillOfMaterials, CreateBillOfMaterialsLine,
     CreateRouting, CreateRoutingOperation, CreateWorkOrder, CreateWorkOrderMaterial,
@@ -50,6 +51,18 @@ impl ManufacturingService {
         tenant_id: i64,
     ) -> Result<Vec<WorkOrder>, ApiError> {
         self.work_order_repo.find_by_tenant(tenant_id).await
+    }
+
+    /// Get work orders by tenant with pagination
+    pub async fn get_work_orders_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<WorkOrder>, ApiError> {
+        self.work_order_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
     }
 
     pub async fn get_work_orders_by_product(

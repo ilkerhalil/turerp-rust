@@ -1,6 +1,7 @@
 //! Stock service for business logic
 use rust_decimal::Decimal;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::stock::model::{
     CreateStockMovement, CreateWarehouse, MovementType, StockLevel, StockMovement, StockSummary,
     Warehouse, WarehouseStock,
@@ -51,6 +52,19 @@ impl StockService {
         tenant_id: i64,
     ) -> Result<Vec<Warehouse>, ApiError> {
         self.warehouse_repo.find_by_tenant(tenant_id).await
+    }
+
+    pub async fn get_warehouses_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Warehouse>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.warehouse_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
     }
 
     pub async fn update_warehouse(

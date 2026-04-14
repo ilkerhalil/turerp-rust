@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 /// Pagination query parameters
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct PaginationParams {
     /// Page number (1-based, default: 1)
     #[serde(default = "default_page")]
@@ -14,11 +14,11 @@ pub struct PaginationParams {
     pub per_page: u32,
 }
 
-fn default_page() -> u32 {
+pub fn default_page() -> u32 {
     1
 }
 
-fn default_per_page() -> u32 {
+pub fn default_per_page() -> u32 {
     20
 }
 
@@ -95,6 +95,20 @@ impl<T> PaginatedResult<T> {
     /// Check if there is a previous page
     pub fn has_previous_page(&self) -> bool {
         self.page > 1
+    }
+
+    /// Map the items to a different type, preserving pagination metadata
+    pub fn map<U, F>(self, f: F) -> PaginatedResult<U>
+    where
+        F: FnMut(T) -> U,
+    {
+        PaginatedResult {
+            items: self.items.into_iter().map(f).collect(),
+            page: self.page,
+            per_page: self.per_page,
+            total: self.total,
+            total_pages: self.total_pages,
+        }
     }
 }
 

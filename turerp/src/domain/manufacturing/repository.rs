@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::manufacturing::model::{
     BillOfMaterials, BillOfMaterialsLine, CreateBillOfMaterials, CreateBillOfMaterialsLine,
     CreateRouting, CreateRoutingOperation, CreateWorkOrder, CreateWorkOrderMaterial,
@@ -19,6 +20,12 @@ pub trait WorkOrderRepository: Send + Sync {
     async fn create(&self, work_order: CreateWorkOrder) -> Result<WorkOrder, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<WorkOrder>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<WorkOrder>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<WorkOrder>, ApiError>;
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<WorkOrder>, ApiError>;
     async fn find_by_status(
         &self,
@@ -155,6 +162,31 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
             .filter(|x| x.tenant_id == tenant_id)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<WorkOrder>, ApiError> {
+        let inner = self.inner.lock();
+        let total = inner
+            .work_orders
+            .values()
+            .filter(|x| x.tenant_id == tenant_id)
+            .count() as u64;
+
+        let items: Vec<WorkOrder> = inner
+            .work_orders
+            .values()
+            .filter(|x| x.tenant_id == tenant_id)
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .cloned()
+            .collect();
+
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<WorkOrder>, ApiError> {

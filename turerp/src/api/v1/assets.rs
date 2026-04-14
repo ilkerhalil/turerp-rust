@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::assets::model::{
     AssetStatus, CreateAsset, CreateMaintenanceRecord, UpdateAsset,
 };
@@ -36,11 +37,12 @@ pub async fn create_asset(
 pub async fn get_assets(
     auth_user: AuthUser,
     assets_service: web::Data<AssetsService>,
+    query: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let assets = assets_service
-        .get_assets_by_tenant(auth_user.0.tenant_id)
+    let result = assets_service
+        .get_assets_by_tenant_paginated(auth_user.0.tenant_id, query.page, query.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(assets))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get asset by ID

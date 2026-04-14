@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::sales::model::{
     CreateQuotation, CreateQuotationLine, CreateSalesOrder, CreateSalesOrderLine, Quotation,
     QuotationLine, QuotationStatus, SalesOrder, SalesOrderLine, SalesOrderStatus,
@@ -23,6 +24,24 @@ pub trait SalesOrderRepository: Send + Sync {
         tenant_id: i64,
         status: SalesOrderStatus,
     ) -> Result<Vec<SalesOrder>, ApiError>;
+
+    /// Find sales orders by tenant with pagination
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<SalesOrder>, ApiError>;
+
+    /// Find sales orders by status with pagination
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: SalesOrderStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<SalesOrder>, ApiError>;
+
     async fn update_status(
         &self,
         id: i64,
@@ -55,6 +74,24 @@ pub trait QuotationRepository: Send + Sync {
         tenant_id: i64,
         status: QuotationStatus,
     ) -> Result<Vec<Quotation>, ApiError>;
+
+    /// Find quotations by tenant with pagination
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Quotation>, ApiError>;
+
+    /// Find quotations by status with pagination
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: QuotationStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Quotation>, ApiError>;
+
     async fn update_status(&self, id: i64, status: QuotationStatus) -> Result<Quotation, ApiError>;
     async fn link_to_order(&self, id: i64, order_id: i64) -> Result<Quotation, ApiError>;
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
@@ -205,6 +242,51 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
             .filter(|o| o.tenant_id == tenant_id && o.status == status)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<SalesOrder>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .orders
+            .values()
+            .filter(|o| o.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: SalesOrderStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<SalesOrder>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .orders
+            .values()
+            .filter(|o| o.tenant_id == tenant_id && o.status == status)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update_status(
@@ -416,6 +498,51 @@ impl QuotationRepository for InMemoryQuotationRepository {
             .filter(|q| q.tenant_id == tenant_id && q.status == status)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Quotation>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .quotations
+            .values()
+            .filter(|q| q.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: QuotationStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Quotation>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .quotations
+            .values()
+            .filter(|q| q.tenant_id == tenant_id && q.status == status)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update_status(&self, id: i64, status: QuotationStatus) -> Result<Quotation, ApiError> {

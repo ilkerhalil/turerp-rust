@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::invoice::model::{CreateInvoice, InvoiceStatus};
 use crate::domain::invoice::service::InvoiceService;
 use crate::error::ApiResult;
@@ -44,35 +45,53 @@ pub async fn get_invoice(
 /// Get all invoices
 #[utoipa::path(
     get, path = "/api/v1/invoices", tag = "Invoice",
-    responses((status = 200, description = "List of invoices")),
+    params(PaginationParams),
+    responses((status = 200, description = "Paginated list of invoices")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_invoices(
     auth_user: AuthUser,
     invoice_service: web::Data<InvoiceService>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let invoices = invoice_service
-        .get_invoices_by_tenant(auth_user.0.tenant_id)
+    pagination
+        .validate()
+        .map_err(crate::error::ApiError::Validation)?;
+    let result = invoice_service
+        .get_invoices_by_tenant_paginated(
+            auth_user.0.tenant_id,
+            pagination.page,
+            pagination.per_page,
+        )
         .await?;
-    Ok(HttpResponse::Ok().json(invoices))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get invoices by status
 #[utoipa::path(
     get, path = "/api/v1/invoices/status/{status}", tag = "Invoice",
-    params(("status" = InvoiceStatus, Path, description = "Invoice status")),
-    responses((status = 200, description = "List of invoices by status")),
+    params(("status" = InvoiceStatus, Path, description = "Invoice status"), PaginationParams),
+    responses((status = 200, description = "Paginated list of invoices by status")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_invoices_by_status(
     auth_user: AuthUser,
     invoice_service: web::Data<InvoiceService>,
     path: web::Path<InvoiceStatus>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let invoices = invoice_service
-        .get_invoices_by_status(auth_user.0.tenant_id, path.into_inner())
+    pagination
+        .validate()
+        .map_err(crate::error::ApiError::Validation)?;
+    let result = invoice_service
+        .get_invoices_by_status_paginated(
+            auth_user.0.tenant_id,
+            path.into_inner(),
+            pagination.page,
+            pagination.per_page,
+        )
         .await?;
-    Ok(HttpResponse::Ok().json(invoices))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get outstanding invoices

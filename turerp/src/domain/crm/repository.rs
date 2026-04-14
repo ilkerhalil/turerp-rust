@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::crm::model::{
     Campaign, CampaignStatus, CreateCampaign, CreateLead, CreateOpportunity, CreateTicket, Lead,
     LeadStatus, Opportunity, OpportunityStatus, Ticket, TicketStatus,
@@ -17,11 +18,24 @@ pub trait LeadRepository: Send + Sync {
     async fn create(&self, lead: CreateLead) -> Result<Lead, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<Lead>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Lead>, ApiError>;
     async fn find_by_status(
         &self,
         tenant_id: i64,
         status: LeadStatus,
     ) -> Result<Vec<Lead>, ApiError>;
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: LeadStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Lead>, ApiError>;
     async fn update_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError>;
     async fn convert_to_customer(&self, id: i64, customer_id: i64) -> Result<Lead, ApiError>;
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
@@ -32,11 +46,24 @@ pub trait OpportunityRepository: Send + Sync {
     async fn create(&self, opp: CreateOpportunity) -> Result<Opportunity, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<Opportunity>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Opportunity>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Opportunity>, ApiError>;
     async fn find_by_status(
         &self,
         tenant_id: i64,
         status: OpportunityStatus,
     ) -> Result<Vec<Opportunity>, ApiError>;
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: OpportunityStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Opportunity>, ApiError>;
     async fn find_by_customer(&self, customer_id: i64) -> Result<Vec<Opportunity>, ApiError>;
     async fn update_status(
         &self,
@@ -51,11 +78,24 @@ pub trait CampaignRepository: Send + Sync {
     async fn create(&self, campaign: CreateCampaign) -> Result<Campaign, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<Campaign>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Campaign>, ApiError>;
     async fn find_by_status(
         &self,
         tenant_id: i64,
         status: CampaignStatus,
     ) -> Result<Vec<Campaign>, ApiError>;
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: CampaignStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Campaign>, ApiError>;
     async fn update_status(&self, id: i64, status: CampaignStatus) -> Result<Campaign, ApiError>;
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
 }
@@ -65,6 +105,12 @@ pub trait TicketRepository: Send + Sync {
     async fn create(&self, ticket: CreateTicket) -> Result<Ticket, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<Ticket>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Ticket>, ApiError>;
     async fn find_by_number(
         &self,
         tenant_id: i64,
@@ -75,6 +121,13 @@ pub trait TicketRepository: Send + Sync {
         tenant_id: i64,
         status: TicketStatus,
     ) -> Result<Vec<Ticket>, ApiError>;
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: TicketStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Ticket>, ApiError>;
     async fn find_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError>;
     async fn update_status(&self, id: i64, status: TicketStatus) -> Result<Ticket, ApiError>;
     async fn resolve(&self, id: i64) -> Result<Ticket, ApiError>;
@@ -158,6 +211,28 @@ impl LeadRepository for InMemoryLeadRepository {
             .collect())
     }
 
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Lead>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .leads
+            .values()
+            .filter(|x| x.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
     async fn find_by_status(
         &self,
         tenant_id: i64,
@@ -170,6 +245,29 @@ impl LeadRepository for InMemoryLeadRepository {
             .filter(|x| x.tenant_id == tenant_id && x.status == status)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: LeadStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Lead>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .leads
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError> {
@@ -272,6 +370,28 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
             .collect())
     }
 
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Opportunity>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .opportunities
+            .values()
+            .filter(|x| x.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
     async fn find_by_status(
         &self,
         tenant_id: i64,
@@ -284,6 +404,29 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
             .filter(|x| x.tenant_id == tenant_id && x.status == status)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: OpportunityStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Opportunity>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .opportunities
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_customer(&self, customer_id: i64) -> Result<Vec<Opportunity>, ApiError> {
@@ -387,6 +530,28 @@ impl CampaignRepository for InMemoryCampaignRepository {
             .collect())
     }
 
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Campaign>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .campaigns
+            .values()
+            .filter(|x| x.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
     async fn find_by_status(
         &self,
         tenant_id: i64,
@@ -399,6 +564,29 @@ impl CampaignRepository for InMemoryCampaignRepository {
             .filter(|x| x.tenant_id == tenant_id && x.status == status)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: CampaignStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Campaign>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .campaigns
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update_status(&self, id: i64, status: CampaignStatus) -> Result<Campaign, ApiError> {
@@ -494,6 +682,28 @@ impl TicketRepository for InMemoryTicketRepository {
             .collect())
     }
 
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Ticket>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .tickets
+            .values()
+            .filter(|x| x.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
     async fn find_by_number(
         &self,
         tenant_id: i64,
@@ -519,6 +729,29 @@ impl TicketRepository for InMemoryTicketRepository {
             .filter(|x| x.tenant_id == tenant_id && x.status == status)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: TicketStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Ticket>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .tickets
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError> {

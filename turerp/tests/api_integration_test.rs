@@ -452,7 +452,7 @@ async fn test_users_list_authorized() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(json.is_array());
+    assert!(json["items"].is_array());
 }
 
 #[actix_web::test]
@@ -646,7 +646,7 @@ async fn test_cari_crud() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert!(json.is_array());
+    assert!(json["items"].is_array());
 
     // Get cari by ID
     let get_req = test::TestRequest::get()
@@ -1776,7 +1776,7 @@ async fn test_cari_tenant_isolation() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let caris = json.as_array().unwrap();
+    let caris = json["items"].as_array().unwrap();
     // Tenant 2 should see an empty list (no caris from tenant 1)
     assert!(caris.is_empty(), "Tenant 2 should not see tenant 1's caris");
 }
@@ -1818,7 +1818,7 @@ async fn test_hr_tenant_isolation() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let employees = json.as_array().unwrap();
+    let employees = json["items"].as_array().unwrap();
     assert!(
         employees.is_empty(),
         "Tenant 2 should not see tenant 1's employees"

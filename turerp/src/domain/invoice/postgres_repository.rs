@@ -5,6 +5,8 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::invoice::model::{
     CreateInvoice, CreateInvoiceLine, CreatePayment, Invoice, InvoiceLine, InvoiceStatus,
     InvoiceType, Payment,
@@ -16,19 +18,6 @@ use crate::domain::invoice::repository::{
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 /// Database row representation for Invoice
 #[derive(Debug, FromRow)]
@@ -91,6 +80,72 @@ impl From<InvoiceRow> for Invoice {
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
         }
+    }
+}
+
+/// Database row representation for paginated invoice queries with total count
+#[derive(Debug, FromRow)]
+struct InvoiceRowWithTotal {
+    id: i64,
+    tenant_id: i64,
+    invoice_number: String,
+    invoice_type: String,
+    status: String,
+    cari_id: i64,
+    issue_date: chrono::DateTime<chrono::Utc>,
+    due_date: chrono::DateTime<chrono::Utc>,
+    subtotal: Decimal,
+    tax_amount: Decimal,
+    discount_amount: Decimal,
+    total_amount: Decimal,
+    paid_amount: Decimal,
+    currency: String,
+    notes: Option<String>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    total_count: i64,
+}
+
+impl From<InvoiceRowWithTotal> for (Invoice, i64) {
+    fn from(row: InvoiceRowWithTotal) -> (Invoice, i64) {
+        let invoice_type = row.invoice_type.parse().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Invalid invoice_type '{}' in database: {}, defaulting to SalesInvoice",
+                row.invoice_type,
+                e
+            );
+            InvoiceType::SalesInvoice
+        });
+
+        let status = row.status.parse().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Invalid status '{}' in database: {}, defaulting to Draft",
+                row.status,
+                e
+            );
+            InvoiceStatus::Draft
+        });
+
+        let invoice = Invoice {
+            id: row.id,
+            tenant_id: row.tenant_id,
+            invoice_number: row.invoice_number,
+            invoice_type,
+            status,
+            cari_id: row.cari_id,
+            issue_date: row.issue_date,
+            due_date: row.due_date,
+            subtotal: row.subtotal,
+            tax_amount: row.tax_amount,
+            discount_amount: row.discount_amount,
+            total_amount: row.total_amount,
+            paid_amount: row.paid_amount,
+            currency: row.currency,
+            notes: row.notes,
+            created_at: row.created_at,
+            updated_at: row.updated_at.unwrap_or(row.created_at),
+        };
+        (invoice, row.total_count)
     }
 }
 
@@ -333,6 +388,81 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find invoices by status: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+
+        let rows: Vec<InvoiceRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+                   issue_date, due_date, subtotal, tax_amount, discount_amount,
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM invoices
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Invoice"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<Invoice> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(invoice, _)| invoice)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn find_by_status_paginated(
+        &self,
+        tenant_id: i64,
+        status: InvoiceStatus,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+        let status_str = status.to_string();
+
+        let rows: Vec<InvoiceRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+                   issue_date, due_date, subtotal, tax_amount, discount_amount,
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM invoices
+            WHERE tenant_id = $1 AND status = $2
+            ORDER BY id DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&status_str)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Invoice"))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<Invoice> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(invoice, _)| invoice)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update_status(&self, id: i64, status: InvoiceStatus) -> Result<Invoice, ApiError> {

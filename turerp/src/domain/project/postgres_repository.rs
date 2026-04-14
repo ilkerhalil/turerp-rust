@@ -5,6 +5,8 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
+use crate::db::error::map_sqlx_error;
 use crate::domain::project::model::{
     CostType, CreateProject, CreateProjectCost, CreateWbsItem, Project, ProjectCost, ProjectStatus,
     WbsItem,
@@ -16,19 +18,6 @@ use crate::domain::project::repository::{
 use crate::error::ApiError;
 
 /// Convert sqlx errors to ApiError with proper detection of error types
-fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
-    match e {
-        sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        _ => {
-            let msg = e.to_string();
-            if msg.contains("duplicate key") || msg.contains("unique constraint") {
-                ApiError::Conflict(format!("{} already exists", entity))
-            } else {
-                ApiError::Database(format!("Failed to operate on {}: {}", entity, e))
-            }
-        }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Project row mapping
@@ -49,6 +38,7 @@ struct ProjectRow {
     actual_cost: Decimal,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    total_count: Option<i64>,
 }
 
 impl From<ProjectRow> for Project {
@@ -238,6 +228,36 @@ impl ProjectRepository for PostgresProjectRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find projects by tenant: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Project>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<ProjectRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, description, cari_id, status,
+                   start_date, end_date, budget, actual_cost, created_at, updated_at,
+                   COUNT(*) OVER() as total_count
+            FROM projects
+            WHERE tenant_id = $1
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Project"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Project> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Project>, ApiError> {

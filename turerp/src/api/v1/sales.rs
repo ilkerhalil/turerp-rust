@@ -2,6 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
+use crate::common::pagination::PaginationParams;
 use crate::domain::sales::model::{
     CreateQuotation, CreateSalesOrder, QuotationStatus, SalesOrderStatus,
 };
@@ -32,17 +33,22 @@ pub async fn create_sales_order(
 /// Get all sales orders
 #[utoipa::path(
     get, path = "/api/v1/sales/orders", tag = "Sales",
-    responses((status = 200, description = "List of sales orders")),
+    params(PaginationParams),
+    responses((status = 200, description = "Paginated list of sales orders")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_sales_orders(
     auth_user: AuthUser,
     sales_service: web::Data<SalesService>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let orders = sales_service
-        .get_orders_by_tenant(auth_user.0.tenant_id)
+    pagination
+        .validate()
+        .map_err(crate::error::ApiError::Validation)?;
+    let result = sales_service
+        .get_orders_by_tenant_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
         .await?;
-    Ok(HttpResponse::Ok().json(orders))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get sales order by ID
@@ -64,19 +70,28 @@ pub async fn get_sales_order(
 /// Get sales orders by status
 #[utoipa::path(
     get, path = "/api/v1/sales/orders/status/{status}", tag = "Sales",
-    params(("status" = SalesOrderStatus, Path, description = "Order status")),
-    responses((status = 200, description = "List of sales orders by status")),
+    params(("status" = SalesOrderStatus, Path, description = "Order status"), PaginationParams),
+    responses((status = 200, description = "Paginated list of sales orders by status")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_sales_orders_by_status(
     auth_user: AuthUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<SalesOrderStatus>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let orders = sales_service
-        .get_orders_by_status(auth_user.0.tenant_id, path.into_inner())
+    pagination
+        .validate()
+        .map_err(crate::error::ApiError::Validation)?;
+    let result = sales_service
+        .get_orders_by_status_paginated(
+            auth_user.0.tenant_id,
+            path.into_inner(),
+            pagination.page,
+            pagination.per_page,
+        )
         .await?;
-    Ok(HttpResponse::Ok().json(orders))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Update sales order status (requires admin role)
@@ -138,17 +153,26 @@ pub async fn create_quotation(
 /// Get all quotations
 #[utoipa::path(
     get, path = "/api/v1/sales/quotations", tag = "Sales",
-    responses((status = 200, description = "List of quotations")),
+    params(PaginationParams),
+    responses((status = 200, description = "Paginated list of quotations")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_quotations(
     auth_user: AuthUser,
     sales_service: web::Data<SalesService>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let quotations = sales_service
-        .get_quotations_by_tenant(auth_user.0.tenant_id)
+    pagination
+        .validate()
+        .map_err(crate::error::ApiError::Validation)?;
+    let result = sales_service
+        .get_quotations_by_tenant_paginated(
+            auth_user.0.tenant_id,
+            pagination.page,
+            pagination.per_page,
+        )
         .await?;
-    Ok(HttpResponse::Ok().json(quotations))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Get quotation by ID
@@ -170,19 +194,28 @@ pub async fn get_quotation(
 /// Get quotations by status
 #[utoipa::path(
     get, path = "/api/v1/sales/quotations/status/{status}", tag = "Sales",
-    params(("status" = QuotationStatus, Path, description = "Quotation status")),
-    responses((status = 200, description = "List of quotations by status")),
+    params(("status" = QuotationStatus, Path, description = "Quotation status"), PaginationParams),
+    responses((status = 200, description = "Paginated list of quotations by status")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_quotations_by_status(
     auth_user: AuthUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<QuotationStatus>,
+    pagination: web::Query<PaginationParams>,
 ) -> ApiResult<HttpResponse> {
-    let quotations = sales_service
-        .get_quotations_by_status(auth_user.0.tenant_id, path.into_inner())
+    pagination
+        .validate()
+        .map_err(crate::error::ApiError::Validation)?;
+    let result = sales_service
+        .get_quotations_by_status_paginated(
+            auth_user.0.tenant_id,
+            path.into_inner(),
+            pagination.page,
+            pagination.per_page,
+        )
         .await?;
-    Ok(HttpResponse::Ok().json(quotations))
+    Ok(HttpResponse::Ok().json(result))
 }
 
 /// Update quotation status (requires admin role)

@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::stock::model::{
     CreateStockMovement, CreateWarehouse, StockLevel, StockMovement, Warehouse,
 };
@@ -16,6 +17,12 @@ pub trait WarehouseRepository: Send + Sync {
     async fn create(&self, warehouse: CreateWarehouse) -> Result<Warehouse, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<Warehouse>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Warehouse>, ApiError>;
     async fn update(
         &self,
         id: i64,
@@ -138,6 +145,28 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
             .filter(|w| w.tenant_id == tenant_id)
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Warehouse>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .warehouses
+            .values()
+            .filter(|w| w.tenant_id == tenant_id)
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn update(

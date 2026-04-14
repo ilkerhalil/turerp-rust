@@ -2,6 +2,7 @@
 
 use validator::Validate;
 
+use crate::common::pagination::PaginatedResult;
 use crate::domain::user::model::{CreateUser, UpdateUser, User, UserResponse};
 use crate::domain::user::repository::BoxUserRepository;
 use crate::error::ApiError;
@@ -82,6 +83,25 @@ impl UserService {
     pub async fn get_all_users(&self, tenant_id: i64) -> Result<Vec<UserResponse>, ApiError> {
         let users = self.repo.find_all(tenant_id).await?;
         Ok(users.into_iter().map(|u| u.into()).collect())
+    }
+
+    /// Get all users for a tenant with pagination
+    pub async fn get_all_users_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<UserResponse>, ApiError> {
+        let result = self
+            .repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await?;
+        Ok(PaginatedResult::new(
+            result.items.into_iter().map(|u| u.into()).collect(),
+            result.page,
+            result.per_page,
+            result.total,
+        ))
     }
 
     /// Update a user

@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use super::model::{CreateFeatureFlag, FeatureFlagResponse, FeatureFlagStatus, UpdateFeatureFlag};
 use super::repository::FeatureFlagRepository;
+use crate::common::pagination::PaginatedResult;
 use crate::error::ApiError;
 
 /// Feature flag service
@@ -61,6 +62,22 @@ impl FeatureFlagService {
     ) -> Result<Vec<FeatureFlagResponse>, ApiError> {
         let flags = self.repository.get_all(tenant_id).await?;
         Ok(flags.into_iter().map(|f| f.into()).collect())
+    }
+
+    /// Get all feature flags with pagination
+    pub async fn get_all_paginated(
+        &self,
+        tenant_id: Option<i64>,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<FeatureFlagResponse>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        let result = self
+            .repository
+            .get_all_paginated(tenant_id, page, per_page)
+            .await?;
+        Ok(result.map(|f| f.into()))
     }
 
     /// Update a feature flag
