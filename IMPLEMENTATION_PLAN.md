@@ -243,8 +243,8 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Fix AdminUser extractor role comparison (case sensitivity bug)
 - [x] Fix all Clippy warnings (needless_borrows, manual_range_contains, etc.)
 - [x] Fix InvoiceStatus and ProjectStatus Default implementations (derive macro)
-- [ ] Add trusted proxy configuration for rate limiting
-- [ ] Improve error context in database operations
+- [x] Add trusted proxy configuration for rate limiting
+- [x] Improve error context in database operations
 
 ---
 
@@ -288,7 +288,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ---
 
-## Current Status: Phase 11 - Complete ✅
+## Current Status: Phase 12 - Complete ✅
 
 ### Completed Modules
 | Module | Status | Notes |
@@ -311,9 +311,21 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Feature Flags | ✅ Complete | CRUD, tenant-specific, API v1, admin auth |
 | Product Variants | ✅ Complete | CRUD, API v1 |
 | Purchase Requests | ✅ Complete | CRUD, approval workflow, API v1, state machine, pagination |
+| Audit | ✅ Complete | Request audit trail, batch persistence, admin query API |
+
+### Infrastructure & Operations
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Centralized Error Handling | ✅ Complete | `map_sqlx_error` with PG error codes (23505, 23503) |
+| Trusted Proxy Config | ✅ Complete | `TURERP_TRUSTED_PROXIES` for rate limiting behind LBs |
+| Composite DB Indexes | ✅ Complete | `tenant_id + created_at DESC` on all multi-tenant tables |
+| Health Checks | ✅ Complete | `/health/live` (liveness), `/health/ready` (readiness + DB) |
+| Prometheus Metrics | ✅ Complete | `http_requests_total`, `http_request_duration_seconds`, `/metrics` |
+| Pagination | ✅ Complete | All 14 list endpoints return `PaginatedResult<T>` |
+| Audit Log API | ✅ Complete | `GET /api/v1/audit-logs` with filtering + pagination |
 
 ### Test Coverage
-- **290 tests passing** (225 unit + 38 integration + 27 security)
+- **314 tests passing** (249 unit + 38 integration + 27 security)
 - Unit tests for all domain modules
 - Model validation tests
 - Service business logic tests
@@ -337,9 +349,9 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - ✅ JWT authentication with HS256
 - ✅ Password hashing with bcrypt (cost 12)
 - ✅ Password complexity validation
-- ✅ Rate limiting (10 req/min per IP)
+- ✅ Rate limiting (10 req/min per IP) with trusted proxy support
 - ✅ Request ID tracking
-- ✅ Audit logging middleware
+- ✅ Audit logging middleware with batch persistence
 - ✅ Production config validation
 - ✅ SQL injection prevention (parameterized queries)
 - ✅ Admin role authorization for sensitive operations (AdminUser extractor)
@@ -352,35 +364,24 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - ✅ #[must_use] attributes on important return types
 - ✅ Forbidden (403) error type for authorization failures
 - ✅ AdminUser extractor role comparison (lowercase "admin" fix)
+- ✅ Centralized DB error handling with PG error code detection
 - ⚠️ Default admin credentials (dev only, warning in migrations)
 
 ---
 
 ## Remaining Work
 
-### High Priority
-| Feature | Description | Status |
-|---------|-------------|--------|
-| Trusted Proxy Config | Configure trusted proxies for rate limiting behind load balancers | Planned |
-| DB Error Context | Improve error context in database operations | Planned |
-
 ### Medium Priority
 | Feature | Description | Status |
 |---------|-------------|--------|
-| API Analytics | Request metrics and response time tracking | Planned |
 | Performance Testing | Load testing with realistic data | Planned |
-| Monitoring | Prometheus/Grafana metrics integration | Planned |
-| Database Indexes | Add indexes for frequently queried columns | Planned |
-| Pagination | Add pagination to all list endpoints | Planned |
+| API Response Caching | Cache frequently accessed data | Planned |
 
 ### Low Priority
 | Feature | Description | Status |
 |---------|-------------|--------|
 | API Rate Limit Dashboard | Visual dashboard for rate limit metrics | Planned |
-| Health Check Details | Add dependency health checks (DB, cache) | Planned |
-| API Response Caching | Cache frequently accessed data | Planned |
 | Webhook System | Event-driven notifications | Planned |
-| Audit Log API | Queryable audit log endpoint | Planned |
 
 ---
 
@@ -562,8 +563,16 @@ zeroize = "1.8"
 - `POST /api/v1/purchase-requests/{id}/approve` - Approve request (admin only)
 - `POST /api/v1/purchase-requests/{id}/reject` - Reject request (admin only)
 
+### Audit Logs (v1)
+- `GET /api/v1/audit-logs` - List audit logs (admin only, with filtering and pagination)
+
 ### Health Check
-- `GET /health` - Health check endpoint
+- `GET /health` - Health check endpoint (alias for readiness)
+- `GET /health/live` - Liveness probe (always 200)
+- `GET /health/ready` - Readiness probe (checks DB, returns version + latency)
+
+### Metrics
+- `GET /metrics` - Prometheus metrics (http_requests_total, http_request_duration_seconds)
 
 ### Swagger UI
 - `/swagger-ui/` - Interactive API documentation
@@ -642,13 +651,15 @@ turerp/
 │   │       ├── tenant.rs
 │   │       ├── feature_flags.rs
 │   │       ├── product_variants.rs
-│   │       └── purchase_requests.rs
+│   │       ├── purchase_requests.rs
+│   │       └── audit.rs
 │   ├── middleware/
 │   │   ├── mod.rs        # Middleware exports
 │   │   ├── auth.rs       # JWT authentication
-│   │   ├── rate_limit.rs # Rate limiting
+│   │   ├── rate_limit.rs # Rate limiting (with trusted proxy support)
 │   │   ├── request_id.rs # Request ID tracking
-│   │   ├── audit.rs      # Audit logging
+│   │   ├── audit.rs      # Audit logging (channel-based batch persistence)
+│   │   ├── metrics.rs    # Prometheus metrics collection
 │   │   └── tenant.rs     # Tenant context middleware
 │   ├── domain/
 │   │   ├── auth/         # Auth domain
@@ -666,12 +677,14 @@ turerp/
 │   │   ├── project/      # Project domain
 │   │   ├── manufacturing/# Manufacturing domain
 │   │   ├── crm/          # CRM domain
+│   │   ├── audit/        # Audit log domain
 │   │   └── feature/      # Feature flags domain
 │   ├── common/
-│   │   └── pagination.rs # Pagination utilities
+│   │   └── pagination.rs # Pagination utilities (PaginatedResult, PaginationParams)
 │   ├── db/
 │   │   ├── mod.rs        # DB module
 │   │   ├── pool.rs       # Connection pool
+│   │   ├── error.rs      # Centralized DB error handling (map_sqlx_error)
 │   │   └── tenant_registry.rs # Tenant pool registry
 │   └── utils/
 │       ├── jwt.rs        # JWT utilities
@@ -680,7 +693,9 @@ turerp/
 ├── migrations/
 │   ├── 001_initial_schema.sql
 │   ├── 002_add_tenant_db_name.sql
-│   └── 003_business_modules.sql
+│   ├── 003_business_modules.sql
+│   ├── 004_composite_indexes.sql
+│   └── 005_audit_logs.sql
 ├── tests/
 │   ├── api_integration_test.rs   # Integration tests (38 tests)
 │   └── security_test.rs          # Security tests (27 tests)
@@ -689,26 +704,32 @@ turerp/
 
 ---
 
-## Phase 12: Next Steps (Planned)
+## Phase 12: Infrastructure & Operations (Complete ✅)
 
-### 12.1 Infrastructure
-- [ ] Trusted proxy configuration for rate limiting behind load balancers
-- [ ] Improve error context in database operations
-- [ ] Add database indexes for frequently queried columns
-- [ ] Add pagination to all list endpoints
+### 12A: Centralized Error Handling & Trusted Proxy
+- [x] Extract `map_sqlx_error` to `db/error.rs` with PG error code detection (23505, 23503)
+- [x] Add `RateLimitConfig` with trusted_proxies, requests_per_minute, burst_size
+- [x] Rewrite rate limiting to only trust `X-Forwarded-For` from configured proxies
 
-### 12.2 Monitoring & Observability
-- [ ] Prometheus metrics integration
-- [ ] Grafana dashboard templates
-- [ ] Request metrics and response time tracking
-- [ ] Health check endpoint with dependency status (DB connectivity)
+### 12B: Database Indexes & Health Checks
+- [x] Add `004_composite_indexes.sql` with `tenant_id + created_at DESC` indexes
+- [x] Add `/health/live` (liveness) and `/health/ready` (readiness with DB check) endpoints
+- [x] Add `/health` as backwards-compatible alias for readiness
 
-### 12.3 Performance
-- [ ] Load testing with realistic data
-- [ ] Response caching for frequently accessed data
-- [ ] Database query optimization
+### 12C: Prometheus Metrics
+- [x] Add `metrics` and `metrics-exporter-prometheus` dependencies
+- [x] Create `MetricsMiddleware` recording `http_requests_total`, `http_request_duration_seconds`
+- [x] Add `/metrics` endpoint with configurable path and enabled flag
 
-### 12.4 Features
-- [ ] Audit log queryable API endpoint
-- [ ] Webhook system for event-driven notifications
-- [ ] API rate limit dashboard
+### 12D: Pagination for All List Endpoints
+- [x] Add `PaginatedResult::map()` for type transformations
+- [x] Switch all 14 list endpoints to accept `PaginationParams` and return `PaginatedResult`
+- [x] PostgreSQL repos use `COUNT(*) OVER()` for efficient total count
+- [x] In-memory repos implement skip/take pagination
+
+### 12E: Audit Log Domain & API
+- [x] Add `005_audit_logs.sql` with indexes for tenant+created_at, tenant+user_id, tenant+path
+- [x] Create audit domain module (model, repository, service, postgres_repository)
+- [x] Add `GET /api/v1/audit-logs` endpoint with filtering and pagination (admin-only)
+- [x] Rewrite `AuditLoggingMiddleware` with mpsc channel for non-blocking batch persistence
+- [x] Spawn background audit writer with 5s flush interval and 100-event buffer

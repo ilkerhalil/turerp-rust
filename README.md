@@ -1,6 +1,7 @@
 # Turerp ERP
 
 [![CI](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-314%20passing-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **Modern, multi-tenant SaaS ERP system** - Built with Rust, Actix-web, and SQLx.
@@ -35,6 +36,17 @@
 | **BOM** | Bill of Materials management, material requirements planning |
 | **Quality Control** | Quality inspections, non-conformance reports (NCR) |
 | **CRM** | Leads, opportunities, campaigns, support tickets |
+| **Audit** | Request audit trail, batch persistence, admin query API |
+
+### Infrastructure & Operations
+| Feature | Description |
+|---------|-------------|
+| **Prometheus Metrics** | `http_requests_total`, `http_request_duration_seconds`, `/metrics` endpoint |
+| **Health Checks** | `/health/live` (liveness), `/health/ready` (readiness + DB check + version) |
+| **Pagination** | All list endpoints return `PaginatedResult<T>` with page/per_page/total |
+| **Centralized Error Handling** | `map_sqlx_error` with PG error code detection (23505, 23503) |
+| **Trusted Proxy** | Configurable trusted proxies for rate limiting behind load balancers |
+| **Composite DB Indexes** | `tenant_id + created_at DESC` on all multi-tenant tables |
 
 ## Tech Stack
 
@@ -48,6 +60,7 @@
 | **Validation** | validator | 0.16 |
 | **Rate Limiting** | governor | 0.8 |
 | **Synchronization** | parking_lot (Mutex) | 0.12 |
+| **Metrics** | metrics + metrics-exporter-prometheus | 0.24/0.16 |
 | **API Docs** | utoipa (OpenAPI/Swagger) | 4.x |
 | **Logging** | tracing | 0.1 |
 
@@ -144,7 +157,8 @@ turerp-rust/
 │   │   ├── config/           # Configuration
 │   │   ├── db/                # Database layer (PostgreSQL)
 │   │   │   ├── mod.rs
-│   │   │   └── pool.rs       # Connection pool, migrations
+│   │   │   ├── pool.rs       # Connection pool, migrations
+│   │   │   └── error.rs      # Centralized DB error handling
 │   │   ├── domain/           # Domain modules (business logic)
 │   │   │   ├── auth/          # Authentication
 │   │   │   ├── user/         # User management
@@ -167,12 +181,15 @@ turerp-rust/
 │   │   │   ├── assets/        # Assets module
 │   │   │   ├── project/       # Project management
 │   │   │   ├── manufacturing/ # Manufacturing module
+│   │   │   ├── audit/         # Audit log module
 │   │   │   └── crm/           # CRM module
 │   │   ├── common/
 │   │   │   └── pagination.rs  # Pagination helpers
 │   │   ├── middleware/       # HTTP middleware
 │   │   │   ├── auth.rs        # JWT authentication
-│   │   │   ├── rate_limit.rs  # Rate limiting (governor)
+│   │   │   ├── rate_limit.rs  # Rate limiting (governor, trusted proxy)
+│   │   │   ├── metrics.rs     # Prometheus metrics collection
+│   │   │   ├── audit.rs       # Audit logging (channel-based batch persistence)
 │   │   │   └── request_id.rs  # Request ID tracing
 │   │   ├── utils/             # Utility functions
 │   │   │   ├── jwt.rs         # JWT utilities
@@ -182,7 +199,11 @@ turerp-rust/
 │   │   ├── lib.rs             # Library entry point
 │   │   └── main.rs            # Application entry point
 │   ├── migrations/
-│   │   └── 001_initial_schema.sql  # Database schema
+│   │   ├── 001_initial_schema.sql    # Core schema
+│   │   ├── 002_add_tenant_db_name.sql
+│   │   ├── 003_business_modules.sql  # Business module tables
+│   │   ├── 004_composite_indexes.sql # Pagination indexes
+│   │   └── 005_audit_logs.sql        # Audit log table
 │   ├── tests/                 # Integration tests
 │   └── Cargo.toml             # Dependencies
 ├── docs/                      # Project documentation
@@ -209,14 +230,28 @@ GET  /api/auth/me         - Current user info 🔒
 
 ### Users (Protected - JWT required)
 ```
-GET    /api/users         - User list 🔒
+GET    /api/users         - User list (paginated) 🔒
 POST   /api/users         - Create user 🔒
 GET    /api/users/{id}    - User details 🔒
 PUT    /api/users/{id}    - Update user 🔒
 DELETE /api/users/{id}    - Delete user 🔒
 ```
 
+### Audit Logs (Admin only)
+```
+GET    /api/v1/audit-logs - List audit logs (paginated, filterable) 🔒👑
+```
+
+### Health & Monitoring
+```
+GET /health        - Health check (alias for readiness)
+GET /health/live   - Liveness probe (always 200)
+GET /health/ready  - Readiness probe (checks DB, version, latency)
+GET /metrics       - Prometheus metrics
+```
+
 🔒 = JWT Bearer token required
+👑 = Admin role required
 
 ### Swagger UI
 - **Swagger UI**: `http://localhost:8000/swagger-ui/`
@@ -260,7 +295,7 @@ JWT Token → User Authentication → Role-Based Access
 ## Testing
 
 ```bash
-# All tests (290 tests)
+# All tests (314 tests)
 cargo test
 
 # Security tests
@@ -305,6 +340,11 @@ Automated via GitHub Actions:
 | `TURERP_CORS_METHODS` | Allowed HTTP methods | `GET,POST,PUT,DELETE,OPTIONS` |
 | `TURERP_CORS_HEADERS` | Allowed headers | `Content-Type,Authorization` |
 | `TURERP_CORS_CREDENTIALS` | CORS credentials | `true` |
+| `TURERP_TRUSTED_PROXIES` | Comma-separated trusted proxy IPs for rate limiting | (none) |
+| `TURERP_RATE_LIMIT_RPM` | Rate limit requests per minute | `10` |
+| `TURERP_RATE_LIMIT_BURST` | Rate limit burst size | `3` |
+| `TURERP_METRICS_ENABLED` | Enable Prometheus metrics | `true` |
+| `TURERP_METRICS_PATH` | Metrics endpoint path | `/metrics` |
 | `RUST_LOG` | Log level | `info` |
 
 ## Security
@@ -330,6 +370,9 @@ Additional security measures:
 - **Tenant Isolation** - Mandatory `tenant_id` to prevent tenant data exposure
 - **Thread Safety** - Single mutex pattern to prevent race conditions
 - **Must-Use Attributes** - `#[must_use]` for important return values
+- **Audit Trail** - All authenticated requests are logged with batch persistence
+- **Centralized DB Errors** - PostgreSQL error code detection (unique violation, foreign key)
+- **Prometheus Metrics** - Request counters, latency histograms, in-flight gauges
 
 ### JWT Authentication
 
@@ -349,8 +392,9 @@ curl http://localhost:8000/api/users \
 ### Rate Limiting
 
 Auth endpoints are protected with rate limiting:
-- **Limit**: 10 requests/minute (per IP)
-- **Burst**: 3 requests
+- **Limit**: 10 requests/minute (configurable via `TURERP_RATE_LIMIT_RPM`)
+- **Burst**: 3 requests (configurable via `TURERP_RATE_LIMIT_BURST`)
+- **Trusted Proxies**: Configure `TURERP_TRUSTED_PROXIES` to trust `X-Forwarded-For` headers behind load balancers
 
 ### Password Requirements
 

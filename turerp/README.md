@@ -1,7 +1,7 @@
 # Turerp ERP
 
 [![CI](https://github.com/turerp/turerp-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/turerp/turerp-rust/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-99%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-314%20passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 
 **Multi-tenant SaaS ERP system** - Built with Rust, Actix-web, and SQLx.
@@ -28,6 +28,13 @@
 - **Manufacturing**: Work orders, routing, BOM management
 - **Quality Control**: Inspections, non-conformance reports (NCR)
 - **CRM**: Leads, opportunities, campaign management
+- **Audit**: Request audit trail, batch persistence, admin query API
+
+### Infrastructure
+- **Prometheus Metrics**: Request counters, latency histograms, `/metrics` endpoint
+- **Health Checks**: Liveness (`/health/live`) and readiness (`/health/ready`) probes
+- **Pagination**: All list endpoints return `PaginatedResult<T>`
+- **Trusted Proxy**: Configurable trusted proxies for rate limiting behind load balancers
 
 ## Tech Stack
 
@@ -40,6 +47,7 @@
 | Serialization | serde |
 | Error Handling | thiserror + anyhow |
 | Logging | tracing |
+| Metrics | metrics + metrics-exporter-prometheus |
 | API Docs | utoipa (OpenAPI/Swagger) |
 
 ## Installation
@@ -101,11 +109,24 @@ GET  /api/auth/me        - Current user info
 
 ### Users
 ```
-GET    /api/users        - User list
+GET    /api/users        - User list (paginated)
 POST   /api/users        - Create user
 GET    /api/users/{id}   - User details
 PUT    /api/users/{id}   - Update user
 DELETE /api/users/{id}   - Delete user
+```
+
+### Audit Logs (Admin only)
+```
+GET /api/v1/audit-logs   - List audit logs (paginated, filterable)
+```
+
+### Health & Monitoring
+```
+GET /health        - Health check (alias for readiness)
+GET /health/live   - Liveness probe (always 200)
+GET /health/ready  - Readiness probe (checks DB, version, latency)
+GET /metrics       - Prometheus metrics
 ```
 
 ### Tenant
@@ -214,6 +235,11 @@ Automated via GitHub Actions:
 | `TURERP_DB_MAX_CONNECTIONS` | Max DB connections | `10` |
 | `TURERP_JWT_ACCESS_EXPIRATION` | Access token duration (seconds) | `3600` |
 | `TURERP_JWT_REFRESH_EXPIRATION` | Refresh token duration (seconds) | `604800` |
+| `TURERP_TRUSTED_PROXIES` | Comma-separated trusted proxy IPs | (none) |
+| `TURERP_RATE_LIMIT_RPM` | Rate limit requests per minute | `10` |
+| `TURERP_RATE_LIMIT_BURST` | Rate limit burst size | `3` |
+| `TURERP_METRICS_ENABLED` | Enable Prometheus metrics | `true` |
+| `TURERP_METRICS_PATH` | Metrics endpoint path | `/metrics` |
 | `RUST_LOG` | Log level | `info` |
 
 ## Contributing
