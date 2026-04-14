@@ -2,37 +2,37 @@
 
 [![CI](https://github.com/turerp/turerp-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/turerp/turerp-rust/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-99%20passing-brightgreen)]()
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#lisans)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 
-**Multi-tenant SaaS ERP sistemi** - Rust, Actix-web ve SQLx ile geliştirilmiştir.
+**Multi-tenant SaaS ERP system** - Built with Rust, Actix-web, and SQLx.
 
-## Özellikler
+## Features
 
-### Core Modüller
-- **Kimlik Doğrulama**: JWT tabanlı auth, bcrypt şifre hashing, token refresh
-- **Tenant Yönetimi**: Subdomain bazlı multi-tenant mimari
-- **Kullanıcı Yönetimi**: Roller (Admin, User, Viewer), CRUD işlemleri
-- **Cari**: Müşteri/Tedarikçi hesapları, kredi limiti yönetimi
-- **Ürünler**: Kategori yönetimi, birim, barkod desteği
-- **Stok**: Depo yönetimi, stok hareketleri, değerleme
-- **Faturalar**: Fatura oluşturma, ödeme takibi, vergi hesaplamaları
+### Core Modules
+- **Authentication**: JWT-based auth, bcrypt password hashing, token refresh
+- **Tenant Management**: Subdomain-based multi-tenant architecture
+- **User Management**: Roles (Admin, User, Viewer), CRUD operations
+- **Cari**: Customer/Vendor accounts, credit limit management
+- **Products**: Category management, units, barcode support
+- **Stock**: Warehouse management, stock movements, valuation
+- **Invoices**: Invoice creation, payment tracking, tax calculations
 
-### İş Modülleri
-- **Satış**: Siparişler, teklifler, fiyatlandırma
-- **Satın Alma**: Siparişler, mal kabul, tedarikçi yönetimi
-- **İK**: Personel yönetimi, bordro, izin takibi
-- **Muhasebe**: Hesap planı, yevmiye kayıtları, mizan
+### Business Modules
+- **Sales**: Orders, quotations, pricing
+- **Purchase**: Orders, goods receipt, vendor management
+- **HR**: Employee management, payroll, leave tracking
+- **Accounting**: Chart of accounts, journal entries, trial balance
 
-### Gelişmiş Modüller
-- **Proje Yönetimi**: WBS, proje maliyetleri, karlılık analizi
-- **Üretim**: İş emirleri, rota, BOM yönetimi
-- **Kalite Kontrol**: İncelemeler, uygunsuzluk raporları (NCR)
-- **CRM**: Potansiyel müşteri, fırsat, kampanya yönetimi
+### Advanced Modules
+- **Project Management**: WBS, project costs, profitability analysis
+- **Manufacturing**: Work orders, routing, BOM management
+- **Quality Control**: Inspections, non-conformance reports (NCR)
+- **CRM**: Leads, opportunities, campaign management
 
-## Teknoloji Stack
+## Tech Stack
 
-| Katman | Teknoloji |
-|--------|-----------|
+| Layer | Technology |
+|-------|-----------|
 | Web Framework | Actix-web 4 |
 | Database | PostgreSQL + SQLx |
 | Auth | JWT + bcrypt |
@@ -42,14 +42,14 @@
 | Logging | tracing |
 | API Docs | utoipa (OpenAPI/Swagger) |
 
-## Kurulum
+## Installation
 
-### Gereksinimler
+### Prerequisites
 - Rust 1.70+
 - PostgreSQL 14+
-- (Opsiyonel) Docker & Docker Compose
+- (Optional) Docker & Docker Compose
 
-### Hızlı Başlangıç (Docker)
+### Quick Start (Docker)
 
 ```bash
 cd turerp
@@ -58,32 +58,32 @@ docker-compose up -d
 # Swagger UI: http://localhost:8080/swagger-ui/
 ```
 
-> **Not**: Docker port 8080, local development port 8000 kullanır.
+> **Note**: Docker uses port 8080, local development uses port 8000.
 
-### Geliştirme Ortamı
+### Development Setup
 
 ```bash
-# Rust kurulumu (rustup)
+# Install Rust (rustup)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# PostgreSQL veritabanı oluştur
+# Create PostgreSQL database
 createdb turerp
 
-# Environment variables ayarla
+# Set environment variables
 export TURERP_DATABASE_URL="postgres://postgres:postgres@localhost:5432/turerp"
 export TURERP_JWT_SECRET="your-secret-key-change-in-production"
 
-# Repository'yi klonla
+# Clone the repository
 git clone https://github.com/turerp/turerp-rust.git
 cd turerp-rust/turerp
 
-# Bağımlılıkları yükle ve build et
+# Install dependencies and build
 cargo build
 
-# Testleri çalıştır
+# Run tests
 cargo test
 
-# Sunucuyu başlat
+# Start the server
 cargo run
 # API: http://localhost:8000
 # Swagger UI: http://localhost:8000/swagger-ui/
@@ -91,46 +91,46 @@ cargo run
 
 ## API Endpoints
 
-### Kimlik Doğrulama
+### Authentication
 ```
-POST /api/auth/register  - Yeni kullanıcı kaydı
-POST /api/auth/login     - Giriş
-POST /api/auth/refresh    - Token yenileme
-GET  /api/auth/me        - Aktif kullanıcı bilgisi
+POST /api/auth/register  - Register new user
+POST /api/auth/login     - Login
+POST /api/auth/refresh   - Token refresh
+GET  /api/auth/me        - Current user info
 ```
 
-### Kullanıcılar
+### Users
 ```
-GET    /api/users        - Kullanıcı listesi
-POST   /api/users        - Kullanıcı oluştur
-GET    /api/users/{id}   - Kullanıcı detayı
-PUT    /api/users/{id}   - Kullanıcı güncelle
-DELETE /api/users/{id}   - Kullanıcı sil
+GET    /api/users        - User list
+POST   /api/users        - Create user
+GET    /api/users/{id}   - User details
+PUT    /api/users/{id}   - Update user
+DELETE /api/users/{id}   - Delete user
 ```
 
 ### Tenant
 ```
-GET    /api/tenants        - Tenant listesi
-POST   /api/tenants        - Tenant oluştur
-GET    /api/tenants/{id}   - Tenant detayı
-PUT    /api/tenants/{id}   - Tenant güncelle
-DELETE /api/tenants/{id}   - Tenant sil
+GET    /api/tenants        - Tenant list
+POST   /api/tenants        - Create tenant
+GET    /api/tenants/{id}   - Tenant details
+PUT    /api/tenants/{id}   - Update tenant
+DELETE /api/tenants/{id}   - Delete tenant
 ```
 
 ### Swagger UI
 - **Swagger UI**: `http://localhost:8000/swagger-ui/`
 - **OpenAPI Spec**: `http://localhost:8000/api-docs/openapi.json`
 
-## Mimari
+## Architecture
 
-### Multi-Tenant Akışı
+### Multi-Tenant Flow
 ```
-İstek → Subdomain Tespiti → Tenant Lookup → DB Routing → API Yanıtı
+Request → Subdomain Detection → Tenant Lookup → DB Routing → API Response
    ↓
-JWT Token → Kullanıcı Doğrulama → Rol Bazlı Erişim
+JWT Token → User Authentication → Role-Based Access
 ```
 
-### Modül Bağımlılıkları
+### Module Dependencies
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Authentication (Auth)                     │
@@ -151,44 +151,44 @@ JWT Token → Kullanıcı Doğrulama → Rol Bazlı Erişim
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Proje Yapısı
+### Project Structure
 ```
 turerp/
 ├── src/
 │   ├── api/              # HTTP handlers (Actix-web)
-│   ├── config/           # Konfigürasyon
-│   ├── domain/           # Domain modülleri (business logic)
-│   │   ├── auth/         # Kimlik doğrulama
-│   │   ├── user/         # Kullanıcı yönetimi
-│   │   ├── tenant/       # Tenant yönetimi
-│   │   ├── cari/         # Cari hesaplar
-│   │   ├── product/      # Ürün yönetimi
-│   │   ├── stock/        # Stok yönetimi
-│   │   ├── invoice/      # Fatura yönetimi
-│   │   ├── sales/        # Satış modülü
-│   │   ├── purchase/     # Satın alma modülü
-│   │   ├── hr/           # İK modülü
-│   │   ├── accounting/   # Muhasebe modülü
-│   │   ├── project/      # Proje yönetimi
-│   │   ├── manufacturing/# Üretim modülü
-│   │   └── crm/          # CRM modülü
-│   ├── error/            # Hata yönetimi
+│   ├── config/           # Configuration
+│   ├── domain/           # Domain modules (business logic)
+│   │   ├── auth/         # Authentication
+│   │   ├── user/         # User management
+│   │   ├── tenant/       # Tenant management
+│   │   ├── cari/         # Cari accounts
+│   │   ├── product/      # Product management
+│   │   ├── stock/        # Stock management
+│   │   ├── invoice/      # Invoice management
+│   │   ├── sales/        # Sales module
+│   │   ├── purchase/     # Purchase module
+│   │   ├── hr/           # HR module
+│   │   ├── accounting/   # Accounting module
+│   │   ├── project/      # Project management
+│   │   ├── manufacturing/# Manufacturing module
+│   │   └── crm/          # CRM module
+│   ├── error/            # Error handling
 │   ├── middleware/       # HTTP middleware
-│   ├── utils/            # Yardımcı fonksiyonlar
+│   ├── utils/            # Utility functions
 │   ├── lib.rs            # Library entry point
 │   └── main.rs           # Application entry point
-├── tests/                # Entegrasyon testleri
-├── docs/                 # Modül dokümantasyonu
+├── tests/                # Integration tests
+├── docs/                 # Module documentation
 └── Cargo.toml            # Dependencies
 ```
 
-## Test
+## Testing
 
 ```bash
-# Tüm testler
+# All tests
 cargo test
 
-# Belirli modül testleri
+# Specific module tests
 cargo test --lib domain::cari
 
 # Test coverage
@@ -197,40 +197,40 @@ cargo tarpaulin --out Html
 
 ## CI/CD
 
-GitHub Actions ile otomatik:
-- Format kontrolü (`cargo fmt --check`)
+Automated via GitHub Actions:
+- Format check (`cargo fmt --check`)
 - Clippy linting (`cargo clippy`)
-- Test çalıştırma (`cargo test`)
+- Test execution (`cargo test`)
 - Security audit (`cargo audit`)
 
 ## Environment Variables
 
-| Değişken | Açıklama | Varsayılan |
-|----------|---------|------------|
-| `TURERP_DATABASE_URL` | PostgreSQL connection string | Zorunlu |
-| `TURERP_JWT_SECRET` | JWT imzalama anahtarı | Zorunlu |
-| `TURERP_SERVER_HOST` | Sunucu host | `0.0.0.0` |
-| `TURERP_SERVER_PORT` | Sunucu portu | `8000` |
-| `TURERP_DB_MAX_CONNECTIONS` | Max DB bağlantısı | `10` |
-| `TURERP_JWT_ACCESS_EXPIRATION` | Access token süresi (saniye) | `3600` |
-| `TURERP_JWT_REFRESH_EXPIRATION` | Refresh token süresi (saniye) | `604800` |
-| `RUST_LOG` | Log seviyesi | `info` |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TURERP_DATABASE_URL` | PostgreSQL connection string | Required |
+| `TURERP_JWT_SECRET` | JWT signing key | Required |
+| `TURERP_SERVER_HOST` | Server host | `0.0.0.0` |
+| `TURERP_SERVER_PORT` | Server port | `8000` |
+| `TURERP_DB_MAX_CONNECTIONS` | Max DB connections | `10` |
+| `TURERP_JWT_ACCESS_EXPIRATION` | Access token duration (seconds) | `3600` |
+| `TURERP_JWT_REFRESH_EXPIRATION` | Refresh token duration (seconds) | `604800` |
+| `RUST_LOG` | Log level | `info` |
 
-## Katkıda Bulunma
+## Contributing
 
-1. Fork yapın
-2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
-3. Değişikliklerinizi commit edin (`git commit -m 'feat: amazing feature'`)
-4. Branch'i push edin (`git push origin feature/amazing-feature`)
-5. Pull Request açın
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: amazing feature'`)
+4. Push the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Dokümantasyon
+## Documentation
 
-- [Modül Dokümantasyonu](docs/README.md)
-- [Implementasyon Planı](IMPLEMENTATION_PLAN.md)
-- [API Dokümantasyonu](http://localhost:8000/swagger-ui/)
+- [Module Documentation](docs/README.md)
+- [Implementation Plan](IMPLEMENTATION_PLAN.md)
+- [API Documentation](http://localhost:8000/swagger-ui/)
 
-## Lisans
+## License
 
 MIT License
 
@@ -258,4 +258,4 @@ SOFTWARE.
 
 ---
 
-**Turerp Team** - Modern ERP çözümleri için Rust ile geliştirilmiştir.
+**Turerp Team** - Built with Rust for modern ERP solutions.

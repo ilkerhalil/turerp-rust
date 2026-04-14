@@ -3,43 +3,43 @@
 [![CI](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Modern, çok kiracılı (multi-tenant) SaaS ERP sistemi** - Rust, Actix-web ve SQLx ile geliştirilmiştir.
+**Modern, multi-tenant SaaS ERP system** - Built with Rust, Actix-web, and SQLx.
 
-## Özellikler
+## Features
 
-### 🏢 Core Modüller
-| Modül | Açıklama |
-|-------|----------|
-| **Auth** | JWT tabanlı kimlik doğrulama, bcrypt şifre hashing, token refresh |
-| **Tenant** | Subdomain bazlı multi-tenant mimari, tenant izolasyonu |
-| **User** | Kullanıcı yönetimi, roller (Admin, User, Viewer) |
-| **Cari** | Müşteri/Tedarikçi hesapları, kredi limiti yönetimi |
-| **Product** | Ürün katalogu, kategoriler, birim, barkod desteği |
-| **Stock** | Depo yönetimi, stok hareketleri, değerleme |
-| **Invoice** | Fatura oluşturma, ödeme takibi, vergi hesaplamaları |
+### Core Modules
+| Module | Description |
+|--------|-------------|
+| **Auth** | JWT-based authentication, bcrypt password hashing, token refresh |
+| **Tenant** | Subdomain-based multi-tenant architecture, tenant isolation |
+| **User** | User management, roles (Admin, User, Viewer) |
+| **Cari** | Customer/Vendor accounts, credit limit management |
+| **Product** | Product catalog, categories, units, barcode support |
+| **Stock** | Warehouse management, stock movements, valuation |
+| **Invoice** | Invoice creation, payment tracking, tax calculations |
 
-### 💼 İş Modülleri
-| Modül | Açıklama |
-|-------|----------|
-| **Sales** | Satış siparişleri, teklifler, fiyatlandırma |
-| **Purchase** | Satın alma siparişleri, mal kabul, tedarikçi yönetimi |
-| **HR** | Personel yönetimi, bordro, izin takibi |
-| **Accounting** | Hesap planı, yevmiye kayıtları, mizan |
-| **Assets** | Demirbaşlar, amortisman hesaplama, bakım takibi |
+### Business Modules
+| Module | Description |
+|--------|-------------|
+| **Sales** | Sales orders, quotations, pricing |
+| **Purchase** | Purchase orders, goods receipt, vendor management |
+| **HR** | Employee management, payroll, leave tracking |
+| **Accounting** | Chart of accounts, journal entries, trial balance |
+| **Assets** | Fixed assets, depreciation calculation, maintenance tracking |
 
-### 📊 Gelişmiş Modüller
-| Modül | Açıklama |
-|-------|----------|
-| **Projects** | Proje yönetimi, WBS, proje maliyetleri, karlılık analizi |
-| **Manufacturing** | İş emirleri, rota, üretim takibi |
-| **BOM** | Reçete yönetimi, malzeme ihtiyacı hesaplama |
-| **Quality Control** | Kalite kontroller, uygunsuzluk raporları (NCR) |
-| **CRM** | Potansiyel müşteri, fırsat, kampanya, destek talepleri |
+### Advanced Modules
+| Module | Description |
+|--------|-------------|
+| **Projects** | Project management, WBS, project costs, profitability analysis |
+| **Manufacturing** | Work orders, routing, production tracking |
+| **BOM** | Bill of Materials management, material requirements planning |
+| **Quality Control** | Quality inspections, non-conformance reports (NCR) |
+| **CRM** | Leads, opportunities, campaigns, support tickets |
 
-## Teknoloji Stack
+## Tech Stack
 
-| Katman | Teknoloji | Versiyon |
-|--------|-----------|----------|
+| Layer | Technology | Version |
+|-------|-----------|---------|
 | **Backend** | Rust | 1.70+ |
 | **Web Framework** | Actix-web | 4.x |
 | **Database** | PostgreSQL | 14+ |
@@ -51,14 +51,14 @@
 | **API Docs** | utoipa (OpenAPI/Swagger) | 4.x |
 | **Logging** | tracing | 0.1 |
 
-## Hızlı Başlangıç
+## Quick Start
 
-### Gereksinimler
+### Prerequisites
 - Rust 1.70+
 - PostgreSQL 14+
-- (Opsiyonel) Docker & Docker Compose
+- (Optional) Docker & Docker Compose
 
-### Docker ile Çalıştırma
+### Running with Docker
 
 ```bash
 cd turerp
@@ -67,25 +67,25 @@ docker-compose up -d
 # Swagger UI: http://localhost:8080/swagger-ui/
 ```
 
-### Geliştirme Ortamı
+### Development Setup
 
 ```bash
-# Repository'yi klonla
+# Clone the repository
 git clone https://github.com/ilkerhalil/turerp-rust.git
 cd turerp-rust/turerp
 
-# Build ve çalıştır (in-memory storage - development)
+# Build and run (in-memory storage - development)
 cargo run
 
-# PostgreSQL ile çalıştır (production)
+# Run with PostgreSQL (production)
 export TURERP_DATABASE_URL="postgres://postgres:postgres@localhost:5432/turerp"
 export TURERP_JWT_SECRET="your-secret-key-change-in-production"
 cargo run --features postgres
 
-# Testleri çalıştır
+# Run tests
 cargo test
 
-# PostgreSQL testleri
+# PostgreSQL tests
 cargo test --features postgres
 ```
 
@@ -96,36 +96,36 @@ cargo test --features postgres
 | **In-Memory** | `cargo run` | Development, testing |
 | **PostgreSQL** | `cargo run --features postgres` | Production |
 
-**Not**: In-memory mod tüm verileri RAM'de tutar. Sunucu yeniden başlatıldığında veriler kaybolur. Production için PostgreSQL kullanın.
+**Note**: In-memory mode stores all data in RAM. Data is lost on server restart. Use PostgreSQL for production.
 
 ### Pre-commit & Pre-push Hooks (Lefthook)
 
-Bu proje, CI başarısızlıklarını önlemek için lefthook kullanır. Her commit ve push işlemlerinde otomatik kontroller çalışır.
+This project uses lefthook to prevent CI failures. Automatic checks run on every commit and push.
 
-**Kurulum:**
+**Setup:**
 ```bash
-# Lefthook'u kur (tek seferlik)
+# Install lefthook (one-time)
 cargo install lefthook
 
-# Git hook'ları aktifleştir
+# Activate git hooks
 lefthook install
 ```
 
-**Çalışan Kontroller:**
+**Running Checks:**
 
-| Hook | Komutlar | Açıklama |
-|------|----------|----------|
-| `pre-commit` | `cargo fmt --check` | Kod formatı kontrolü |
-| `pre-commit` | `cargo clippy -- -D warnings` | Lint hataları |
-| `pre-push` | `cargo test` | Tüm testler |
-| `pre-push` | `cargo audit` | Güvenlik denetimi |
-| `commit-msg` | Conventional commits | Commit mesaj formatı |
+| Hook | Commands | Description |
+|------|----------|-------------|
+| `pre-commit` | `cargo fmt --check` | Code format check |
+| `pre-commit` | `cargo clippy -- -D warnings` | Lint errors |
+| `pre-push` | `cargo test` | All tests |
+| `pre-push` | `cargo audit` | Security audit |
+| `commit-msg` | Conventional commits | Commit message format |
 
-**Commit Mesaj Formatı:**
+**Commit Message Format:**
 ```
 type(scope): description
 
-# Örnekler:
+# Examples:
 feat: add rate limiting middleware
 fix: auth token validation bug
 docs: update README
@@ -134,111 +134,106 @@ ci: add lefthook configuration
 
 **Types:** feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
 
-## Proje Yapısı
+## Project Structure
 
 ```
 turerp-rust/
-├── turerp/                    # Ana uygulama (Rust crate)
+├── turerp/                    # Main application (Rust crate)
 │   ├── src/
 │   │   ├── api/               # HTTP handlers (Actix-web)
-│   │   ├── config/           # Konfigürasyon
+│   │   ├── config/           # Configuration
 │   │   ├── db/                # Database layer (PostgreSQL)
 │   │   │   ├── mod.rs
 │   │   │   └── pool.rs       # Connection pool, migrations
-│   │   ├── domain/           # Domain modülleri (business logic)
-│   │   │   ├── auth/          # Kimlik doğrulama
-│   │   │   ├── user/         # Kullanıcı yönetimi
+│   │   ├── domain/           # Domain modules (business logic)
+│   │   │   ├── auth/          # Authentication
+│   │   │   ├── user/         # User management
 │   │   │   │   ├── mod.rs
 │   │   │   │   ├── model.rs
 │   │   │   │   ├── repository.rs      # InMemory impl
 │   │   │   │   ├── postgres_repository.rs  # PostgreSQL impl
 │   │   │   │   └── service.rs
-│   │   │   ├── tenant/        # Tenant yönetimi
+│   │   │   ├── tenant/        # Tenant management
 │   │   │   │   └── postgres_repository.rs
-│   │   │   ├── cari/          # Cari hesaplar
+│   │   │   ├── cari/          # Cari accounts
 │   │   │   │   └── postgres_repository.rs
-│   │   │   ├── product/       # Ürün yönetimi
-│   │   │   ├── stock/         # Stok yönetimi
-│   │   │   ├── invoice/       # Fatura yönetimi
-│   │   │   ├── sales/         # Satış modülü
-│   │   │   ├── purchase/      # Satın alma modülü
-│   │   │   ├── hr/            # İK modülü
-│   │   │   ├── accounting/    # Muhasebe modülü
-│   │   │   ├── assets/        # Demirbaş modülü (NEW)
-│   │   │   ├── project/       # Proje yönetimi
-│   │   │   ├── manufacturing/ # Üretim modülü
-│   │   │   └── crm/           # CRM modülü
+│   │   │   ├── product/       # Product management
+│   │   │   ├── stock/         # Stock management
+│   │   │   ├── invoice/       # Invoice management
+│   │   │   ├── sales/         # Sales module
+│   │   │   ├── purchase/      # Purchase module
+│   │   │   ├── hr/            # HR module
+│   │   │   ├── accounting/    # Accounting module
+│   │   │   ├── assets/        # Assets module
+│   │   │   ├── project/       # Project management
+│   │   │   ├── manufacturing/ # Manufacturing module
+│   │   │   └── crm/           # CRM module
 │   │   ├── common/
-│   │   │   └── pagination.rs  # Sayfalama yardımcıları (NEW)
+│   │   │   └── pagination.rs  # Pagination helpers
 │   │   ├── middleware/       # HTTP middleware
 │   │   │   ├── auth.rs        # JWT authentication
 │   │   │   ├── rate_limit.rs  # Rate limiting (governor)
 │   │   │   └── request_id.rs  # Request ID tracing
-│   │   ├── utils/             # Yardımcı fonksiyonlar
+│   │   ├── utils/             # Utility functions
 │   │   │   ├── jwt.rs         # JWT utilities
 │   │   │   ├── password.rs    # Password utilities
-│   │   │   └── encryption.rs  # AES-256-GCM encryption (NEW)
-│   │   ├── error/             # Hata yönetimi
-│   │   ├── middleware/       # HTTP middleware
-│   │   │   ├── auth.rs        # JWT authentication
-│   │   │   ├── rate_limit.rs  # Rate limiting (governor)
-│   │   │   └── request_id.rs  # Request ID tracing
-│   │   ├── utils/             # Yardımcı fonksiyonlar
+│   │   │   └── encryption.rs  # AES-256-GCM encryption
+│   │   ├── error/             # Error handling
 │   │   ├── lib.rs             # Library entry point
 │   │   └── main.rs            # Application entry point
 │   ├── migrations/
 │   │   └── 001_initial_schema.sql  # Database schema
-│   ├── tests/                 # Entegrasyon testleri
-│   └── Cargo.toml             # Bağımlılıklar
-├── docs/                      # Proje dokümantasyonu
-│   └── modules/               # Modül detayları
+│   ├── tests/                 # Integration tests
+│   └── Cargo.toml             # Dependencies
+├── docs/                      # Project documentation
+│   └── modules/               # Module details
 ├── .github/                   # GitHub Actions CI/CD
-├── AGENTS.md                  # AI agent konfigürasyonu
-├── IMPLEMENTATION_PLAN.md     # Implementasyon planı
+├── AGENTS.md                  # AI agent configuration
+├── IMPLEMENTATION_PLAN.md     # Implementation plan
 └── lefthook.yml               # Pre-commit/pre-push hooks
 ```
 
 ## API Endpoints
 
-### Kimlik Doğrulama (Public - JWT gerekmez)
+### Authentication (Public - No JWT required)
 ```
-POST /api/auth/register   - Yeni kullanıcı kaydı
-POST /api/auth/login      - Giriş (JWT token döner)
-POST /api/auth/refresh    - Token yenileme
-```
-
-### Kimlik Doğrulama (Protected - JWT gerekir)
-```
-GET  /api/auth/me         - Aktif kullanıcı bilgisi 🔒
+POST /api/auth/register   - Register new user
+POST /api/auth/login      - Login (returns JWT token)
+POST /api/auth/refresh    - Token refresh
 ```
 
-### Kullanıcılar (Protected - JWT gerekir)
+### Authentication (Protected - JWT required)
 ```
-GET    /api/users         - Kullanıcı listesi 🔒
-POST   /api/users         - Kullanıcı oluştur 🔒
-GET    /api/users/{id}    - Kullanıcı detayı 🔒
-PUT    /api/users/{id}    - Kullanıcı güncelle 🔒
-DELETE /api/users/{id}    - Kullanıcı sil 🔒
+GET  /api/auth/me         - Current user info 🔒
 ```
 
-🔒 = JWT Bearer token gerekir
+### Users (Protected - JWT required)
+```
+GET    /api/users         - User list 🔒
+POST   /api/users         - Create user 🔒
+GET    /api/users/{id}    - User details 🔒
+PUT    /api/users/{id}    - Update user 🔒
+DELETE /api/users/{id}    - Delete user 🔒
+```
+
+🔒 = JWT Bearer token required
 
 ### Swagger UI
 - **Swagger UI**: `http://localhost:8000/swagger-ui/`
 - **OpenAPI Spec**: `http://localhost:8000/api-docs/openapi.json`
 
-**Not**: Swagger UI'da "Authorize" butonuna tıklayarak Bearer token girebilirsiniz.
+**Note**: Click the "Authorize" button in Swagger UI to enter a Bearer token.
 
-## Mimari
+## Architecture
 
-### Multi-Tenant Akışı
+### Multi-Tenant Flow
 ```
-İstek → Subdomain Tespiti → Tenant Lookup → DB Routing → API Yanıtı
+Request → Subdomain Detection → Tenant Lookup → DB Routing → API Response
    ↓
-JWT Token → Kullanıcı Doğrulama → Rol Bazlı Erişim
+JWT Token → User Authentication → Role-Based Access
 ```
 
-### Modül Bağımlılıkları
+### Module Dependencies
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Authentication (Auth)                     │
@@ -262,16 +257,16 @@ JWT Token → Kullanıcı Doğrulama → Rol Bazlı Erişim
 └─────────────────────────────────────────────────────────────┘
 ```
 
-## Test
+## Testing
 
 ```bash
-# Tüm testler (219 test)
+# All tests (290 tests)
 cargo test
 
-# Security testleri
+# Security tests
 cargo test --test security_test
 
-# Belirli modül testleri
+# Specific module tests
 cargo test --lib domain::cari
 
 # Test coverage
@@ -280,119 +275,118 @@ cargo tarpaulin --out Html
 
 ## CI/CD
 
-GitHub Actions ile otomatik:
-- ✅ Format kontrolü (`cargo fmt --check`)
-- ✅ Clippy linting (`cargo clippy`)
-- ✅ Test çalıştırma (`cargo test`)
-- ✅ Security audit (`cargo audit`)
+Automated via GitHub Actions:
+- Format check (`cargo fmt --check`)
+- Clippy linting (`cargo clippy`)
+- Test execution (`cargo test`)
+- Security audit (`cargo audit`)
 
 ## Environment Variables
 
-### Zorunlu Değişkenler
+### Required Variables
 
-| Değişken | Açıklama |
-|----------|---------|
-| `TURERP_DATABASE_URL` | PostgreSQL connection string (örn: `postgres://user:pass@host:5432/db`) |
-| `TURERP_JWT_SECRET` | JWT imzalama anahtarı (production'da min 32 karakter, güvenli rastgele string) |
+| Variable | Description |
+|----------|-------------|
+| `TURERP_DATABASE_URL` | PostgreSQL connection string (e.g., `postgres://user:pass@host:5432/db`) |
+| `TURERP_JWT_SECRET` | JWT signing key (min 32 characters in production, secure random string) |
 
-### Opsiyonel Değişkenler
+### Optional Variables
 
-| Değişken | Açıklama | Varsayılan |
-|----------|---------|------------|
-| `TURERP_ENV` | Ortam (`development` / `production`) | `development` |
-| `TURERP_SERVER_HOST` | Sunucu host | `0.0.0.0` |
-| `TURERP_SERVER_PORT` | Sunucu portu | `8000` |
-| `TURERP_DB_MAX_CONNECTIONS` | Max DB bağlantısı | `10` |
-| `TURERP_DB_MIN_CONNECTIONS` | Min DB bağlantısı | `5` |
-| `TURERP_JWT_ACCESS_EXPIRATION` | Access token süresi (saniye) | `3600` (1 saat) |
-| `TURERP_JWT_REFRESH_EXPIRATION` | Refresh token süresi (saniye) | `604800` (7 gün) |
-| `TURERP_CORS_ORIGINS` | İzin verilen origins (virgülle ayrılmış) | `*` |
-| `TURERP_CORS_METHODS` | İzin verilen HTTP metodları | `GET,POST,PUT,DELETE,OPTIONS` |
-| `TURERP_CORS_HEADERS` | İzin verilen headerlar | `Content-Type,Authorization` |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `TURERP_ENV` | Environment (`development` / `production`) | `development` |
+| `TURERP_SERVER_HOST` | Server host | `0.0.0.0` |
+| `TURERP_SERVER_PORT` | Server port | `8000` |
+| `TURERP_DB_MAX_CONNECTIONS` | Max DB connections | `10` |
+| `TURERP_DB_MIN_CONNECTIONS` | Min DB connections | `5` |
+| `TURERP_JWT_ACCESS_EXPIRATION` | Access token duration (seconds) | `3600` (1 hour) |
+| `TURERP_JWT_REFRESH_EXPIRATION` | Refresh token duration (seconds) | `604800` (7 days) |
+| `TURERP_CORS_ORIGINS` | Allowed origins (comma-separated) | `*` |
+| `TURERP_CORS_METHODS` | Allowed HTTP methods | `GET,POST,PUT,DELETE,OPTIONS` |
+| `TURERP_CORS_HEADERS` | Allowed headers | `Content-Type,Authorization` |
 | `TURERP_CORS_CREDENTIALS` | CORS credentials | `true` |
-| `RUST_LOG` | Log seviyesi | `info` |
+| `RUST_LOG` | Log level | `info` |
 
-## Güvenlik
+## Security
 
-### OWASP Top 10 Koruması
+### OWASP Top 10 Protection
 
-Sistem OWASP Top 10 güvenlik açıklarına karşı test edilmiştir:
-- ✅ **SQL Injection Prevention** - Parametreli sorgular
-- ✅ **JWT Token Security** - Token doğrulama ve manipülasyon koruması
-- ✅ **Authentication Security** - Güçlü şifre politikaları, rate limiting
-- ✅ **Authorization** - Rol bazlı erişim kontrolü (Admin, User, Viewer)
-- ✅ **Input Validation** - Tüm girişler doğrulanıyor
-- ✅ **HTTP Method Security** - İzin verilmeyen metodlar reddediliyor
+The system has been tested against OWASP Top 10 vulnerabilities:
+- **SQL Injection Prevention** - Parameterized queries
+- **JWT Token Security** - Token validation and tampering protection
+- **Authentication Security** - Strong password policies, rate limiting
+- **Authorization** - Role-based access control (Admin, User, Viewer)
+- **Input Validation** - All inputs are validated
+- **HTTP Method Security** - Disallowed methods are rejected
 
-### Güvenlik Hardening (Code Review)
+### Security Hardening (Code Review)
 
-Ek güvenlik önlemleri:
-- ✅ **Public Path Matching** - Exact match ile route bypass önleme
-- ✅ **Encryption Key Security** - `zeroize` ile bellek temizleme
-- ✅ **Financial Precision** - `Decimal` tipi ile parasal hesaplamalar (tüm modüller)
-- ✅ **Role-Based Access** - AdminUser extractor ile endpoint koruması
-- ✅ **Mutex Pattern** - Single inner struct ile thread-safe repository'ler
-- ✅ **Tenant Isolation** - Zorunlu `tenant_id` ile tenant exposure önleme
-- ✅ **Thread Safety** - Single mutex pattern ile race condition önleme
-- ✅ **Role-Based Access** - AdminUser extractor ile endpoint koruması
-- ✅ **Must-Use Attributes** - Önemli dönüş değerleri için `#[must_use]`
+Additional security measures:
+- **Public Path Matching** - Exact match to prevent route bypass
+- **Encryption Key Security** - Memory cleanup with `zeroize`
+- **Financial Precision** - `Decimal` type for monetary calculations (all modules)
+- **Role-Based Access** - AdminUser extractor for endpoint protection
+- **Mutex Pattern** - Thread-safe repositories with single inner struct
+- **Tenant Isolation** - Mandatory `tenant_id` to prevent tenant data exposure
+- **Thread Safety** - Single mutex pattern to prevent race conditions
+- **Must-Use Attributes** - `#[must_use]` for important return values
 
-### JWT Kimlik Doğrulama
+### JWT Authentication
 
-Tüm API endpoint'leri (auth hariç) JWT Bearer token gerektirir:
+All API endpoints (except auth) require a JWT Bearer token:
 
 ```bash
-# Token al
+# Get token
 curl -X POST http://localhost:8000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"password"}'
 
-# Authenticated istek
+# Authenticated request
 curl http://localhost:8000/api/users \
   -H "Authorization: Bearer <access_token>"
 ```
 
 ### Rate Limiting
 
-Auth endpoint'leri rate limiting ile korunur:
-- **Limit**: 10 request/dakika (per IP)
-- **Burst**: 3 request
+Auth endpoints are protected with rate limiting:
+- **Limit**: 10 requests/minute (per IP)
+- **Burst**: 3 requests
 
-### Şifre Gereksinimleri
+### Password Requirements
 
-Şifreler aşağıdaki kriterleri karşılamalıdır:
-- Minimum 12 karakter
-- En az 1 büyük harf
-- En az 1 küçük harf
-- En az 1 rakam
-- En az 1 özel karakter
+Passwords must meet the following criteria:
+- Minimum 12 characters
+- At least 1 uppercase letter
+- At least 1 lowercase letter
+- At least 1 digit
+- At least 1 special character
 
-### Production Uyarıları
+### Production Warnings
 
-Production ortamında (`TURERP_ENV=production`):
-- JWT secret minimum 32 karakter olmalı
-- JWT secret "dev", "test", "password" gibi zayıf patternler içermemeli
-- CORS wildcard (`*`) kullanılmaması önerilir
+In production environment (`TURERP_ENV=production`):
+- JWT secret must be at least 32 characters
+- JWT secret must not contain weak patterns like "dev", "test", "password"
+- CORS wildcard (`*`) usage is not recommended
 
-### Tenant İzolasyonu
+### Tenant Isolation
 
-Her tenant kendi veritabanına sahip ve JWT token'dan gelen `tenant_id` ile izole edilmiştir. Kullanıcılar sadece kendi tenant'larının verilerine erişebilir.
+Each tenant has its own database and is isolated via `tenant_id` from the JWT token. Users can only access their own tenant's data.
 
-## Katkıda Bulunma
+## Contributing
 
-1. Fork yapın
-2. Feature branch oluşturun (`git checkout -b feature/amazing-feature`)
-3. Değişikliklerinizi commit edin (`git commit -m 'feat: amazing feature'`)
-4. Branch'i push edin (`git push origin feature/amazing-feature`)
-5. Pull Request açın
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: amazing feature'`)
+4. Push the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## Dokümantasyon
+## Documentation
 
-- [Modül Dokümantasyonu](docs/README.md) - Tüm modüllerin detaylı açıklaması
-- [Implementasyon Planı](IMPLEMENTATION_PLAN.md) - Geliştirme road map
-- [Detaylı README](turerp/README.md) - Ana uygulama dokümantasyonu
+- [Module Documentation](docs/README.md) - Detailed description of all modules
+- [Implementation Plan](IMPLEMENTATION_PLAN.md) - Development roadmap
+- [Application README](turerp/README.md) - Main application documentation
 
-## Lisans
+## License
 
 MIT License
 
@@ -412,4 +406,4 @@ copies or substantial portions of the Software.
 
 ---
 
-**Turerp Team** - Modern ERP çözümleri için Rust ile geliştirilmiştir.
+**Turerp Team** - Built with Rust for modern ERP solutions.
