@@ -28,7 +28,7 @@ pub struct StockLevel {
 }
 
 /// Stock movement types
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MovementType {
     Purchase,      // Stock in from purchase order
     Sale,          // Stock out from sales order
@@ -38,6 +38,39 @@ pub enum MovementType {
     ProductionIn,  // Stock in from production
     ProductionOut, // Stock out for production
     Waste,         // Stock out due to waste/damage
+}
+
+impl std::fmt::Display for MovementType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MovementType::Purchase => write!(f, "Purchase"),
+            MovementType::Sale => write!(f, "Sale"),
+            MovementType::Return => write!(f, "Return"),
+            MovementType::Adjustment => write!(f, "Adjustment"),
+            MovementType::Transfer => write!(f, "Transfer"),
+            MovementType::ProductionIn => write!(f, "ProductionIn"),
+            MovementType::ProductionOut => write!(f, "ProductionOut"),
+            MovementType::Waste => write!(f, "Waste"),
+        }
+    }
+}
+
+impl std::str::FromStr for MovementType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Purchase" => Ok(MovementType::Purchase),
+            "Sale" => Ok(MovementType::Sale),
+            "Return" => Ok(MovementType::Return),
+            "Adjustment" => Ok(MovementType::Adjustment),
+            "Transfer" => Ok(MovementType::Transfer),
+            "ProductionIn" => Ok(MovementType::ProductionIn),
+            "ProductionOut" => Ok(MovementType::ProductionOut),
+            "Waste" => Ok(MovementType::Waste),
+            _ => Err(format!("Invalid movement type: {}", s)),
+        }
+    }
 }
 
 /// Stock movement

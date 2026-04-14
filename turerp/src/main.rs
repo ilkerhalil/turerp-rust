@@ -6,15 +6,15 @@
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
 use turerp::config::Config;
-use turerp::middleware::{RateLimitMiddleware, RequestIdMiddleware};
+use turerp::middleware::{AuditLoggingMiddleware, RateLimitMiddleware, RequestIdMiddleware};
 
 use turerp::api::{
-    v1_auth_configure, v1_feature_flags_configure, v1_product_variants_configure,
-    v1_purchase_requests_configure, v1_users_configure, ApiDoc,
+    v1_accounting_configure, v1_assets_configure, v1_auth_configure, v1_cari_configure,
+    v1_crm_configure, v1_feature_flags_configure, v1_hr_configure, v1_invoice_configure,
+    v1_manufacturing_configure, v1_product_variants_configure, v1_project_configure,
+    v1_purchase_requests_configure, v1_sales_configure, v1_stock_configure, v1_tenant_configure,
+    v1_users_configure, ApiDoc,
 };
-// Legacy imports (deprecated)
-#[allow(deprecated)]
-use turerp::api::{auth_configure, users_configure};
 use turerp::setup_logging;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -38,7 +38,6 @@ async fn health_check(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
     // Get the pool from web::Data
-    // web::Data<Arc<PgPool>> contains Arc<PgPool>, and we need &PgPool for sqlx
     let pool: &sqlx::PgPool = &*app_state.db_pool;
 
     // Test database connectivity
@@ -151,11 +150,25 @@ async fn main() -> std::io::Result<()> {
             // Security middlewares (ORDER MATTERS!)
             .wrap(RequestIdMiddleware) // 1. Request ID for tracing
             .wrap(RateLimitMiddleware::new()) // 2. Rate limiting (before auth)
-            .wrap(middleware::Logger::default()) // 3. Logging
-            .wrap(configure_cors(&config.cors)) // 4. CORS
+            .wrap(AuditLoggingMiddleware) // 3. Audit logging
+            .wrap(middleware::Logger::default()) // 4. Access logging
+            .wrap(configure_cors(&config.cors)) // 5. CORS
+            .wrap(middleware::Compress::default()) // 6. Response compression (outermost)
+            .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
             .app_data(app_state.jwt_service.clone())
+            .app_data(app_state.cari_service.clone())
+            .app_data(app_state.stock_service.clone())
+            .app_data(app_state.invoice_service.clone())
+            .app_data(app_state.sales_service.clone())
+            .app_data(app_state.hr_service.clone())
+            .app_data(app_state.accounting_service.clone())
+            .app_data(app_state.project_service.clone())
+            .app_data(app_state.manufacturing_service.clone())
+            .app_data(app_state.crm_service.clone())
+            .app_data(app_state.tenant_service.clone())
+            .app_data(app_state.assets_service.clone())
             .app_data(app_state.feature_service.clone())
             .app_data(app_state.product_service.clone())
             .app_data(app_state.purchase_service.clone())
@@ -166,31 +179,50 @@ async fn main() -> std::io::Result<()> {
             // Security middlewares (ORDER MATTERS!)
             .wrap(RequestIdMiddleware) // 1. Request ID for tracing
             .wrap(RateLimitMiddleware::new()) // 2. Rate limiting (before auth)
-            .wrap(middleware::Logger::default()) // 3. Logging
-            .wrap(configure_cors(&config.cors)) // 4. CORS
+            .wrap(AuditLoggingMiddleware) // 3. Audit logging
+            .wrap(middleware::Logger::default()) // 4. Access logging
+            .wrap(configure_cors(&config.cors)) // 5. CORS
+            .wrap(middleware::Compress::default()) // 6. Response compression (outermost)
+            .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
             .app_data(app_state.jwt_service.clone())
+            .app_data(app_state.cari_service.clone())
+            .app_data(app_state.stock_service.clone())
+            .app_data(app_state.invoice_service.clone())
+            .app_data(app_state.sales_service.clone())
+            .app_data(app_state.hr_service.clone())
+            .app_data(app_state.accounting_service.clone())
+            .app_data(app_state.project_service.clone())
+            .app_data(app_state.manufacturing_service.clone())
+            .app_data(app_state.crm_service.clone())
+            .app_data(app_state.tenant_service.clone())
+            .app_data(app_state.assets_service.clone())
             .app_data(app_state.feature_service.clone())
             .app_data(app_state.product_service.clone())
             .app_data(app_state.purchase_service.clone());
 
         app // Health check
             .route("/health", web::get().to(health_check))
-            // V1 API routes (preferred)
+            // V1 API routes
             .service(
                 web::scope("/api")
                     .configure(v1_auth_configure)
                     .configure(v1_users_configure)
                     .configure(v1_feature_flags_configure)
                     .configure(v1_product_variants_configure)
-                    .configure(v1_purchase_requests_configure),
-            )
-            // Legacy API routes (deprecated, will be removed in v2)
-            .service(
-                web::scope("/api")
-                    .configure(auth_configure)
-                    .configure(users_configure),
+                    .configure(v1_purchase_requests_configure)
+                    .configure(v1_cari_configure)
+                    .configure(v1_stock_configure)
+                    .configure(v1_invoice_configure)
+                    .configure(v1_sales_configure)
+                    .configure(v1_hr_configure)
+                    .configure(v1_accounting_configure)
+                    .configure(v1_project_configure)
+                    .configure(v1_manufacturing_configure)
+                    .configure(v1_crm_configure)
+                    .configure(v1_tenant_configure)
+                    .configure(v1_assets_configure),
             )
             // Swagger UI
             .service(

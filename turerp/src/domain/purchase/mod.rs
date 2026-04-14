@@ -1,6 +1,8 @@
 //! Purchase domain module
 
 pub mod model;
+#[cfg(feature = "postgres")]
+pub mod postgres_repository;
 pub mod repository;
 pub mod service;
 
@@ -12,6 +14,12 @@ pub use model::{
     PurchaseOrderResponse, PurchaseOrderStatus, PurchaseRequest, PurchaseRequestLine,
     PurchaseRequestResponse, PurchaseRequestStatus, UpdatePurchaseRequest,
     UpdatePurchaseRequestLine,
+};
+#[cfg(feature = "postgres")]
+pub use postgres_repository::{
+    PostgresGoodsReceiptLineRepository, PostgresGoodsReceiptRepository,
+    PostgresPurchaseOrderLineRepository, PostgresPurchaseOrderRepository,
+    PostgresPurchaseRequestLineRepository, PostgresPurchaseRequestRepository,
 };
 pub use repository::{
     BoxGoodsReceiptLineRepository, BoxGoodsReceiptRepository, BoxPurchaseOrderLineRepository,

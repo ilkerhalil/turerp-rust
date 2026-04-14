@@ -5,8 +5,9 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Invoice status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum InvoiceStatus {
+    #[default]
     Draft,
     Pending,       // Awaiting approval
     Approved,      // Approved, awaiting payment
@@ -18,6 +19,41 @@ pub enum InvoiceStatus {
     Refunded,
 }
 
+impl std::fmt::Display for InvoiceStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InvoiceStatus::Draft => write!(f, "Draft"),
+            InvoiceStatus::Pending => write!(f, "Pending"),
+            InvoiceStatus::Approved => write!(f, "Approved"),
+            InvoiceStatus::Sent => write!(f, "Sent"),
+            InvoiceStatus::PartiallyPaid => write!(f, "PartiallyPaid"),
+            InvoiceStatus::Paid => write!(f, "Paid"),
+            InvoiceStatus::Overdue => write!(f, "Overdue"),
+            InvoiceStatus::Cancelled => write!(f, "Cancelled"),
+            InvoiceStatus::Refunded => write!(f, "Refunded"),
+        }
+    }
+}
+
+impl std::str::FromStr for InvoiceStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Draft" => Ok(InvoiceStatus::Draft),
+            "Pending" => Ok(InvoiceStatus::Pending),
+            "Approved" => Ok(InvoiceStatus::Approved),
+            "Sent" => Ok(InvoiceStatus::Sent),
+            "PartiallyPaid" => Ok(InvoiceStatus::PartiallyPaid),
+            "Paid" => Ok(InvoiceStatus::Paid),
+            "Overdue" => Ok(InvoiceStatus::Overdue),
+            "Cancelled" => Ok(InvoiceStatus::Cancelled),
+            "Refunded" => Ok(InvoiceStatus::Refunded),
+            _ => Err(format!("Invalid invoice status: {}", s)),
+        }
+    }
+}
+
 /// Invoice type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum InvoiceType {
@@ -25,6 +61,31 @@ pub enum InvoiceType {
     PurchaseInvoice,
     SalesReturn,
     PurchaseReturn,
+}
+
+impl std::fmt::Display for InvoiceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InvoiceType::SalesInvoice => write!(f, "SalesInvoice"),
+            InvoiceType::PurchaseInvoice => write!(f, "PurchaseInvoice"),
+            InvoiceType::SalesReturn => write!(f, "SalesReturn"),
+            InvoiceType::PurchaseReturn => write!(f, "PurchaseReturn"),
+        }
+    }
+}
+
+impl std::str::FromStr for InvoiceType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "SalesInvoice" => Ok(InvoiceType::SalesInvoice),
+            "PurchaseInvoice" => Ok(InvoiceType::PurchaseInvoice),
+            "SalesReturn" => Ok(InvoiceType::SalesReturn),
+            "PurchaseReturn" => Ok(InvoiceType::PurchaseReturn),
+            _ => Err(format!("Invalid invoice type: {}", s)),
+        }
+    }
 }
 
 /// Invoice entity

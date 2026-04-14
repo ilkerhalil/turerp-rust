@@ -5,13 +5,41 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 /// Project status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ProjectStatus {
+    #[default]
     Planning,
     Active,
     OnHold,
     Completed,
     Cancelled,
+}
+
+impl std::fmt::Display for ProjectStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProjectStatus::Planning => write!(f, "planning"),
+            ProjectStatus::Active => write!(f, "active"),
+            ProjectStatus::OnHold => write!(f, "on_hold"),
+            ProjectStatus::Completed => write!(f, "completed"),
+            ProjectStatus::Cancelled => write!(f, "cancelled"),
+        }
+    }
+}
+
+impl std::str::FromStr for ProjectStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "planning" => Ok(ProjectStatus::Planning),
+            "active" => Ok(ProjectStatus::Active),
+            "on_hold" => Ok(ProjectStatus::OnHold),
+            "completed" => Ok(ProjectStatus::Completed),
+            "cancelled" => Ok(ProjectStatus::Cancelled),
+            _ => Err(format!("Invalid project status: {}", s)),
+        }
+    }
 }
 
 /// Project entity
@@ -66,6 +94,33 @@ pub enum CostType {
     Equipment,
     Subcontract,
     Other,
+}
+
+impl std::fmt::Display for CostType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CostType::Labor => write!(f, "labor"),
+            CostType::Material => write!(f, "material"),
+            CostType::Equipment => write!(f, "equipment"),
+            CostType::Subcontract => write!(f, "subcontract"),
+            CostType::Other => write!(f, "other"),
+        }
+    }
+}
+
+impl std::str::FromStr for CostType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "labor" => Ok(CostType::Labor),
+            "material" => Ok(CostType::Material),
+            "equipment" => Ok(CostType::Equipment),
+            "subcontract" => Ok(CostType::Subcontract),
+            "other" => Ok(CostType::Other),
+            _ => Err(format!("Invalid cost type: {}", s)),
+        }
+    }
 }
 
 /// Project profitability

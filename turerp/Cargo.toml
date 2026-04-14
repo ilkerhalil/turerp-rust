@@ -16,7 +16,7 @@ actix-rt = "2"
 actix-cors = "0.7"
 
 # Database - use sqlx directly
-sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "macros", "chrono"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "macros", "chrono", "rust_decimal"] }
 
 # Authentication
 jsonwebtoken = "9"

@@ -17,6 +17,39 @@ pub enum SalesOrderStatus {
     OnHold,
 }
 
+impl std::fmt::Display for SalesOrderStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Draft => write!(f, "Draft"),
+            Self::PendingApproval => write!(f, "PendingApproval"),
+            Self::Approved => write!(f, "Approved"),
+            Self::InProgress => write!(f, "InProgress"),
+            Self::Shipped => write!(f, "Shipped"),
+            Self::Delivered => write!(f, "Delivered"),
+            Self::Cancelled => write!(f, "Cancelled"),
+            Self::OnHold => write!(f, "OnHold"),
+        }
+    }
+}
+
+impl std::str::FromStr for SalesOrderStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Draft" => Ok(Self::Draft),
+            "PendingApproval" => Ok(Self::PendingApproval),
+            "Approved" => Ok(Self::Approved),
+            "InProgress" => Ok(Self::InProgress),
+            "Shipped" => Ok(Self::Shipped),
+            "Delivered" => Ok(Self::Delivered),
+            "Cancelled" => Ok(Self::Cancelled),
+            "OnHold" => Ok(Self::OnHold),
+            _ => Err(format!("Invalid sales order status: {}", s)),
+        }
+    }
+}
+
 /// Quotation status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum QuotationStatus {
@@ -27,6 +60,37 @@ pub enum QuotationStatus {
     Rejected,
     Expired,
     ConvertedToOrder,
+}
+
+impl std::fmt::Display for QuotationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Draft => write!(f, "Draft"),
+            Self::Sent => write!(f, "Sent"),
+            Self::UnderReview => write!(f, "UnderReview"),
+            Self::Accepted => write!(f, "Accepted"),
+            Self::Rejected => write!(f, "Rejected"),
+            Self::Expired => write!(f, "Expired"),
+            Self::ConvertedToOrder => write!(f, "ConvertedToOrder"),
+        }
+    }
+}
+
+impl std::str::FromStr for QuotationStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Draft" => Ok(Self::Draft),
+            "Sent" => Ok(Self::Sent),
+            "UnderReview" => Ok(Self::UnderReview),
+            "Accepted" => Ok(Self::Accepted),
+            "Rejected" => Ok(Self::Rejected),
+            "Expired" => Ok(Self::Expired),
+            "ConvertedToOrder" => Ok(Self::ConvertedToOrder),
+            _ => Err(format!("Invalid quotation status: {}", s)),
+        }
+    }
 }
 
 /// Sales order entity

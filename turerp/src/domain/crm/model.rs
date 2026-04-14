@@ -16,6 +16,33 @@ pub enum LeadStatus {
     Converted,
 }
 
+impl std::fmt::Display for LeadStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LeadStatus::New => write!(f, "New"),
+            LeadStatus::Contacted => write!(f, "Contacted"),
+            LeadStatus::Qualified => write!(f, "Qualified"),
+            LeadStatus::Unqualified => write!(f, "Unqualified"),
+            LeadStatus::Converted => write!(f, "Converted"),
+        }
+    }
+}
+
+impl std::str::FromStr for LeadStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "new" => Ok(LeadStatus::New),
+            "contacted" => Ok(LeadStatus::Contacted),
+            "qualified" => Ok(LeadStatus::Qualified),
+            "unqualified" => Ok(LeadStatus::Unqualified),
+            "converted" => Ok(LeadStatus::Converted),
+            _ => Err(format!("Invalid lead status: {}", s)),
+        }
+    }
+}
+
 /// Lead entity
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Lead {
@@ -73,6 +100,31 @@ pub enum OpportunityStatus {
     Won,
     Lost,
     Cancelled,
+}
+
+impl std::fmt::Display for OpportunityStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OpportunityStatus::Open => write!(f, "Open"),
+            OpportunityStatus::Won => write!(f, "Won"),
+            OpportunityStatus::Lost => write!(f, "Lost"),
+            OpportunityStatus::Cancelled => write!(f, "Cancelled"),
+        }
+    }
+}
+
+impl std::str::FromStr for OpportunityStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "open" => Ok(OpportunityStatus::Open),
+            "won" => Ok(OpportunityStatus::Won),
+            "lost" => Ok(OpportunityStatus::Lost),
+            "cancelled" => Ok(OpportunityStatus::Cancelled),
+            _ => Err(format!("Invalid opportunity status: {}", s)),
+        }
+    }
 }
 
 /// Opportunity entity
@@ -139,6 +191,33 @@ pub enum CampaignStatus {
     Cancelled,
 }
 
+impl std::fmt::Display for CampaignStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CampaignStatus::Draft => write!(f, "Draft"),
+            CampaignStatus::Scheduled => write!(f, "Scheduled"),
+            CampaignStatus::Active => write!(f, "Active"),
+            CampaignStatus::Completed => write!(f, "Completed"),
+            CampaignStatus::Cancelled => write!(f, "Cancelled"),
+        }
+    }
+}
+
+impl std::str::FromStr for CampaignStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "draft" => Ok(CampaignStatus::Draft),
+            "scheduled" => Ok(CampaignStatus::Scheduled),
+            "active" => Ok(CampaignStatus::Active),
+            "completed" => Ok(CampaignStatus::Completed),
+            "cancelled" => Ok(CampaignStatus::Cancelled),
+            _ => Err(format!("Invalid campaign status: {}", s)),
+        }
+    }
+}
+
 /// Campaign entity
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Campaign {
@@ -200,6 +279,33 @@ pub enum TicketStatus {
     Closed,
 }
 
+impl std::fmt::Display for TicketStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TicketStatus::Open => write!(f, "Open"),
+            TicketStatus::InProgress => write!(f, "InProgress"),
+            TicketStatus::Pending => write!(f, "Pending"),
+            TicketStatus::Resolved => write!(f, "Resolved"),
+            TicketStatus::Closed => write!(f, "Closed"),
+        }
+    }
+}
+
+impl std::str::FromStr for TicketStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "open" => Ok(TicketStatus::Open),
+            "inprogress" => Ok(TicketStatus::InProgress),
+            "pending" => Ok(TicketStatus::Pending),
+            "resolved" => Ok(TicketStatus::Resolved),
+            "closed" => Ok(TicketStatus::Closed),
+            _ => Err(format!("Invalid ticket status: {}", s)),
+        }
+    }
+}
+
 /// Ticket priority
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum TicketPriority {
@@ -207,6 +313,31 @@ pub enum TicketPriority {
     Medium,
     High,
     Critical,
+}
+
+impl std::fmt::Display for TicketPriority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TicketPriority::Low => write!(f, "Low"),
+            TicketPriority::Medium => write!(f, "Medium"),
+            TicketPriority::High => write!(f, "High"),
+            TicketPriority::Critical => write!(f, "Critical"),
+        }
+    }
+}
+
+impl std::str::FromStr for TicketPriority {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "low" => Ok(TicketPriority::Low),
+            "medium" => Ok(TicketPriority::Medium),
+            "high" => Ok(TicketPriority::High),
+            "critical" => Ok(TicketPriority::Critical),
+            _ => Err(format!("Invalid ticket priority: {}", s)),
+        }
+    }
 }
 
 /// Ticket entity

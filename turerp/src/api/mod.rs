@@ -11,10 +11,21 @@ pub use auth::configure as auth_configure;
 pub use users::configure as users_configure;
 
 // V1 re-exports
+pub use v1::accounting_configure as v1_accounting_configure;
+pub use v1::assets_configure as v1_assets_configure;
 pub use v1::auth_configure as v1_auth_configure;
+pub use v1::cari_configure as v1_cari_configure;
+pub use v1::crm_configure as v1_crm_configure;
 pub use v1::feature_flags_configure as v1_feature_flags_configure;
+pub use v1::hr_configure as v1_hr_configure;
+pub use v1::invoice_configure as v1_invoice_configure;
+pub use v1::manufacturing_configure as v1_manufacturing_configure;
 pub use v1::product_variants_configure as v1_product_variants_configure;
+pub use v1::project_configure as v1_project_configure;
 pub use v1::purchase_requests_configure as v1_purchase_requests_configure;
+pub use v1::sales_configure as v1_sales_configure;
+pub use v1::stock_configure as v1_stock_configure;
+pub use v1::tenant_configure as v1_tenant_configure;
 pub use v1::users_configure as v1_users_configure;
 
 use crate::domain::auth::{LoginRequest, LoginResponse, RefreshTokenRequest, RegisterRequest};

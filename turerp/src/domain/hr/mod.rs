@@ -1,6 +1,8 @@
 //! HR domain module
 
 pub mod model;
+#[cfg(feature = "postgres")]
+pub mod postgres_repository;
 pub mod repository;
 pub mod service;
 
@@ -9,6 +11,11 @@ pub use model::{
     Attendance, AttendanceStatus, CreateAttendance, CreateEmployee, CreateLeaveRequest, Employee,
     EmployeeResponse, EmployeeStatus, LeaveRequest, LeaveRequestStatus, LeaveType, Payroll,
     PayrollStatus,
+};
+#[cfg(feature = "postgres")]
+pub use postgres_repository::{
+    PostgresAttendanceRepository, PostgresEmployeeRepository, PostgresLeaveRequestRepository,
+    PostgresLeaveTypeRepository, PostgresPayrollRepository,
 };
 pub use repository::{
     AttendanceRepository, BoxAttendanceRepository, BoxEmployeeRepository,

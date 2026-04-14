@@ -14,6 +14,33 @@ pub enum AccountType {
     Expense,
 }
 
+impl std::fmt::Display for AccountType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccountType::Asset => write!(f, "Asset"),
+            AccountType::Liability => write!(f, "Liability"),
+            AccountType::Equity => write!(f, "Equity"),
+            AccountType::Revenue => write!(f, "Revenue"),
+            AccountType::Expense => write!(f, "Expense"),
+        }
+    }
+}
+
+impl std::str::FromStr for AccountType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Asset" => Ok(AccountType::Asset),
+            "Liability" => Ok(AccountType::Liability),
+            "Equity" => Ok(AccountType::Equity),
+            "Revenue" => Ok(AccountType::Revenue),
+            "Expense" => Ok(AccountType::Expense),
+            _ => Err(format!("Invalid account type: {}", s)),
+        }
+    }
+}
+
 /// Account subtype
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AccountSubType {
@@ -32,6 +59,43 @@ pub enum AccountSubType {
     // Expense
     OperatingExpense,
     NonOperatingExpense,
+}
+
+impl std::fmt::Display for AccountSubType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AccountSubType::CurrentAsset => write!(f, "CurrentAsset"),
+            AccountSubType::FixedAsset => write!(f, "FixedAsset"),
+            AccountSubType::CurrentLiability => write!(f, "CurrentLiability"),
+            AccountSubType::LongTermLiability => write!(f, "LongTermLiability"),
+            AccountSubType::OwnersEquity => write!(f, "OwnersEquity"),
+            AccountSubType::RetainedEarnings => write!(f, "RetainedEarnings"),
+            AccountSubType::OperatingRevenue => write!(f, "OperatingRevenue"),
+            AccountSubType::NonOperatingRevenue => write!(f, "NonOperatingRevenue"),
+            AccountSubType::OperatingExpense => write!(f, "OperatingExpense"),
+            AccountSubType::NonOperatingExpense => write!(f, "NonOperatingExpense"),
+        }
+    }
+}
+
+impl std::str::FromStr for AccountSubType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "CurrentAsset" => Ok(AccountSubType::CurrentAsset),
+            "FixedAsset" => Ok(AccountSubType::FixedAsset),
+            "CurrentLiability" => Ok(AccountSubType::CurrentLiability),
+            "LongTermLiability" => Ok(AccountSubType::LongTermLiability),
+            "OwnersEquity" => Ok(AccountSubType::OwnersEquity),
+            "RetainedEarnings" => Ok(AccountSubType::RetainedEarnings),
+            "OperatingRevenue" => Ok(AccountSubType::OperatingRevenue),
+            "NonOperatingRevenue" => Ok(AccountSubType::NonOperatingRevenue),
+            "OperatingExpense" => Ok(AccountSubType::OperatingExpense),
+            "NonOperatingExpense" => Ok(AccountSubType::NonOperatingExpense),
+            _ => Err(format!("Invalid account sub type: {}", s)),
+        }
+    }
 }
 
 /// Account entity (Chart of Accounts)
@@ -72,6 +136,29 @@ pub enum JournalEntryStatus {
     Draft,
     Posted,
     Voided,
+}
+
+impl std::fmt::Display for JournalEntryStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JournalEntryStatus::Draft => write!(f, "Draft"),
+            JournalEntryStatus::Posted => write!(f, "Posted"),
+            JournalEntryStatus::Voided => write!(f, "Voided"),
+        }
+    }
+}
+
+impl std::str::FromStr for JournalEntryStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Draft" => Ok(JournalEntryStatus::Draft),
+            "Posted" => Ok(JournalEntryStatus::Posted),
+            "Voided" => Ok(JournalEntryStatus::Voided),
+            _ => Err(format!("Invalid journal entry status: {}", s)),
+        }
+    }
 }
 
 /// Journal line item
@@ -263,5 +350,99 @@ mod tests {
             lines: vec![],
         };
         assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn test_account_type_display() {
+        assert_eq!(AccountType::Asset.to_string(), "Asset");
+        assert_eq!(AccountType::Liability.to_string(), "Liability");
+        assert_eq!(AccountType::Equity.to_string(), "Equity");
+        assert_eq!(AccountType::Revenue.to_string(), "Revenue");
+        assert_eq!(AccountType::Expense.to_string(), "Expense");
+    }
+
+    #[test]
+    fn test_account_type_from_str() {
+        use std::str::FromStr;
+        assert_eq!(AccountType::from_str("Asset").unwrap(), AccountType::Asset);
+        assert_eq!(
+            AccountType::from_str("Liability").unwrap(),
+            AccountType::Liability
+        );
+        assert!(AccountType::from_str("Invalid").is_err());
+    }
+
+    #[test]
+    fn test_account_sub_type_display() {
+        assert_eq!(AccountSubType::CurrentAsset.to_string(), "CurrentAsset");
+        assert_eq!(AccountSubType::FixedAsset.to_string(), "FixedAsset");
+        assert_eq!(
+            AccountSubType::CurrentLiability.to_string(),
+            "CurrentLiability"
+        );
+        assert_eq!(
+            AccountSubType::LongTermLiability.to_string(),
+            "LongTermLiability"
+        );
+        assert_eq!(AccountSubType::OwnersEquity.to_string(), "OwnersEquity");
+        assert_eq!(
+            AccountSubType::RetainedEarnings.to_string(),
+            "RetainedEarnings"
+        );
+        assert_eq!(
+            AccountSubType::OperatingRevenue.to_string(),
+            "OperatingRevenue"
+        );
+        assert_eq!(
+            AccountSubType::NonOperatingRevenue.to_string(),
+            "NonOperatingRevenue"
+        );
+        assert_eq!(
+            AccountSubType::OperatingExpense.to_string(),
+            "OperatingExpense"
+        );
+        assert_eq!(
+            AccountSubType::NonOperatingExpense.to_string(),
+            "NonOperatingExpense"
+        );
+    }
+
+    #[test]
+    fn test_account_sub_type_from_str() {
+        use std::str::FromStr;
+        assert_eq!(
+            AccountSubType::from_str("CurrentAsset").unwrap(),
+            AccountSubType::CurrentAsset
+        );
+        assert_eq!(
+            AccountSubType::from_str("FixedAsset").unwrap(),
+            AccountSubType::FixedAsset
+        );
+        assert!(AccountSubType::from_str("Invalid").is_err());
+    }
+
+    #[test]
+    fn test_journal_entry_status_display() {
+        assert_eq!(JournalEntryStatus::Draft.to_string(), "Draft");
+        assert_eq!(JournalEntryStatus::Posted.to_string(), "Posted");
+        assert_eq!(JournalEntryStatus::Voided.to_string(), "Voided");
+    }
+
+    #[test]
+    fn test_journal_entry_status_from_str() {
+        use std::str::FromStr;
+        assert_eq!(
+            JournalEntryStatus::from_str("Draft").unwrap(),
+            JournalEntryStatus::Draft
+        );
+        assert_eq!(
+            JournalEntryStatus::from_str("Posted").unwrap(),
+            JournalEntryStatus::Posted
+        );
+        assert_eq!(
+            JournalEntryStatus::from_str("Voided").unwrap(),
+            JournalEntryStatus::Voided
+        );
+        assert!(JournalEntryStatus::from_str("Invalid").is_err());
     }
 }

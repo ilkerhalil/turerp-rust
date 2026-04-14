@@ -34,6 +34,31 @@ pub enum EmployeeStatus {
     Suspended,
 }
 
+impl std::fmt::Display for EmployeeStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EmployeeStatus::Active => write!(f, "Active"),
+            EmployeeStatus::OnLeave => write!(f, "OnLeave"),
+            EmployeeStatus::Terminated => write!(f, "Terminated"),
+            EmployeeStatus::Suspended => write!(f, "Suspended"),
+        }
+    }
+}
+
+impl std::str::FromStr for EmployeeStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Active" => Ok(EmployeeStatus::Active),
+            "OnLeave" => Ok(EmployeeStatus::OnLeave),
+            "Terminated" => Ok(EmployeeStatus::Terminated),
+            "Suspended" => Ok(EmployeeStatus::Suspended),
+            _ => Err(format!("Invalid employee status: {}", s)),
+        }
+    }
+}
+
 /// Attendance record
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Attendance {
@@ -55,6 +80,33 @@ pub enum AttendanceStatus {
     Late,
     OnLeave,
     Holiday,
+}
+
+impl std::fmt::Display for AttendanceStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AttendanceStatus::Present => write!(f, "Present"),
+            AttendanceStatus::Absent => write!(f, "Absent"),
+            AttendanceStatus::Late => write!(f, "Late"),
+            AttendanceStatus::OnLeave => write!(f, "OnLeave"),
+            AttendanceStatus::Holiday => write!(f, "Holiday"),
+        }
+    }
+}
+
+impl std::str::FromStr for AttendanceStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Present" => Ok(AttendanceStatus::Present),
+            "Absent" => Ok(AttendanceStatus::Absent),
+            "Late" => Ok(AttendanceStatus::Late),
+            "OnLeave" => Ok(AttendanceStatus::OnLeave),
+            "Holiday" => Ok(AttendanceStatus::Holiday),
+            _ => Err(format!("Invalid attendance status: {}", s)),
+        }
+    }
 }
 
 /// Leave type
@@ -93,6 +145,31 @@ pub enum LeaveRequestStatus {
     Cancelled,
 }
 
+impl std::fmt::Display for LeaveRequestStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LeaveRequestStatus::Pending => write!(f, "Pending"),
+            LeaveRequestStatus::Approved => write!(f, "Approved"),
+            LeaveRequestStatus::Rejected => write!(f, "Rejected"),
+            LeaveRequestStatus::Cancelled => write!(f, "Cancelled"),
+        }
+    }
+}
+
+impl std::str::FromStr for LeaveRequestStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Pending" => Ok(LeaveRequestStatus::Pending),
+            "Approved" => Ok(LeaveRequestStatus::Approved),
+            "Rejected" => Ok(LeaveRequestStatus::Rejected),
+            "Cancelled" => Ok(LeaveRequestStatus::Cancelled),
+            _ => Err(format!("Invalid leave request status: {}", s)),
+        }
+    }
+}
+
 /// Payroll record
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Payroll {
@@ -119,6 +196,31 @@ pub enum PayrollStatus {
     Calculated,
     Approved,
     Paid,
+}
+
+impl std::fmt::Display for PayrollStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PayrollStatus::Draft => write!(f, "Draft"),
+            PayrollStatus::Calculated => write!(f, "Calculated"),
+            PayrollStatus::Approved => write!(f, "Approved"),
+            PayrollStatus::Paid => write!(f, "Paid"),
+        }
+    }
+}
+
+impl std::str::FromStr for PayrollStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Draft" => Ok(PayrollStatus::Draft),
+            "Calculated" => Ok(PayrollStatus::Calculated),
+            "Approved" => Ok(PayrollStatus::Approved),
+            "Paid" => Ok(PayrollStatus::Paid),
+            _ => Err(format!("Invalid payroll status: {}", s)),
+        }
+    }
 }
 
 /// Create employee request
