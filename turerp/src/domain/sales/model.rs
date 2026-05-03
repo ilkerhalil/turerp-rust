@@ -278,6 +278,9 @@ impl CreateQuotationLine {
         if self.quantity <= Decimal::ZERO {
             errors.push("Quantity must be positive".to_string());
         }
+        if self.unit_price < Decimal::ZERO {
+            errors.push("Unit price cannot be negative".to_string());
+        }
         if errors.is_empty() {
             Ok(())
         } else {

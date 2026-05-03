@@ -25,7 +25,6 @@ use crate::middleware::AuthUser;
 )]
 pub async fn register(
     auth_service: web::Data<AuthService>,
-    _user_service: web::Data<UserService>,
     payload: web::Json<RegisterRequest>,
 ) -> ApiResult<HttpResponse> {
     let response = auth_service.register(payload.into_inner()).await?;

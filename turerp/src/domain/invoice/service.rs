@@ -44,16 +44,22 @@ impl InvoiceService {
         // Create invoice
         let invoice = self.invoice_repo.create(create.clone()).await?;
 
-        // Create lines
-        let lines = self.line_repo.create_many(invoice.id, create.lines).await?;
+        // Create lines — if this fails, roll back the orphan invoice
+        let lines = match self.line_repo.create_many(invoice.id, create.lines).await {
+            Ok(lines) => lines,
+            Err(e) => {
+                let _ = self.invoice_repo.delete(invoice.id, create.tenant_id).await;
+                return Err(e);
+            }
+        };
 
         Ok(InvoiceResponse::from((invoice, lines)))
     }
 
-    pub async fn get_invoice(&self, id: i64) -> Result<InvoiceResponse, ApiError> {
+    pub async fn get_invoice(&self, id: i64, tenant_id: i64) -> Result<InvoiceResponse, ApiError> {
         let invoice = self
             .invoice_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", id)))?;
 
@@ -112,15 +118,16 @@ impl InvoiceService {
     pub async fn update_invoice_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: InvoiceStatus,
     ) -> Result<Invoice, ApiError> {
-        self.invoice_repo.update_status(id, status).await
+        self.invoice_repo.update_status(id, tenant_id, status).await
     }
 
-    pub async fn delete_invoice(&self, id: i64) -> Result<(), ApiError> {
+    pub async fn delete_invoice(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         // Delete associated lines first
         self.line_repo.delete_by_invoice(id).await?;
-        self.invoice_repo.delete(id).await
+        self.invoice_repo.delete(id, tenant_id).await
     }
 
     // Payment operations
@@ -129,10 +136,10 @@ impl InvoiceService {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        // Verify invoice exists and is payable
+        // Verify invoice exists and is payable (with tenant check)
         let invoice = self
             .invoice_repo
-            .find_by_id(create.invoice_id)
+            .find_by_id(create.invoice_id, create.tenant_id)
             .await?
             .ok_or_else(|| {
                 ApiError::NotFound(format!("Invoice {} not found", create.invoice_id))
@@ -161,10 +168,15 @@ impl InvoiceService {
         // Create payment
         let payment = self.payment_repo.create(create).await?;
 
-        // Update invoice paid amount
-        self.invoice_repo
-            .update_paid_amount(invoice.id, new_paid)
-            .await?;
+        // Update invoice paid amount — if this fails, roll back the payment
+        if let Err(e) = self
+            .invoice_repo
+            .update_paid_amount(invoice.id, invoice.tenant_id, new_paid)
+            .await
+        {
+            let _ = self.payment_repo.delete(payment.id).await;
+            return Err(e);
+        }
 
         Ok(payment)
     }
@@ -289,7 +301,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Check invoice status updated
-        let updated = service.get_invoice(invoice.id).await.unwrap();
+        let updated = service.get_invoice(invoice.id, 1).await.unwrap();
         assert_eq!(updated.status, InvoiceStatus::PartiallyPaid);
     }
 
@@ -331,7 +343,7 @@ mod tests {
 
         service.create_payment(payment_create).await.unwrap();
 
-        let updated = service.get_invoice(invoice.id).await.unwrap();
+        let updated = service.get_invoice(invoice.id, 1).await.unwrap();
         assert_eq!(updated.status, InvoiceStatus::Paid);
     }
 }

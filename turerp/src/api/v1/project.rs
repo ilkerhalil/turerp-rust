@@ -182,7 +182,10 @@ pub async fn get_profitability(
     path: web::Path<i64>,
     query: web::Query<ProfitabilityQuery>,
 ) -> ApiResult<HttpResponse> {
-    let revenue: rust_decimal::Decimal = query.revenue.parse().unwrap_or_default();
+    let revenue: rust_decimal::Decimal = query
+        .revenue
+        .parse()
+        .map_err(|_| crate::error::ApiError::Validation("Invalid revenue amount".into()))?;
     let profitability = project_service.get_profitability(*path, revenue).await?;
     Ok(HttpResponse::Ok().json(profitability))
 }

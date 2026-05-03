@@ -285,17 +285,18 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Invoice>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Invoice>, ApiError> {
         let result: Option<InvoiceRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at
             FROM invoices
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find invoice by id: {}", e)))?;
@@ -465,14 +466,19 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn update_status(&self, id: i64, status: InvoiceStatus) -> Result<Invoice, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: InvoiceStatus,
+    ) -> Result<Invoice, ApiError> {
         let status_str = status.to_string();
 
         let row: InvoiceRow = sqlx::query_as(
             r#"
             UPDATE invoices
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
                       total_amount, paid_amount, currency, notes, created_at, updated_at
@@ -480,6 +486,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Invoice"))?;
@@ -487,12 +494,17 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         Ok(row.into())
     }
 
-    async fn update_paid_amount(&self, id: i64, paid_amount: Decimal) -> Result<Invoice, ApiError> {
+    async fn update_paid_amount(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        paid_amount: Decimal,
+    ) -> Result<Invoice, ApiError> {
         let row: InvoiceRow = sqlx::query_as(
             r#"
             UPDATE invoices
             SET paid_amount = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
                       total_amount, paid_amount, currency, notes, created_at, updated_at
@@ -500,6 +512,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         )
         .bind(paid_amount)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Invoice"))?;
@@ -507,14 +520,15 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM invoices
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete invoice: {}", e)))?;

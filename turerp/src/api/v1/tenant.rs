@@ -3,8 +3,10 @@
 use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
-use crate::domain::tenant::model::{CreateTenant, UpdateTenant};
-use crate::domain::tenant::service::TenantService;
+use crate::domain::tenant::model::{
+    CreateTenant, CreateTenantConfig, UpdateTenant, UpdateTenantConfig,
+};
+use crate::domain::tenant::service::{TenantConfigService, TenantService};
 use crate::error::ApiResult;
 use crate::middleware::{AdminUser, AuthUser};
 
@@ -97,9 +99,6 @@ pub async fn delete_tenant(
     Ok(HttpResponse::NoContent().finish())
 }
 
-use crate::domain::tenant::model::{CreateTenantConfig, UpdateTenantConfig};
-use crate::domain::tenant::service::TenantConfigService;
-
 /// Create tenant config (requires admin role)
 #[utoipa::path(
     post, path = "/api/v1/tenant-configs", tag = "Tenant Config",
@@ -134,10 +133,10 @@ pub async fn get_tenant_configs(
     Ok(HttpResponse::Ok().json(configs))
 }
 
-/// Get tenant config by key
+/// Get tenant config by key or ID
 #[utoipa::path(
-    get, path = "/api/v1/tenant-configs/{key}", tag = "Tenant Config",
-    params(("key" = String, Path, description = "Config key")),
+    get, path = "/api/v1/tenant-configs/{id_or_key}", tag = "Tenant Config",
+    params(("id_or_key" = String, Path, description = "Config key")),
     responses((status = 200, description = "Config found"), (status = 404, description = "Not found")),
     security(("bearer_auth" = []))
 )]
@@ -146,16 +145,17 @@ pub async fn get_tenant_config(
     tenant_config_service: web::Data<TenantConfigService>,
     path: web::Path<String>,
 ) -> ApiResult<HttpResponse> {
+    let key = path.into_inner();
     let config = tenant_config_service
-        .get_config(auth_user.0.tenant_id, &path.into_inner())
+        .get_config(auth_user.0.tenant_id, &key)
         .await?;
     Ok(HttpResponse::Ok().json(config))
 }
 
 /// Update tenant config (requires admin role)
 #[utoipa::path(
-    put, path = "/api/v1/tenant-configs/{id}", tag = "Tenant Config",
-    params(("id" = i64, Path, description = "Config ID")),
+    put, path = "/api/v1/tenant-configs/{id_or_key}", tag = "Tenant Config",
+    params(("id_or_key" = String, Path, description = "Config ID")),
     request_body = UpdateTenantConfig,
     responses((status = 200, description = "Config updated"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
     security(("bearer_auth" = []))
@@ -163,28 +163,36 @@ pub async fn get_tenant_config(
 pub async fn update_tenant_config(
     _admin_user: AdminUser,
     tenant_config_service: web::Data<TenantConfigService>,
-    path: web::Path<i64>,
+    path: web::Path<String>,
     payload: web::Json<UpdateTenantConfig>,
 ) -> ApiResult<HttpResponse> {
+    let id = path
+        .into_inner()
+        .parse::<i64>()
+        .map_err(|_| crate::error::ApiError::Validation("Invalid config ID".to_string()))?;
     let config = tenant_config_service
-        .update_config(*path, payload.into_inner())
+        .update_config(id, payload.into_inner())
         .await?;
     Ok(HttpResponse::Ok().json(config))
 }
 
 /// Delete tenant config (requires admin role)
 #[utoipa::path(
-    delete, path = "/api/v1/tenant-configs/{id}", tag = "Tenant Config",
-    params(("id" = i64, Path, description = "Config ID")),
+    delete, path = "/api/v1/tenant-configs/{id_or_key}", tag = "Tenant Config",
+    params(("id_or_key" = String, Path, description = "Config ID")),
     responses((status = 204, description = "Config deleted"), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn delete_tenant_config(
     _admin_user: AdminUser,
     tenant_config_service: web::Data<TenantConfigService>,
-    path: web::Path<i64>,
+    path: web::Path<String>,
 ) -> ApiResult<HttpResponse> {
-    tenant_config_service.delete_config(*path).await?;
+    let id = path
+        .into_inner()
+        .parse::<i64>()
+        .map_err(|_| crate::error::ApiError::Validation("Invalid config ID".to_string()))?;
+    tenant_config_service.delete_config(id).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -207,9 +215,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_tenant_config)),
     )
     .service(
-        web::resource("/v1/tenant-configs/{id}")
+        web::resource("/v1/tenant-configs/{id_or_key}")
+            .route(web::get().to(get_tenant_config))
             .route(web::put().to(update_tenant_config))
             .route(web::delete().to(delete_tenant_config)),
-    )
-    .service(web::resource("/v1/tenant-configs/{key}").route(web::get().to(get_tenant_config)));
+    );
 }

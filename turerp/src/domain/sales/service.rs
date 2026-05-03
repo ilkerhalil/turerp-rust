@@ -235,6 +235,11 @@ impl SalesService {
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", quotation_id)))?;
 
+        // Idempotency: if already converted, return the existing order
+        if let Some(order_id) = quotation.sales_order_id {
+            return self.get_sales_order(order_id).await;
+        }
+
         if quotation.status == QuotationStatus::ConvertedToOrder {
             return Err(ApiError::BadRequest(
                 "Quotation is already converted to order".to_string(),

@@ -389,6 +389,11 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 ### Code Quality
 | Issue | Severity | Description |
 |-------|----------|-------------|
+| **Migration 004 table/column name mismatches** | **Critical** | Migration `004_composite_indexes.sql` references non-existent tables (`crm_opportunities`, `support_tickets`) and columns (`stage`, `tenant_id` on `stock_movements`). Because `run_migrations()` runs inside a transaction, a single bad `CREATE INDEX` aborts the whole migration batch, preventing `005_audit_logs.sql` from ever executing. |
+| **Zeroize dependency unused** | Medium | `zeroize = "1.8"` is declared in `Cargo.toml` but no struct implements `Zeroize`/`ZeroizeOnDrop`; `generate_key()` returns a plain `[u8; 32]` stack array that is not scrubbed on drop. |
+| **Service transaction atomicity** | High | `InvoiceService::create_invoice`, `InvoiceService::create_payment`, and `SalesService::convert_quotation_to_order` all perform multi-repo operations sequentially without compensating transactions. Partial failure leaves orphaned records (ghost invoices, detached payments, duplicate sales orders on retry). |
+| **InvoiceRepository trait missing tenant_id** | High | `InvoiceRepository::find_by_id(&self, id)` and `delete(&self, id)` do not accept `tenant_id`, allowing a tenant admin to read/delete another tenant's invoices. Same pattern in `SalesOrderRepository`. |
+| **Quotation line validation gap** | Low | `CreateSalesOrderLine` validates `unit_price >= 0`, but `CreateQuotationLine` does not, allowing negative unit prices in quotations. |
 | Test/production route divergence | Medium | Integration tests register legacy routes that don't exist in production `main.rs` |
 
 ---

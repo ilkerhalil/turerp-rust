@@ -16,7 +16,7 @@ CREATE INDEX IF NOT EXISTS idx_products_tenant_created ON products(tenant_id, cr
 -- ============================================================================
 
 CREATE INDEX IF NOT EXISTS idx_warehouses_tenant_created ON warehouses(tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_stock_movements_tenant_created ON stock_movements(tenant_id, created_at DESC);
+-- Note: stock_movements does not have tenant_id column. Skipping composite index.
 
 -- ============================================================================
 -- SALES & PURCHASE
@@ -79,12 +79,12 @@ CREATE INDEX IF NOT EXISTS idx_bills_of_materials_tenant_created ON bills_of_mat
 
 CREATE INDEX IF NOT EXISTS idx_leads_tenant_created ON leads(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_leads_tenant_status_created ON leads(tenant_id, status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_crm_opportunities_tenant_created ON crm_opportunities(tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_crm_opportunities_tenant_stage_created ON crm_opportunities(tenant_id, stage, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_opportunities_tenant_created ON opportunities(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_opportunities_tenant_status_created ON opportunities(tenant_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_campaigns_tenant_created ON campaigns(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_campaigns_tenant_status_created ON campaigns(tenant_id, status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_support_tickets_tenant_created ON support_tickets(tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_support_tickets_tenant_status_created ON support_tickets(tenant_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tickets_tenant_created ON tickets(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_tickets_tenant_status_created ON tickets(tenant_id, status, created_at DESC);
 
 -- ============================================================================
 -- ASSETS

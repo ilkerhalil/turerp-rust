@@ -176,7 +176,11 @@ pub async fn approve_leave_request(
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let approver_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let approver_id: i64 = admin_user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
     let request = hr_service.approve_leave_request(*path, approver_id).await?;
     Ok(HttpResponse::Ok().json(request))
 }
@@ -193,7 +197,11 @@ pub async fn reject_leave_request(
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let approver_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let approver_id: i64 = admin_user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
     let request = hr_service.reject_leave_request(*path, approver_id).await?;
     Ok(HttpResponse::Ok().json(request))
 }

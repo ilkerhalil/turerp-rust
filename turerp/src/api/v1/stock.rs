@@ -142,7 +142,11 @@ pub async fn create_stock_movement(
     payload: web::Json<CreateStockMovement>,
 ) -> ApiResult<HttpResponse> {
     let mut create = payload.into_inner();
-    create.created_by = admin_user.0.sub.parse().unwrap_or(0);
+    create.created_by = admin_user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
     let movement = stock_service.create_stock_movement(create).await?;
     Ok(HttpResponse::Created().json(movement))
 }

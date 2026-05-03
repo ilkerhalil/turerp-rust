@@ -92,7 +92,11 @@ pub async fn create_journal_entry(
 ) -> ApiResult<HttpResponse> {
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    create.created_by = admin_user.0.sub.parse().unwrap_or(0);
+    create.created_by = admin_user
+        .0
+        .sub
+        .parse()
+        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
     let entry = accounting_service.create_journal_entry(create).await?;
     Ok(HttpResponse::Created().json(entry))
 }

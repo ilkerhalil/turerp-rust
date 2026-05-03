@@ -328,7 +328,10 @@ pub async fn calculate_material_requirements(
     path: web::Path<i64>,
     query: web::Query<QuantityQuery>,
 ) -> ApiResult<HttpResponse> {
-    let quantity: rust_decimal::Decimal = query.quantity.parse().unwrap_or_default();
+    let quantity: rust_decimal::Decimal = query
+        .quantity
+        .parse()
+        .map_err(|_| crate::error::ApiError::Validation("Invalid quantity".into()))?;
     let requirements = mfg_service
         .calculate_material_requirements(*path, quantity)
         .await?;

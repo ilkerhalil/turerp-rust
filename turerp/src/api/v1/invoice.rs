@@ -34,11 +34,13 @@ pub async fn create_invoice(
     security(("bearer_auth" = []))
 )]
 pub async fn get_invoice(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     invoice_service: web::Data<InvoiceService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let invoice = invoice_service.get_invoice(*path).await?;
+    let invoice = invoice_service
+        .get_invoice(*path, auth_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(invoice))
 }
 
@@ -141,7 +143,7 @@ pub async fn update_invoice_status(
     payload: web::Json<UpdateStatusRequest>,
 ) -> ApiResult<HttpResponse> {
     let invoice = invoice_service
-        .update_invoice_status(*path, payload.into_inner().status)
+        .update_invoice_status(*path, _admin_user.0.tenant_id, payload.into_inner().status)
         .await?;
     Ok(HttpResponse::Ok().json(invoice))
 }
@@ -158,7 +160,9 @@ pub async fn delete_invoice(
     invoice_service: web::Data<InvoiceService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    invoice_service.delete_invoice(*path).await?;
+    invoice_service
+        .delete_invoice(*path, _admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 

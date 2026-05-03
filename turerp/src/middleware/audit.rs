@@ -127,10 +127,14 @@ where
             let auth_info = get_auth_claims(response.request()).ok();
 
             if let Some(claims) = auth_info {
+                let user_id = claims.sub.parse().unwrap_or_else(|_| {
+                    tracing::warn!("Failed to parse user_id from JWT sub claim: {}", claims.sub);
+                    0
+                });
                 let event = AuditEvent {
                     tenant_id: claims.tenant_id,
-                    user_id: claims.sub.parse().unwrap_or(0),
-                    username: claims.sub.clone(),
+                    user_id,
+                    username: claims.username.clone(),
                     action: method,
                     path,
                     status_code: status.as_u16() as i16,
@@ -202,40 +206,50 @@ async fn audit_writer_task(
 
     loop {
         tokio::select! {
-            Some(event) = receiver.recv() => {
-                let log = CreateAuditLog {
-                    tenant_id: event.tenant_id,
-                    user_id: event.user_id,
-                    username: event.username,
-                    action: event.action,
-                    path: event.path,
-                    status_code: event.status_code,
-                    request_id: event.request_id,
-                    ip_address: event.ip_address,
-                    user_agent: event.user_agent,
-                    created_at: chrono::Utc::now(),
-                };
-                buffer.push(log);
+            event = receiver.recv() => {
+                match event {
+                    Some(event) => {
+                        let log = CreateAuditLog {
+                            tenant_id: event.tenant_id,
+                            user_id: event.user_id,
+                            username: event.username,
+                            action: event.action,
+                            path: event.path,
+                            status_code: event.status_code,
+                            request_id: event.request_id,
+                            ip_address: event.ip_address,
+                            user_agent: event.user_agent,
+                            created_at: chrono::Utc::now(),
+                        };
+                        buffer.push(log);
 
-                // Flush if we've accumulated enough
-                if buffer.len() >= 100 {
-                    if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
-                        dead_letter_queue.extend(failed);
-                        if dead_letter_queue.len() > 1_000 {
-                            tracing::error!("Audit DLQ exceeded 1000 items, dropping oldest {} logs", dead_letter_queue.len() - 500);
-                            dead_letter_queue.drain(0..dead_letter_queue.len() - 500);
+                        if buffer.len() >= 100 {
+                            if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
+                                dead_letter_queue.extend(failed);
+                                if dead_letter_queue.len() > 1_000 {
+                                    tracing::error!("Audit DLQ exceeded 1000 items, dropping oldest {} logs", dead_letter_queue.len() - 500);
+                                    dead_letter_queue.drain(0..dead_letter_queue.len() - 500);
+                                }
+                            }
                         }
+                    }
+                    None => {
+                        // Channel closed — flush any remaining events and exit
+                        if !buffer.is_empty() {
+                            if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
+                                dead_letter_queue.extend(failed);
+                            }
+                        }
+                        break;
                     }
                 }
             }
             _ = flush_interval.tick() => {
-                // Periodic flush
                 if !buffer.is_empty() {
                     if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
                         dead_letter_queue.extend(failed);
                     }
                 }
-                // Attempt to retry DLQ items on each tick
                 if !dead_letter_queue.is_empty() {
                     let mut dlq_buffer = std::mem::take(&mut dead_letter_queue);
                     if let Err(failed) = flush_buffer_with_retry(&service, &mut dlq_buffer, MAX_FLUSH_RETRIES).await {

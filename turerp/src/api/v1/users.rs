@@ -117,7 +117,11 @@ pub async fn update_user(
     payload: web::Json<UpdateUser>,
 ) -> ApiResult<HttpResponse> {
     let tenant_id = auth_user.0.tenant_id;
-    let user_id = auth_user.0.sub.parse::<i64>().unwrap_or(0);
+    let user_id = auth_user
+        .0
+        .sub
+        .parse::<i64>()
+        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
     let id = *path;
     let update = payload.into_inner();
 
@@ -162,13 +166,11 @@ pub async fn update_user(
     )
 )]
 pub async fn delete_user(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     user_service: web::Data<UserService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    // AdminUser extractor ensures only admins can access this endpoint
-    // The underscore prefix indicates we don't need the claims for this operation
-    let tenant_id = _admin_user.0.tenant_id;
+    let tenant_id = admin_user.0.tenant_id;
     let id = *path;
     user_service.delete_user(id, tenant_id).await?;
     Ok(HttpResponse::NoContent().finish())

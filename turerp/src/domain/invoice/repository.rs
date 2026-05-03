@@ -15,7 +15,7 @@ use crate::error::ApiError;
 #[async_trait]
 pub trait InvoiceRepository: Send + Sync {
     async fn create(&self, invoice: CreateInvoice) -> Result<Invoice, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Invoice>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Invoice>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError>;
     async fn find_by_number(
         &self,
@@ -46,9 +46,19 @@ pub trait InvoiceRepository: Send + Sync {
         per_page: u32,
     ) -> Result<PaginatedResult<Invoice>, ApiError>;
 
-    async fn update_status(&self, id: i64, status: InvoiceStatus) -> Result<Invoice, ApiError>;
-    async fn update_paid_amount(&self, id: i64, paid_amount: Decimal) -> Result<Invoice, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: InvoiceStatus,
+    ) -> Result<Invoice, ApiError>;
+    async fn update_paid_amount(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        paid_amount: Decimal,
+    ) -> Result<Invoice, ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for InvoiceLine operations
@@ -181,9 +191,13 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
         Ok(invoice)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Invoice>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Invoice>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.invoices.get(&id).cloned())
+        Ok(inner
+            .invoices
+            .values()
+            .find(|i| i.id == id && i.tenant_id == tenant_id)
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
@@ -284,22 +298,34 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn update_status(&self, id: i64, status: InvoiceStatus) -> Result<Invoice, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: InvoiceStatus,
+    ) -> Result<Invoice, ApiError> {
         let mut inner = self.inner.lock();
         let invoice = inner
             .invoices
-            .get_mut(&id)
+            .values_mut()
+            .find(|i| i.id == id && i.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", id)))?;
         invoice.status = status;
         invoice.updated_at = chrono::Utc::now();
         Ok(invoice.clone())
     }
 
-    async fn update_paid_amount(&self, id: i64, paid_amount: Decimal) -> Result<Invoice, ApiError> {
+    async fn update_paid_amount(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        paid_amount: Decimal,
+    ) -> Result<Invoice, ApiError> {
         let mut inner = self.inner.lock();
         let invoice = inner
             .invoices
-            .get_mut(&id)
+            .values_mut()
+            .find(|i| i.id == id && i.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", id)))?;
 
         invoice.paid_amount = paid_amount;
@@ -319,9 +345,28 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
         Ok(invoice.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let invoice = {
+            let inner = self.inner.lock();
+            inner.invoices.get(&id).cloned()
+        }
+        .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", id)))?;
+
+        if invoice.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Invoice {} not found", id)));
+        }
+
         let mut inner = self.inner.lock();
         inner.invoices.remove(&id);
+        inner
+            .tenant_invoices
+            .entry(invoice.tenant_id)
+            .and_modify(|v| {
+                v.retain(|&x| x != id);
+            });
+        inner.cari_invoices.entry(invoice.cari_id).and_modify(|v| {
+            v.retain(|&x| x != id);
+        });
         Ok(())
     }
 }

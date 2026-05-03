@@ -9,6 +9,7 @@ use aes_gcm::{
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use rand::RngCore;
 use thiserror::Error;
+use zeroize::Zeroizing;
 
 /// Encryption error types
 #[derive(Debug, Error)]
@@ -104,11 +105,11 @@ pub fn decrypt(ciphertext: &str, key: &[u8]) -> EncryptionResult<String> {
 /// Generate a new encryption key
 ///
 /// # Returns
-/// A 32-byte random key suitable for AES-256-GCM
-pub fn generate_key() -> [u8; 32] {
+/// A 32-byte random key suitable for AES-256-GCM, scrubbed from memory on drop.
+pub fn generate_key() -> Zeroizing<[u8; 32]> {
     let mut key = [0u8; 32];
     rand::thread_rng().fill_bytes(&mut key);
-    key
+    Zeroizing::new(key)
 }
 
 #[cfg(test)]
@@ -120,8 +121,8 @@ mod tests {
         let key = generate_key();
         let plaintext = "secret data";
 
-        let encrypted = encrypt(plaintext, &key).unwrap();
-        let decrypted = decrypt(&encrypted, &key).unwrap();
+        let encrypted = encrypt(plaintext, &*key).unwrap();
+        let decrypted = decrypt(&encrypted, &*key).unwrap();
 
         assert_eq!(plaintext, decrypted);
     }
@@ -131,8 +132,8 @@ mod tests {
         let key = generate_key();
         let plaintext = "secret data";
 
-        let encrypted1 = encrypt(plaintext, &key).unwrap();
-        let encrypted2 = encrypt(plaintext, &key).unwrap();
+        let encrypted1 = encrypt(plaintext, &*key).unwrap();
+        let encrypted2 = encrypt(plaintext, &*key).unwrap();
 
         // Due to random nonce, ciphertext should be different
         assert_ne!(encrypted1, encrypted2);
@@ -148,7 +149,7 @@ mod tests {
     #[test]
     fn test_decrypt_invalid_ciphertext() {
         let key = generate_key();
-        let result = decrypt("not-valid-base64!@#", &key);
+        let result = decrypt("not-valid-base64!@#", &*key);
         assert!(matches!(result, Err(EncryptionError::InvalidCiphertext)));
     }
 }
