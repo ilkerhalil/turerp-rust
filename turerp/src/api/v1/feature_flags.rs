@@ -3,8 +3,10 @@
 use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
+use crate::common::MessageResponse;
 use crate::domain::feature::{CreateFeatureFlag, FeatureFlagService, UpdateFeatureFlag};
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create feature flag endpoint (admin only)
@@ -28,9 +30,14 @@ pub async fn create_flag(
     _admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     payload: web::Json<CreateFeatureFlag>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let flag = feature_service.create(payload.into_inner()).await?;
-    Ok(HttpResponse::Created().json(flag))
+    let i18n = resolve(&i18n);
+    match feature_service.create(payload.into_inner()).await {
+        Ok(flag) => Ok(HttpResponse::Created().json(flag)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all feature flags endpoint (authenticated)
@@ -51,17 +58,22 @@ pub async fn get_flags(
     auth_user: AuthUser,
     feature_service: web::Data<FeatureFlagService>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    pagination
-        .validate()
-        .map_err(crate::error::ApiError::Validation)?;
-    // Always use authenticated user's tenant for isolation
-    // Regular users can only see their own tenant's feature flags
+    let i18n = resolve(&i18n);
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
     let tenant_id = Some(auth_user.0.tenant_id);
-    let result = feature_service
+    match feature_service
         .get_all_paginated(tenant_id, pagination.page, pagination.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get feature flag by ID endpoint (authenticated)
@@ -85,11 +97,22 @@ pub async fn get_flag_by_id(
     _auth_user: AuthUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let flag = feature_service.get_by_id(*path).await?.ok_or_else(|| {
-        crate::error::ApiError::NotFound(format!("Feature flag with id {} not found", path))
-    })?;
-    Ok(HttpResponse::Ok().json(flag))
+    let i18n = resolve(&i18n);
+    match feature_service.get_by_id(*path).await {
+        Ok(Some(flag)) => Ok(HttpResponse::Ok().json(flag)),
+        Ok(None) => {
+            let msg = i18n.t_args(
+                locale.as_str(),
+                "errors.not_found",
+                &[("resource", "Feature flag")],
+            );
+            Ok(HttpResponse::NotFound().json(crate::error::ErrorResponse { error: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update feature flag endpoint (admin only)
@@ -117,14 +140,22 @@ pub async fn update_flag(
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateFeatureFlag>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let flag = feature_service
-        .update(*path, payload.into_inner())
-        .await?
-        .ok_or_else(|| {
-            crate::error::ApiError::NotFound(format!("Feature flag with id {} not found", path))
-        })?;
-    Ok(HttpResponse::Ok().json(flag))
+    let i18n = resolve(&i18n);
+    match feature_service.update(*path, payload.into_inner()).await {
+        Ok(Some(flag)) => Ok(HttpResponse::Ok().json(flag)),
+        Ok(None) => {
+            let msg = i18n.t_args(
+                locale.as_str(),
+                "errors.not_found",
+                &[("resource", "Feature flag")],
+            );
+            Ok(HttpResponse::NotFound().json(crate::error::ErrorResponse { error: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Delete feature flag endpoint (admin only)
@@ -136,7 +167,7 @@ pub async fn update_flag(
         ("id" = i64, Path, description = "Feature flag ID")
     ),
     responses(
-        (status = 204, description = "Feature flag deleted"),
+        (status = 200, description = "Feature flag deleted", body = MessageResponse),
         (status = 401, description = "Not authenticated - missing or invalid JWT token"),
         (status = 403, description = "Forbidden - admin access required"),
         (status = 404, description = "Feature flag not found")
@@ -149,9 +180,17 @@ pub async fn delete_flag(
     _admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    feature_service.delete(*path).await?;
-    Ok(HttpResponse::NoContent().finish())
+    let i18n = resolve(&i18n);
+    match feature_service.delete(*path).await {
+        Ok(_) => {
+            let msg = i18n.t(locale.as_str(), "generic.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Enable feature flag endpoint (admin only)
@@ -176,11 +215,22 @@ pub async fn enable_flag(
     _admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let flag = feature_service.enable(*path).await?.ok_or_else(|| {
-        crate::error::ApiError::NotFound(format!("Feature flag with id {} not found", path))
-    })?;
-    Ok(HttpResponse::Ok().json(flag))
+    let i18n = resolve(&i18n);
+    match feature_service.enable(*path).await {
+        Ok(Some(flag)) => Ok(HttpResponse::Ok().json(flag)),
+        Ok(None) => {
+            let msg = i18n.t_args(
+                locale.as_str(),
+                "errors.not_found",
+                &[("resource", "Feature flag")],
+            );
+            Ok(HttpResponse::NotFound().json(crate::error::ErrorResponse { error: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Disable feature flag endpoint (admin only)
@@ -205,11 +255,22 @@ pub async fn disable_flag(
     _admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let flag = feature_service.disable(*path).await?.ok_or_else(|| {
-        crate::error::ApiError::NotFound(format!("Feature flag with id {} not found", path))
-    })?;
-    Ok(HttpResponse::Ok().json(flag))
+    let i18n = resolve(&i18n);
+    match feature_service.disable(*path).await {
+        Ok(Some(flag)) => Ok(HttpResponse::Ok().json(flag)),
+        Ok(None) => {
+            let msg = i18n.t_args(
+                locale.as_str(),
+                "errors.not_found",
+                &[("resource", "Feature flag")],
+            );
+            Ok(HttpResponse::NotFound().json(crate::error::ErrorResponse { error: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Check if feature is enabled endpoint (authenticated)
@@ -232,22 +293,20 @@ pub async fn check_feature(
     auth_user: AuthUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<String>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let name = path.into_inner();
     let tenant_id = Some(auth_user.0.tenant_id);
-    let enabled = feature_service.is_enabled(&name, tenant_id).await?;
-    Ok(HttpResponse::Ok().json(FeatureStatusResponse {
-        name,
-        enabled,
-        tenant_id: auth_user.0.tenant_id,
-    }))
-}
-
-/// Query parameters for listing feature flags
-#[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
-pub struct GetFlagsParams {
-    /// Filter by tenant ID
-    pub tenant_id: Option<i64>,
+    match feature_service.is_enabled(&name, tenant_id).await {
+        Ok(enabled) => Ok(HttpResponse::Ok().json(FeatureStatusResponse {
+            name,
+            enabled,
+            tenant_id: auth_user.0.tenant_id,
+        })),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Response for feature status check

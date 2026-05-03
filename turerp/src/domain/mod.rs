@@ -14,6 +14,7 @@ pub mod product;
 pub mod project;
 pub mod purchase;
 pub mod sales;
+pub mod settings;
 pub mod stock;
 pub mod tenant;
 pub mod user;
@@ -176,3 +177,13 @@ pub use feature::model::{
 };
 pub use feature::repository::{FeatureFlagRepository, InMemoryFeatureFlagRepository};
 pub use feature::service::FeatureFlagService;
+
+// Settings module re-exports
+pub use settings::model::{
+    BulkUpdateSettingItem, BulkUpdateSettings, CreateSetting, Setting, SettingDataType,
+    SettingGroup, SettingResponse, UpdateSetting,
+};
+pub use settings::repository::{
+    BoxSettingsRepository, InMemorySettingsRepository, SettingsRepository,
+};
+pub use settings::service::SettingsService;

@@ -3,9 +3,11 @@
 use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
+use crate::common::MessageResponse;
 use crate::domain::stock::model::{CreateStockMovement, CreateWarehouse};
 use crate::domain::stock::service::StockService;
 use crate::error::ApiResult;
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create warehouse (requires admin role)
@@ -25,11 +27,16 @@ pub async fn create_warehouse(
     admin_user: AdminUser,
     stock_service: web::Data<StockService>,
     payload: web::Json<CreateWarehouse>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let warehouse = stock_service.create_warehouse(create).await?;
-    Ok(HttpResponse::Created().json(warehouse))
+    match stock_service.create_warehouse(create).await {
+        Ok(warehouse) => Ok(HttpResponse::Created().json(warehouse)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all warehouses (requires authentication)
@@ -47,11 +54,17 @@ pub async fn get_warehouses(
     auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = stock_service
+    let i18n = resolve(&i18n);
+    match stock_service
         .get_warehouses_paginated(auth_user.0.tenant_id, query.page, query.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get warehouse by ID (requires authentication)
@@ -70,9 +83,14 @@ pub async fn get_warehouse(
     _auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let warehouse = stock_service.get_warehouse(*path).await?;
-    Ok(HttpResponse::Ok().json(warehouse))
+    let i18n = resolve(&i18n);
+    match stock_service.get_warehouse(*path).await {
+        Ok(warehouse) => Ok(HttpResponse::Ok().json(warehouse)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update warehouse (requires admin role)
@@ -94,12 +112,18 @@ pub async fn update_warehouse(
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateWarehouseRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let req = payload.into_inner();
-    let warehouse = stock_service
+    match stock_service
         .update_warehouse(*path, req.code, req.name, req.address, req.is_active)
-        .await?;
-    Ok(HttpResponse::Ok().json(warehouse))
+        .await
+    {
+        Ok(warehouse) => Ok(HttpResponse::Ok().json(warehouse)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Delete warehouse (requires admin role)
@@ -109,7 +133,7 @@ pub async fn update_warehouse(
     tag = "Stock",
     params(("id" = i64, Path, description = "Warehouse ID")),
     responses(
-        (status = 204, description = "Warehouse deleted"),
+        (status = 200, description = "Warehouse deleted", body = MessageResponse),
         (status = 403, description = "Forbidden - admin role required"),
         (status = 404, description = "Warehouse not found")
     ),
@@ -119,9 +143,17 @@ pub async fn delete_warehouse(
     _admin_user: AdminUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    stock_service.delete_warehouse(*path).await?;
-    Ok(HttpResponse::NoContent().finish())
+    let i18n = resolve(&i18n);
+    match stock_service.delete_warehouse(*path).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "stock.warehouse.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Create stock movement (requires admin role)
@@ -140,15 +172,20 @@ pub async fn create_stock_movement(
     admin_user: AdminUser,
     stock_service: web::Data<StockService>,
     payload: web::Json<CreateStockMovement>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.created_by = admin_user
         .0
         .sub
         .parse()
         .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
-    let movement = stock_service.create_stock_movement(create).await?;
-    Ok(HttpResponse::Created().json(movement))
+    match stock_service.create_stock_movement(create).await {
+        Ok(movement) => Ok(HttpResponse::Created().json(movement)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get stock movements by product (requires authentication)
@@ -167,9 +204,14 @@ pub async fn get_stock_movements_by_product(
     _auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let movements = stock_service.get_stock_movements_by_product(*path).await?;
-    Ok(HttpResponse::Ok().json(movements))
+    let i18n = resolve(&i18n);
+    match stock_service.get_stock_movements_by_product(*path).await {
+        Ok(movements) => Ok(HttpResponse::Ok().json(movements)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get stock movements by warehouse (requires authentication)
@@ -188,11 +230,14 @@ pub async fn get_stock_movements_by_warehouse(
     _auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let movements = stock_service
-        .get_stock_movements_by_warehouse(*path)
-        .await?;
-    Ok(HttpResponse::Ok().json(movements))
+    let i18n = resolve(&i18n);
+    match stock_service.get_stock_movements_by_warehouse(*path).await {
+        Ok(movements) => Ok(HttpResponse::Ok().json(movements)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get stock levels by product (requires authentication)
@@ -211,9 +256,14 @@ pub async fn get_stock_by_product(
     _auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let levels = stock_service.get_stock_by_product(*path).await?;
-    Ok(HttpResponse::Ok().json(levels))
+    let i18n = resolve(&i18n);
+    match stock_service.get_stock_by_product(*path).await {
+        Ok(levels) => Ok(HttpResponse::Ok().json(levels)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get stock levels by warehouse (requires authentication)
@@ -232,9 +282,14 @@ pub async fn get_stock_by_warehouse(
     _auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let levels = stock_service.get_stock_by_warehouse(*path).await?;
-    Ok(HttpResponse::Ok().json(levels))
+    let i18n = resolve(&i18n);
+    match stock_service.get_stock_by_warehouse(*path).await {
+        Ok(levels) => Ok(HttpResponse::Ok().json(levels)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get stock summary (requires authentication)
@@ -253,9 +308,14 @@ pub async fn get_stock_summary(
     _auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let summary = stock_service.get_stock_summary(*path).await?;
-    Ok(HttpResponse::Ok().json(summary))
+    let i18n = resolve(&i18n);
+    match stock_service.get_stock_summary(*path).await {
+        Ok(summary) => Ok(HttpResponse::Ok().json(summary)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]

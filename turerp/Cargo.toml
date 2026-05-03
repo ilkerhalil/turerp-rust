@@ -85,6 +85,10 @@ mockall = "0.12"
 utoipa = "4"
 utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 
+[[bin]]
+name = "gen_openapi"
+path = "src/bin/gen_openapi.rs"
+
 [features]
 default = []
 postgres = ["sqlx/runtime-tokio-native-tls"]

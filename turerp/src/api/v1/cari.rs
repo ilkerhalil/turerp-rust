@@ -3,9 +3,11 @@
 use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
+use crate::common::MessageResponse;
 use crate::domain::cari::model::{CariType, CreateCari, UpdateCari};
 use crate::domain::cari::service::CariService;
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create a cari (requires admin role)
@@ -26,11 +28,16 @@ pub async fn create_cari(
     admin_user: AdminUser,
     cari_service: web::Data<CariService>,
     payload: web::Json<CreateCari>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let cari = cari_service.create_cari(create).await?;
-    Ok(HttpResponse::Created().json(cari))
+    match cari_service.create_cari(create).await {
+        Ok(cari) => Ok(HttpResponse::Created().json(cari)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get cari by ID (requires authentication)
@@ -50,9 +57,14 @@ pub async fn get_cari(
     auth_user: AuthUser,
     cari_service: web::Data<CariService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let cari = cari_service.get_cari(*path, auth_user.0.tenant_id).await?;
-    Ok(HttpResponse::Ok().json(cari))
+    let i18n = resolve(&i18n);
+    match cari_service.get_cari(*path, auth_user.0.tenant_id).await {
+        Ok(cari) => Ok(HttpResponse::Ok().json(cari)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all cari (requires authentication)
@@ -71,14 +83,21 @@ pub async fn get_all_cari(
     auth_user: AuthUser,
     cari_service: web::Data<CariService>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    pagination
-        .validate()
-        .map_err(crate::error::ApiError::Validation)?;
-    let result = cari_service
+    let i18n = resolve(&i18n);
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
+    match cari_service
         .get_all_cari_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get cari by type (requires authentication)
@@ -98,19 +117,26 @@ pub async fn get_cari_by_type(
     cari_service: web::Data<CariService>,
     path: web::Path<CariType>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    pagination
-        .validate()
-        .map_err(crate::error::ApiError::Validation)?;
-    let result = cari_service
+    let i18n = resolve(&i18n);
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
+    match cari_service
         .get_cari_by_type_paginated(
             path.into_inner(),
             auth_user.0.tenant_id,
             pagination.page,
             pagination.per_page,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Search cari (requires authentication)
@@ -129,14 +155,21 @@ pub async fn search_cari(
     auth_user: AuthUser,
     cari_service: web::Data<CariService>,
     query: web::Query<SearchQuery>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    query
-        .validate()
-        .map_err(crate::error::ApiError::Validation)?;
-    let result = cari_service
+    let i18n = resolve(&i18n);
+    if let Err(e) = query.validate() {
+        let err = ApiError::Validation(e);
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
+    match cari_service
         .search_cari_paginated(&query.q, auth_user.0.tenant_id, query.page, query.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update cari (requires admin role)
@@ -159,11 +192,17 @@ pub async fn update_cari(
     cari_service: web::Data<CariService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateCari>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let cari = cari_service
+    let i18n = resolve(&i18n);
+    match cari_service
         .update_cari(*path, admin_user.0.tenant_id, payload.into_inner())
-        .await?;
-    Ok(HttpResponse::Ok().json(cari))
+        .await
+    {
+        Ok(cari) => Ok(HttpResponse::Ok().json(cari)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Delete cari (requires admin role)
@@ -173,7 +212,7 @@ pub async fn update_cari(
     tag = "Cari",
     params(("id" = i64, Path, description = "Cari ID")),
     responses(
-        (status = 204, description = "Cari deleted"),
+        (status = 200, description = "Cari deleted", body = MessageResponse),
         (status = 401, description = "Not authenticated"),
         (status = 403, description = "Forbidden - admin role required"),
         (status = 404, description = "Cari not found")
@@ -184,11 +223,20 @@ pub async fn delete_cari(
     admin_user: AdminUser,
     cari_service: web::Data<CariService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    cari_service
+    let i18n = resolve(&i18n);
+    match cari_service
         .delete_cari(*path, admin_user.0.tenant_id)
-        .await?;
-    Ok(HttpResponse::NoContent().finish())
+        .await
+    {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "cari.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]

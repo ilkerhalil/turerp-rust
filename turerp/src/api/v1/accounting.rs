@@ -6,6 +6,7 @@ use crate::common::pagination::PaginationParams;
 use crate::domain::accounting::model::{AccountType, CreateAccount, CreateJournalEntry};
 use crate::domain::accounting::service::AccountingService;
 use crate::error::ApiResult;
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create account (requires admin role)
@@ -19,11 +20,16 @@ pub async fn create_account(
     admin_user: AdminUser,
     accounting_service: web::Data<AccountingService>,
     payload: web::Json<CreateAccount>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let account = accounting_service.create_account(create).await?;
-    Ok(HttpResponse::Created().json(account))
+    match accounting_service.create_account(create).await {
+        Ok(account) => Ok(HttpResponse::Created().json(account)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all accounts
@@ -37,11 +43,17 @@ pub async fn get_accounts(
     auth_user: AuthUser,
     accounting_service: web::Data<AccountingService>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = accounting_service
+    let i18n = resolve(&i18n);
+    match accounting_service
         .get_accounts_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get accounts by type
@@ -55,11 +67,17 @@ pub async fn get_accounts_by_type(
     auth_user: AuthUser,
     accounting_service: web::Data<AccountingService>,
     path: web::Path<AccountType>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let accounts = accounting_service
+    let i18n = resolve(&i18n);
+    match accounting_service
         .get_accounts_by_type(auth_user.0.tenant_id, path.into_inner())
-        .await?;
-    Ok(HttpResponse::Ok().json(accounts))
+        .await
+    {
+        Ok(accounts) => Ok(HttpResponse::Ok().json(accounts)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get account by ID
@@ -73,9 +91,14 @@ pub async fn get_account(
     _auth_user: AuthUser,
     accounting_service: web::Data<AccountingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let account = accounting_service.get_account(*path).await?;
-    Ok(HttpResponse::Ok().json(account))
+    let i18n = resolve(&i18n);
+    match accounting_service.get_account(*path).await {
+        Ok(account) => Ok(HttpResponse::Ok().json(account)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Create journal entry (requires admin role)
@@ -89,7 +112,10 @@ pub async fn create_journal_entry(
     admin_user: AdminUser,
     accounting_service: web::Data<AccountingService>,
     payload: web::Json<CreateJournalEntry>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
     create.created_by = admin_user
@@ -97,8 +123,10 @@ pub async fn create_journal_entry(
         .sub
         .parse()
         .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
-    let entry = accounting_service.create_journal_entry(create).await?;
-    Ok(HttpResponse::Created().json(entry))
+    match accounting_service.create_journal_entry(create).await {
+        Ok(entry) => Ok(HttpResponse::Created().json(entry)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all journal entries
@@ -112,11 +140,17 @@ pub async fn get_journal_entries(
     auth_user: AuthUser,
     accounting_service: web::Data<AccountingService>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = accounting_service
+    let i18n = resolve(&i18n);
+    match accounting_service
         .get_journal_entries_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get journal entry by ID
@@ -130,9 +164,14 @@ pub async fn get_journal_entry(
     _auth_user: AuthUser,
     accounting_service: web::Data<AccountingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let entry = accounting_service.get_journal_entry(*path).await?;
-    Ok(HttpResponse::Ok().json(entry))
+    let i18n = resolve(&i18n);
+    match accounting_service.get_journal_entry(*path).await {
+        Ok(entry) => Ok(HttpResponse::Ok().json(entry)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Post journal entry (requires admin role)
@@ -146,9 +185,14 @@ pub async fn post_journal_entry(
     _admin_user: AdminUser,
     accounting_service: web::Data<AccountingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let entry = accounting_service.post_journal_entry(*path).await?;
-    Ok(HttpResponse::Ok().json(entry))
+    let i18n = resolve(&i18n);
+    match accounting_service.post_journal_entry(*path).await {
+        Ok(entry) => Ok(HttpResponse::Ok().json(entry)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Void journal entry (requires admin role)
@@ -162,9 +206,14 @@ pub async fn void_journal_entry(
     _admin_user: AdminUser,
     accounting_service: web::Data<AccountingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let entry = accounting_service.void_journal_entry(*path).await?;
-    Ok(HttpResponse::Ok().json(entry))
+    let i18n = resolve(&i18n);
+    match accounting_service.void_journal_entry(*path).await {
+        Ok(entry) => Ok(HttpResponse::Ok().json(entry)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Generate trial balance (requires authentication)
@@ -178,15 +227,21 @@ pub async fn generate_trial_balance(
     auth_user: AuthUser,
     accounting_service: web::Data<AccountingService>,
     payload: web::Json<TrialBalanceRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let balance = accounting_service
+    let i18n = resolve(&i18n);
+    match accounting_service
         .generate_trial_balance(
             auth_user.0.tenant_id,
             payload.period_start,
             payload.period_end,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(balance))
+        .await
+    {
+        Ok(balance) => Ok(HttpResponse::Ok().json(balance)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]

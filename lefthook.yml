@@ -5,6 +5,11 @@
 pre-commit:
   parallel: true
   commands:
+    gen-openapi:
+      run: cargo run --bin gen_openapi && git add openapi.json
+      root: turerp/
+      fail_text: |
+        OpenAPI spec generation failed. Check for schema compilation errors.
     format:
       run: cargo fmt --check
       root: turerp/

@@ -5,7 +5,8 @@ use actix_web::{web, HttpResponse};
 use crate::common::pagination::PaginationParams;
 use crate::domain::project::model::{CreateProject, CreateWbsItem, ProjectStatus};
 use crate::domain::project::service::ProjectService;
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create project (requires admin role)
@@ -19,11 +20,16 @@ pub async fn create_project(
     admin_user: AdminUser,
     project_service: web::Data<ProjectService>,
     payload: web::Json<CreateProject>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let project = project_service.create_project(create).await?;
-    Ok(HttpResponse::Created().json(project))
+    match project_service.create_project(create).await {
+        Ok(project) => Ok(HttpResponse::Created().json(project)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all projects
@@ -37,11 +43,17 @@ pub async fn get_projects(
     auth_user: AuthUser,
     project_service: web::Data<ProjectService>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = project_service
+    let i18n = resolve(&i18n);
+    match project_service
         .get_projects_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get project by ID
@@ -55,9 +67,14 @@ pub async fn get_project(
     _auth_user: AuthUser,
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let project = project_service.get_project(*path).await?;
-    Ok(HttpResponse::Ok().json(project))
+    let i18n = resolve(&i18n);
+    match project_service.get_project(*path).await {
+        Ok(project) => Ok(HttpResponse::Ok().json(project)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update project status (requires admin role)
@@ -73,11 +90,17 @@ pub async fn update_project_status(
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateProjectStatusRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let project = project_service
+    let i18n = resolve(&i18n);
+    match project_service
         .update_project_status(*path, payload.into_inner().status)
-        .await?;
-    Ok(HttpResponse::Ok().json(project))
+        .await
+    {
+        Ok(project) => Ok(HttpResponse::Ok().json(project)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Create WBS item (requires admin role)
@@ -91,11 +114,14 @@ pub async fn create_wbs_item(
     _admin_user: AdminUser,
     project_service: web::Data<ProjectService>,
     payload: web::Json<CreateWbsItem>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let wbs = project_service
-        .create_wbs_item(payload.into_inner())
-        .await?;
-    Ok(HttpResponse::Created().json(wbs))
+    let i18n = resolve(&i18n);
+    match project_service.create_wbs_item(payload.into_inner()).await {
+        Ok(wbs) => Ok(HttpResponse::Created().json(wbs)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get WBS items by project
@@ -109,9 +135,14 @@ pub async fn get_wbs_by_project(
     _auth_user: AuthUser,
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let wbs = project_service.get_wbs_by_project(*path).await?;
-    Ok(HttpResponse::Ok().json(wbs))
+    let i18n = resolve(&i18n);
+    match project_service.get_wbs_by_project(*path).await {
+        Ok(wbs) => Ok(HttpResponse::Ok().json(wbs)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update WBS progress (requires admin role)
@@ -127,12 +158,18 @@ pub async fn update_wbs_progress(
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateWbsProgressRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let req = payload.into_inner();
-    let wbs = project_service
+    match project_service
         .update_wbs_progress(*path, req.progress, req.hours)
-        .await?;
-    Ok(HttpResponse::Ok().json(wbs))
+        .await
+    {
+        Ok(wbs) => Ok(HttpResponse::Ok().json(wbs)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Create project cost (requires admin role)
@@ -146,11 +183,17 @@ pub async fn create_project_cost(
     _admin_user: AdminUser,
     project_service: web::Data<ProjectService>,
     payload: web::Json<crate::domain::project::model::CreateProjectCost>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let cost = project_service
+    let i18n = resolve(&i18n);
+    match project_service
         .create_project_cost(payload.into_inner())
-        .await?;
-    Ok(HttpResponse::Created().json(cost))
+        .await
+    {
+        Ok(cost) => Ok(HttpResponse::Created().json(cost)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get project costs
@@ -164,9 +207,14 @@ pub async fn get_project_costs(
     _auth_user: AuthUser,
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let costs = project_service.get_project_costs(*path).await?;
-    Ok(HttpResponse::Ok().json(costs))
+    let i18n = resolve(&i18n);
+    match project_service.get_project_costs(*path).await {
+        Ok(costs) => Ok(HttpResponse::Ok().json(costs)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get project profitability
@@ -181,13 +229,18 @@ pub async fn get_profitability(
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
     query: web::Query<ProfitabilityQuery>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let revenue: rust_decimal::Decimal = query
-        .revenue
-        .parse()
-        .map_err(|_| crate::error::ApiError::Validation("Invalid revenue amount".into()))?;
-    let profitability = project_service.get_profitability(*path, revenue).await?;
-    Ok(HttpResponse::Ok().json(profitability))
+    let i18n = resolve(&i18n);
+    let revenue: rust_decimal::Decimal = query.revenue.parse().map_err(|_| {
+        let msg = i18n.t(locale.as_str(), "generic.validation_error");
+        ApiError::Validation(msg)
+    })?;
+    match project_service.get_profitability(*path, revenue).await {
+        Ok(profitability) => Ok(HttpResponse::Ok().json(profitability)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]

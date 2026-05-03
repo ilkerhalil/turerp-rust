@@ -254,8 +254,30 @@ impl RateLimitConfig {
     }
 }
 
-/// Application configuration
+/// Localization configuration
 #[derive(Debug, Clone, Deserialize)]
+pub struct LocalizationConfig {
+    pub default_locale: String,
+}
+
+impl Default for LocalizationConfig {
+    fn default() -> Self {
+        Self {
+            default_locale: "en".to_string(),
+        }
+    }
+}
+
+impl LocalizationConfig {
+    pub fn from_env() -> Self {
+        Self {
+            default_locale: std::env::var("TURERP_DEFAULT_LOCALE")
+                .ok()
+                .unwrap_or_else(|| "en".to_string()),
+        }
+    }
+}
+
 pub struct Config {
     pub environment: Environment,
     pub server: ServerConfig,
@@ -264,6 +286,7 @@ pub struct Config {
     pub cors: CorsConfig,
     pub rate_limit: RateLimitConfig,
     pub metrics: MetricsConfig,
+    pub localization: LocalizationConfig,
 }
 
 impl Default for Config {
@@ -284,6 +307,7 @@ impl Default for Config {
             cors: CorsConfig::default(),
             rate_limit: RateLimitConfig::default(),
             metrics: MetricsConfig::default(),
+            localization: LocalizationConfig::default(),
         }
     }
 }
@@ -338,6 +362,7 @@ impl Config {
         let cors = CorsConfig::from_env()?;
         let rate_limit = RateLimitConfig::from_env();
         let metrics = MetricsConfig::from_env();
+        let localization = LocalizationConfig::from_env();
 
         Ok(Self {
             environment,
@@ -347,6 +372,7 @@ impl Config {
             cors,
             rate_limit,
             metrics,
+            localization,
         })
     }
 

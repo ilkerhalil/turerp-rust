@@ -16,8 +16,8 @@ use turerp::api::{
     v1_accounting_configure, v1_assets_configure, v1_audit_configure, v1_auth_configure,
     v1_cari_configure, v1_crm_configure, v1_feature_flags_configure, v1_hr_configure,
     v1_invoice_configure, v1_manufacturing_configure, v1_product_variants_configure,
-    v1_project_configure, v1_purchase_requests_configure, v1_sales_configure, v1_stock_configure,
-    v1_tenant_configure, v1_users_configure, ApiDoc,
+    v1_project_configure, v1_purchase_requests_configure, v1_sales_configure,
+    v1_settings_configure, v1_stock_configure, v1_tenant_configure, v1_users_configure, ApiDoc,
 };
 use turerp::middleware::audit::{AuditEvent, AUDIT_CHANNEL_CAPACITY};
 use turerp::setup_logging;
@@ -237,6 +237,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.product_service.clone())
             .app_data(app_state.purchase_service.clone())
             .app_data(app_state.audit_service.clone())
+            .app_data(app_state.settings_service.clone())
+            .app_data(app_state.i18n.clone())
             .app_data(app_state.db_pool.clone());
 
         #[cfg(not(feature = "postgres"))]
@@ -275,7 +277,9 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.feature_service.clone())
             .app_data(app_state.product_service.clone())
             .app_data(app_state.purchase_service.clone())
-            .app_data(app_state.audit_service.clone());
+            .app_data(app_state.audit_service.clone())
+            .app_data(app_state.settings_service.clone())
+            .app_data(app_state.i18n.clone());
 
         app // Health check
             .route("/health", web::get().to(health_check))
@@ -301,7 +305,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_crm_configure)
                     .configure(v1_tenant_configure)
                     .configure(v1_assets_configure)
-                    .configure(v1_audit_configure),
+                    .configure(v1_audit_configure)
+                    .configure(v1_settings_configure),
             )
             // Swagger UI
             .service(

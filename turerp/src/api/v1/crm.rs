@@ -9,6 +9,7 @@ use crate::domain::crm::model::{
 };
 use crate::domain::crm::service::CrmService;
 use crate::error::ApiResult;
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
 
 // --- Leads ---
@@ -24,11 +25,16 @@ pub async fn create_lead(
     admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     payload: web::Json<CreateLead>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let lead = crm_service.create_lead(create).await?;
-    Ok(HttpResponse::Created().json(lead))
+    match crm_service.create_lead(create).await {
+        Ok(lead) => Ok(HttpResponse::Created().json(lead)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all leads
@@ -41,11 +47,17 @@ pub async fn get_leads(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .get_leads_paginated(auth_user.0.tenant_id, query.page, query.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get lead by ID
@@ -59,9 +71,14 @@ pub async fn get_lead(
     _auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let lead = crm_service.get_lead(*path).await?;
-    Ok(HttpResponse::Ok().json(lead))
+    let i18n = resolve(&i18n);
+    match crm_service.get_lead(*path).await {
+        Ok(lead) => Ok(HttpResponse::Ok().json(lead)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get leads by status
@@ -76,16 +93,22 @@ pub async fn get_leads_by_status(
     crm_service: web::Data<CrmService>,
     path: web::Path<LeadStatus>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .get_leads_by_status_paginated(
             auth_user.0.tenant_id,
             path.into_inner(),
             query.page,
             query.per_page,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update lead status (requires admin role)
@@ -101,11 +124,17 @@ pub async fn update_lead_status(
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateLeadStatusRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let lead = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .update_lead_status(*path, payload.into_inner().status)
-        .await?;
-    Ok(HttpResponse::Ok().json(lead))
+        .await
+    {
+        Ok(lead) => Ok(HttpResponse::Ok().json(lead)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Convert lead to customer (requires admin role)
@@ -121,11 +150,17 @@ pub async fn convert_lead(
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     payload: web::Json<ConvertLeadRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let lead = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .convert_lead_to_customer(*path, payload.customer_id)
-        .await?;
-    Ok(HttpResponse::Ok().json(lead))
+        .await
+    {
+        Ok(lead) => Ok(HttpResponse::Ok().json(lead)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 // --- Opportunities ---
@@ -141,11 +176,16 @@ pub async fn create_opportunity(
     admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     payload: web::Json<CreateOpportunity>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let opportunity = crm_service.create_opportunity(create).await?;
-    Ok(HttpResponse::Created().json(opportunity))
+    match crm_service.create_opportunity(create).await {
+        Ok(opportunity) => Ok(HttpResponse::Created().json(opportunity)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all opportunities
@@ -158,11 +198,17 @@ pub async fn get_opportunities(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .get_opportunities_paginated(auth_user.0.tenant_id, query.page, query.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get opportunity by ID
@@ -176,9 +222,14 @@ pub async fn get_opportunity(
     _auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let opportunity = crm_service.get_opportunity(*path).await?;
-    Ok(HttpResponse::Ok().json(opportunity))
+    let i18n = resolve(&i18n);
+    match crm_service.get_opportunity(*path).await {
+        Ok(opportunity) => Ok(HttpResponse::Ok().json(opportunity)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get opportunities by status
@@ -193,16 +244,22 @@ pub async fn get_opportunities_by_status(
     crm_service: web::Data<CrmService>,
     path: web::Path<OpportunityStatus>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .get_opportunities_by_status_paginated(
             auth_user.0.tenant_id,
             path.into_inner(),
             query.page,
             query.per_page,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update opportunity status (requires admin role)
@@ -218,11 +275,17 @@ pub async fn update_opportunity_status(
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateOpportunityStatusRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let opportunity = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .update_opportunity_status(*path, payload.into_inner().status)
-        .await?;
-    Ok(HttpResponse::Ok().json(opportunity))
+        .await
+    {
+        Ok(opportunity) => Ok(HttpResponse::Ok().json(opportunity)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get sales pipeline value
@@ -234,11 +297,17 @@ pub async fn update_opportunity_status(
 pub async fn get_pipeline_value(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let value = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .get_sales_pipeline_value(auth_user.0.tenant_id)
-        .await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({ "pipeline_value": value })))
+        .await
+    {
+        Ok(value) => Ok(HttpResponse::Ok().json(serde_json::json!({ "pipeline_value": value }))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 // --- Campaigns ---
@@ -254,11 +323,16 @@ pub async fn create_campaign(
     admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     payload: web::Json<CreateCampaign>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let campaign = crm_service.create_campaign(create).await?;
-    Ok(HttpResponse::Created().json(campaign))
+    match crm_service.create_campaign(create).await {
+        Ok(campaign) => Ok(HttpResponse::Created().json(campaign)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all campaigns
@@ -271,11 +345,17 @@ pub async fn get_campaigns(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .get_campaigns_paginated(auth_user.0.tenant_id, query.page, query.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get campaign by ID
@@ -289,9 +369,14 @@ pub async fn get_campaign(
     _auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let campaign = crm_service.get_campaign(*path).await?;
-    Ok(HttpResponse::Ok().json(campaign))
+    let i18n = resolve(&i18n);
+    match crm_service.get_campaign(*path).await {
+        Ok(campaign) => Ok(HttpResponse::Ok().json(campaign)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get campaigns by status
@@ -306,16 +391,22 @@ pub async fn get_campaigns_by_status(
     crm_service: web::Data<CrmService>,
     path: web::Path<CampaignStatus>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .get_campaigns_by_status_paginated(
             auth_user.0.tenant_id,
             path.into_inner(),
             query.page,
             query.per_page,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update campaign status (requires admin role)
@@ -331,11 +422,17 @@ pub async fn update_campaign_status(
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateCampaignStatusRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let campaign = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .update_campaign_status(*path, payload.into_inner().status)
-        .await?;
-    Ok(HttpResponse::Ok().json(campaign))
+        .await
+    {
+        Ok(campaign) => Ok(HttpResponse::Ok().json(campaign)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 // --- Tickets ---
@@ -351,11 +448,16 @@ pub async fn create_ticket(
     admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     payload: web::Json<CreateTicket>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let ticket = crm_service.create_ticket(create).await?;
-    Ok(HttpResponse::Created().json(ticket))
+    match crm_service.create_ticket(create).await {
+        Ok(ticket) => Ok(HttpResponse::Created().json(ticket)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all tickets
@@ -368,11 +470,17 @@ pub async fn get_tickets(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .get_tickets_paginated(auth_user.0.tenant_id, query.page, query.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get ticket by ID
@@ -386,9 +494,14 @@ pub async fn get_ticket(
     _auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let ticket = crm_service.get_ticket(*path).await?;
-    Ok(HttpResponse::Ok().json(ticket))
+    let i18n = resolve(&i18n);
+    match crm_service.get_ticket(*path).await {
+        Ok(ticket) => Ok(HttpResponse::Ok().json(ticket)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get tickets by status
@@ -403,16 +516,22 @@ pub async fn get_tickets_by_status(
     crm_service: web::Data<CrmService>,
     path: web::Path<TicketStatus>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .get_tickets_by_status_paginated(
             auth_user.0.tenant_id,
             path.into_inner(),
             query.page,
             query.per_page,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update ticket status (requires admin role)
@@ -428,11 +547,17 @@ pub async fn update_ticket_status(
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateTicketStatusRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let ticket = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .update_ticket_status(*path, payload.into_inner().status)
-        .await?;
-    Ok(HttpResponse::Ok().json(ticket))
+        .await
+    {
+        Ok(ticket) => Ok(HttpResponse::Ok().json(ticket)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Resolve ticket (requires admin role)
@@ -446,9 +571,14 @@ pub async fn resolve_ticket(
     _admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let ticket = crm_service.resolve_ticket(*path).await?;
-    Ok(HttpResponse::Ok().json(ticket))
+    let i18n = resolve(&i18n);
+    match crm_service.resolve_ticket(*path).await {
+        Ok(ticket) => Ok(HttpResponse::Ok().json(ticket)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get open tickets count
@@ -460,11 +590,19 @@ pub async fn resolve_ticket(
 pub async fn get_open_tickets_count(
     auth_user: AuthUser,
     crm_service: web::Data<CrmService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let count = crm_service
+    let i18n = resolve(&i18n);
+    match crm_service
         .get_open_tickets_count(auth_user.0.tenant_id)
-        .await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({ "open_tickets_count": count })))
+        .await
+    {
+        Ok(count) => {
+            Ok(HttpResponse::Ok().json(serde_json::json!({ "open_tickets_count": count })))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]

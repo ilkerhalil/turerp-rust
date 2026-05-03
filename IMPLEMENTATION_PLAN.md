@@ -420,6 +420,35 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ---
 
+## Phase 13: Localization (i18n) ✅
+
+### 13.1 Infrastructure
+- [x] JSON-based translation bundles (`locales/en.json`, `locales/tr.json`)
+- [x] Eager-load translations at startup via `std::sync::OnceLock`
+- [x] Accept-Language header parsing with quality values (`q=0.8`)
+- [x] Configurable default locale (`TURERP_DEFAULT_LOCALE`)
+- [x] Simple `{placeholder}` string interpolation
+
+### 13.2 Integration Points
+- [x] `I18n` service added to `AppState` and injected as `web::Data`
+- [x] `Locale` Actix extractor pulls preferred language per-request
+- [x] `ErrorResponse` extended with optional `localized_error` field
+- [x] `ApiError::error_response()` consumes locale context when available
+
+### 13.3 Translation Coverage
+| Domain | Keys | Status |
+|--------|------|--------|
+| Auth | invalid_credentials, token_expired, invalid_token | ✅ |
+| Generic | not_found, unauthorized, forbidden, bad_request, conflict, validation_error, internal_error, database_error | ✅ |
+
+### 13.4 Files Added
+- `src/i18n/mod.rs` — Core localization engine
+- `src/i18n/extractor.rs` — `Locale` Actix extractor
+- `locales/en.json` — English translations
+- `locales/tr.json` — Turkish translations
+
+---
+
 ## Dependencies (Cargo.toml)
 
 ```toml

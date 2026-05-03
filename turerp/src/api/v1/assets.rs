@@ -3,11 +3,13 @@
 use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
+use crate::common::MessageResponse;
 use crate::domain::assets::model::{
     AssetStatus, CreateAsset, CreateMaintenanceRecord, UpdateAsset,
 };
 use crate::domain::assets::service::AssetsService;
 use crate::error::ApiResult;
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create asset (requires admin role)
@@ -21,11 +23,16 @@ pub async fn create_asset(
     admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     payload: web::Json<CreateAsset>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let asset = assets_service.create_asset(create).await?;
-    Ok(HttpResponse::Created().json(asset))
+    match assets_service.create_asset(create).await {
+        Ok(asset) => Ok(HttpResponse::Created().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all assets
@@ -38,11 +45,17 @@ pub async fn get_assets(
     auth_user: AuthUser,
     assets_service: web::Data<AssetsService>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = assets_service
+    let i18n = resolve(&i18n);
+    match assets_service
         .get_assets_by_tenant_paginated(auth_user.0.tenant_id, query.page, query.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get asset by ID
@@ -56,9 +69,14 @@ pub async fn get_asset(
     _auth_user: AuthUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let asset = assets_service.get_asset(*path).await?;
-    Ok(HttpResponse::Ok().json(asset))
+    let i18n = resolve(&i18n);
+    match assets_service.get_asset(*path).await {
+        Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get assets by status
@@ -72,11 +90,17 @@ pub async fn get_assets_by_status(
     auth_user: AuthUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<AssetStatus>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let assets = assets_service
+    let i18n = resolve(&i18n);
+    match assets_service
         .get_assets_by_status(auth_user.0.tenant_id, path.into_inner())
-        .await?;
-    Ok(HttpResponse::Ok().json(assets))
+        .await
+    {
+        Ok(assets) => Ok(HttpResponse::Ok().json(assets)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update asset (requires admin role)
@@ -92,11 +116,17 @@ pub async fn update_asset(
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateAsset>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let asset = assets_service
+    let i18n = resolve(&i18n);
+    match assets_service
         .update_asset(*path, payload.into_inner())
-        .await?;
-    Ok(HttpResponse::Ok().json(asset))
+        .await
+    {
+        Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update asset status (requires admin role)
@@ -112,11 +142,17 @@ pub async fn update_asset_status(
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateAssetStatusRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let asset = assets_service
+    let i18n = resolve(&i18n);
+    match assets_service
         .update_asset_status(*path, payload.into_inner().status)
-        .await?;
-    Ok(HttpResponse::Ok().json(asset))
+        .await
+    {
+        Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Calculate depreciation
@@ -130,9 +166,14 @@ pub async fn calculate_depreciation(
     _admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let asset = assets_service.calculate_depreciation(*path).await?;
-    Ok(HttpResponse::Ok().json(asset))
+    let i18n = resolve(&i18n);
+    match assets_service.calculate_depreciation(*path).await {
+        Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Record depreciation (requires admin role)
@@ -148,11 +189,17 @@ pub async fn record_depreciation(
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     payload: web::Json<RecordDepreciationRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let asset = assets_service
+    let i18n = resolve(&i18n);
+    match assets_service
         .record_depreciation(*path, payload.amount)
-        .await?;
-    Ok(HttpResponse::Ok().json(asset))
+        .await
+    {
+        Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Dispose asset (requires admin role)
@@ -166,9 +213,14 @@ pub async fn dispose_asset(
     _admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let asset = assets_service.dispose_asset(*path).await?;
-    Ok(HttpResponse::Ok().json(asset))
+    let i18n = resolve(&i18n);
+    match assets_service.dispose_asset(*path).await {
+        Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Write off asset (requires admin role)
@@ -182,9 +234,14 @@ pub async fn write_off_asset(
     _admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let asset = assets_service.write_off_asset(*path).await?;
-    Ok(HttpResponse::Ok().json(asset))
+    let i18n = resolve(&i18n);
+    match assets_service.write_off_asset(*path).await {
+        Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Start maintenance (requires admin role)
@@ -198,9 +255,14 @@ pub async fn start_maintenance(
     _admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let asset = assets_service.start_maintenance(*path).await?;
-    Ok(HttpResponse::Ok().json(asset))
+    let i18n = resolve(&i18n);
+    match assets_service.start_maintenance(*path).await {
+        Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// End maintenance (requires admin role)
@@ -216,27 +278,41 @@ pub async fn end_maintenance(
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     payload: web::Json<EndMaintenanceRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let asset = assets_service
+    let i18n = resolve(&i18n);
+    match assets_service
         .end_maintenance(*path, payload.new_status)
-        .await?;
-    Ok(HttpResponse::Ok().json(asset))
+        .await
+    {
+        Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Delete asset (requires admin role)
 #[utoipa::path(
     delete, path = "/api/v1/assets/{id}", tag = "Assets",
     params(("id" = i64, Path, description = "Asset ID")),
-    responses((status = 204, description = "Asset deleted"), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "Asset deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn delete_asset(
     _admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    assets_service.delete_asset(*path).await?;
-    Ok(HttpResponse::NoContent().finish())
+    let i18n = resolve(&i18n);
+    match assets_service.delete_asset(*path).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "asset.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Create maintenance record (requires admin role)
@@ -250,11 +326,17 @@ pub async fn create_maintenance_record(
     _admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     payload: web::Json<CreateMaintenanceRecord>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let record = assets_service
+    let i18n = resolve(&i18n);
+    match assets_service
         .create_maintenance_record(payload.into_inner())
-        .await?;
-    Ok(HttpResponse::Created().json(record))
+        .await
+    {
+        Ok(record) => Ok(HttpResponse::Created().json(record)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get maintenance records for asset
@@ -268,9 +350,14 @@ pub async fn get_maintenance_records(
     _auth_user: AuthUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let records = assets_service.get_maintenance_records(*path).await?;
-    Ok(HttpResponse::Ok().json(records))
+    let i18n = resolve(&i18n);
+    match assets_service.get_maintenance_records(*path).await {
+        Ok(records) => Ok(HttpResponse::Ok().json(records)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]

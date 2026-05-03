@@ -6,6 +6,7 @@ use crate::common::pagination::PaginationParams;
 use crate::domain::audit::model::AuditLogQueryParams;
 use crate::domain::audit::service::AuditService;
 use crate::error::ApiResult;
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::AdminUser;
 
 /// Get audit logs (requires admin role)
@@ -30,12 +31,15 @@ pub async fn get_audit_logs(
     _admin_user: AdminUser,
     audit_service: web::Data<AuditService>,
     query: web::Query<AuditLogQueryParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let tenant_id = _admin_user.0.tenant_id;
-    let result = audit_service
-        .get_logs(tenant_id, query.into_inner())
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+    match audit_service.get_logs(tenant_id, query.into_inner()).await {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Configure audit routes for v1 API

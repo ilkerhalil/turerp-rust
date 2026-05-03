@@ -1,0 +1,7298 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Turerp ERP API",
+    "description": "Multi-tenant SaaS ERP system API\n\n## Authentication\n\nAll endpoints except `/api/v1/auth/login`, `/api/v1/auth/register`, and `/api/v1/auth/refresh` require JWT Bearer token authentication.\n\n## Rate Limiting\n\nAuthentication endpoints are rate limited to 10 requests per minute per IP address with a burst of 3 requests.\n\n## Localization\n\nAll endpoints support per-request localization via the `Accept-Language` header. Supported languages: `en` (default), `tr`.\n\n## API Versioning\n\n- `/api/v1/` - Current stable API (recommended)\n- `/api/auth/`, `/api/users/` - Legacy routes (deprecated, will be removed in v2)",
+    "contact": {
+      "name": "Turerp Team",
+      "email": "info@turerp.com"
+    },
+    "license": {
+      "name": ""
+    },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/accounting/accounts": {
+      "get": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Get all accounts",
+        "operationId": "get_accounts",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of accounts"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Create account (requires admin role)",
+        "operationId": "create_account",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccount"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Account created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/accounts/type/{account_type}": {
+      "get": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Get accounts by type",
+        "operationId": "get_accounts_by_type",
+        "parameters": [
+          {
+            "name": "account_type",
+            "in": "path",
+            "description": "Account type",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/AccountType"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of accounts by type"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/accounts/{id}": {
+      "get": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Get account by ID",
+        "operationId": "get_account",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/journal-entries": {
+      "get": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Get all journal entries",
+        "operationId": "get_journal_entries",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of journal entries"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Create journal entry (requires admin role)",
+        "operationId": "create_journal_entry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJournalEntry"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Journal entry created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/journal-entries/{id}": {
+      "get": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Get journal entry by ID",
+        "operationId": "get_journal_entry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Journal entry ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journal entry found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/journal-entries/{id}/post": {
+      "post": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Post journal entry (requires admin role)",
+        "operationId": "post_journal_entry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Journal entry ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entry posted"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/journal-entries/{id}/void": {
+      "post": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Void journal entry (requires admin role)",
+        "operationId": "void_journal_entry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Journal entry ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entry voided"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/trial-balance": {
+      "post": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Generate trial balance (requires authentication)",
+        "operationId": "generate_trial_balance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrialBalanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Trial balance generated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets": {
+      "get": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Get all assets",
+        "operationId": "get_assets",
+        "responses": {
+          "200": {
+            "description": "List of assets"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Create asset (requires admin role)",
+        "operationId": "create_asset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAsset"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Asset created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/maintenance-records": {
+      "post": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Create maintenance record (requires admin role)",
+        "operationId": "create_maintenance_record",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMaintenanceRecord"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Maintenance record created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/status/{status}": {
+      "get": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Get assets by status",
+        "operationId": "get_assets_by_status",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "path",
+            "description": "Asset status",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/AssetStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assets by status"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}": {
+      "get": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Get asset by ID",
+        "operationId": "get_asset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asset found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Update asset (requires admin role)",
+        "operationId": "update_asset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAsset"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Asset updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Delete asset (requires admin role)",
+        "operationId": "delete_asset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asset deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}/depreciation": {
+      "post": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Calculate depreciation",
+        "operationId": "calculate_depreciation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Depreciation calculated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}/depreciation/record": {
+      "post": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Record depreciation (requires admin role)",
+        "operationId": "record_depreciation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordDepreciationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Depreciation recorded"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}/dispose": {
+      "post": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Dispose asset (requires admin role)",
+        "operationId": "dispose_asset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asset disposed"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}/maintenance-records": {
+      "get": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Get maintenance records for asset",
+        "operationId": "get_maintenance_records",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Maintenance records"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}/maintenance/end": {
+      "post": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "End maintenance (requires admin role)",
+        "operationId": "end_maintenance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndMaintenanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Maintenance ended"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}/maintenance/start": {
+      "post": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Start maintenance (requires admin role)",
+        "operationId": "start_maintenance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Maintenance started"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}/status": {
+      "put": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Update asset status (requires admin role)",
+        "operationId": "update_asset_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAssetStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}/write-off": {
+      "post": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Write off asset (requires admin role)",
+        "operationId": "write_off_asset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asset written off"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/audit-logs": {
+      "get": {
+        "tags": [
+          "Audit"
+        ],
+        "summary": "Get audit logs (requires admin role)",
+        "operationId": "get_audit_logs",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "query",
+            "description": "Filter by user ID",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Filter by path (contains)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "description": "Filter from date (ISO 8601)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "description": "Filter to date (ISO 8601)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of audit logs"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Login endpoint (public - no authentication required)",
+        "description": "Rate limited: 10 requests/minute per IP",
+        "operationId": "login",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "description": "Tenant ID (default: 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get current user endpoint (requires authentication)",
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "description": "Current user info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Refresh token endpoint (public - no authentication required)",
+        "operationId": "refresh_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tokens refreshed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenPair"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid refresh token"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register endpoint (public - no authentication required)",
+        "description": "Rate limited: 10 requests/minute per IP",
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error - password requirements not met"
+          },
+          "409": {
+            "description": "User already exists"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      }
+    },
+    "/api/v1/cari": {
+      "get": {
+        "tags": [
+          "Cari"
+        ],
+        "summary": "Get all cari (requires authentication)",
+        "operationId": "get_all_cari",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of cari"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Cari"
+        ],
+        "summary": "Create a cari (requires admin role)",
+        "operationId": "create_cari",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCari"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Cari created successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cari/search": {
+      "get": {
+        "tags": [
+          "Cari"
+        ],
+        "summary": "Search cari (requires authentication)",
+        "operationId": "search_cari",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated search results"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cari/type/{cari_type}": {
+      "get": {
+        "tags": [
+          "Cari"
+        ],
+        "summary": "Get cari by type (requires authentication)",
+        "operationId": "get_cari_by_type",
+        "parameters": [
+          {
+            "name": "cari_type",
+            "in": "path",
+            "description": "Cari type filter",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CariType"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of cari by type"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cari/{id}": {
+      "get": {
+        "tags": [
+          "Cari"
+        ],
+        "summary": "Get cari by ID (requires authentication)",
+        "operationId": "get_cari",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cari ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cari found"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Cari not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Cari"
+        ],
+        "summary": "Update cari (requires admin role)",
+        "operationId": "update_cari",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cari ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCari"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Cari updated"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Cari not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Cari"
+        ],
+        "summary": "Delete cari (requires admin role)",
+        "operationId": "delete_cari",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cari ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cari deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Cari not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/categories": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get all categories (paginated)",
+        "operationId": "get_categories",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of categories"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/campaigns": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get all campaigns",
+        "operationId": "get_campaigns",
+        "responses": {
+          "200": {
+            "description": "List of campaigns"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Create campaign (requires admin role)",
+        "operationId": "create_campaign",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCampaign"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Campaign created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/campaigns/status/{status}": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get campaigns by status",
+        "operationId": "get_campaigns_by_status",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "path",
+            "description": "Campaign status",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CampaignStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaigns by status"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/campaigns/{id}": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get campaign by ID",
+        "operationId": "get_campaign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Campaign ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaign found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/campaigns/{id}/status": {
+      "put": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Update campaign status (requires admin role)",
+        "operationId": "update_campaign_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Campaign ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCampaignStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/leads": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get all leads",
+        "operationId": "get_leads",
+        "responses": {
+          "200": {
+            "description": "List of leads"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Create lead (requires admin role)",
+        "operationId": "create_lead",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLead"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Lead created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/leads/status/{status}": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get leads by status",
+        "operationId": "get_leads_by_status",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "path",
+            "description": "Lead status",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/LeadStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leads by status"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/leads/{id}": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get lead by ID",
+        "operationId": "get_lead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Lead ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lead found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/leads/{id}/convert": {
+      "post": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Convert lead to customer (requires admin role)",
+        "operationId": "convert_lead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Lead ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConvertLeadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Lead converted"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/leads/{id}/status": {
+      "put": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Update lead status (requires admin role)",
+        "operationId": "update_lead_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Lead ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLeadStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/opportunities": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get all opportunities",
+        "operationId": "get_opportunities",
+        "responses": {
+          "200": {
+            "description": "List of opportunities"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Create opportunity (requires admin role)",
+        "operationId": "create_opportunity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOpportunity"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Opportunity created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/opportunities/status/{status}": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get opportunities by status",
+        "operationId": "get_opportunities_by_status",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "path",
+            "description": "Opportunity status",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/OpportunityStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Opportunities by status"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/opportunities/{id}": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get opportunity by ID",
+        "operationId": "get_opportunity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Opportunity ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Opportunity found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/opportunities/{id}/status": {
+      "put": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Update opportunity status (requires admin role)",
+        "operationId": "update_opportunity_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Opportunity ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOpportunityStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/pipeline-value": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get sales pipeline value",
+        "operationId": "get_pipeline_value",
+        "responses": {
+          "200": {
+            "description": "Total pipeline value"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/tickets": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get all tickets",
+        "operationId": "get_tickets",
+        "responses": {
+          "200": {
+            "description": "List of tickets"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Create ticket",
+        "operationId": "create_ticket",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTicket"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Ticket created"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/tickets/open-count": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get open tickets count",
+        "operationId": "get_open_tickets_count",
+        "responses": {
+          "200": {
+            "description": "Open tickets count"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/tickets/status/{status}": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get tickets by status",
+        "operationId": "get_tickets_by_status",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "path",
+            "description": "Ticket status",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/TicketStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tickets by status"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/tickets/{id}": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Get ticket by ID",
+        "operationId": "get_ticket",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ticket ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/tickets/{id}/resolve": {
+      "post": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Resolve ticket (requires admin role)",
+        "operationId": "resolve_ticket",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ticket ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket resolved"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/tickets/{id}/status": {
+      "put": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Update ticket status (requires admin role)",
+        "operationId": "update_ticket_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ticket ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTicketStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feature-flags": {
+      "get": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Get all feature flags endpoint (authenticated)",
+        "operationId": "get_flags",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flags retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Create feature flag endpoint (admin only)",
+        "operationId": "create_flag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFeatureFlag"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Feature flag created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlagResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "409": {
+            "description": "Feature flag already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feature-flags/check/{name}": {
+      "get": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Check if feature is enabled endpoint (authenticated)",
+        "operationId": "check_feature",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Feature flag name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flag status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feature-flags/{id}": {
+      "get": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Get feature flag by ID endpoint (authenticated)",
+        "operationId": "get_flag_by_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Feature flag ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flag found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlagResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Feature flag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Update feature flag endpoint (admin only)",
+        "operationId": "update_flag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Feature flag ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFeatureFlag"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Feature flag updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlagResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Feature flag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Delete feature flag endpoint (admin only)",
+        "operationId": "delete_flag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Feature flag ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flag deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Feature flag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feature-flags/{id}/disable": {
+      "post": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Disable feature flag endpoint (admin only)",
+        "operationId": "disable_flag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Feature flag ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flag disabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlagResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Feature flag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feature-flags/{id}/enable": {
+      "post": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Enable feature flag endpoint (admin only)",
+        "operationId": "enable_flag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Feature flag ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flag enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlagResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Feature flag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/attendance": {
+      "post": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Record attendance (requires admin role)",
+        "operationId": "record_attendance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAttendance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Attendance recorded"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/attendance/employee/{employee_id}": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Get attendance by employee",
+        "operationId": "get_attendance_by_employee",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attendance records"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/employees": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Get all employees",
+        "operationId": "get_employees",
+        "responses": {
+          "200": {
+            "description": "List of employees"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Create employee (requires admin role)",
+        "operationId": "create_employee",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEmployee"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Employee created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/employees/{id}": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Get employee by ID",
+        "operationId": "get_employee",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Employee found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/employees/{id}/status": {
+      "put": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Update employee status (requires admin role)",
+        "operationId": "update_employee_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEmployeeStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/employees/{id}/terminate": {
+      "post": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Terminate employee (requires admin role)",
+        "operationId": "terminate_employee",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Employee terminated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/leave-requests": {
+      "post": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Create leave request",
+        "operationId": "create_leave_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLeaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Leave request created"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/leave-requests/employee/{employee_id}": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Get leave requests by employee",
+        "operationId": "get_leave_requests_by_employee",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leave requests"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/leave-requests/{id}/approve": {
+      "post": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Approve leave request (requires admin role)",
+        "operationId": "approve_leave_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Leave request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leave request approved"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/leave-requests/{id}/reject": {
+      "post": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Reject leave request (requires admin role)",
+        "operationId": "reject_leave_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Leave request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leave request rejected"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/leave-types": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Get leave types",
+        "operationId": "get_leave_types",
+        "responses": {
+          "200": {
+            "description": "List of leave types"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/payroll/calculate": {
+      "post": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Calculate payroll (requires admin role)",
+        "operationId": "calculate_payroll",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalculatePayrollRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Payroll calculated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/payroll/employee/{employee_id}": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Get payroll by employee",
+        "operationId": "get_payroll_by_employee",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payroll records"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/payroll/{id}/paid": {
+      "post": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Mark payroll as paid (requires admin role)",
+        "operationId": "mark_payroll_paid",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Payroll ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payroll marked as paid"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/invoices": {
+      "get": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Get all invoices",
+        "operationId": "get_invoices",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of invoices"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Create invoice (requires admin role)",
+        "operationId": "create_invoice",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Invoice created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/invoices/outstanding": {
+      "get": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Get outstanding invoices",
+        "operationId": "get_outstanding_invoices",
+        "responses": {
+          "200": {
+            "description": "Outstanding invoices"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/invoices/overdue": {
+      "get": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Get overdue invoices",
+        "operationId": "get_overdue_invoices",
+        "responses": {
+          "200": {
+            "description": "Overdue invoices"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/invoices/payments": {
+      "post": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Add payment to invoice (requires admin role)",
+        "operationId": "create_payment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/crate.domain.invoice.model.CreatePayment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Payment created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/invoices/status/{status}": {
+      "get": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Get invoices by status",
+        "operationId": "get_invoices_by_status",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "path",
+            "description": "Invoice status",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/InvoiceStatus"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of invoices by status"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/invoices/{id}": {
+      "get": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Get invoice by ID",
+        "operationId": "get_invoice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Delete invoice (requires admin role)",
+        "operationId": "delete_invoice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/invoices/{id}/payments": {
+      "get": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Get payments by invoice",
+        "operationId": "get_payments_by_invoice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payments for invoice"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/invoices/{id}/status": {
+      "put": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Update invoice status (requires admin role)",
+        "operationId": "update_invoice_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/boms": {
+      "post": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Create BOM (requires admin role)",
+        "operationId": "create_bom",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBillOfMaterials"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "BOM created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/boms/lines": {
+      "post": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Add BOM line (requires admin role)",
+        "operationId": "add_bom_line",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBillOfMaterialsLine"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "BOM line added"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/boms/product/{product_id}": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get BOMs by product",
+        "operationId": "get_boms_by_product",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BOMs for product"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/boms/{bom_id}/lines": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get BOM lines",
+        "operationId": "get_bom_lines",
+        "parameters": [
+          {
+            "name": "bom_id",
+            "in": "path",
+            "description": "BOM ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BOM lines"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/boms/{id}": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get BOM by ID",
+        "operationId": "get_bom",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "BOM ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BOM found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/inspections": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get all inspections for tenant",
+        "operationId": "get_inspections",
+        "responses": {
+          "200": {
+            "description": "List of inspections"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Create inspection (requires admin role)",
+        "operationId": "create_inspection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInspection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Inspection created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/inspections/{id}": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get inspection by ID",
+        "operationId": "get_inspection",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Inspection ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Inspection found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Update inspection (requires admin role)",
+        "operationId": "update_inspection",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Inspection ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInspection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Inspection updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Delete inspection (requires admin role)",
+        "operationId": "delete_inspection",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Inspection ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Inspection deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/material-requirements/{product_id}": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Calculate material requirements",
+        "operationId": "calculate_material_requirements",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "quantity",
+            "in": "query",
+            "description": "Quantity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Material requirements"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/ncrs": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get all NCRs for tenant",
+        "operationId": "get_ncrs",
+        "responses": {
+          "200": {
+            "description": "List of NCRs"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Create NCR (requires admin role)",
+        "operationId": "create_ncr",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNonConformanceReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "NCR created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/ncrs/{id}": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get NCR by ID",
+        "operationId": "get_ncr",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "NCR ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "NCR found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Update NCR (requires admin role)",
+        "operationId": "update_ncr",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "NCR ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNonConformanceReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "NCR updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Delete NCR (requires admin role)",
+        "operationId": "delete_ncr",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "NCR ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "NCR deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/routings": {
+      "post": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Create routing (requires admin role)",
+        "operationId": "create_routing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRouting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Routing created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/routings/operations": {
+      "post": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Add routing operation (requires admin role)",
+        "operationId": "add_routing_operation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateRoutingOperation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Routing operation added"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/routings/product/{product_id}": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get routings by product",
+        "operationId": "get_routings_by_product",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Routings for product"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/routings/{id}": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get routing by ID",
+        "operationId": "get_routing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Routing ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Routing found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/work-orders": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get all work orders",
+        "operationId": "get_work_orders",
+        "responses": {
+          "200": {
+            "description": "List of work orders"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Create work order (requires admin role)",
+        "operationId": "create_work_order",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkOrder"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Work order created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/work-orders/materials": {
+      "post": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Add work order material (requires admin role)",
+        "operationId": "add_work_order_material",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkOrderMaterial"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Material added"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/work-orders/operations": {
+      "post": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Add work order operation (requires admin role)",
+        "operationId": "add_work_order_operation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkOrderOperation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Operation added"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/work-orders/{id}": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get work order by ID",
+        "operationId": "get_work_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Work order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Work order found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/work-orders/{id}/status": {
+      "put": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Update work order status (requires admin role)",
+        "operationId": "update_work_order_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Work order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkOrderStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/work-orders/{work_order_id}/materials": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get work order materials",
+        "operationId": "get_work_order_materials",
+        "parameters": [
+          {
+            "name": "work_order_id",
+            "in": "path",
+            "description": "Work order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Materials for work order"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/work-orders/{work_order_id}/operations": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Get work order operations",
+        "operationId": "get_work_order_operations",
+        "parameters": [
+          {
+            "name": "work_order_id",
+            "in": "path",
+            "description": "Work order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operations for work order"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get all products (paginated)",
+        "operationId": "get_products",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of products"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/products/{product_id}/variants": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get all variants for a product endpoint (requires authentication)",
+        "operationId": "get_variants_by_product",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product variants found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductVariantResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Create product variant endpoint (requires admin role)",
+        "operationId": "create_variant",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductVariant"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Product variant created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductVariantResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Get all projects",
+        "operationId": "get_projects",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of projects"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Create project (requires admin role)",
+        "operationId": "create_project",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Project created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/costs": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Create project cost (requires admin role)",
+        "operationId": "create_project_cost",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/crate.domain.project.model.CreateProjectCost"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Project cost created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/wbs": {
+      "post": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Create WBS item (requires admin role)",
+        "operationId": "create_wbs_item",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWbsItem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "WBS item created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/wbs/{id}/progress": {
+      "put": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Update WBS progress (requires admin role)",
+        "operationId": "update_wbs_progress",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "WBS item ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWbsProgressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Progress updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{id}": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Get project by ID",
+        "operationId": "get_project",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{id}/status": {
+      "put": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Update project status (requires admin role)",
+        "operationId": "update_project_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProjectStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/costs": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Get project costs",
+        "operationId": "get_project_costs",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project costs"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/profitability": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Get project profitability",
+        "operationId": "get_profitability",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "revenue",
+            "in": "query",
+            "description": "Revenue amount",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project profitability"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/wbs": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Get WBS items by project",
+        "operationId": "get_wbs_by_project",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "WBS items for project"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-requests": {
+      "get": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "Get all purchase requests for tenant endpoint (requires authentication)",
+        "operationId": "get_requests",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (default: 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of purchase requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRequestListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "Create purchase request endpoint (requires authentication)",
+        "operationId": "create_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePurchaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Purchase request created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRequestResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-requests/{id}": {
+      "get": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "Get purchase request by ID endpoint (requires authentication)",
+        "operationId": "get_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase request found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRequestResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Purchase request not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "Update purchase request endpoint (requires authentication)",
+        "operationId": "update_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePurchaseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Purchase request updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRequest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Purchase request not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "Delete purchase request endpoint (requires authentication)",
+        "operationId": "delete_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase request deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Purchase request not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-requests/{id}/approve": {
+      "post": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "Approve purchase request endpoint (requires admin role)",
+        "operationId": "approve_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase request approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Not authorized - admin role required"
+          },
+          "404": {
+            "description": "Purchase request not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-requests/{id}/reject": {
+      "post": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "Reject purchase request endpoint (requires admin role)",
+        "operationId": "reject_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase request rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Not authorized - admin role required"
+          },
+          "404": {
+            "description": "Purchase request not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-requests/{id}/submit": {
+      "post": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "Submit purchase request for approval endpoint (requires authentication)",
+        "operationId": "submit_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase request submitted for approval",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRequest"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Purchase request not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/orders": {
+      "get": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Get all sales orders",
+        "operationId": "get_sales_orders",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of sales orders"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Create sales order (requires admin role)",
+        "operationId": "create_sales_order",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSalesOrder"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Sales order created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/orders/status/{status}": {
+      "get": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Get sales orders by status",
+        "operationId": "get_sales_orders_by_status",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "path",
+            "description": "Order status",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/SalesOrderStatus"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of sales orders by status"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{id}": {
+      "get": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Get sales order by ID",
+        "operationId": "get_sales_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Sales order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sales order found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Delete sales order (requires admin role)",
+        "operationId": "delete_sales_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Sales order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{id}/status": {
+      "put": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Update sales order status (requires admin role)",
+        "operationId": "update_sales_order_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Sales order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/quotations": {
+      "get": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Get all quotations",
+        "operationId": "get_quotations",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of quotations"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Create quotation (requires admin role)",
+        "operationId": "create_quotation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateQuotation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Quotation created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/quotations/status/{status}": {
+      "get": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Get quotations by status",
+        "operationId": "get_quotations_by_status",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "path",
+            "description": "Quotation status",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/QuotationStatus"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of quotations by status"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/quotations/{id}": {
+      "get": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Get quotation by ID",
+        "operationId": "get_quotation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Quotation ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quotation found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Delete quotation (requires admin role)",
+        "operationId": "delete_quotation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Quotation ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quotation deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/quotations/{id}/convert": {
+      "post": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Convert quotation to sales order (requires admin role)",
+        "operationId": "convert_quotation_to_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Quotation ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quotation converted to order"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/quotations/{id}/status": {
+      "put": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Update quotation status (requires admin role)",
+        "operationId": "update_quotation_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Quotation ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateQuotationStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/levels/product/{product_id}": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Get stock levels by product (requires authentication)",
+        "operationId": "get_stock_by_product",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stock levels for product"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/levels/warehouse/{warehouse_id}": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Get stock levels by warehouse (requires authentication)",
+        "operationId": "get_stock_by_warehouse",
+        "parameters": [
+          {
+            "name": "warehouse_id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stock levels for warehouse"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/movements": {
+      "post": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Create stock movement (requires admin role)",
+        "operationId": "create_stock_movement",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStockMovement"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Stock movement created"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/movements/product/{product_id}": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Get stock movements by product (requires authentication)",
+        "operationId": "get_stock_movements_by_product",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stock movements for product"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/movements/warehouse/{warehouse_id}": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Get stock movements by warehouse (requires authentication)",
+        "operationId": "get_stock_movements_by_warehouse",
+        "parameters": [
+          {
+            "name": "warehouse_id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stock movements for warehouse"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/summary/{product_id}": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Get stock summary (requires authentication)",
+        "operationId": "get_stock_summary",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stock summary"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/warehouses": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Get all warehouses (requires authentication)",
+        "operationId": "get_warehouses",
+        "responses": {
+          "200": {
+            "description": "List of warehouses"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Create warehouse (requires admin role)",
+        "operationId": "create_warehouse",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWarehouse"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Warehouse created"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/warehouses/{id}": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Get warehouse by ID (requires authentication)",
+        "operationId": "get_warehouse",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Warehouse found"
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Update warehouse (requires admin role)",
+        "operationId": "update_warehouse",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWarehouseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Warehouse updated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Delete warehouse (requires admin role)",
+        "operationId": "delete_warehouse",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Warehouse deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tenant-configs": {
+      "get": {
+        "tags": [
+          "Tenant Config"
+        ],
+        "summary": "Get all tenant configs for current tenant",
+        "operationId": "get_tenant_configs",
+        "responses": {
+          "200": {
+            "description": "List of tenant configs"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Tenant Config"
+        ],
+        "summary": "Create tenant config (requires admin role)",
+        "operationId": "create_tenant_config",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTenantConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Tenant config created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tenant-configs/{id_or_key}": {
+      "get": {
+        "tags": [
+          "Tenant Config"
+        ],
+        "summary": "Get tenant config by key or ID",
+        "operationId": "get_tenant_config",
+        "parameters": [
+          {
+            "name": "id_or_key",
+            "in": "path",
+            "description": "Config key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Config found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Tenant Config"
+        ],
+        "summary": "Update tenant config (requires admin role)",
+        "operationId": "update_tenant_config",
+        "parameters": [
+          {
+            "name": "id_or_key",
+            "in": "path",
+            "description": "Config ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTenantConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Config updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Tenant Config"
+        ],
+        "summary": "Delete tenant config (requires admin role)",
+        "operationId": "delete_tenant_config",
+        "parameters": [
+          {
+            "name": "id_or_key",
+            "in": "path",
+            "description": "Config ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Config deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants": {
+      "get": {
+        "tags": [
+          "Tenant"
+        ],
+        "summary": "Get all tenants (requires authentication)",
+        "operationId": "get_tenants",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of tenants"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Tenant"
+        ],
+        "summary": "Create tenant (requires admin role)",
+        "operationId": "create_tenant",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTenant"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Tenant created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{id}": {
+      "get": {
+        "tags": [
+          "Tenant"
+        ],
+        "summary": "Get tenant by ID (requires authentication)",
+        "operationId": "get_tenant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenant found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Tenant"
+        ],
+        "summary": "Update tenant (requires admin role)",
+        "operationId": "update_tenant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTenant"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tenant updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Tenant"
+        ],
+        "summary": "Delete tenant (requires admin role)",
+        "operationId": "delete_tenant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenant deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get all users endpoint (requires authentication)",
+        "operationId": "get_users",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of users"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Create user endpoint (requires admin role)",
+        "operationId": "create_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "User created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "409": {
+            "description": "User already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{id}": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Get user by ID endpoint (requires authentication)",
+        "operationId": "get_user",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Update user endpoint (requires authentication, self or admin for role changes)",
+        "operationId": "update_user",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "User updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - can only update own profile or admin role required for role changes"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Delete user endpoint (requires admin role)",
+        "operationId": "delete_user",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/variants/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get product variant by ID endpoint (requires authentication)",
+        "operationId": "get_variant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Variant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product variant found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductVariantResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Variant not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Update product variant endpoint (requires admin role)",
+        "operationId": "update_variant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Variant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductVariant"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Product variant updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductVariantResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Variant not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Delete product variant endpoint (requires admin role)",
+        "operationId": "delete_variant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Variant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product variant deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Variant not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateFeatureFlag": {
+        "type": "object",
+        "description": "Create feature flag request",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Human-readable description (optional, max 500 characters)",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "description": "Feature flag name (required, 1-100 characters, alphanumeric with underscores/hyphens)"
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeatureFlagStatus"
+              }
+            ],
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Optional tenant ID for tenant-specific flags",
+            "nullable": true
+          }
+        }
+      },
+      "CreateUser": {
+        "type": "object",
+        "description": "Data for creating a new user",
+        "required": [
+          "username",
+          "email",
+          "full_name",
+          "password",
+          "tenant_id"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "role": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ],
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "Error response structure for JSON API responses",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "FeatureFlagResponse": {
+        "type": "object",
+        "description": "Feature flag response for API",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/chrono.NaiveDateTime"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FeatureFlagStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/chrono.NaiveDateTime"
+          }
+        }
+      },
+      "FeatureFlagStatus": {
+        "type": "string",
+        "description": "Feature flag status",
+        "enum": [
+          "enabled",
+          "disabled"
+        ]
+      },
+      "FeatureStatusResponse": {
+        "type": "object",
+        "description": "Response for feature status check",
+        "required": [
+          "name",
+          "enabled",
+          "tenant_id"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the feature is enabled"
+          },
+          "name": {
+            "type": "string",
+            "description": "Feature flag name"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Tenant ID context"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "description": "Login request",
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "description": "Login response",
+        "required": [
+          "user",
+          "tokens"
+        ],
+        "properties": {
+          "tokens": {
+            "$ref": "#/components/schemas/TokenPair"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserResponse"
+          }
+        }
+      },
+      "MessageResponse": {
+        "type": "object",
+        "description": "Simple localized success message payload.",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "PaginationParams": {
+        "type": "object",
+        "description": "Pagination query parameters",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Page number (1-based, default: 1)",
+            "minimum": 0
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "minimum": 0
+          }
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "description": "Token refresh request",
+        "required": [
+          "refresh_token"
+        ],
+        "properties": {
+          "refresh_token": {
+            "type": "string"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "description": "Register request",
+        "required": [
+          "username",
+          "email",
+          "full_name",
+          "password",
+          "tenant_id"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "role": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ],
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Tenant ID for the new user (required for registration)\nSECURITY: Must be explicitly provided - no default tenant to prevent\naccidental exposure of system tenant (id=1)"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateFeatureFlag": {
+        "type": "object",
+        "description": "Update feature flag request",
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "Human-readable description (optional, max 500 characters)",
+            "nullable": true
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/FeatureFlagStatus"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "UpdateUser": {
+        "type": "object",
+        "description": "Data for updating an existing user",
+        "properties": {
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "full_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "role": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Role"
+              }
+            ],
+            "nullable": true
+          },
+          "username": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "description": "User response (without sensitive data)",
+        "required": [
+          "id",
+          "username",
+          "email",
+          "full_name",
+          "tenant_id",
+          "role",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "email": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearer_auth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearer_auth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Auth",
+      "description": "Authentication endpoints (login, register, token refresh)"
+    },
+    {
+      "name": "Users",
+      "description": "User management endpoints (CRUD operations)"
+    },
+    {
+      "name": "Tenant",
+      "description": "Tenant management and configuration"
+    },
+    {
+      "name": "Cari",
+      "description": "Customer / Vendor accounts"
+    },
+    {
+      "name": "Stock",
+      "description": "Warehouses, stock movements and inventory"
+    },
+    {
+      "name": "Invoice",
+      "description": "Invoices and payments"
+    },
+    {
+      "name": "Sales",
+      "description": "Sales orders and quotations"
+    },
+    {
+      "name": "Purchase Requests",
+      "description": "Purchase requests and approval workflow"
+    },
+    {
+      "name": "HR",
+      "description": "Employees, attendance, leave and payroll"
+    },
+    {
+      "name": "Accounting",
+      "description": "Chart of accounts and journal entries"
+    },
+    {
+      "name": "Assets",
+      "description": "Fixed assets, depreciation and maintenance"
+    },
+    {
+      "name": "Project",
+      "description": "Projects, WBS and costs"
+    },
+    {
+      "name": "Manufacturing",
+      "description": "Work orders, BOM, routing and quality control"
+    },
+    {
+      "name": "CRM",
+      "description": "Leads, opportunities, campaigns and tickets"
+    },
+    {
+      "name": "Products",
+      "description": "Product catalog, categories and variants"
+    },
+    {
+      "name": "Feature Flags",
+      "description": "Feature flag management endpoints"
+    },
+    {
+      "name": "Audit",
+      "description": "Audit log retrieval"
+    }
+  ]
+}

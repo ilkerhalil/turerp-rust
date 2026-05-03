@@ -3,11 +3,13 @@
 use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
+use crate::common::MessageResponse;
 use crate::domain::sales::model::{
     CreateQuotation, CreateSalesOrder, QuotationStatus, SalesOrderStatus,
 };
 use crate::domain::sales::service::SalesService;
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
 
 // --- Sales Orders ---
@@ -23,11 +25,16 @@ pub async fn create_sales_order(
     admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     payload: web::Json<CreateSalesOrder>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let order = sales_service.create_sales_order(create).await?;
-    Ok(HttpResponse::Created().json(order))
+    match sales_service.create_sales_order(create).await {
+        Ok(order) => Ok(HttpResponse::Created().json(order)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all sales orders
@@ -41,14 +48,21 @@ pub async fn get_sales_orders(
     auth_user: AuthUser,
     sales_service: web::Data<SalesService>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    pagination
-        .validate()
-        .map_err(crate::error::ApiError::Validation)?;
-    let result = sales_service
+    let i18n = resolve(&i18n);
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
+    match sales_service
         .get_orders_by_tenant_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get sales order by ID
@@ -62,9 +76,14 @@ pub async fn get_sales_order(
     _auth_user: AuthUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let order = sales_service.get_sales_order(*path).await?;
-    Ok(HttpResponse::Ok().json(order))
+    let i18n = resolve(&i18n);
+    match sales_service.get_sales_order(*path).await {
+        Ok(order) => Ok(HttpResponse::Ok().json(order)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get sales orders by status
@@ -79,19 +98,26 @@ pub async fn get_sales_orders_by_status(
     sales_service: web::Data<SalesService>,
     path: web::Path<SalesOrderStatus>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    pagination
-        .validate()
-        .map_err(crate::error::ApiError::Validation)?;
-    let result = sales_service
+    let i18n = resolve(&i18n);
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
+    match sales_service
         .get_orders_by_status_paginated(
             auth_user.0.tenant_id,
             path.into_inner(),
             pagination.page,
             pagination.per_page,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update sales order status (requires admin role)
@@ -107,27 +133,41 @@ pub async fn update_sales_order_status(
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateOrderStatusRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let order = sales_service
+    let i18n = resolve(&i18n);
+    match sales_service
         .update_order_status(*path, payload.into_inner().status)
-        .await?;
-    Ok(HttpResponse::Ok().json(order))
+        .await
+    {
+        Ok(order) => Ok(HttpResponse::Ok().json(order)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Delete sales order (requires admin role)
 #[utoipa::path(
     delete, path = "/api/v1/sales/orders/{id}", tag = "Sales",
     params(("id" = i64, Path, description = "Sales order ID")),
-    responses((status = 204, description = "Order deleted"), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "Order deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn delete_sales_order(
     _admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    sales_service.delete_order(*path).await?;
-    Ok(HttpResponse::NoContent().finish())
+    let i18n = resolve(&i18n);
+    match sales_service.delete_order(*path).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "sales.order.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 // --- Quotations ---
@@ -143,11 +183,16 @@ pub async fn create_quotation(
     admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     payload: web::Json<CreateQuotation>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let quotation = sales_service.create_quotation(create).await?;
-    Ok(HttpResponse::Created().json(quotation))
+    match sales_service.create_quotation(create).await {
+        Ok(quotation) => Ok(HttpResponse::Created().json(quotation)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all quotations
@@ -161,18 +206,25 @@ pub async fn get_quotations(
     auth_user: AuthUser,
     sales_service: web::Data<SalesService>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    pagination
-        .validate()
-        .map_err(crate::error::ApiError::Validation)?;
-    let result = sales_service
+    let i18n = resolve(&i18n);
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
+    match sales_service
         .get_quotations_by_tenant_paginated(
             auth_user.0.tenant_id,
             pagination.page,
             pagination.per_page,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get quotation by ID
@@ -186,9 +238,14 @@ pub async fn get_quotation(
     _auth_user: AuthUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let quotation = sales_service.get_quotation(*path).await?;
-    Ok(HttpResponse::Ok().json(quotation))
+    let i18n = resolve(&i18n);
+    match sales_service.get_quotation(*path).await {
+        Ok(quotation) => Ok(HttpResponse::Ok().json(quotation)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get quotations by status
@@ -203,19 +260,26 @@ pub async fn get_quotations_by_status(
     sales_service: web::Data<SalesService>,
     path: web::Path<QuotationStatus>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    pagination
-        .validate()
-        .map_err(crate::error::ApiError::Validation)?;
-    let result = sales_service
+    let i18n = resolve(&i18n);
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
+    match sales_service
         .get_quotations_by_status_paginated(
             auth_user.0.tenant_id,
             path.into_inner(),
             pagination.page,
             pagination.per_page,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update quotation status (requires admin role)
@@ -231,11 +295,17 @@ pub async fn update_quotation_status(
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateQuotationStatusRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let quotation = sales_service
+    let i18n = resolve(&i18n);
+    match sales_service
         .update_quotation_status(*path, payload.into_inner().status)
-        .await?;
-    Ok(HttpResponse::Ok().json(quotation))
+        .await
+    {
+        Ok(quotation) => Ok(HttpResponse::Ok().json(quotation)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Convert quotation to sales order (requires admin role)
@@ -249,25 +319,38 @@ pub async fn convert_quotation_to_order(
     _admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let order = sales_service.convert_quotation_to_order(*path).await?;
-    Ok(HttpResponse::Ok().json(order))
+    let i18n = resolve(&i18n);
+    match sales_service.convert_quotation_to_order(*path).await {
+        Ok(order) => Ok(HttpResponse::Ok().json(order)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Delete quotation (requires admin role)
 #[utoipa::path(
     delete, path = "/api/v1/sales/quotations/{id}", tag = "Sales",
     params(("id" = i64, Path, description = "Quotation ID")),
-    responses((status = 204, description = "Quotation deleted"), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "Quotation deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn delete_quotation(
     _admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    sales_service.delete_quotation(*path).await?;
-    Ok(HttpResponse::NoContent().finish())
+    let i18n = resolve(&i18n);
+    match sales_service.delete_quotation(*path).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "sales.quotation.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]

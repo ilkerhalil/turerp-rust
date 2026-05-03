@@ -1,12 +1,20 @@
 //! Users API endpoints (v1)
 
 use actix_web::{web, HttpResponse};
+use serde::Serialize;
 
 use crate::common::pagination::PaginationParams;
 use crate::domain::user::model::{CreateUser, UpdateUser};
 use crate::domain::user::service::UserService;
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
+
+/// Simple localized success message payload.
+#[derive(Serialize)]
+pub struct MessageResponse {
+    pub message: String,
+}
 
 /// Create user endpoint (requires admin role)
 #[utoipa::path(
@@ -29,10 +37,15 @@ pub async fn create_user(
     _admin_user: AdminUser,
     user_service: web::Data<UserService>,
     payload: web::Json<CreateUser>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let create = payload.into_inner();
-    let user = user_service.create_user(create).await?;
-    Ok(HttpResponse::Created().json(user))
+    match user_service.create_user(create).await {
+        Ok(user) => Ok(HttpResponse::Created().json(user)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get user by ID endpoint (requires authentication)
@@ -56,10 +69,15 @@ pub async fn get_user(
     auth_user: AuthUser,
     user_service: web::Data<UserService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let tenant_id = auth_user.0.tenant_id;
-    let user = user_service.get_user(*path, tenant_id).await?;
-    Ok(HttpResponse::Ok().json(user))
+    match user_service.get_user(*path, tenant_id).await {
+        Ok(user) => Ok(HttpResponse::Ok().json(user)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all users endpoint (requires authentication)
@@ -80,15 +98,22 @@ pub async fn get_users(
     auth_user: AuthUser,
     user_service: web::Data<UserService>,
     pagination: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    pagination
-        .validate()
-        .map_err(crate::error::ApiError::Validation)?;
+    let i18n = resolve(&i18n);
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
     let tenant_id = auth_user.0.tenant_id;
-    let result = user_service
+    match user_service
         .get_all_users_paginated(tenant_id, pagination.page, pagination.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update user endpoint (requires authentication, self or admin for role changes)
@@ -115,7 +140,10 @@ pub async fn update_user(
     user_service: web::Data<UserService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateUser>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let tenant_id = auth_user.0.tenant_id;
     let user_id = auth_user
         .0
@@ -125,26 +153,24 @@ pub async fn update_user(
     let id = *path;
     let update = payload.into_inner();
 
-    // Check authorization: users can update their own profile, but only admins can change roles
     let is_self = user_id == id;
     let is_admin = auth_user.0.role == "admin";
     let is_role_change = update.role.is_some();
 
     if !is_self && !is_admin {
-        return Err(crate::error::ApiError::Forbidden(
-            "Can only update own profile".to_string(),
-        ));
+        let msg = i18n.t(locale.as_str(), "user.self_update_only");
+        return Ok(HttpResponse::Forbidden().json(crate::error::ErrorResponse { error: msg }));
     }
 
-    // Non-admins cannot change roles
     if is_role_change && !is_admin {
-        return Err(crate::error::ApiError::Forbidden(
-            "Only admins can change user roles".to_string(),
-        ));
+        let msg = i18n.t(locale.as_str(), "user.role_change_forbidden");
+        return Ok(HttpResponse::Forbidden().json(crate::error::ErrorResponse { error: msg }));
     }
 
-    let user = user_service.update_user(id, tenant_id, update).await?;
-    Ok(HttpResponse::Ok().json(user))
+    match user_service.update_user(id, tenant_id, update).await {
+        Ok(user) => Ok(HttpResponse::Ok().json(user)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Delete user endpoint (requires admin role)
@@ -156,7 +182,7 @@ pub async fn update_user(
         ("id" = i64, Path, description = "User ID")
     ),
     responses(
-        (status = 204, description = "User deleted"),
+        (status = 200, description = "User deleted", body = MessageResponse),
         (status = 401, description = "Not authenticated - missing or invalid JWT token"),
         (status = 403, description = "Forbidden - admin role required"),
         (status = 404, description = "User not found")
@@ -166,14 +192,22 @@ pub async fn update_user(
     )
 )]
 pub async fn delete_user(
-    admin_user: AdminUser,
+    _admin_user: AdminUser,
     user_service: web::Data<UserService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let tenant_id = admin_user.0.tenant_id;
+    let i18n = resolve(&i18n);
+    let tenant_id = _admin_user.0.tenant_id;
     let id = *path;
-    user_service.delete_user(id, tenant_id).await?;
-    Ok(HttpResponse::NoContent().finish())
+    match user_service.delete_user(id, tenant_id).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "user.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Configure user routes for v1 API

@@ -49,6 +49,7 @@ Multi-tenant SaaS ERP system built with Rust, Actix-web, and SQLx.
 | `crm` | Leads, opportunities, campaigns, support tickets | ✅ Complete |
 | `hr` | Employee management, attendance, leave, payroll | ✅ Complete |
 | `feature` | Feature flags & tenant-specific toggles | ✅ Complete + API v1 |
+| `settings` | Per-tenant configuration management with typed values & categories | ✅ Complete + API v1 |
 | `audit` | Request audit trail, mpsc batch persistence | ✅ Complete + API v1 |
 
 ---
@@ -335,6 +336,7 @@ turerp/
 │   │       ├── feature_flags.rs
 │   │       ├── product_variants.rs
 │   │       ├── purchase_requests.rs
+│   │       ├── settings.rs          # Configuration management REST API
 │   │       └── audit.rs
 │   ├── middleware/
 │   │   ├── mod.rs              # Middleware exports
@@ -362,6 +364,7 @@ turerp/
 │   │   ├── manufacturing/    # Manufacturing domain
 │   │   ├── crm/              # CRM domain
 │   │   ├── audit/            # Audit log domain
+│   │   ├── settings/         # Configuration management domain
 │   │   └── feature/          # Feature flags domain
 │   ├── common/
 │   │   └── pagination.rs     # Pagination utilities (PaginatedResult, PaginationParams)

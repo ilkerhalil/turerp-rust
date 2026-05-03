@@ -15,6 +15,7 @@
 | **Tenant** | Subdomain-based multi-tenant architecture, tenant isolation |
 | **User** | User management, roles (Admin, User, Viewer) |
 | **Feature Flags** | Tenant-specific feature toggles, admin controls |
+| **Settings** | Per-tenant configuration management, typed values, categories |
 | **Cari** | Customer/Vendor accounts, credit limit management |
 | **Product** | Product catalog, categories, units, variants, barcode support |
 | **Stock** | Warehouse management, stock movements, valuation |
@@ -184,6 +185,8 @@ turerp-rust/
 │   │   │   ├── project/       # Project management
 │   │   │   ├── manufacturing/ # Manufacturing module
 │   │   │   ├── audit/         # Audit log module
+│   │   │   ├── feature/       # Feature flags module
+│   │   │   ├── settings/      # Configuration management module
 │   │   │   └── crm/           # CRM module
 │   │   ├── common/
 │   │   │   └── pagination.rs  # Pagination helpers
@@ -206,7 +209,8 @@ turerp-rust/
 │   │   ├── 002_add_tenant_db_name.sql
 │   │   ├── 003_business_modules.sql  # Business module tables
 │   │   ├── 004_composite_indexes.sql # Pagination indexes
-│   │   └── 005_audit_logs.sql        # Audit log table
+│   │   ├── 005_audit_logs.sql        # Audit log table
+│   │   └── 006_settings.sql          # Settings / Config management table
 │   ├── tests/                 # Integration tests
 │   └── Cargo.toml             # Dependencies
 ├── docs/                      # Project documentation
@@ -238,6 +242,17 @@ POST   /api/v1/users         - Create user (admin only) 🔒👑
 GET    /api/v1/users/{id}    - User details 🔒
 PUT    /api/v1/users/{id}    - Update user (self or admin) 🔒
 DELETE /api/v1/users/{id}    - Delete user (admin only) 🔒👑
+```
+
+### Settings (Protected - Admin only)
+```
+POST   /api/v1/settings           - Create setting 🔒👑
+GET    /api/v1/settings           - List settings (paginated, group filter) 🔒
+GET    /api/v1/settings/{key}     - Get setting by key 🔒
+PUT    /api/v1/settings/{id}     - Update setting 🔒👑
+POST   /api/v1/settings/bulk      - Bulk update settings 🔒👑
+DELETE /api/v1/settings/{id}     - Delete setting 🔒👑
+POST   /api/v1/settings/seed      - Seed default settings 🔒👑
 ```
 
 ### Audit Logs (Admin only)

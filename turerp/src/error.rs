@@ -4,6 +4,8 @@ use actix_web::{HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::i18n::I18n;
+
 /// API Error types
 #[derive(Error, Debug)]
 pub enum ApiError {
@@ -42,7 +44,7 @@ pub enum ApiError {
 }
 
 /// Error response structure for JSON API responses
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ErrorResponse {
     pub error: String,
 }
@@ -101,6 +103,62 @@ impl ResponseError for ApiError {
 
 /// Result type alias for API operations
 pub type ApiResult<T> = Result<T, ApiError>;
+
+impl ApiError {
+    /// Translate this error into the requested locale.
+    /// Falls back to English if the key is missing.
+    pub fn localized(&self, i18n: &I18n, locale: &str) -> String {
+        match self {
+            ApiError::InvalidCredentials => i18n.t(locale, "errors.invalid_credentials"),
+            ApiError::TokenExpired => i18n.t(locale, "errors.token_expired"),
+            ApiError::Database(_) => i18n.t(locale, "errors.database_error"),
+            ApiError::Internal(_) => i18n.t(locale, "errors.internal_error"),
+            ApiError::NotFound(msg) => {
+                let resource = msg.trim_end_matches(" not found");
+                i18n.t_args(locale, "errors.not_found", &[("resource", resource)])
+            }
+            ApiError::Unauthorized(msg) => {
+                i18n.t_args(locale, "errors.unauthorized", &[("detail", msg)])
+            }
+            ApiError::Forbidden(msg) => i18n.t_args(locale, "errors.forbidden", &[("detail", msg)]),
+            ApiError::BadRequest(msg) => {
+                i18n.t_args(locale, "errors.bad_request", &[("detail", msg)])
+            }
+            ApiError::Conflict(msg) => i18n.t_args(locale, "errors.conflict", &[("detail", msg)]),
+            ApiError::Validation(msg) => {
+                i18n.t_args(locale, "errors.validation_error", &[("detail", msg)])
+            }
+            ApiError::InvalidToken(msg) => {
+                i18n.t_args(locale, "errors.invalid_token", &[("detail", msg)])
+            }
+        }
+    }
+
+    /// Convert into a localized JSON error response.
+    pub fn to_localized_response(&self, i18n: &I18n, locale: &str) -> ErrorResponse {
+        ErrorResponse {
+            error: self.localized(i18n, locale),
+        }
+    }
+
+    /// Build a fully localized `HttpResponse` with the correct status code.
+    /// Use this in handlers when you want translated error bodies.
+    pub fn to_http_response(&self, i18n: &I18n, locale: &str) -> HttpResponse {
+        let body = self.to_localized_response(i18n, locale);
+        match self {
+            ApiError::NotFound(_) => HttpResponse::NotFound(),
+            ApiError::Unauthorized(_)
+            | ApiError::InvalidCredentials
+            | ApiError::TokenExpired
+            | ApiError::InvalidToken(_) => HttpResponse::Unauthorized(),
+            ApiError::Forbidden(_) => HttpResponse::Forbidden(),
+            ApiError::BadRequest(_) | ApiError::Validation(_) => HttpResponse::BadRequest(),
+            ApiError::Conflict(_) => HttpResponse::Conflict(),
+            ApiError::Database(_) | ApiError::Internal(_) => HttpResponse::InternalServerError(),
+        }
+        .json(body)
+    }
+}
 
 #[cfg(test)]
 mod tests {

@@ -92,6 +92,8 @@ fn build_full_test_app(
         .app_data(state.manufacturing_service.clone())
         .app_data(state.crm_service.clone())
         .app_data(state.tenant_service.clone())
+        .app_data(state.tenant_config_service.clone())
+        .app_data(state.i18n.clone())
         .app_data(state.assets_service.clone())
         .app_data(state.feature_service.clone())
         .app_data(state.product_service.clone())
@@ -601,7 +603,10 @@ async fn test_users_delete_authorized() {
         .to_request();
 
     let resp = test::call_service(&app, delete_req).await;
-    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert_eq!(resp.status(), StatusCode::OK);
+    let delete_body = to_bytes(resp.into_body()).await.unwrap();
+    let delete_json: serde_json::Value = serde_json::from_slice(&delete_body).unwrap();
+    assert!(delete_json["message"].as_str().unwrap().contains("deleted"));
 
     // Verify user is deleted
     let get_req = test::TestRequest::get()
@@ -696,7 +701,10 @@ async fn test_cari_crud() {
         .to_request();
 
     let resp = test::call_service(&app, delete_req).await;
-    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert_eq!(resp.status(), StatusCode::OK);
+    let del_body = to_bytes(resp.into_body()).await.unwrap();
+    let del_json: serde_json::Value = serde_json::from_slice(&del_body).unwrap();
+    assert!(del_json["message"].as_str().unwrap().contains("deleted"));
 
     // Verify deletion
     let get_req = test::TestRequest::get()
@@ -867,7 +875,10 @@ async fn test_stock_warehouse_crud() {
         .to_request();
 
     let resp = test::call_service(&app, delete_req).await;
-    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert_eq!(resp.status(), StatusCode::OK);
+    let del_body = to_bytes(resp.into_body()).await.unwrap();
+    let del_json: serde_json::Value = serde_json::from_slice(&del_body).unwrap();
+    assert!(del_json["message"].as_str().unwrap().contains("deleted"));
 }
 
 #[actix_web::test]
@@ -1004,7 +1015,10 @@ async fn test_invoice_crud() {
         .to_request();
 
     let resp = test::call_service(&app, delete_req).await;
-    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert_eq!(resp.status(), StatusCode::OK);
+    let del_body = to_bytes(resp.into_body()).await.unwrap();
+    let del_json: serde_json::Value = serde_json::from_slice(&del_body).unwrap();
+    assert!(del_json["message"].as_str().unwrap().contains("deleted"));
 }
 
 #[actix_web::test]
@@ -1120,7 +1134,10 @@ async fn test_sales_order_crud() {
         .to_request();
 
     let resp = test::call_service(&app, delete_req).await;
-    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert_eq!(resp.status(), StatusCode::OK);
+    let del_body = to_bytes(resp.into_body()).await.unwrap();
+    let del_json: serde_json::Value = serde_json::from_slice(&del_body).unwrap();
+    assert!(del_json["message"].as_str().unwrap().contains("deleted"));
 }
 
 #[actix_web::test]
@@ -1650,7 +1667,10 @@ async fn test_tenant_crud() {
         .to_request();
 
     let resp = test::call_service(&app, delete_req).await;
-    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    assert_eq!(resp.status(), StatusCode::OK);
+    let delete_body = to_bytes(resp.into_body()).await.unwrap();
+    let delete_json: serde_json::Value = serde_json::from_slice(&delete_body).unwrap();
+    assert!(delete_json["message"].as_str().unwrap().contains("deleted"));
 }
 
 // ============================================================================

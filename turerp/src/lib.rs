@@ -10,6 +10,7 @@ pub mod config;
 pub mod db;
 pub mod domain;
 pub mod error;
+pub mod i18n;
 pub mod middleware;
 pub mod utils;
 
@@ -22,6 +23,7 @@ pub use domain::{
     user::{CreateUser, Role, UpdateUser, User, UserResponse, UserService},
 };
 pub use error::{ApiError, ApiResult, ErrorResponse};
+pub use i18n::I18n;
 
 /// Application state
 pub mod app {
@@ -89,6 +91,7 @@ pub mod app {
     use crate::domain::tenant::service::{TenantConfigService, TenantService};
     use crate::domain::user::repository::BoxUserRepository;
     use crate::domain::user::service::UserService;
+    use crate::i18n::I18n;
     use crate::utils::jwt::JwtService;
 
     // In-memory repository imports
@@ -223,6 +226,8 @@ pub mod app {
         pub purchase_service: web::Data<PurchaseService>,
         pub audit_service: web::Data<AuditService>,
         pub qc_service: web::Data<crate::domain::manufacturing::QualityControlService>,
+        pub settings_service: web::Data<crate::domain::settings::SettingsService>,
+        pub i18n: web::Data<I18n>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
     }
@@ -393,6 +398,11 @@ pub mod app {
             let qc_service =
                 crate::domain::manufacturing::QualityControlService::new(inspection_repo, ncr_repo);
 
+            // Settings
+            let settings_repo = Arc::new(crate::domain::settings::InMemorySettingsRepository::new())
+                as crate::domain::settings::BoxSettingsRepository;
+            let settings_service = crate::domain::settings::SettingsService::new(settings_repo);
+
             (
                 auth_service,
                 user_service,
@@ -414,6 +424,7 @@ pub mod app {
                 purchase_service,
                 audit_service,
                 qc_service,
+                settings_service,
             )
         }};
     }
@@ -442,7 +453,10 @@ pub mod app {
             purchase_service,
             audit_service,
             qc_service,
+            settings_service,
         ) = create_in_memory_services!(config);
+
+        let i18n = I18n::init();
 
         AppState {
             auth_service: web::Data::new(auth_service),
@@ -465,6 +479,8 @@ pub mod app {
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
             qc_service: web::Data::new(qc_service),
+            settings_service: web::Data::new(settings_service),
+            i18n: web::Data::new(i18n),
         }
     }
 
@@ -587,6 +603,10 @@ pub mod app {
         let feature_repo = PostgresFeatureFlagRepository::new(pool.clone()).into_boxed();
         let feature_service = FeatureFlagService::new(feature_repo);
 
+        // Settings - PostgreSQL
+        let settings_repo = PostgresSettingsRepository::new(pool.clone()).into_boxed();
+        let settings_service = crate::domain::settings::SettingsService::new(settings_repo);
+
         // Product - PostgreSQL
         let product_repo = PostgresProductRepository::new(pool.clone()).into_boxed();
         let category_repo = PostgresCategoryRepository::new(pool.clone()).into_boxed();
@@ -616,6 +636,8 @@ pub mod app {
         let audit_repo = PostgresAuditLogRepository::new(pool.clone()).into_boxed();
         let audit_service = AuditService::new(audit_repo);
 
+        let i18n = I18n::init();
+
         AppState {
             auth_service: web::Data::new(auth_service),
             user_service: web::Data::new(user_service),
@@ -637,7 +659,9 @@ pub mod app {
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
             qc_service: web::Data::new(qc_service),
+            settings_service: web::Data::new(settings_service),
             db_pool: web::Data::new(pool),
+            i18n: web::Data::new(i18n),
         }
     }
 
@@ -671,6 +695,7 @@ pub mod app {
             purchase_service,
             audit_service,
             qc_service,
+            settings_service,
         ) = create_in_memory_services!(config);
 
         // For in-memory testing with postgres feature, create a mock pool
@@ -682,6 +707,8 @@ pub mod app {
                 .expect("Failed to create lazy pool")
         });
         let db_pool = web::Data::new(Arc::new(pool));
+
+        let i18n = I18n::init();
 
         AppState {
             auth_service: web::Data::new(auth_service),
@@ -704,7 +731,9 @@ pub mod app {
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
             qc_service: web::Data::new(qc_service),
+            settings_service: web::Data::new(settings_service),
             db_pool,
+            i18n: web::Data::new(i18n),
         }
     }
 }

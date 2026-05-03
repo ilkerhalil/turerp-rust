@@ -3,13 +3,15 @@
 use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
+use crate::common::MessageResponse;
 use crate::domain::manufacturing::model::{
     CreateBillOfMaterials, CreateBillOfMaterialsLine, CreateInspection, CreateNonConformanceReport,
     CreateRouting, CreateRoutingOperation, CreateWorkOrder, CreateWorkOrderMaterial,
     CreateWorkOrderOperation, UpdateInspection, UpdateNonConformanceReport, WorkOrderStatus,
 };
 use crate::domain::manufacturing::service::{ManufacturingService, QualityControlService};
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
 
 // --- Work Orders ---
@@ -25,11 +27,16 @@ pub async fn create_work_order(
     admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateWorkOrder>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let order = mfg_service.create_work_order(create).await?;
-    Ok(HttpResponse::Created().json(order))
+    match mfg_service.create_work_order(create).await {
+        Ok(order) => Ok(HttpResponse::Created().json(order)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all work orders
@@ -42,19 +49,26 @@ pub async fn get_work_orders(
     auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let pagination = query.into_inner();
-    pagination
-        .validate()
-        .map_err(crate::error::ApiError::Validation)?;
-    let result = mfg_service
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
+    match mfg_service
         .get_work_orders_by_tenant_paginated(
             auth_user.0.tenant_id,
             pagination.page,
             pagination.per_page,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get work order by ID
@@ -68,9 +82,14 @@ pub async fn get_work_order(
     _auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let order = mfg_service.get_work_order(*path).await?;
-    Ok(HttpResponse::Ok().json(order))
+    let i18n = resolve(&i18n);
+    match mfg_service.get_work_order(*path).await {
+        Ok(order) => Ok(HttpResponse::Ok().json(order)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update work order status (requires admin role)
@@ -86,11 +105,17 @@ pub async fn update_work_order_status(
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateWorkOrderStatusRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let order = mfg_service
+    let i18n = resolve(&i18n);
+    match mfg_service
         .update_work_order_status(*path, payload.into_inner().status)
-        .await?;
-    Ok(HttpResponse::Ok().json(order))
+        .await
+    {
+        Ok(order) => Ok(HttpResponse::Ok().json(order)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Add work order operation (requires admin role)
@@ -104,11 +129,17 @@ pub async fn add_work_order_operation(
     _admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateWorkOrderOperation>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let op = mfg_service
+    let i18n = resolve(&i18n);
+    match mfg_service
         .add_work_order_operation(payload.into_inner())
-        .await?;
-    Ok(HttpResponse::Created().json(op))
+        .await
+    {
+        Ok(op) => Ok(HttpResponse::Created().json(op)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get work order operations
@@ -122,9 +153,14 @@ pub async fn get_work_order_operations(
     _auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let ops = mfg_service.get_work_order_operations(*path).await?;
-    Ok(HttpResponse::Ok().json(ops))
+    let i18n = resolve(&i18n);
+    match mfg_service.get_work_order_operations(*path).await {
+        Ok(ops) => Ok(HttpResponse::Ok().json(ops)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Add work order material (requires admin role)
@@ -138,11 +174,17 @@ pub async fn add_work_order_material(
     _admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateWorkOrderMaterial>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let material = mfg_service
+    let i18n = resolve(&i18n);
+    match mfg_service
         .add_work_order_material(payload.into_inner())
-        .await?;
-    Ok(HttpResponse::Created().json(material))
+        .await
+    {
+        Ok(material) => Ok(HttpResponse::Created().json(material)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get work order materials
@@ -156,9 +198,14 @@ pub async fn get_work_order_materials(
     _auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let materials = mfg_service.get_work_order_materials(*path).await?;
-    Ok(HttpResponse::Ok().json(materials))
+    let i18n = resolve(&i18n);
+    match mfg_service.get_work_order_materials(*path).await {
+        Ok(materials) => Ok(HttpResponse::Ok().json(materials)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 // --- Bills of Materials ---
@@ -174,11 +221,16 @@ pub async fn create_bom(
     admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateBillOfMaterials>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let bom = mfg_service.create_bom(create).await?;
-    Ok(HttpResponse::Created().json(bom))
+    match mfg_service.create_bom(create).await {
+        Ok(bom) => Ok(HttpResponse::Created().json(bom)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get BOM by ID
@@ -192,9 +244,14 @@ pub async fn get_bom(
     _auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let bom = mfg_service.get_bom(*path).await?;
-    Ok(HttpResponse::Ok().json(bom))
+    let i18n = resolve(&i18n);
+    match mfg_service.get_bom(*path).await {
+        Ok(bom) => Ok(HttpResponse::Ok().json(bom)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get BOMs by product
@@ -208,9 +265,14 @@ pub async fn get_boms_by_product(
     _auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let boms = mfg_service.get_boms_by_product(*path).await?;
-    Ok(HttpResponse::Ok().json(boms))
+    let i18n = resolve(&i18n);
+    match mfg_service.get_boms_by_product(*path).await {
+        Ok(boms) => Ok(HttpResponse::Ok().json(boms)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Add BOM line (requires admin role)
@@ -224,9 +286,14 @@ pub async fn add_bom_line(
     _admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateBillOfMaterialsLine>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let line = mfg_service.add_bom_line(payload.into_inner()).await?;
-    Ok(HttpResponse::Created().json(line))
+    let i18n = resolve(&i18n);
+    match mfg_service.add_bom_line(payload.into_inner()).await {
+        Ok(line) => Ok(HttpResponse::Created().json(line)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get BOM lines
@@ -240,9 +307,14 @@ pub async fn get_bom_lines(
     _auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let lines = mfg_service.get_bom_lines(*path).await?;
-    Ok(HttpResponse::Ok().json(lines))
+    let i18n = resolve(&i18n);
+    match mfg_service.get_bom_lines(*path).await {
+        Ok(lines) => Ok(HttpResponse::Ok().json(lines)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 // --- Routings ---
@@ -258,11 +330,16 @@ pub async fn create_routing(
     admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateRouting>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let routing = mfg_service.create_routing(create).await?;
-    Ok(HttpResponse::Created().json(routing))
+    match mfg_service.create_routing(create).await {
+        Ok(routing) => Ok(HttpResponse::Created().json(routing)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get routing by ID
@@ -276,9 +353,14 @@ pub async fn get_routing(
     _auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let routing = mfg_service.get_routing(*path).await?;
-    Ok(HttpResponse::Ok().json(routing))
+    let i18n = resolve(&i18n);
+    match mfg_service.get_routing(*path).await {
+        Ok(routing) => Ok(HttpResponse::Ok().json(routing)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get routings by product
@@ -292,9 +374,14 @@ pub async fn get_routings_by_product(
     _auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let routings = mfg_service.get_routings_by_product(*path).await?;
-    Ok(HttpResponse::Ok().json(routings))
+    let i18n = resolve(&i18n);
+    match mfg_service.get_routings_by_product(*path).await {
+        Ok(routings) => Ok(HttpResponse::Ok().json(routings)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Add routing operation (requires admin role)
@@ -308,11 +395,17 @@ pub async fn add_routing_operation(
     _admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateRoutingOperation>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let op = mfg_service
+    let i18n = resolve(&i18n);
+    match mfg_service
         .add_routing_operation(payload.into_inner())
-        .await?;
-    Ok(HttpResponse::Created().json(op))
+        .await
+    {
+        Ok(op) => Ok(HttpResponse::Created().json(op)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Calculate material requirements
@@ -327,15 +420,21 @@ pub async fn calculate_material_requirements(
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
     query: web::Query<QuantityQuery>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let quantity: rust_decimal::Decimal = query
-        .quantity
-        .parse()
-        .map_err(|_| crate::error::ApiError::Validation("Invalid quantity".into()))?;
-    let requirements = mfg_service
+    let i18n = resolve(&i18n);
+    let quantity: rust_decimal::Decimal = query.quantity.parse().map_err(|_| {
+        let msg = i18n.t(locale.as_str(), "generic.validation_error");
+        ApiError::Validation(msg)
+    })?;
+    match mfg_service
         .calculate_material_requirements(*path, quantity)
-        .await?;
-    Ok(HttpResponse::Ok().json(requirements))
+        .await
+    {
+        Ok(requirements) => Ok(HttpResponse::Ok().json(requirements)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Create inspection (requires admin role)
@@ -349,10 +448,15 @@ pub async fn create_inspection(
     _admin_user: AdminUser,
     qc_service: web::Data<QualityControlService>,
     payload: web::Json<CreateInspection>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let create = payload.into_inner();
-    let inspection = qc_service.create_inspection(create).await?;
-    Ok(HttpResponse::Created().json(inspection))
+    match qc_service.create_inspection(create).await {
+        Ok(inspection) => Ok(HttpResponse::Created().json(inspection)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all inspections for tenant
@@ -364,11 +468,17 @@ pub async fn create_inspection(
 pub async fn get_inspections(
     auth_user: AuthUser,
     qc_service: web::Data<QualityControlService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let inspections = qc_service
+    let i18n = resolve(&i18n);
+    match qc_service
         .get_inspections_by_tenant(auth_user.0.tenant_id)
-        .await?;
-    Ok(HttpResponse::Ok().json(inspections))
+        .await
+    {
+        Ok(inspections) => Ok(HttpResponse::Ok().json(inspections)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get inspection by ID
@@ -382,9 +492,14 @@ pub async fn get_inspection(
     _auth_user: AuthUser,
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let inspection = qc_service.get_inspection(*path).await?;
-    Ok(HttpResponse::Ok().json(inspection))
+    let i18n = resolve(&i18n);
+    match qc_service.get_inspection(*path).await {
+        Ok(inspection) => Ok(HttpResponse::Ok().json(inspection)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update inspection (requires admin role)
@@ -400,27 +515,41 @@ pub async fn update_inspection(
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateInspection>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let inspection = qc_service
+    let i18n = resolve(&i18n);
+    match qc_service
         .update_inspection(*path, payload.into_inner())
-        .await?;
-    Ok(HttpResponse::Ok().json(inspection))
+        .await
+    {
+        Ok(inspection) => Ok(HttpResponse::Ok().json(inspection)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Delete inspection (requires admin role)
 #[utoipa::path(
     delete, path = "/api/v1/manufacturing/inspections/{id}", tag = "Manufacturing",
     params(("id" = i64, Path, description = "Inspection ID")),
-    responses((status = 204, description = "Inspection deleted"), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "Inspection deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn delete_inspection(
     _admin_user: AdminUser,
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    qc_service.delete_inspection(*path).await?;
-    Ok(HttpResponse::NoContent().finish())
+    let i18n = resolve(&i18n);
+    match qc_service.delete_inspection(*path).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "manufacturing.inspection.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 // --- NCR ---
@@ -436,10 +565,15 @@ pub async fn create_ncr(
     _admin_user: AdminUser,
     qc_service: web::Data<QualityControlService>,
     payload: web::Json<CreateNonConformanceReport>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let create = payload.into_inner();
-    let ncr = qc_service.create_ncr(create).await?;
-    Ok(HttpResponse::Created().json(ncr))
+    match qc_service.create_ncr(create).await {
+        Ok(ncr) => Ok(HttpResponse::Created().json(ncr)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all NCRs for tenant
@@ -451,9 +585,14 @@ pub async fn create_ncr(
 pub async fn get_ncrs(
     auth_user: AuthUser,
     qc_service: web::Data<QualityControlService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let ncrs = qc_service.get_ncrs_by_tenant(auth_user.0.tenant_id).await?;
-    Ok(HttpResponse::Ok().json(ncrs))
+    let i18n = resolve(&i18n);
+    match qc_service.get_ncrs_by_tenant(auth_user.0.tenant_id).await {
+        Ok(ncrs) => Ok(HttpResponse::Ok().json(ncrs)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get NCR by ID
@@ -467,9 +606,14 @@ pub async fn get_ncr(
     _auth_user: AuthUser,
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let ncr = qc_service.get_ncr(*path).await?;
-    Ok(HttpResponse::Ok().json(ncr))
+    let i18n = resolve(&i18n);
+    match qc_service.get_ncr(*path).await {
+        Ok(ncr) => Ok(HttpResponse::Ok().json(ncr)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update NCR (requires admin role)
@@ -485,25 +629,38 @@ pub async fn update_ncr(
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateNonConformanceReport>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let ncr = qc_service.update_ncr(*path, payload.into_inner()).await?;
-    Ok(HttpResponse::Ok().json(ncr))
+    let i18n = resolve(&i18n);
+    match qc_service.update_ncr(*path, payload.into_inner()).await {
+        Ok(ncr) => Ok(HttpResponse::Ok().json(ncr)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Delete NCR (requires admin role)
 #[utoipa::path(
     delete, path = "/api/v1/manufacturing/ncrs/{id}", tag = "Manufacturing",
     params(("id" = i64, Path, description = "NCR ID")),
-    responses((status = 204, description = "NCR deleted"), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "NCR deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn delete_ncr(
     _admin_user: AdminUser,
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    qc_service.delete_ncr(*path).await?;
-    Ok(HttpResponse::NoContent().finish())
+    let i18n = resolve(&i18n);
+    match qc_service.delete_ncr(*path).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "manufacturing.ncr.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]

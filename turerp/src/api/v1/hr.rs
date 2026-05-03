@@ -8,6 +8,7 @@ use crate::domain::hr::model::{
 };
 use crate::domain::hr::service::HrService;
 use crate::error::ApiResult;
+use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create employee (requires admin role)
@@ -21,11 +22,16 @@ pub async fn create_employee(
     admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     payload: web::Json<CreateEmployee>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    let employee = hr_service.create_employee(create).await?;
-    Ok(HttpResponse::Created().json(employee))
+    match hr_service.create_employee(create).await {
+        Ok(employee) => Ok(HttpResponse::Created().json(employee)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get all employees
@@ -38,11 +44,17 @@ pub async fn get_employees(
     auth_user: AuthUser,
     hr_service: web::Data<HrService>,
     query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let result = hr_service
+    let i18n = resolve(&i18n);
+    match hr_service
         .get_employees_paginated(auth_user.0.tenant_id, query.page, query.per_page)
-        .await?;
-    Ok(HttpResponse::Ok().json(result))
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get employee by ID
@@ -56,9 +68,14 @@ pub async fn get_employee(
     _auth_user: AuthUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let employee = hr_service.get_employee(*path).await?;
-    Ok(HttpResponse::Ok().json(employee))
+    let i18n = resolve(&i18n);
+    match hr_service.get_employee(*path).await {
+        Ok(employee) => Ok(HttpResponse::Ok().json(employee)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Update employee status (requires admin role)
@@ -74,11 +91,17 @@ pub async fn update_employee_status(
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateEmployeeStatusRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let employee = hr_service
+    let i18n = resolve(&i18n);
+    match hr_service
         .update_employee_status(*path, payload.into_inner().status)
-        .await?;
-    Ok(HttpResponse::Ok().json(employee))
+        .await
+    {
+        Ok(employee) => Ok(HttpResponse::Ok().json(employee)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Terminate employee (requires admin role)
@@ -92,9 +115,14 @@ pub async fn terminate_employee(
     _admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let employee = hr_service.terminate_employee(*path).await?;
-    Ok(HttpResponse::Ok().json(employee))
+    let i18n = resolve(&i18n);
+    match hr_service.terminate_employee(*path).await {
+        Ok(employee) => Ok(HttpResponse::Ok().json(employee)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Record attendance (requires admin role)
@@ -108,9 +136,14 @@ pub async fn record_attendance(
     _admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     payload: web::Json<CreateAttendance>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let attendance = hr_service.record_attendance(payload.into_inner()).await?;
-    Ok(HttpResponse::Created().json(attendance))
+    let i18n = resolve(&i18n);
+    match hr_service.record_attendance(payload.into_inner()).await {
+        Ok(attendance) => Ok(HttpResponse::Created().json(attendance)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get attendance by employee
@@ -124,9 +157,14 @@ pub async fn get_attendance_by_employee(
     _auth_user: AuthUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let attendance = hr_service.get_attendance_by_employee(*path).await?;
-    Ok(HttpResponse::Ok().json(attendance))
+    let i18n = resolve(&i18n);
+    match hr_service.get_attendance_by_employee(*path).await {
+        Ok(attendance) => Ok(HttpResponse::Ok().json(attendance)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Create leave request
@@ -140,11 +178,14 @@ pub async fn create_leave_request(
     _auth_user: AuthUser,
     hr_service: web::Data<HrService>,
     payload: web::Json<CreateLeaveRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let request = hr_service
-        .create_leave_request(payload.into_inner())
-        .await?;
-    Ok(HttpResponse::Created().json(request))
+    let i18n = resolve(&i18n);
+    match hr_service.create_leave_request(payload.into_inner()).await {
+        Ok(request) => Ok(HttpResponse::Created().json(request)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get leave requests by employee
@@ -158,16 +199,20 @@ pub async fn get_leave_requests_by_employee(
     _auth_user: AuthUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let requests = hr_service.get_leave_requests_by_employee(*path).await?;
-    Ok(HttpResponse::Ok().json(requests))
+    let i18n = resolve(&i18n);
+    match hr_service.get_leave_requests_by_employee(*path).await {
+        Ok(requests) => Ok(HttpResponse::Ok().json(requests)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Approve leave request (requires admin role)
 #[utoipa::path(
     post, path = "/api/v1/hr/leave-requests/{id}/approve", tag = "HR",
     params(("id" = i64, Path, description = "Leave request ID")),
-    request_body = ApproveRequest,
     responses((status = 200, description = "Leave request approved"), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
@@ -175,14 +220,19 @@ pub async fn approve_leave_request(
     admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let approver_id: i64 = admin_user
         .0
         .sub
         .parse()
         .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
-    let request = hr_service.approve_leave_request(*path, approver_id).await?;
-    Ok(HttpResponse::Ok().json(request))
+    match hr_service.approve_leave_request(*path, approver_id).await {
+        Ok(request) => Ok(HttpResponse::Ok().json(request)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Reject leave request (requires admin role)
@@ -196,14 +246,19 @@ pub async fn reject_leave_request(
     admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
     let approver_id: i64 = admin_user
         .0
         .sub
         .parse()
         .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
-    let request = hr_service.reject_leave_request(*path, approver_id).await?;
-    Ok(HttpResponse::Ok().json(request))
+    match hr_service.reject_leave_request(*path, approver_id).await {
+        Ok(request) => Ok(HttpResponse::Ok().json(request)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get leave types
@@ -215,9 +270,14 @@ pub async fn reject_leave_request(
 pub async fn get_leave_types(
     auth_user: AuthUser,
     hr_service: web::Data<HrService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let types = hr_service.get_leave_types(auth_user.0.tenant_id).await?;
-    Ok(HttpResponse::Ok().json(types))
+    let i18n = resolve(&i18n);
+    match hr_service.get_leave_types(auth_user.0.tenant_id).await {
+        Ok(types) => Ok(HttpResponse::Ok().json(types)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Calculate payroll (requires admin role)
@@ -231,15 +291,21 @@ pub async fn calculate_payroll(
     _admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     payload: web::Json<CalculatePayrollRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let payroll = hr_service
+    let i18n = resolve(&i18n);
+    match hr_service
         .calculate_payroll(
             payload.employee_id,
             payload.period_start,
             payload.period_end,
         )
-        .await?;
-    Ok(HttpResponse::Ok().json(payroll))
+        .await
+    {
+        Ok(payroll) => Ok(HttpResponse::Ok().json(payroll)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Get payroll by employee
@@ -253,9 +319,14 @@ pub async fn get_payroll_by_employee(
     _auth_user: AuthUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let payroll = hr_service.get_payroll_by_employee(*path).await?;
-    Ok(HttpResponse::Ok().json(payroll))
+    let i18n = resolve(&i18n);
+    match hr_service.get_payroll_by_employee(*path).await {
+        Ok(payroll) => Ok(HttpResponse::Ok().json(payroll)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Mark payroll as paid (requires admin role)
@@ -269,9 +340,14 @@ pub async fn mark_payroll_paid(
     _admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let payroll = hr_service.mark_payroll_paid(*path).await?;
-    Ok(HttpResponse::Ok().json(payroll))
+    let i18n = resolve(&i18n);
+    match hr_service.mark_payroll_paid(*path).await {
+        Ok(payroll) => Ok(HttpResponse::Ok().json(payroll)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
