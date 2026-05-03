@@ -51,7 +51,9 @@ fn build_full_test_app(
     impl actix_web::dev::ServiceFactory<
         actix_web::dev::ServiceRequest,
         Config = (),
-        Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+        Response = actix_web::dev::ServiceResponse<
+            actix_web::body::EitherBody<actix_web::body::BoxBody>,
+        >,
         Error = actix_web::Error,
         InitError = (),
     >,
@@ -98,26 +100,37 @@ macro_rules! test_app {
     };
 }
 
-/// Helper macro to register an admin user and return access token
+/// Helper macro to create an admin user directly and return access token
 macro_rules! sec_register_admin {
-    ($app:expr, $tenant_id:expr) => {{
-        let username = format!("secadmin_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
-        let req = test::TestRequest::post()
-            .uri("/api/auth/register")
-            .set_json(json!({
-                "username": username,
-                "email": format!("{}@test.com", username),
-                "full_name": "Security Admin",
-                "password": "Password123!",
-                "tenant_id": $tenant_id,
-                "role": "admin"
-            }))
-            .to_request();
-        let resp = test::call_service($app, req).await;
-        assert_eq!(resp.status(), StatusCode::CREATED, "Admin registration failed");
-        let body = to_bytes(resp.into_body()).await.unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        json["tokens"]["access_token"].as_str().unwrap().to_string()
+    ($state:expr, $tenant_id:expr) => {{
+        let username = format!(
+            "secadmin_{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        );
+        let user = $state
+            .user_service
+            .get_ref()
+            .create_user(turerp::CreateUser {
+                username: username.clone(),
+                email: format!("{}@test.com", username),
+                full_name: "Security Admin".to_string(),
+                password: "Password123!".to_string(),
+                tenant_id: $tenant_id,
+                role: Some(turerp::Role::Admin),
+            })
+            .await
+            .unwrap();
+        let tokens = $state
+            .jwt_service
+            .get_ref()
+            .generate_tokens(
+                user.id,
+                user.tenant_id,
+                user.username.clone(),
+                turerp::Role::Admin,
+            )
+            .unwrap();
+        tokens.access_token
     }};
 }
 
@@ -221,7 +234,7 @@ async fn test_sql_injection_in_cari_endpoints() {
     let state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&state)).await;
 
-    let token = sec_register_admin!(&app, 1);
+    let token = sec_register_admin!(&state, 1);
 
     // Try SQL injection in cari code field
     let malicious_codes = vec![
@@ -258,7 +271,7 @@ async fn test_sql_injection_in_cari_search() {
     let state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&state)).await;
 
-    let token = sec_register_admin!(&app, 1);
+    let token = sec_register_admin!(&state, 1);
 
     // Try SQL injection in search query parameter
     let malicious_queries = vec![
@@ -292,7 +305,7 @@ async fn test_sql_injection_in_stock_endpoints() {
     let state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&state)).await;
 
-    let token = sec_register_admin!(&app, 1);
+    let token = sec_register_admin!(&state, 1);
 
     // Try SQL injection in warehouse code field
     let req = test::TestRequest::post()
@@ -318,7 +331,7 @@ async fn test_sql_injection_in_accounting_endpoints() {
     let state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&state)).await;
 
-    let token = sec_register_admin!(&app, 1);
+    let token = sec_register_admin!(&state, 1);
 
     // Try SQL injection in account code
     let req = test::TestRequest::post()
@@ -346,7 +359,7 @@ async fn test_sql_injection_in_crm_endpoints() {
     let state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&state)).await;
 
-    let token = sec_register_admin!(&app, 1);
+    let token = sec_register_admin!(&state, 1);
 
     // Try SQL injection in lead name field
     let req = test::TestRequest::post()
@@ -588,7 +601,7 @@ async fn test_normal_user_cannot_update_cari() {
     let app = test::init_service(build_full_test_app(&state)).await;
 
     // Admin creates a cari
-    let admin_token = sec_register_admin!(&app, 1);
+    let admin_token = sec_register_admin!(&state, 1);
 
     let create_req = test::TestRequest::post()
         .uri("/api/v1/cari")
@@ -630,7 +643,7 @@ async fn test_normal_user_cannot_delete_cari() {
     let app = test::init_service(build_full_test_app(&state)).await;
 
     // Admin creates a cari
-    let admin_token = sec_register_admin!(&app, 1);
+    let admin_token = sec_register_admin!(&state, 1);
 
     let create_req = test::TestRequest::post()
         .uri("/api/v1/cari")
@@ -740,7 +753,7 @@ async fn test_tenant_isolation_cari() {
     let app = test::init_service(build_full_test_app(&state)).await;
 
     // Admin in tenant 1 creates cari
-    let token1 = sec_register_admin!(&app, 1);
+    let token1 = sec_register_admin!(&state, 1);
 
     let create_req = test::TestRequest::post()
         .uri("/api/v1/cari")
@@ -758,7 +771,7 @@ async fn test_tenant_isolation_cari() {
     assert_eq!(resp.status(), StatusCode::CREATED);
 
     // Admin in tenant 2 lists cari - should not see tenant 1's data
-    let token2 = sec_register_admin!(&app, 2);
+    let token2 = sec_register_admin!(&state, 2);
 
     let list_req = test::TestRequest::get()
         .uri("/api/v1/cari")
@@ -783,7 +796,7 @@ async fn test_tenant_isolation_employees() {
     let app = test::init_service(build_full_test_app(&state)).await;
 
     // Admin in tenant 1 creates employee
-    let token1 = sec_register_admin!(&app, 1);
+    let token1 = sec_register_admin!(&state, 1);
 
     let create_req = test::TestRequest::post()
         .uri("/api/v1/hr/employees")
@@ -802,7 +815,7 @@ async fn test_tenant_isolation_employees() {
     let _ = test::call_service(&app, create_req).await;
 
     // Admin in tenant 2 lists employees - should not see tenant 1's data
-    let token2 = sec_register_admin!(&app, 2);
+    let token2 = sec_register_admin!(&state, 2);
 
     let list_req = test::TestRequest::get()
         .uri("/api/v1/hr/employees")
@@ -827,7 +840,7 @@ async fn test_tenant_isolation_accounts() {
     let app = test::init_service(build_full_test_app(&state)).await;
 
     // Admin in tenant 1 creates account
-    let token1 = sec_register_admin!(&app, 1);
+    let token1 = sec_register_admin!(&state, 1);
 
     let create_req = test::TestRequest::post()
         .uri("/api/v1/accounting/accounts")
@@ -845,7 +858,7 @@ async fn test_tenant_isolation_accounts() {
     let _ = test::call_service(&app, create_req).await;
 
     // Admin in tenant 2 lists accounts - should not see tenant 1's data
-    let token2 = sec_register_admin!(&app, 2);
+    let token2 = sec_register_admin!(&state, 2);
 
     let list_req = test::TestRequest::get()
         .uri("/api/v1/accounting/accounts")
@@ -870,7 +883,7 @@ async fn test_tenant_isolation_projects() {
     let app = test::init_service(build_full_test_app(&state)).await;
 
     // Admin in tenant 1 creates project
-    let token1 = sec_register_admin!(&app, 1);
+    let token1 = sec_register_admin!(&state, 1);
 
     let create_req = test::TestRequest::post()
         .uri("/api/v1/projects")
@@ -885,7 +898,7 @@ async fn test_tenant_isolation_projects() {
     let _ = test::call_service(&app, create_req).await;
 
     // Admin in tenant 2 lists projects - should not see tenant 1's data
-    let token2 = sec_register_admin!(&app, 2);
+    let token2 = sec_register_admin!(&state, 2);
 
     let list_req = test::TestRequest::get()
         .uri("/api/v1/projects")
@@ -910,7 +923,7 @@ async fn test_tenant_isolation_crm_leads() {
     let app = test::init_service(build_full_test_app(&state)).await;
 
     // Admin in tenant 1 creates lead
-    let token1 = sec_register_admin!(&app, 1);
+    let token1 = sec_register_admin!(&state, 1);
 
     let create_req = test::TestRequest::post()
         .uri("/api/v1/crm/leads")
@@ -925,7 +938,7 @@ async fn test_tenant_isolation_crm_leads() {
     let _ = test::call_service(&app, create_req).await;
 
     // Admin in tenant 2 lists leads - should not see tenant 1's data
-    let token2 = sec_register_admin!(&app, 2);
+    let token2 = sec_register_admin!(&state, 2);
 
     let list_req = test::TestRequest::get()
         .uri("/api/v1/crm/leads")
@@ -992,7 +1005,7 @@ async fn test_cari_validation_empty_code() {
     let state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&state)).await;
 
-    let token = sec_register_admin!(&app, 1);
+    let token = sec_register_admin!(&state, 1);
 
     // Try to create cari with empty code - should fail validation
     let req = test::TestRequest::post()
@@ -1020,7 +1033,7 @@ async fn test_cari_validation_empty_name() {
     let state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&state)).await;
 
-    let token = sec_register_admin!(&app, 1);
+    let token = sec_register_admin!(&state, 1);
 
     // Try to create cari with empty name - should fail validation
     let req = test::TestRequest::post()
@@ -1048,7 +1061,7 @@ async fn test_warehouse_validation_empty_code() {
     let state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&state)).await;
 
-    let token = sec_register_admin!(&app, 1);
+    let token = sec_register_admin!(&state, 1);
 
     // Try to create warehouse with empty code
     let req = test::TestRequest::post()
@@ -1074,7 +1087,7 @@ async fn test_asset_validation_negative_useful_life() {
     let state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&state)).await;
 
-    let token = sec_register_admin!(&app, 1);
+    let token = sec_register_admin!(&state, 1);
 
     // Try to create asset with negative useful life - should fail validation
     let req = test::TestRequest::post()

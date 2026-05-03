@@ -5,7 +5,7 @@
 //! - `http_request_duration_seconds` histogram (labels: method, path)
 //! - `http_requests_in_flight` gauge (labels: method)
 
-use actix_web::body::BoxBody;
+use actix_web::body::MessageBody;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
 use metrics::{counter, gauge, histogram};
 use std::sync::OnceLock;
@@ -32,12 +32,13 @@ impl Default for MetricsMiddleware {
     }
 }
 
-impl<S> actix_web::dev::Transform<S, ServiceRequest> for MetricsMiddleware
+impl<S, B> actix_web::dev::Transform<S, ServiceRequest> for MetricsMiddleware
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<B>;
     type Error = Error;
     type InitError = ();
     type Transform = MetricsMiddlewareService<S>;
@@ -53,12 +54,13 @@ pub struct MetricsMiddlewareService<S> {
     service: S,
 }
 
-impl<S> actix_web::dev::Service<ServiceRequest> for MetricsMiddlewareService<S>
+impl<S, B> actix_web::dev::Service<ServiceRequest> for MetricsMiddlewareService<S>
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<B>;
     type Error = Error;
     type Future = futures::future::LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 

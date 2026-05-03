@@ -192,7 +192,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Rate limiting (governor crate)
 
 ### 9.2 Testing & Security
-- [x] Unit tests (225 passing)
+- [x] Unit tests (264 passing)
 - [x] Integration tests (38 passing)
 - [x] Security tests (27 passing - OWASP Top 10)
 - [x] Request ID middleware
@@ -321,11 +321,11 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Composite DB Indexes | ✅ Complete | `tenant_id + created_at DESC` on all multi-tenant tables |
 | Health Checks | ✅ Complete | `/health/live` (liveness), `/health/ready` (readiness + DB) |
 | Prometheus Metrics | ✅ Complete | `http_requests_total`, `http_request_duration_seconds`, `/metrics` |
-| Pagination | ✅ Complete | All 14 list endpoints return `PaginatedResult<T>` |
+| Pagination | ✅ Complete | All list endpoints return `PaginatedResult<T>` (20+ paginated endpoints across all modules) |
 | Audit Log API | ✅ Complete | `GET /api/v1/audit-logs` with filtering + pagination |
 
 ### Test Coverage
-- **314 tests passing** (249 unit + 38 integration + 27 security)
+- **329 tests passing** (264 unit + 38 integration + 27 security)
 - Unit tests for all domain modules
 - Model validation tests
 - Service business logic tests
@@ -394,49 +394,74 @@ actix-rt = "2"
 actix-cors = "0.7"
 
 # Database
-sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "macros", "chrono"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "macros", "chrono", "rust_decimal"] }
 
 # Authentication
 jsonwebtoken = "9"
 bcrypt = "0.15"
+
+# Encryption
+aes-gcm = "0.10"
+base64 = "0.22"
+rand = "0.8"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Validation
-validator = { version = "0.16", features = ["derive"] }
+validator = { version = "0.20", features = ["derive"] }
 
-# OpenAPI / Swagger
-utoipa = "4"
-utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
+# Configuration
+config = "0.14"
+dotenvy = "0.15"
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
 
 # Async
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
+futures = "0.3"
 
-# Error handling
-thiserror = "1.0"
+# Rate limiting
+governor = "0.8"
+nonzero_ext = "0.3"
+
+# Validation
+regex = "1"
 
 # Logging
 tracing = "0.1"
-tracing-subscriber = "0.3"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Rate limiting
-governor = "0.6"
+# Time
+chrono = { version = "0.4", features = ["serde"] }
 
 # UUID
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
 
-# Configuration
-config = "0.14"
-dotenv = "0.15"
-
-# Precise decimal for financial calculations
-rust_decimal = { version = "1.36", features = ["serde"] }
+# Synchronization (no poisoning)
+parking_lot = "0.12"
 
 # Secure memory zeroing
 zeroize = "1.8"
+
+# Metrics
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
+
+# Precise decimal for financial calculations
+rust_decimal = { version = "1.36", features = ["serde"] }
+rust_decimal_macros = "1.36"
+
+# Mocking for tests
+mockall = "0.12"
+
+# OpenAPI / Swagger
+utoipa = "4"
+utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 ```
 
 ---
@@ -450,101 +475,183 @@ zeroize = "1.8"
 - `GET /api/v1/auth/me` - Current user (requires auth)
 
 ### Users (v1)
-- `GET /api/v1/users` - List users (requires auth)
-- `POST /api/v1/users` - Create user (requires auth)
+- `GET /api/v1/users` - List users (requires auth, paginated)
+- `POST /api/v1/users` - Create user (admin only)
 - `GET /api/v1/users/{id}` - Get user (requires auth)
-- `PUT /api/v1/users/{id}` - Update user (requires auth)
-- `DELETE /api/v1/users/{id}` - Delete user (requires auth)
+- `PUT /api/v1/users/{id}` - Update user (self or admin)
+- `DELETE /api/v1/users/{id}` - Delete user (admin only)
 
-### Tenants
-- `GET /api/tenants` - List tenants
-- `POST /api/tenants` - Create tenant
-- `GET /api/tenants/{id}` - Get tenant
-- `PUT /api/tenants/{id}` - Update tenant
-- `DELETE /api/tenants/{id}` - Delete tenant
+### Tenants (v1)
+- `GET /api/v1/tenants` - List tenants (requires auth, paginated)
+- `POST /api/v1/tenants` - Create tenant (admin only)
+- `GET /api/v1/tenants/{id}` - Get tenant (requires auth)
+- `PUT /api/v1/tenants/{id}` - Update tenant (admin only)
+- `DELETE /api/v1/tenants/{id}` - Delete tenant (admin only)
 
-### Cari
-- `GET /api/cari` - List cari accounts
-- `GET /api/cari/{id}` - Get cari account
-- `GET /api/cari/code/{code}` - Get cari by code
-- `POST /api/cari` - Create cari account
-- `PUT /api/cari/{id}` - Update cari account
-- `DELETE /api/cari/{id}` - Delete cari account
-- `GET /api/cari/{id}/orders` - Get customer's sales orders
+### Cari (v1)
+- `GET /api/v1/cari` - List cari accounts (requires auth, paginated)
+- `POST /api/v1/cari` - Create cari account (admin only)
+- `GET /api/v1/cari/{id}` - Get cari account (requires auth)
+- `PUT /api/v1/cari/{id}` - Update cari account (admin only)
+- `DELETE /api/v1/cari/{id}` - Delete cari account (admin only)
+- `GET /api/v1/cari/type/{cari_type}` - Get cari by type (requires auth, paginated)
+- `GET /api/v1/cari/search` - Search cari by code/name (requires auth, paginated)
 
 ### Products (v1)
-- `GET /api/v1/products/{product_id}/variants` - List variants (auth)
-- `POST /api/v1/products/{product_id}/variants` - Create variant (auth)
-- `GET /api/v1/variants/{id}` - Get variant (auth)
-- `PUT /api/v1/variants/{id}` - Update variant (auth)
-- `DELETE /api/v1/variants/{id}` - Delete variant (auth)
+- `GET /api/v1/products` - List products (requires auth, paginated)
+- `GET /api/v1/categories` - List categories (requires auth, paginated)
+- `GET /api/v1/products/{product_id}/variants` - List variants (requires auth)
+- `POST /api/v1/products/{product_id}/variants` - Create variant (requires auth)
+- `GET /api/v1/variants/{id}` - Get variant (requires auth)
+- `PUT /api/v1/variants/{id}` - Update variant (requires auth)
+- `DELETE /api/v1/variants/{id}` - Delete variant (requires auth)
 
-### Stock
-- `GET /api/stock/warehouses` - List warehouses
-- `POST /api/stock/warehouses` - Create warehouse
-- `GET /api/stock/warehouses/{id}` - Get warehouse
-- `PUT /api/stock/warehouses/{id}` - Update warehouse
-- `DELETE /api/stock/warehouses/{id}` - Delete warehouse
-- `GET /api/stock/movements` - List stock movements
-- `POST /api/stock/movements` - Create stock movement
-- `GET /api/stock/summary` - Stock summary
+### Stock (v1)
+- `GET /api/v1/stock/warehouses` - List warehouses (requires auth, paginated)
+- `POST /api/v1/stock/warehouses` - Create warehouse (admin only)
+- `GET /api/v1/stock/warehouses/{id}` - Get warehouse (requires auth)
+- `PUT /api/v1/stock/warehouses/{id}` - Update warehouse (admin only)
+- `DELETE /api/v1/stock/warehouses/{id}` - Delete warehouse (admin only)
+- `POST /api/v1/stock/movements` - Create stock movement (admin only)
+- `GET /api/v1/stock/movements/product/{product_id}` - Movements by product (requires auth)
+- `GET /api/v1/stock/movements/warehouse/{warehouse_id}` - Movements by warehouse (requires auth)
+- `GET /api/v1/stock/levels/product/{product_id}` - Stock levels by product (requires auth)
+- `GET /api/v1/stock/levels/warehouse/{warehouse_id}` - Stock levels by warehouse (requires auth)
+- `GET /api/v1/stock/summary/{product_id}` - Stock summary (requires auth)
 
-### Invoices
-- `GET /api/invoices` - List invoices
-- `POST /api/invoices` - Create invoice
-- `GET /api/invoices/{id}` - Get invoice
-- `PUT /api/invoices/{id}` - Update invoice
-- `DELETE /api/invoices/{id}` - Delete invoice
+### Invoices (v1)
+- `GET /api/v1/invoices` - List invoices (requires auth, paginated)
+- `POST /api/v1/invoices` - Create invoice (admin only)
+- `GET /api/v1/invoices/{id}` - Get invoice (requires auth)
+- `DELETE /api/v1/invoices/{id}` - Delete invoice (admin only)
+- `GET /api/v1/invoices/status/{status}` - Invoices by status (requires auth, paginated)
+- `GET /api/v1/invoices/outstanding` - Outstanding invoices (requires auth)
+- `GET /api/v1/invoices/overdue` - Overdue invoices (requires auth)
+- `PUT /api/v1/invoices/{id}/status` - Update invoice status (admin only)
+- `POST /api/v1/invoices/payments` - Add payment (admin only)
+- `GET /api/v1/invoices/{id}/payments` - Get payments by invoice (requires auth)
 
-### Sales
-- `GET /api/sales` - List sales orders
-- `POST /api/sales` - Create sales order
-- `GET /api/sales/{id}` - Get sales order
-- `PUT /api/sales/{id}` - Update sales order
-- `DELETE /api/sales/{id}` - Delete sales order
+### Sales (v1)
+- `GET /api/v1/sales/orders` - List sales orders (requires auth, paginated)
+- `POST /api/v1/sales/orders` - Create sales order (admin only)
+- `GET /api/v1/sales/orders/{id}` - Get sales order (requires auth)
+- `DELETE /api/v1/sales/orders/{id}` - Delete sales order (admin only)
+- `GET /api/v1/sales/orders/status/{status}` - Orders by status (requires auth, paginated)
+- `PUT /api/v1/sales/orders/{id}/status` - Update order status (admin only)
+- `GET /api/v1/sales/quotations` - List quotations (requires auth, paginated)
+- `POST /api/v1/sales/quotations` - Create quotation (admin only)
+- `GET /api/v1/sales/quotations/{id}` - Get quotation (requires auth)
+- `DELETE /api/v1/sales/quotations/{id}` - Delete quotation (admin only)
+- `GET /api/v1/sales/quotations/status/{status}` - Quotations by status (requires auth, paginated)
+- `PUT /api/v1/sales/quotations/{id}/status` - Update quotation status (admin only)
+- `POST /api/v1/sales/quotations/{id}/convert` - Convert quotation to order (admin only)
 
-### HR
-- `GET /api/hr/employees` - List employees
-- `POST /api/hr/employees` - Create employee
-- `GET /api/hr/employees/{id}` - Get employee
-- `PUT /api/hr/employees/{id}` - Update employee
-- `DELETE /api/hr/employees/{id}` - Delete employee
+### HR (v1)
+- `GET /api/v1/hr/employees` - List employees (requires auth, paginated)
+- `POST /api/v1/hr/employees` - Create employee (admin only)
+- `GET /api/v1/hr/employees/{id}` - Get employee (requires auth)
+- `PUT /api/v1/hr/employees/{id}/status` - Update employee status (admin only)
+- `POST /api/v1/hr/employees/{id}/terminate` - Terminate employee (admin only)
+- `POST /api/v1/hr/attendance` - Record attendance (admin only)
+- `GET /api/v1/hr/attendance/employee/{employee_id}` - Attendance by employee (requires auth)
+- `POST /api/v1/hr/leave-requests` - Create leave request (requires auth)
+- `GET /api/v1/hr/leave-requests/employee/{employee_id}` - Leave requests by employee (requires auth)
+- `POST /api/v1/hr/leave-requests/{id}/approve` - Approve leave request (admin only)
+- `POST /api/v1/hr/leave-requests/{id}/reject` - Reject leave request (admin only)
+- `GET /api/v1/hr/leave-types` - List leave types (requires auth)
+- `POST /api/v1/hr/payroll/calculate` - Calculate payroll (admin only)
+- `GET /api/v1/hr/payroll/employee/{employee_id}` - Payroll by employee (requires auth)
+- `POST /api/v1/hr/payroll/{id}/paid` - Mark payroll as paid (admin only)
 
-### Accounting
-- `GET /api/accounting/accounts` - List accounts
-- `POST /api/accounting/accounts` - Create account
-- `GET /api/accounting/accounts/tree` - Account tree
-- `GET /api/accounting/journal` - List journal entries
-- `POST /api/accounting/journal` - Create journal entry
+### Accounting (v1)
+- `GET /api/v1/accounting/accounts` - List accounts (requires auth, paginated)
+- `POST /api/v1/accounting/accounts` - Create account (admin only)
+- `GET /api/v1/accounting/accounts/type/{account_type}` - Accounts by type (requires auth)
+- `GET /api/v1/accounting/accounts/{id}` - Get account (requires auth)
+- `GET /api/v1/accounting/journal-entries` - List journal entries (requires auth, paginated)
+- `POST /api/v1/accounting/journal-entries` - Create journal entry (admin only)
+- `GET /api/v1/accounting/journal-entries/{id}` - Get journal entry (requires auth)
+- `POST /api/v1/accounting/journal-entries/{id}/post` - Post journal entry (admin only)
+- `POST /api/v1/accounting/journal-entries/{id}/void` - Void journal entry (admin only)
+- `POST /api/v1/accounting/trial-balance` - Generate trial balance (requires auth)
 
-### Assets
-- `GET /api/assets` - List assets
-- `POST /api/assets` - Create asset
-- `GET /api/assets/{id}` - Get asset
-- `PUT /api/assets/{id}` - Update asset
-- `DELETE /api/assets/{id}` - Delete asset
-- `GET /api/assets/{id}/depreciation` - Depreciation schedule
+### Assets (v1)
+- `GET /api/v1/assets` - List assets (requires auth, paginated)
+- `POST /api/v1/assets` - Create asset (admin only)
+- `GET /api/v1/assets/{id}` - Get asset (requires auth)
+- `PUT /api/v1/assets/{id}` - Update asset (admin only)
+- `DELETE /api/v1/assets/{id}` - Delete asset (admin only)
+- `GET /api/v1/assets/status/{status}` - Assets by status (requires auth)
+- `PUT /api/v1/assets/{id}/status` - Update asset status (admin only)
+- `POST /api/v1/assets/{id}/depreciation` - Calculate depreciation (admin only)
+- `POST /api/v1/assets/{id}/depreciation/record` - Record depreciation (admin only)
+- `POST /api/v1/assets/{id}/dispose` - Dispose asset (admin only)
+- `POST /api/v1/assets/{id}/write-off` - Write off asset (admin only)
+- `POST /api/v1/assets/{id}/maintenance/start` - Start maintenance (admin only)
+- `POST /api/v1/assets/{id}/maintenance/end` - End maintenance (admin only)
+- `GET /api/v1/assets/{id}/maintenance-records` - Get maintenance records (requires auth)
+- `POST /api/v1/assets/maintenance-records` - Create maintenance record (admin only)
 
-### Project
-- `GET /api/projects` - List projects
-- `POST /api/projects` - Create project
-- `GET /api/projects/{id}` - Get project
-- `PUT /api/projects/{id}` - Update project
+### Project (v1)
+- `GET /api/v1/projects` - List projects (requires auth, paginated)
+- `POST /api/v1/projects` - Create project (admin only)
+- `GET /api/v1/projects/{id}` - Get project (requires auth)
+- `PUT /api/v1/projects/{id}/status` - Update project status (admin only)
+- `GET /api/v1/projects/{project_id}/wbs` - Get WBS items (requires auth)
+- `POST /api/v1/projects/wbs` - Create WBS item (admin only)
+- `PUT /api/v1/projects/wbs/{id}/progress` - Update WBS progress (admin only)
+- `GET /api/v1/projects/{project_id}/costs` - Get project costs (requires auth)
+- `POST /api/v1/projects/costs` - Create project cost (admin only)
+- `GET /api/v1/projects/{project_id}/profitability` - Get profitability (requires auth)
 
-### Manufacturing
-- `GET /api/manufacturing/work-orders` - List work orders
-- `POST /api/manufacturing/work-orders` - Create work order
-- `GET /api/manufacturing/work-orders/{id}` - Get work order
-- `PUT /api/manufacturing/work-orders/{id}` - Update work order
+### Manufacturing (v1)
+- `GET /api/v1/manufacturing/work-orders` - List work orders (requires auth, paginated)
+- `POST /api/v1/manufacturing/work-orders` - Create work order (admin only)
+- `GET /api/v1/manufacturing/work-orders/{id}` - Get work order (requires auth)
+- `PUT /api/v1/manufacturing/work-orders/{id}/status` - Update work order status (admin only)
+- `GET /api/v1/manufacturing/work-orders/{work_order_id}/operations` - Get operations (requires auth)
+- `POST /api/v1/manufacturing/work-orders/operations` - Add operation (admin only)
+- `GET /api/v1/manufacturing/work-orders/{work_order_id}/materials` - Get materials (requires auth)
+- `POST /api/v1/manufacturing/work-orders/materials` - Add material (admin only)
+- `POST /api/v1/manufacturing/boms` - Create BOM (admin only)
+- `GET /api/v1/manufacturing/boms/{id}` - Get BOM (requires auth)
+- `GET /api/v1/manufacturing/boms/product/{product_id}` - BOMs by product (requires auth)
+- `POST /api/v1/manufacturing/boms/lines` - Add BOM line (admin only)
+- `GET /api/v1/manufacturing/boms/{bom_id}/lines` - Get BOM lines (requires auth)
+- `POST /api/v1/manufacturing/routings` - Create routing (admin only)
+- `GET /api/v1/manufacturing/routings/{id}` - Get routing (requires auth)
+- `GET /api/v1/manufacturing/routings/product/{product_id}` - Routings by product (requires auth)
+- `POST /api/v1/manufacturing/routings/operations` - Add routing operation (admin only)
+- `GET /api/v1/manufacturing/material-requirements/{product_id}` - Calculate material requirements (requires auth)
 
-### CRM
-- `GET /api/crm/leads` - List leads
-- `POST /api/crm/leads` - Create lead
-- `GET /api/crm/opportunities` - List opportunities
-- `POST /api/crm/opportunities` - Create opportunity
+### CRM (v1)
+- `GET /api/v1/crm/leads` - List leads (requires auth, paginated)
+- `POST /api/v1/crm/leads` - Create lead (admin only)
+- `GET /api/v1/crm/leads/{id}` - Get lead (requires auth)
+- `GET /api/v1/crm/leads/status/{status}` - Leads by status (requires auth, paginated)
+- `PUT /api/v1/crm/leads/{id}/status` - Update lead status (admin only)
+- `POST /api/v1/crm/leads/{id}/convert` - Convert lead to customer (admin only)
+- `GET /api/v1/crm/opportunities` - List opportunities (requires auth, paginated)
+- `POST /api/v1/crm/opportunities` - Create opportunity (admin only)
+- `GET /api/v1/crm/opportunities/{id}` - Get opportunity (requires auth)
+- `GET /api/v1/crm/opportunities/status/{status}` - Opportunities by status (requires auth, paginated)
+- `PUT /api/v1/crm/opportunities/{id}/status` - Update opportunity status (admin only)
+- `GET /api/v1/crm/pipeline-value` - Get sales pipeline value (requires auth)
+- `GET /api/v1/crm/campaigns` - List campaigns (requires auth, paginated)
+- `POST /api/v1/crm/campaigns` - Create campaign (admin only)
+- `GET /api/v1/crm/campaigns/{id}` - Get campaign (requires auth)
+- `GET /api/v1/crm/campaigns/status/{status}` - Campaigns by status (requires auth, paginated)
+- `PUT /api/v1/crm/campaigns/{id}/status` - Update campaign status (admin only)
+- `GET /api/v1/crm/tickets` - List tickets (requires auth, paginated)
+- `POST /api/v1/crm/tickets` - Create ticket (admin only)
+- `GET /api/v1/crm/tickets/{id}` - Get ticket (requires auth)
+- `GET /api/v1/crm/tickets/status/{status}` - Tickets by status (requires auth, paginated)
+- `GET /api/v1/crm/tickets/open-count` - Get open tickets count (requires auth)
+- `PUT /api/v1/crm/tickets/{id}/status` - Update ticket status (admin only)
+- `POST /api/v1/crm/tickets/{id}/resolve` - Resolve ticket (admin only)
 
 ### Feature Flags (v1)
-- `GET /api/v1/feature-flags` - List flags (auth, tenant-isolated)
+- `GET /api/v1/feature-flags` - List flags (auth, tenant-isolated, paginated)
 - `POST /api/v1/feature-flags` - Create flag (admin only)
 - `GET /api/v1/feature-flags/{id}` - Get flag (auth)
 - `PUT /api/v1/feature-flags/{id}` - Update flag (admin only)
@@ -554,7 +661,7 @@ zeroize = "1.8"
 - `GET /api/v1/feature-flags/check/{name}` - Check if enabled (auth)
 
 ### Purchase Requests (v1)
-- `GET /api/v1/purchase-requests` - List requests (auth, tenant-isolated)
+- `GET /api/v1/purchase-requests` - List requests (auth, tenant-isolated, paginated, status filter)
 - `POST /api/v1/purchase-requests` - Create request (auth)
 - `GET /api/v1/purchase-requests/{id}` - Get request (auth)
 - `PUT /api/v1/purchase-requests/{id}` - Update request (auth)
@@ -568,8 +675,8 @@ zeroize = "1.8"
 
 ### Health Check
 - `GET /health` - Health check endpoint (alias for readiness)
-- `GET /health/live` - Liveness probe (always 200)
-- `GET /health/ready` - Readiness probe (checks DB, returns version + latency)
+- `GET /health/live` - Liveness probe (always 200, returns version)
+- `GET /health/ready` - Readiness probe (checks DB, returns version + latency + storage)
 
 ### Metrics
 - `GET /metrics` - Prometheus metrics (http_requests_total, http_request_duration_seconds)
@@ -596,7 +703,7 @@ cargo test -- --nocapture
 cargo build --release
 
 # Swagger UI
-# Visit http://localhost:8080/swagger-ui/
+# Visit http://localhost:8000/swagger-ui/
 ```
 
 ---
@@ -617,7 +724,20 @@ docker-compose up -d --build
 | TURERP_SERVER_HOST | Server host | 0.0.0.0 |
 | TURERP_SERVER_PORT | Server port | 8000 |
 | TURERP_ENV | Environment (development/production) | development |
+| TURERP_DB_MAX_CONNECTIONS | Max DB connections | 10 |
+| TURERP_DB_MIN_CONNECTIONS | Min DB connections | 5 |
+| TURERP_JWT_ACCESS_EXPIRATION | Access token expiry (seconds) | 3600 |
+| TURERP_JWT_REFRESH_EXPIRATION | Refresh token expiry (seconds) | 604800 |
 | TURERP_CORS_ORIGINS | Comma-separated allowed origins | * |
+| TURERP_CORS_METHODS | Comma-separated allowed methods | GET,POST,PUT,DELETE,OPTIONS |
+| TURERP_CORS_HEADERS | Comma-separated allowed headers | Content-Type,Authorization |
+| TURERP_CORS_CREDENTIALS | Allow credentials | true |
+| TURERP_CORS_MAX_AGE | Preflight cache max age (seconds) | 3600 |
+| TURERP_TRUSTED_PROXIES | Comma-separated trusted proxy IPs | (empty) |
+| TURERP_RATE_LIMIT_REQUESTS_PER_MINUTE | Rate limit per minute | 10 |
+| TURERP_RATE_LIMIT_BURST | Rate limit burst size | 3 |
+| TURERP_METRICS_ENABLED | Enable Prometheus metrics | true |
+| TURERP_METRICS_PATH | Metrics endpoint path | /metrics |
 | RUST_LOG | Log level | info |
 
 ---
@@ -723,7 +843,7 @@ turerp/
 
 ### 12D: Pagination for All List Endpoints
 - [x] Add `PaginatedResult::map()` for type transformations
-- [x] Switch all 14 list endpoints to accept `PaginationParams` and return `PaginatedResult`
+- [x] Switch all list endpoints (20+ across all modules) to accept `PaginationParams` and return `PaginatedResult`
 - [x] PostgreSQL repos use `COUNT(*) OVER()` for efficient total count
 - [x] In-memory repos implement skip/take pagination
 

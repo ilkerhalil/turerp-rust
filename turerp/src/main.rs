@@ -7,8 +7,8 @@ use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
 use turerp::config::Config;
 use turerp::middleware::{
-    audit::spawn_audit_writer, AuditLoggingMiddleware, MetricsMiddleware, RateLimitMiddleware,
-    RequestIdMiddleware,
+    audit::spawn_audit_writer, AuditLoggingMiddleware, JwtAuthMiddleware, MetricsMiddleware,
+    RateLimitMiddleware, RequestIdMiddleware, TenantMiddleware,
 };
 
 use tokio::sync::mpsc;
@@ -19,6 +19,7 @@ use turerp::api::{
     v1_project_configure, v1_purchase_requests_configure, v1_sales_configure, v1_stock_configure,
     v1_tenant_configure, v1_users_configure, ApiDoc,
 };
+use turerp::middleware::audit::{AuditEvent, AUDIT_CHANNEL_CAPACITY};
 use turerp::setup_logging;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -192,9 +193,9 @@ async fn main() -> std::io::Result<()> {
         turerp::app::create_app_state(&config).await
     };
 
-    // Set up audit log channel for non-blocking persistence
-    let (audit_tx, audit_rx) = mpsc::unbounded_channel();
-    let audit_sender = std::sync::Arc::new(audit_tx);
+    // Set up audit log channel (bounded to prevent unbounded memory growth under load)
+    let (audit_tx, audit_rx) = mpsc::channel::<AuditEvent>(AUDIT_CHANNEL_CAPACITY);
+    let audit_sender: std::sync::Arc<mpsc::Sender<AuditEvent>> = std::sync::Arc::new(audit_tx);
     let audit_svc = app_state.audit_service.get_ref().clone();
     spawn_audit_writer(audit_rx, audit_svc);
 
@@ -202,13 +203,19 @@ async fn main() -> std::io::Result<()> {
         #[cfg(feature = "postgres")]
         let app = App::new()
             // Security middlewares (ORDER MATTERS!)
-            .wrap(RequestIdMiddleware) // 1. Request ID for tracing
-            .wrap(MetricsMiddleware::new()) // 2. Metrics collection
-            .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // 3. Rate limiting (before auth)
-            .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // 4. Audit logging with channel
-            .wrap(middleware::Logger::default()) // 5. Access logging
-            .wrap(configure_cors(&config.cors)) // 6. CORS
-            .wrap(middleware::Compress::default()) // 7. Response compression (outermost)
+            // First wrap = outermost (touches request first, response last).
+            // Last wrap = innermost (touches request last, response first).
+            .wrap(middleware::Compress::default()) // Outermost: response compression
+            .wrap(configure_cors(&config.cors)) // CORS handling
+            .wrap(middleware::Logger::default()) // Access logging
+            .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
+            .wrap(JwtAuthMiddleware::new(
+                app_state.jwt_service.get_ref().clone(),
+            )) // JWT validation
+            .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // Rate limiting
+            .wrap(MetricsMiddleware::new()) // Metrics collection
+            .wrap(TenantMiddleware) // Tenant context extraction (after auth)
+            .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())
@@ -233,13 +240,19 @@ async fn main() -> std::io::Result<()> {
         #[cfg(not(feature = "postgres"))]
         let app = App::new()
             // Security middlewares (ORDER MATTERS!)
-            .wrap(RequestIdMiddleware) // 1. Request ID for tracing
-            .wrap(MetricsMiddleware::new()) // 2. Metrics collection
-            .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // 3. Rate limiting (before auth)
-            .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // 4. Audit logging with channel
-            .wrap(middleware::Logger::default()) // 5. Access logging
-            .wrap(configure_cors(&config.cors)) // 6. CORS
-            .wrap(middleware::Compress::default()) // 7. Response compression (outermost)
+            // First wrap = outermost (touches request first, response last).
+            // Last wrap = innermost (touches request last, response first).
+            .wrap(middleware::Compress::default()) // Outermost: response compression
+            .wrap(configure_cors(&config.cors)) // CORS handling
+            .wrap(middleware::Logger::default()) // Access logging
+            .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
+            .wrap(JwtAuthMiddleware::new(
+                app_state.jwt_service.get_ref().clone(),
+            )) // JWT validation
+            .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // Rate limiting
+            .wrap(MetricsMiddleware::new()) // Metrics collection
+            .wrap(TenantMiddleware) // Tenant context extraction (after auth)
+            .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
             .app_data(app_state.auth_service.clone())
             .app_data(app_state.user_service.clone())

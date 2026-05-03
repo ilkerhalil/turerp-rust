@@ -27,7 +27,8 @@ pre-push:
         Tests failed. Fix them before pushing.
 
     security:
-      run: cargo audit 2>/dev/null || echo "Run 'cargo audit' manually to check for vulnerabilities"
+      # RUSTSEC-2023-0071: rsa Marvin Attack - only affects sqlx-mysql which we don't use
+      run: cargo audit --ignore RUSTSEC-2023-0071
       root: turerp/
       fail_text: |
         Security vulnerabilities found. Run 'cargo audit' for details.

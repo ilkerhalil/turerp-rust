@@ -374,10 +374,11 @@ impl Config {
 
             // CORS should not be wildcard in production
             if self.cors.is_wildcard() {
-                tracing::warn!(
+                return Err(ConfigError::Message(
                     "CORS is configured to allow all origins (*) in production mode. \
-                     Consider setting TURERP_CORS_ORIGINS to specific domains."
-                );
+                     Set TURERP_CORS_ORIGINS to specific domains."
+                        .to_string(),
+                ));
             }
 
             // Warn if rate limiting trusts X-Forwarded-For without trusted proxies
@@ -503,6 +504,10 @@ mod tests {
                 access_token_expiration: 3600,
                 refresh_token_expiration: 604800,
             },
+            cors: CorsConfig {
+                allowed_origins: vec!["https://example.com".to_string()],
+                ..Default::default()
+            },
             ..Default::default()
         };
 
@@ -520,6 +525,10 @@ mod tests {
                 secret: "short".to_string(),
                 access_token_expiration: 3600,
                 refresh_token_expiration: 604800,
+            },
+            cors: CorsConfig {
+                allowed_origins: vec!["https://example.com".to_string()],
+                ..Default::default()
             },
             ..Default::default()
         };
@@ -548,6 +557,29 @@ mod tests {
 
         let result = config.validate();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_production_wildcard_cors() {
+        let config = Config {
+            environment: Environment::Production,
+            jwt: JwtConfig {
+                secret: "aGg3N2RmZ2hqOEBrc2RqZmhosdKJF8sdfkjhsdkjfh".to_string(),
+                access_token_expiration: 3600,
+                refresh_token_expiration: 604800,
+            },
+            cors: CorsConfig {
+                allowed_origins: vec!["*".to_string()],
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let result = config.validate();
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("CORS"));
+        assert!(err.contains("*"));
     }
 
     #[test]

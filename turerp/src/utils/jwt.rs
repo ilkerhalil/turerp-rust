@@ -19,6 +19,8 @@ pub struct AuthClaims {
     pub role: String,
     pub exp: i64,
     pub iat: i64,
+    pub aud: String,
+    pub iss: String,
 }
 
 impl AuthClaims {
@@ -37,6 +39,8 @@ impl AuthClaims {
             role: role.to_string(),
             exp: now + expires_in,
             iat: now,
+            aud: "turerp-api".to_string(),
+            iss: "turerp-auth".to_string(),
         }
     }
 }
@@ -123,7 +127,9 @@ impl JwtService {
     /// Decode and validate a token
     #[must_use = "The decoded claims should be used for authentication"]
     pub fn decode_token(&self, token: &str) -> Result<AuthClaims, ApiError> {
-        let validation = Validation::new(self.algorithm);
+        let mut validation = Validation::new(self.algorithm);
+        validation.set_audience(&["turerp-api"]);
+        validation.set_issuer(&["turerp-auth"]);
 
         let token_data: TokenData<AuthClaims> = decode(
             token,

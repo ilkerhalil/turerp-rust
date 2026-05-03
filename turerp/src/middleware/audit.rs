@@ -4,7 +4,7 @@
 //! authenticated requests. Sends audit events through a channel for
 //! non-blocking batch persistence to the audit log repository.
 
-use actix_web::body::BoxBody;
+use actix_web::body::MessageBody;
 use actix_web::{
     dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     Error,
@@ -30,9 +30,12 @@ pub struct AuditEvent {
     pub user_agent: Option<String>,
 }
 
+/// Maximum number of audit events buffered in the channel before backpressure.
+pub const AUDIT_CHANNEL_CAPACITY: usize = 10_000;
+
 /// Audit logging middleware factory
 pub struct AuditLoggingMiddleware {
-    sender: Option<Arc<mpsc::UnboundedSender<AuditEvent>>>,
+    sender: Option<Arc<mpsc::Sender<AuditEvent>>>,
 }
 
 impl Default for AuditLoggingMiddleware {
@@ -48,19 +51,20 @@ impl AuditLoggingMiddleware {
     }
 
     /// Create with channel sender for persisting audit logs
-    pub fn with_sender(sender: Arc<mpsc::UnboundedSender<AuditEvent>>) -> Self {
+    pub fn with_sender(sender: Arc<mpsc::Sender<AuditEvent>>) -> Self {
         Self {
             sender: Some(sender),
         }
     }
 }
 
-impl<S> Transform<S, ServiceRequest> for AuditLoggingMiddleware
+impl<S, B> Transform<S, ServiceRequest> for AuditLoggingMiddleware
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error>,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<B>;
     type Error = Error;
     type Transform = AuditLoggingMiddlewareService<S>;
     type InitError = ();
@@ -77,15 +81,16 @@ where
 /// Audit logging middleware service
 pub struct AuditLoggingMiddlewareService<S> {
     service: S,
-    sender: Option<Arc<mpsc::UnboundedSender<AuditEvent>>>,
+    sender: Option<Arc<mpsc::Sender<AuditEvent>>>,
 }
 
-impl<S> Service<ServiceRequest> for AuditLoggingMiddlewareService<S>
+impl<S, B> Service<ServiceRequest> for AuditLoggingMiddlewareService<S>
 where
-    S: Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error>,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<B>;
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -94,7 +99,6 @@ where
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let method = req.method().to_string();
         let path = req.path().to_string();
-        let auth_info = get_auth_claims(req.request()).ok();
         let request_id = req
             .headers()
             .get("X-Request-ID")
@@ -115,6 +119,12 @@ where
             let response = fut.await?;
 
             let status = response.status();
+
+            // Read auth claims from the response's request reference.
+            // This allows JwtAuthMiddleware to be placed inner relative to Audit,
+            // since claims are injected during request processing and persist
+            // through the response chain.
+            let auth_info = get_auth_claims(response.request()).ok();
 
             if let Some(claims) = auth_info {
                 let event = AuditEvent {
@@ -149,9 +159,11 @@ where
                     );
                 }
 
-                // Send event to channel for persistence
+                // Send event to channel for persistence (drop if backpressure exceeded)
                 if let Some(sender) = sender {
-                    let _ = sender.send(event);
+                    if let Err(e) = sender.try_send(event) {
+                        tracing::warn!("Audit log channel full, dropping event: {}", e);
+                    }
                 }
             } else {
                 tracing::debug!(
@@ -167,9 +179,12 @@ where
     }
 }
 
+/// Maximum retry attempts for audit log flush failures.
+const MAX_FLUSH_RETRIES: u32 = 3;
+
 /// Spawn a background task that drains audit events and batch-writes them
 pub fn spawn_audit_writer(
-    receiver: mpsc::UnboundedReceiver<AuditEvent>,
+    receiver: mpsc::Receiver<AuditEvent>,
     service: crate::domain::audit::service::AuditService,
 ) {
     tokio::spawn(async move {
@@ -178,10 +193,11 @@ pub fn spawn_audit_writer(
 }
 
 async fn audit_writer_task(
-    mut receiver: mpsc::UnboundedReceiver<AuditEvent>,
+    mut receiver: mpsc::Receiver<AuditEvent>,
     service: crate::domain::audit::service::AuditService,
 ) {
     let mut buffer: Vec<CreateAuditLog> = Vec::new();
+    let mut dead_letter_queue: Vec<CreateAuditLog> = Vec::new();
     let mut flush_interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
 
     loop {
@@ -203,29 +219,82 @@ async fn audit_writer_task(
 
                 // Flush if we've accumulated enough
                 if buffer.len() >= 100 {
-                    flush_buffer(&service, &mut buffer).await;
+                    if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
+                        dead_letter_queue.extend(failed);
+                        if dead_letter_queue.len() > 1_000 {
+                            tracing::error!("Audit DLQ exceeded 1000 items, dropping oldest {} logs", dead_letter_queue.len() - 500);
+                            dead_letter_queue.drain(0..dead_letter_queue.len() - 500);
+                        }
+                    }
                 }
             }
             _ = flush_interval.tick() => {
                 // Periodic flush
                 if !buffer.is_empty() {
-                    flush_buffer(&service, &mut buffer).await;
+                    if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
+                        dead_letter_queue.extend(failed);
+                    }
+                }
+                // Attempt to retry DLQ items on each tick
+                if !dead_letter_queue.is_empty() {
+                    let mut dlq_buffer = std::mem::take(&mut dead_letter_queue);
+                    if let Err(failed) = flush_buffer_with_retry(&service, &mut dlq_buffer, MAX_FLUSH_RETRIES).await {
+                        dead_letter_queue.extend(failed);
+                        if dead_letter_queue.len() > 1_000 {
+                            tracing::error!("Audit DLQ exceeded 1000 items after retry, dropping oldest {} logs", dead_letter_queue.len() - 500);
+                            dead_letter_queue.drain(0..dead_letter_queue.len() - 500);
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-async fn flush_buffer(
+/// Flush buffer with exponential backoff retry. Returns failed logs on permanent failure.
+async fn flush_buffer_with_retry(
     service: &crate::domain::audit::service::AuditService,
     buffer: &mut Vec<CreateAuditLog>,
-) {
+    max_retries: u32,
+) -> Result<(), Vec<CreateAuditLog>> {
     if buffer.is_empty() {
-        return;
+        return Ok(());
     }
 
     let logs: Vec<CreateAuditLog> = std::mem::take(buffer);
-    if let Err(e) = service.create_batch(logs).await {
-        tracing::error!("Failed to flush audit logs: {}", e);
+
+    for attempt in 1..=max_retries {
+        match service.create_batch(logs.clone()).await {
+            Ok(()) => {
+                if attempt > 1 {
+                    tracing::info!(
+                        "Audit logs flushed successfully after {} retries",
+                        attempt - 1
+                    );
+                }
+                return Ok(());
+            }
+            Err(e) => {
+                if attempt < max_retries {
+                    let delay = std::time::Duration::from_millis(100 * 2_u64.pow(attempt - 1));
+                    tracing::warn!(
+                        "Failed to flush audit logs (attempt {}/{}): {}. Retrying in {:?}...",
+                        attempt,
+                        max_retries,
+                        e,
+                        delay
+                    );
+                    tokio::time::sleep(delay).await;
+                } else {
+                    tracing::error!(
+                        "Failed to flush audit logs after {} attempts: {}. Logs moved to DLQ.",
+                        max_retries,
+                        e
+                    );
+                }
+            }
+        }
     }
+
+    Err(logs)
 }

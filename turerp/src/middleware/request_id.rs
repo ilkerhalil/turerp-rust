@@ -2,7 +2,7 @@
 //!
 //! Generates a unique request ID for each request and adds it as a response header
 
-use actix_web::body::BoxBody;
+use actix_web::body::MessageBody;
 use actix_web::http::header::{HeaderName, HeaderValue};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, HttpMessage};
 use futures::future::LocalBoxFuture;
@@ -12,12 +12,13 @@ use uuid::Uuid;
 /// Request ID middleware
 pub struct RequestIdMiddleware;
 
-impl<S> actix_web::dev::Transform<S, ServiceRequest> for RequestIdMiddleware
+impl<S, B> actix_web::dev::Transform<S, ServiceRequest> for RequestIdMiddleware
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<B>;
     type Error = Error;
     type InitError = ();
     type Transform = RequestIdMiddlewareService<S>;
@@ -33,12 +34,13 @@ pub struct RequestIdMiddlewareService<S> {
     service: S,
 }
 
-impl<S> actix_web::dev::Service<ServiceRequest> for RequestIdMiddlewareService<S>
+impl<S, B> actix_web::dev::Service<ServiceRequest> for RequestIdMiddlewareService<S>
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<B>;
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 

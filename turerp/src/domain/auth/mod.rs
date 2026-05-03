@@ -93,6 +93,18 @@ impl AuthService {
         // No default is used to prevent accidental exposure of system tenant
         let tenant_id = request.tenant_id;
 
+        // SECURITY: Only admins can create admin accounts.
+        // Self-registration defaults to Role::User regardless of requested role.
+        let role = if request.role == Some(Role::Admin) {
+            tracing::warn!(
+                "Self-registration requested Admin role for tenant {} - forcing User role",
+                tenant_id
+            );
+            Some(Role::User)
+        } else {
+            request.role.or(Some(Role::User))
+        };
+
         // Create user
         let create = CreateUser {
             username: request.username,
@@ -100,7 +112,7 @@ impl AuthService {
             full_name: request.full_name,
             password: request.password,
             tenant_id,
-            role: request.role.or(Some(Role::User)),
+            role,
         };
 
         let user_response = self.user_service.create_user(create).await?;

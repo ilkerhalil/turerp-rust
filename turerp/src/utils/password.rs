@@ -1,16 +1,18 @@
 //! Password utilities
 
 use bcrypt::{hash, verify, DEFAULT_COST};
-use lazy_static::lazy_static;
 use regex::Regex;
+use std::sync::LazyLock;
 
 // Compile regex patterns once for better performance
-lazy_static! {
-    static ref UPPERCASE_REGEX: Regex = Regex::new(r"[A-Z]").unwrap();
-    static ref LOWERCASE_REGEX: Regex = Regex::new(r"[a-z]").unwrap();
-    static ref DIGIT_REGEX: Regex = Regex::new(r"[0-9]").unwrap();
-    static ref SPECIAL_REGEX: Regex = Regex::new(r"[^A-Za-z0-9]").unwrap();
-}
+static UPPERCASE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[A-Z]").expect("UPPERCASE_REGEX is valid"));
+static LOWERCASE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[a-z]").expect("LOWERCASE_REGEX is valid"));
+static DIGIT_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[0-9]").expect("DIGIT_REGEX is valid"));
+static SPECIAL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[^A-Za-z0-9]").expect("SPECIAL_REGEX is valid"));
 
 /// Minimum password length
 pub const MIN_PASSWORD_LENGTH: usize = 12;

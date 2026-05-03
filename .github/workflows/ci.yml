@@ -71,10 +71,21 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Run security audit
+      - name: Cache cargo-audit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: ${{ runner.os }}-cargo-audit
+
+      - name: Install cargo-audit
         run: |
-          cargo install cargo-audit
-          cargo audit || echo "Security audit found issues - check manually"
+          if ! command -v cargo-audit &> /dev/null; then
+            cargo install cargo-audit
+          fi
+
+      - name: Run security audit
+        # RUSTSEC-2023-0071: rsa Marvin Attack - only affects sqlx-mysql which we don't use
+        run: cargo audit --ignore RUSTSEC-2023-0071
 
   build-release:
     name: Build Release

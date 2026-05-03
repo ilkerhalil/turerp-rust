@@ -3,7 +3,7 @@
 //! This middleware extracts tenant context from incoming requests,
 //! allowing for multi-tenant database isolation.
 
-use actix_web::body::BoxBody;
+use actix_web::body::MessageBody;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, HttpMessage};
 use futures::future::LocalBoxFuture;
 
@@ -55,12 +55,13 @@ impl Default for TenantMiddleware {
 }
 
 /// Implementation of actix-web middleware for TenantMiddleware
-impl<S> actix_web::dev::Transform<S, ServiceRequest> for TenantMiddleware
+impl<S, B> actix_web::dev::Transform<S, ServiceRequest> for TenantMiddleware
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<B>;
     type Error = Error;
     type InitError = ();
     type Transform = TenantMiddlewareService<S>;
@@ -76,12 +77,13 @@ pub struct TenantMiddlewareService<S> {
     service: S,
 }
 
-impl<S> actix_web::dev::Service<ServiceRequest> for TenantMiddlewareService<S>
+impl<S, B> actix_web::dev::Service<ServiceRequest> for TenantMiddlewareService<S>
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<B>;
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 

@@ -4,7 +4,7 @@
 //! Supports trusted proxy configuration for secure IP extraction
 //! behind load balancers and reverse proxies.
 
-use actix_web::body::BoxBody;
+use actix_web::body::{EitherBody, MessageBody};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
 use futures::future::LocalBoxFuture;
 use governor::{clock::DefaultClock, state::keyed::DashMapStateStore, Quota, RateLimiter};
@@ -114,12 +114,13 @@ impl Default for RateLimitMiddleware {
     }
 }
 
-impl<S> actix_web::dev::Transform<S, ServiceRequest> for RateLimitMiddleware
+impl<S, B> actix_web::dev::Transform<S, ServiceRequest> for RateLimitMiddleware
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<EitherBody<B>>;
     type Error = Error;
     type InitError = ();
     type Transform = RateLimitMiddlewareService<S>;
@@ -141,12 +142,13 @@ pub struct RateLimitMiddlewareService<S> {
     trusted_proxies: Vec<IpAddr>,
 }
 
-impl<S> actix_web::dev::Service<ServiceRequest> for RateLimitMiddlewareService<S>
+impl<S, B> actix_web::dev::Service<ServiceRequest> for RateLimitMiddlewareService<S>
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<BoxBody>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
     S::Future: 'static,
+    B: MessageBody + 'static,
 {
-    type Response = ServiceResponse<BoxBody>;
+    type Response = ServiceResponse<EitherBody<B>>;
     type Error = Error;
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -161,7 +163,10 @@ where
             Ok(_) => {
                 // Request allowed
                 let fut = self.service.call(req);
-                Box::pin(fut)
+                Box::pin(async move {
+                    let res = fut.await?;
+                    Ok(res.map_into_left_body())
+                })
             }
             Err(_) => {
                 // Rate limit exceeded
@@ -169,7 +174,7 @@ where
                     .json(crate::error::ErrorResponse {
                         error: "Rate limit exceeded. Please try again later.".to_string(),
                     })
-                    .map_into_boxed_body();
+                    .map_into_right_body::<B>();
                 Box::pin(async move { Ok(req.into_response(response)) })
             }
         }

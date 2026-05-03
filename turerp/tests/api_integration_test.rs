@@ -65,7 +65,9 @@ fn build_full_test_app(
     impl actix_web::dev::ServiceFactory<
         actix_web::dev::ServiceRequest,
         Config = (),
-        Response = actix_web::dev::ServiceResponse<actix_web::body::BoxBody>,
+        Response = actix_web::dev::ServiceResponse<
+            actix_web::body::EitherBody<actix_web::body::BoxBody>,
+        >,
         Error = actix_web::Error,
         InitError = (),
     >,
@@ -101,29 +103,38 @@ fn build_full_test_app(
         )
 }
 
-/// Helper macro to register an admin user and return (access_token, user_id, app)
-/// Usage: `let (token, user_id) = register_admin!(&app, 1);`
+/// Helper macro to create an admin user directly and return (access_token, user_id)
+/// Usage: `let (token, user_id) = register_admin!(&app_state, 1);`
 macro_rules! register_admin {
-    ($app:expr, $tenant_id:expr) => {{
-        let username = format!("admin_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
-        let req = test::TestRequest::post()
-            .uri("/api/auth/register")
-            .set_json(json!({
-                "username": username,
-                "email": format!("{}@test.com", username),
-                "full_name": "Admin User",
-                "password": "Password123!",
-                "tenant_id": $tenant_id,
-                "role": "admin"
-            }))
-            .to_request();
-        let resp = test::call_service($app, req).await;
-        assert_eq!(resp.status(), StatusCode::CREATED, "Admin registration failed");
-        let body = to_bytes(resp.into_body()).await.unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        let access_token = json["tokens"]["access_token"].as_str().unwrap().to_string();
-        let user_id = json["user"]["id"].as_i64().unwrap();
-        (access_token, user_id)
+    ($state:expr, $tenant_id:expr) => {{
+        let username = format!(
+            "admin_{}",
+            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+        );
+        let user = $state
+            .user_service
+            .get_ref()
+            .create_user(turerp::CreateUser {
+                username: username.clone(),
+                email: format!("{}@test.com", username),
+                full_name: "Admin User".to_string(),
+                password: "Password123!".to_string(),
+                tenant_id: $tenant_id,
+                role: Some(turerp::Role::Admin),
+            })
+            .await
+            .unwrap();
+        let tokens = $state
+            .jwt_service
+            .get_ref()
+            .generate_tokens(
+                user.id,
+                user.tenant_id,
+                user.username.clone(),
+                turerp::Role::Admin,
+            )
+            .unwrap();
+        (tokens.access_token, user.id)
     }};
 }
 
@@ -411,7 +422,7 @@ async fn test_users_create_authorized() {
 
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (access_token, _) = register_admin!(&app, 1);
+    let (access_token, _) = register_admin!(&app_state, 1);
 
     // Create user with auth token
     let req = test::TestRequest::post()
@@ -440,7 +451,7 @@ async fn test_users_list_authorized() {
 
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (access_token, _) = register_admin!(&app, 1);
+    let (access_token, _) = register_admin!(&app_state, 1);
 
     let req = test::TestRequest::get()
         .uri("/api/users")
@@ -480,7 +491,7 @@ async fn test_users_get_by_id_authorized() {
 
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (access_token, _) = register_admin!(&app, 1);
+    let (access_token, _) = register_admin!(&app_state, 1);
 
     // Create a user
     let create_req = test::TestRequest::post()
@@ -520,7 +531,7 @@ async fn test_users_update_authorized() {
 
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (access_token, _) = register_admin!(&app, 1);
+    let (access_token, _) = register_admin!(&app_state, 1);
 
     // Create a user
     let create_req = test::TestRequest::post()
@@ -563,7 +574,7 @@ async fn test_users_delete_authorized() {
 
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (access_token, _) = register_admin!(&app, 1);
+    let (access_token, _) = register_admin!(&app_state, 1);
 
     // Create a user
     let create_req = test::TestRequest::post()
@@ -611,7 +622,7 @@ async fn test_cari_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, user_id) = register_admin!(&app, 1);
+    let (token, user_id) = register_admin!(&app_state, 1);
 
     // Create cari
     let create_req = test::TestRequest::post()
@@ -702,7 +713,7 @@ async fn test_cari_search() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, user_id) = register_admin!(&app, 1);
+    let (token, user_id) = register_admin!(&app_state, 1);
 
     // Create a cari first
     let create_req = test::TestRequest::post()
@@ -760,7 +771,7 @@ async fn test_cari_read_allows_authenticated() {
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Admin creates a cari
-    let (admin_token, admin_id) = register_admin!(&app, 1);
+    let (admin_token, admin_id) = register_admin!(&app_state, 1);
 
     let create_req = test::TestRequest::post()
         .uri("/api/v1/cari")
@@ -797,7 +808,7 @@ async fn test_stock_warehouse_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, _) = register_admin!(&app, 1);
+    let (token, _) = register_admin!(&app_state, 1);
 
     // Create warehouse
     let create_req = test::TestRequest::post()
@@ -864,7 +875,7 @@ async fn test_stock_movement_create() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, user_id) = register_admin!(&app, 1);
+    let (token, user_id) = register_admin!(&app_state, 1);
 
     // Create a warehouse first
     let wh_req = test::TestRequest::post()
@@ -908,7 +919,7 @@ async fn test_invoice_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, user_id) = register_admin!(&app, 1);
+    let (token, user_id) = register_admin!(&app_state, 1);
 
     // Create a cari first (invoices need cari_id)
     let cari_req = test::TestRequest::post()
@@ -1037,7 +1048,7 @@ async fn test_sales_order_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, user_id) = register_admin!(&app, 1);
+    let (token, user_id) = register_admin!(&app_state, 1);
 
     // Create a cari first
     let cari_req = test::TestRequest::post()
@@ -1117,7 +1128,7 @@ async fn test_sales_quotation_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, user_id) = register_admin!(&app, 1);
+    let (token, user_id) = register_admin!(&app_state, 1);
 
     // Create a cari first
     let cari_req = test::TestRequest::post()
@@ -1172,7 +1183,7 @@ async fn test_hr_employee_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, _) = register_admin!(&app, 1);
+    let (token, _) = register_admin!(&app_state, 1);
 
     // Create employee
     let create_req = test::TestRequest::post()
@@ -1235,7 +1246,7 @@ async fn test_hr_leave_types() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, _) = register_admin!(&app, 1);
+    let (token, _) = register_admin!(&app_state, 1);
 
     // Get leave types (seeded by default)
     let req = test::TestRequest::get()
@@ -1256,7 +1267,7 @@ async fn test_accounting_account_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, _) = register_admin!(&app, 1);
+    let (token, _) = register_admin!(&app_state, 1);
 
     // Create account (use a unique code to avoid conflict with seeded defaults)
     let create_req = test::TestRequest::post()
@@ -1305,7 +1316,7 @@ async fn test_accounting_journal_entry() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, user_id) = register_admin!(&app, 1);
+    let (token, user_id) = register_admin!(&app_state, 1);
 
     // Create two accounts first (use unique codes to avoid conflict with seeded defaults)
     let debit_req = test::TestRequest::post()
@@ -1402,7 +1413,7 @@ async fn test_project_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, _) = register_admin!(&app, 1);
+    let (token, _) = register_admin!(&app_state, 1);
 
     // Create project
     let create_req = test::TestRequest::post()
@@ -1462,7 +1473,7 @@ async fn test_manufacturing_work_order() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, _) = register_admin!(&app, 1);
+    let (token, _) = register_admin!(&app_state, 1);
 
     // Create work order
     let create_req = test::TestRequest::post()
@@ -1504,7 +1515,7 @@ async fn test_crm_lead_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, _) = register_admin!(&app, 1);
+    let (token, _) = register_admin!(&app_state, 1);
 
     // Create lead
     let create_req = test::TestRequest::post()
@@ -1551,7 +1562,7 @@ async fn test_crm_opportunity_create() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, _) = register_admin!(&app, 1);
+    let (token, _) = register_admin!(&app_state, 1);
 
     // Create opportunity
     let create_req = test::TestRequest::post()
@@ -1578,7 +1589,7 @@ async fn test_tenant_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, _) = register_admin!(&app, 1);
+    let (token, _) = register_admin!(&app_state, 1);
 
     // Create tenant
     let create_req = test::TestRequest::post()
@@ -1651,7 +1662,7 @@ async fn test_asset_crud() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
-    let (token, _) = register_admin!(&app, 1);
+    let (token, _) = register_admin!(&app_state, 1);
 
     // Create asset
     let create_req = test::TestRequest::post()
@@ -1746,7 +1757,7 @@ async fn test_cari_tenant_isolation() {
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Admin in tenant 1 creates a cari
-    let (token1, user_id1) = register_admin!(&app, 1);
+    let (token1, user_id1) = register_admin!(&app_state, 1);
 
     let create_req = test::TestRequest::post()
         .uri("/api/v1/cari")
@@ -1764,7 +1775,7 @@ async fn test_cari_tenant_isolation() {
     assert_eq!(resp.status(), StatusCode::CREATED);
 
     // Admin in tenant 2 should not see tenant 1's cari
-    let (token2, _) = register_admin!(&app, 2);
+    let (token2, _) = register_admin!(&app_state, 2);
 
     let list_req = test::TestRequest::get()
         .uri("/api/v1/cari")
@@ -1787,7 +1798,7 @@ async fn test_hr_tenant_isolation() {
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Admin in tenant 1 creates an employee
-    let (token1, _) = register_admin!(&app, 1);
+    let (token1, _) = register_admin!(&app_state, 1);
 
     let create_req = test::TestRequest::post()
         .uri("/api/v1/hr/employees")
@@ -1806,7 +1817,7 @@ async fn test_hr_tenant_isolation() {
     let _ = test::call_service(&app, create_req).await;
 
     // Admin in tenant 2 should not see tenant 1's employees
-    let (token2, _) = register_admin!(&app, 2);
+    let (token2, _) = register_admin!(&app_state, 2);
 
     let list_req = test::TestRequest::get()
         .uri("/api/v1/hr/employees")
