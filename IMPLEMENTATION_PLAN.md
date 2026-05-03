@@ -449,6 +449,80 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 
 ---
 
+## Phase 14: Enterprise Infrastructure (P0 - Critical)
+
+### 14.1 Soft Delete (All Domains)
+- [ ] Add `deleted_at` / `deleted_by` to all domain models
+- [ ] Update all `find_all` queries with `WHERE deleted_at IS NULL`
+- [ ] Add admin-only "list deleted" and "restore" endpoints
+- [ ] Add `destroy()` (hard delete) for super-admin
+
+### 14.2 Event-Driven Architecture (Outbox Pattern)
+- [ ] `EventBus` trait (InMemory + Redis Streams)
+- [ ] `Outbox` table + background publisher
+- [ ] Domain Events: `InvoiceCreated`, `PaymentReceived`, `StockMoved`, `EmployeeHired`
+- [ ] Event subscribers: `InvoiceCreated → StockDecrement + AccountingEntry`
+- [ ] Dead Letter Queue (DLQ)
+
+### 14.3 Background Job Scheduler
+- [ ] `JobScheduler` trait (PostgreSQL-based job queue)
+- [ ] Job types: `CalculateDepreciation`, `RunPayroll`, `SendReminders`, `ArchiveLogs`
+- [ ] Cron expression support
+- [ ] Retry mechanism with exponential backoff
+
+### 14.4 Notification Service (Email/SMS)
+- [ ] `NotificationService` trait
+- [ ] Email template engine (Handlebars)
+- [ ] SMTP/SendGrid/AWS SES integration
+- [ ] Notification queue (async)
+- [ ] In-app notification bell
+
+### 14.5 Idempotency Keys
+- [ ] `IdempotencyKey` header middleware
+- [ ] Redis-backed response cache (24h TTL)
+- [ ] Per-endpoint idempotency support
+
+### 14.6 API Key Authentication
+- [ ] `ApiKey` model with scopes and expiry
+- [ ] API Key middleware (separate from JWT)
+- [ ] Scoped permissions: `["stock:read", "invoice:write"]`
+- [ ] Admin CRUD for API keys
+
+### 14.7 File Upload & Document Management
+- [ ] `FileStorage` trait (Local/S3/MinIO)
+- [ ] Presigned URL support
+- [ ] File metadata tracking (per-tenant)
+- [ ] Image/document upload endpoints
+
+### 14.8 Full-Text Search
+- [ ] PostgreSQL `pg_trgm` + `unaccent` extensions
+- [ ] `SearchService` trait (DB + Meilisearch)
+- [ ] Cari, product, invoice search with fuzzy matching
+- [ ] Turkish locale support
+
+### 14.9 Redis Caching Layer
+- [ ] `CacheService` trait (InMemory + Redis)
+- [ ] Tenant config, feature flags, user perms caching
+- [ ] Cache invalidation on writes
+
+### 14.10 Report Engine (PDF/Excel/XML)
+- [ ] `ReportEngine` trait
+- [ ] Invoice PDF generation
+- [ ] Excel export for accounting/HR
+- [ ] e-Defter UBL-TR XML format
+
+### 14.11 Distributed Tracing (OpenTelemetry)
+- [ ] OpenTelemetry integration with `tracing-opentelemetry`
+- [ ] Jaeger/Tempo export
+- [ ] Per-request span propagation
+
+### 14.12 Database Read Replicas
+- [ ] `DbRouter` with master/replica split
+- [ ] Read query routing to replicas
+- [ ] Write query routing to master
+
+---
+
 ## Dependencies (Cargo.toml)
 
 ```toml
