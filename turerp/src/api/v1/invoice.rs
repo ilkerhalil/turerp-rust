@@ -215,6 +215,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/invoices/status/{status}").route(web::get().to(get_invoices_by_status)),
     )
+    // MUST register /payments BEFORE /{id} to avoid route shadowing
+    .service(web::resource("/v1/invoices/payments").route(web::post().to(create_payment)))
     .service(
         web::resource("/v1/invoices/{id}")
             .route(web::get().to(get_invoice))
@@ -223,6 +225,5 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(web::resource("/v1/invoices/{id}/status").route(web::put().to(update_invoice_status)))
     .service(
         web::resource("/v1/invoices/{id}/payments").route(web::get().to(get_payments_by_invoice)),
-    )
-    .service(web::resource("/v1/invoices/payments").route(web::post().to(create_payment)));
+    );
 }

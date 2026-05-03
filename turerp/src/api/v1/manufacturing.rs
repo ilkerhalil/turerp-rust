@@ -4,10 +4,11 @@ use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
 use crate::domain::manufacturing::model::{
-    CreateBillOfMaterials, CreateBillOfMaterialsLine, CreateRouting, CreateRoutingOperation,
-    CreateWorkOrder, CreateWorkOrderMaterial, CreateWorkOrderOperation, WorkOrderStatus,
+    CreateBillOfMaterials, CreateBillOfMaterialsLine, CreateInspection, CreateNonConformanceReport,
+    CreateRouting, CreateRoutingOperation, CreateWorkOrder, CreateWorkOrderMaterial,
+    CreateWorkOrderOperation, UpdateInspection, UpdateNonConformanceReport, WorkOrderStatus,
 };
-use crate::domain::manufacturing::service::ManufacturingService;
+use crate::domain::manufacturing::service::{ManufacturingService, QualityControlService};
 use crate::error::ApiResult;
 use crate::middleware::{AdminUser, AuthUser};
 
@@ -334,6 +335,174 @@ pub async fn calculate_material_requirements(
     Ok(HttpResponse::Ok().json(requirements))
 }
 
+/// Create inspection (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/manufacturing/inspections", tag = "Manufacturing",
+    request_body = CreateInspection,
+    responses((status = 201, description = "Inspection created"), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn create_inspection(
+    _admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+    payload: web::Json<CreateInspection>,
+) -> ApiResult<HttpResponse> {
+    let create = payload.into_inner();
+    let inspection = qc_service.create_inspection(create).await?;
+    Ok(HttpResponse::Created().json(inspection))
+}
+
+/// Get all inspections for tenant
+#[utoipa::path(
+    get, path = "/api/v1/manufacturing/inspections", tag = "Manufacturing",
+    responses((status = 200, description = "List of inspections")),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_inspections(
+    auth_user: AuthUser,
+    qc_service: web::Data<QualityControlService>,
+) -> ApiResult<HttpResponse> {
+    let inspections = qc_service
+        .get_inspections_by_tenant(auth_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(inspections))
+}
+
+/// Get inspection by ID
+#[utoipa::path(
+    get, path = "/api/v1/manufacturing/inspections/{id}", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Inspection ID")),
+    responses((status = 200, description = "Inspection found"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_inspection(
+    _auth_user: AuthUser,
+    qc_service: web::Data<QualityControlService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let inspection = qc_service.get_inspection(*path).await?;
+    Ok(HttpResponse::Ok().json(inspection))
+}
+
+/// Update inspection (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/manufacturing/inspections/{id}", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Inspection ID")),
+    request_body = UpdateInspection,
+    responses((status = 200, description = "Inspection updated"), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn update_inspection(
+    _admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+    path: web::Path<i64>,
+    payload: web::Json<UpdateInspection>,
+) -> ApiResult<HttpResponse> {
+    let inspection = qc_service
+        .update_inspection(*path, payload.into_inner())
+        .await?;
+    Ok(HttpResponse::Ok().json(inspection))
+}
+
+/// Delete inspection (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/manufacturing/inspections/{id}", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Inspection ID")),
+    responses((status = 204, description = "Inspection deleted"), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn delete_inspection(
+    _admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    qc_service.delete_inspection(*path).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+// --- NCR ---
+
+/// Create NCR (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/manufacturing/ncrs", tag = "Manufacturing",
+    request_body = CreateNonConformanceReport,
+    responses((status = 201, description = "NCR created"), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn create_ncr(
+    _admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+    payload: web::Json<CreateNonConformanceReport>,
+) -> ApiResult<HttpResponse> {
+    let create = payload.into_inner();
+    let ncr = qc_service.create_ncr(create).await?;
+    Ok(HttpResponse::Created().json(ncr))
+}
+
+/// Get all NCRs for tenant
+#[utoipa::path(
+    get, path = "/api/v1/manufacturing/ncrs", tag = "Manufacturing",
+    responses((status = 200, description = "List of NCRs")),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_ncrs(
+    auth_user: AuthUser,
+    qc_service: web::Data<QualityControlService>,
+) -> ApiResult<HttpResponse> {
+    let ncrs = qc_service.get_ncrs_by_tenant(auth_user.0.tenant_id).await?;
+    Ok(HttpResponse::Ok().json(ncrs))
+}
+
+/// Get NCR by ID
+#[utoipa::path(
+    get, path = "/api/v1/manufacturing/ncrs/{id}", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "NCR ID")),
+    responses((status = 200, description = "NCR found"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_ncr(
+    _auth_user: AuthUser,
+    qc_service: web::Data<QualityControlService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let ncr = qc_service.get_ncr(*path).await?;
+    Ok(HttpResponse::Ok().json(ncr))
+}
+
+/// Update NCR (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/manufacturing/ncrs/{id}", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "NCR ID")),
+    request_body = UpdateNonConformanceReport,
+    responses((status = 200, description = "NCR updated"), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn update_ncr(
+    _admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+    path: web::Path<i64>,
+    payload: web::Json<UpdateNonConformanceReport>,
+) -> ApiResult<HttpResponse> {
+    let ncr = qc_service.update_ncr(*path, payload.into_inner()).await?;
+    Ok(HttpResponse::Ok().json(ncr))
+}
+
+/// Delete NCR (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/manufacturing/ncrs/{id}", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "NCR ID")),
+    responses((status = 204, description = "NCR deleted"), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn delete_ncr(
+    _admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    qc_service.delete_ncr(*path).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct UpdateWorkOrderStatusRequest {
     pub status: WorkOrderStatus,
@@ -397,5 +566,29 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/manufacturing/material-requirements/{product_id}")
             .route(web::get().to(calculate_material_requirements)),
+    )
+    // Quality Control - Inspections
+    .service(
+        web::resource("/v1/manufacturing/inspections")
+            .route(web::get().to(get_inspections))
+            .route(web::post().to(create_inspection)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/inspections/{id}")
+            .route(web::get().to(get_inspection))
+            .route(web::put().to(update_inspection))
+            .route(web::delete().to(delete_inspection)),
+    )
+    // Quality Control - NCRs
+    .service(
+        web::resource("/v1/manufacturing/ncrs")
+            .route(web::get().to(get_ncrs))
+            .route(web::post().to(create_ncr)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/ncrs/{id}")
+            .route(web::get().to(get_ncr))
+            .route(web::put().to(update_ncr))
+            .route(web::delete().to(delete_ncr)),
     );
 }

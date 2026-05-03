@@ -3,9 +3,9 @@
 ## Project Overview
 Multi-tenant SaaS ERP system built with Rust, Actix-web, and SQLx.
 
-**Current Production Score: 8.2/10**
+**Current Production Score: 8.7/10**
 
-*Note: Score adjusted to reflect partial OpenAPI coverage (~13/170 handlers documented), legacy route drift (dead code not wired in production), two routing shadow bugs, and missing QC/TenantConfig REST APIs.*
+*Note: Score adjusted to reflect partial OpenAPI coverage (~13/170 handlers documented), legacy route drift (dead code not wired in production), and missing Viewer role enforcement.*
 
 ### Architecture
 
@@ -34,18 +34,18 @@ Multi-tenant SaaS ERP system built with Rust, Actix-web, and SQLx.
 |--------|-------------|--------|
 | `auth` | Authentication & JWT tokens | ✅ Complete |
 | `user` | User management with role-based access | ✅ Complete + PostgreSQL |
-| `tenant` | Multi-tenancy with subdomain routing | ⚠️ Partial — Tenant CRUD exists, but **TenantConfig REST API is missing** |
+| `tenant` | Multi-tenancy with subdomain routing | ✅ Complete — Tenant CRUD + TenantConfig REST API (5 endpoints) + optional encryption |
 | `cari` | Customer/Vendor accounts with credit limits | ✅ Complete + PostgreSQL |
 | `product` | Product catalog, categories, units, barcodes | ✅ Complete |
-| `product/variant` | Product variant CRUD | ⚠️ Partial — All endpoints use `AuthUser` only; **no `AdminUser` enforcement** for create/update/delete |
+| `product/variant` | Product variant CRUD | ✅ Complete — AdminUser enforced for create/update/delete |
 | `stock` | Warehouses, stock levels, movements, valuation | ✅ Complete |
-| `invoice` | Invoice creation, status, payments | ⚠️ Partial — `POST /api/v1/invoices/payments` is **shadowed by `/v1/invoices/{id}` route** and unreachable |
+| `invoice` | Invoice creation, status, payments | ✅ Complete — Payments route shadow bug fixed |
 | `sales` | Sales orders, quotations, conversion | ✅ Complete |
 | `purchase` | Purchase orders, goods receipt, purchase requests (approval workflow) | ✅ Complete |
 | `accounting` | Chart of accounts, journal entries, trial balance | ✅ Complete |
-| `assets` | Fixed assets, depreciation, maintenance | ⚠️ Partial — `POST /api/v1/assets/maintenance-records` is **shadowed by `/v1/assets/{id}` route** and unreachable |
+| `assets` | Fixed assets, depreciation, maintenance | ✅ Complete — Maintenance-records route shadow bug fixed |
 | `project` | Project management, WBS, costs, profitability | ✅ Complete |
-| `manufacturing` | BOM, work orders, routing, material requirements | ⚠️ Partial — NCR and inspection models exist but have **no exposed REST API endpoints** |
+| `manufacturing` | BOM, work orders, routing, material requirements, quality control | ✅ Complete — Inspection + NCR REST APIs added with validation |
 | `crm` | Leads, opportunities, campaigns, support tickets | ✅ Complete |
 | `hr` | Employee management, attendance, leave, payroll | ✅ Complete |
 | `feature` | Feature flags & tenant-specific toggles | ✅ Complete + API v1 |

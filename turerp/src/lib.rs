@@ -83,7 +83,10 @@ pub mod app {
     };
     use crate::domain::stock::service::StockService;
     use crate::domain::tenant::repository::BoxTenantRepository;
-    use crate::domain::tenant::service::TenantService;
+    use crate::domain::tenant::repository::{
+        BoxTenantConfigRepository, InMemoryTenantConfigRepository,
+    };
+    use crate::domain::tenant::service::{TenantConfigService, TenantService};
     use crate::domain::user::repository::BoxUserRepository;
     use crate::domain::user::service::UserService;
     use crate::utils::jwt::JwtService;
@@ -213,11 +216,13 @@ pub mod app {
         pub manufacturing_service: web::Data<ManufacturingService>,
         pub crm_service: web::Data<CrmService>,
         pub tenant_service: web::Data<TenantService>,
+        pub tenant_config_service: web::Data<TenantConfigService>,
         pub assets_service: web::Data<AssetsService>,
         pub feature_service: web::Data<FeatureFlagService>,
         pub product_service: web::Data<ProductService>,
         pub purchase_service: web::Data<PurchaseService>,
         pub audit_service: web::Data<AuditService>,
+        pub qc_service: web::Data<crate::domain::manufacturing::QualityControlService>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
     }
@@ -329,6 +334,9 @@ pub mod app {
             // Tenant
             let tenant_repo = Arc::new(InMemoryTenantRepository::new()) as BoxTenantRepository;
             let tenant_service = TenantService::new(tenant_repo);
+            let tenant_config_repo =
+                Arc::new(InMemoryTenantConfigRepository::new()) as BoxTenantConfigRepository;
+            let tenant_config_service = TenantConfigService::new(tenant_config_repo);
 
             // Assets
             let asset_repo = Arc::new(InMemoryAssetsRepository::new()) as BoxAssetsRepository;
@@ -376,6 +384,15 @@ pub mod app {
             let audit_repo = Arc::new(InMemoryAuditLogRepository::new()) as BoxAuditLogRepository;
             let audit_service = AuditService::new(audit_repo);
 
+            // Quality Control
+            let inspection_repo =
+                Arc::new(crate::domain::manufacturing::InMemoryInspectionRepository::new())
+                    as crate::domain::manufacturing::BoxInspectionRepository;
+            let ncr_repo = Arc::new(crate::domain::manufacturing::InMemoryNcrRepository::new())
+                as crate::domain::manufacturing::BoxNcrRepository;
+            let qc_service =
+                crate::domain::manufacturing::QualityControlService::new(inspection_repo, ncr_repo);
+
             (
                 auth_service,
                 user_service,
@@ -390,11 +407,13 @@ pub mod app {
                 manufacturing_service,
                 crm_service,
                 tenant_service,
+                tenant_config_service,
                 assets_service,
                 feature_service,
                 product_service,
                 purchase_service,
                 audit_service,
+                qc_service,
             )
         }};
     }
@@ -416,11 +435,13 @@ pub mod app {
             manufacturing_service,
             crm_service,
             tenant_service,
+            tenant_config_service,
             assets_service,
             feature_service,
             product_service,
             purchase_service,
             audit_service,
+            qc_service,
         ) = create_in_memory_services!(config);
 
         AppState {
@@ -437,11 +458,13 @@ pub mod app {
             manufacturing_service: web::Data::new(manufacturing_service),
             crm_service: web::Data::new(crm_service),
             tenant_service: web::Data::new(tenant_service),
+            tenant_config_service: web::Data::new(tenant_config_service),
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
+            qc_service: web::Data::new(qc_service),
         }
     }
 
@@ -543,6 +566,17 @@ pub mod app {
         // Tenant - PostgreSQL
         let tenant_repo = PostgresTenantRepository::new(pool.clone()).into_boxed();
         let tenant_service = TenantService::new(tenant_repo);
+        let tenant_config_repo =
+            Arc::new(InMemoryTenantConfigRepository::new()) as BoxTenantConfigRepository;
+        let tenant_config_service = TenantConfigService::new(tenant_config_repo);
+        // Quality Control - using in-memory repos until PostgreSQL repos are implemented
+        let inspection_repo =
+            Arc::new(crate::domain::manufacturing::InMemoryInspectionRepository::new())
+                as crate::domain::manufacturing::BoxInspectionRepository;
+        let ncr_repo = Arc::new(crate::domain::manufacturing::InMemoryNcrRepository::new())
+            as crate::domain::manufacturing::BoxNcrRepository;
+        let qc_service =
+            crate::domain::manufacturing::QualityControlService::new(inspection_repo, ncr_repo);
 
         // Assets - PostgreSQL
         let asset_repo = PostgresAssetsRepository::new(pool.clone());
@@ -596,11 +630,13 @@ pub mod app {
             manufacturing_service: web::Data::new(manufacturing_service),
             crm_service: web::Data::new(crm_service),
             tenant_service: web::Data::new(tenant_service),
+            tenant_config_service: web::Data::new(tenant_config_service),
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
+            qc_service: web::Data::new(qc_service),
             db_pool: web::Data::new(pool),
         }
     }
@@ -628,11 +664,13 @@ pub mod app {
             manufacturing_service,
             crm_service,
             tenant_service,
+            tenant_config_service,
             assets_service,
             feature_service,
             product_service,
             purchase_service,
             audit_service,
+            qc_service,
         ) = create_in_memory_services!(config);
 
         // For in-memory testing with postgres feature, create a mock pool
@@ -659,11 +697,13 @@ pub mod app {
             manufacturing_service: web::Data::new(manufacturing_service),
             crm_service: web::Data::new(crm_service),
             tenant_service: web::Data::new(tenant_service),
+            tenant_config_service: web::Data::new(tenant_config_service),
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
+            qc_service: web::Data::new(qc_service),
             db_pool,
         }
     }

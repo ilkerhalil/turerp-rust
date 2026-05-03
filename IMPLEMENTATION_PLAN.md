@@ -377,11 +377,6 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 |-------|----------|-------------|
 | OpenAPI coverage | Medium | Only ~13 of ~170 handlers are registered in the `ApiDoc` OpenAPI schema; most v1 endpoints undocumented in Swagger |
 | Legacy route drift | Medium | `/api/auth/*` and `/api/users/*` legacy modules exist but are never configured in `main.rs` router; integration tests wire them manually, causing test/production divergence |
-| Invoice payments route | High | `POST /api/v1/invoices/payments` is registered after `/v1/invoices/{id}` in `invoice.rs`, so it is shadowed and unreachable (request hits `{id}="payments"` first → 405) |
-| Assets maintenance record route | High | `POST /api/v1/assets/maintenance-records` is registered after `/v1/assets/{id}` in `assets.rs`; shadowed by `{id}="maintenance-records"` (request → 405) |
-| Product variant auth | Medium | All product variant endpoints use `AuthUser`; no `AdminUser` checks for create/update/delete |
-| QC endpoints missing | Medium | NCR and inspection models exist in `domain/manufacturing` but no API endpoints expose them |
-| TenantConfig API missing | Low | `TenantConfig` domain/repo/migration exist but no REST endpoints exposed |
 | Viewer role unused | Low | `Role::Viewer` is defined but no authorization logic differentiates it from `User` |
 
 ### Infrastructure
@@ -399,6 +394,12 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 ---
 
 ## Remaining Work
+
+### Medium Priority (Completed)
+| Feature | Description | Status |
+|---------|-------------|--------|
+| TenantConfig REST API | CRUD endpoints for per-tenant config (key-value with optional encryption) | ✅ Done — 5 endpoints added in `api/v1/tenant.rs` |
+| Quality Control API | Inspection + NCR endpoints for manufacturing module | ✅ Done — 8 endpoints added in `api/v1/manufacturing.rs` |
 
 ### Medium Priority
 | Feature | Description | Status |

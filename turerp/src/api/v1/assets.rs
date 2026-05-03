@@ -296,6 +296,11 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_asset)),
     )
     .service(web::resource("/v1/assets/status/{status}").route(web::get().to(get_assets_by_status)))
+    // MUST register /maintenance-records BEFORE /{id} to avoid route shadowing
+    .service(
+        web::resource("/v1/assets/maintenance-records")
+            .route(web::post().to(create_maintenance_record)),
+    )
     .service(
         web::resource("/v1/assets/{id}")
             .route(web::get().to(get_asset))
@@ -321,9 +326,5 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/assets/{id}/maintenance-records")
             .route(web::get().to(get_maintenance_records)),
-    )
-    .service(
-        web::resource("/v1/assets/maintenance-records")
-            .route(web::post().to(create_maintenance_record)),
     );
 }

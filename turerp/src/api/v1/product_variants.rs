@@ -5,7 +5,7 @@ use actix_web::{web, HttpResponse};
 use crate::common::pagination::PaginationParams;
 use crate::domain::product::{CreateProductVariant, ProductService, UpdateProductVariant};
 use crate::error::ApiResult;
-use crate::middleware::AuthUser;
+use crate::middleware::{AdminUser, AuthUser};
 
 // --- Products ---
 
@@ -61,7 +61,7 @@ pub async fn get_categories(
     Ok(HttpResponse::Ok().json(result))
 }
 
-/// Create product variant endpoint (requires authentication)
+/// Create product variant endpoint (requires admin role)
 #[utoipa::path(
     post,
     path = "/api/v1/products/{product_id}/variants",
@@ -74,6 +74,7 @@ pub async fn get_categories(
         (status = 201, description = "Product variant created successfully", body = ProductVariantResponse),
         (status = 400, description = "Validation error"),
         (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden - admin role required"),
         (status = 404, description = "Product not found")
     ),
     security(
@@ -81,7 +82,7 @@ pub async fn get_categories(
     )
 )]
 pub async fn create_variant(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     service: web::Data<ProductService>,
     path: web::Path<i64>,
     payload: web::Json<CreateProductVariant>,
@@ -147,7 +148,7 @@ pub async fn get_variant(
     Ok(HttpResponse::Ok().json(variant))
 }
 
-/// Update product variant endpoint (requires authentication)
+/// Update product variant endpoint (requires admin role)
 #[utoipa::path(
     put,
     path = "/api/v1/variants/{id}",
@@ -160,6 +161,7 @@ pub async fn get_variant(
         (status = 200, description = "Product variant updated", body = ProductVariantResponse),
         (status = 400, description = "Validation error"),
         (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden - admin role required"),
         (status = 404, description = "Variant not found")
     ),
     security(
@@ -167,7 +169,7 @@ pub async fn get_variant(
     )
 )]
 pub async fn update_variant(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     service: web::Data<ProductService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateProductVariant>,
@@ -176,7 +178,7 @@ pub async fn update_variant(
     Ok(HttpResponse::Ok().json(variant))
 }
 
-/// Delete product variant endpoint (requires authentication)
+/// Delete product variant endpoint (requires admin role)
 #[utoipa::path(
     delete,
     path = "/api/v1/variants/{id}",
@@ -187,6 +189,7 @@ pub async fn update_variant(
     responses(
         (status = 204, description = "Product variant deleted"),
         (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden - admin role required"),
         (status = 404, description = "Variant not found")
     ),
     security(
@@ -194,7 +197,7 @@ pub async fn update_variant(
     )
 )]
 pub async fn delete_variant(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     service: web::Data<ProductService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
