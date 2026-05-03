@@ -34,11 +34,11 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Tenant model and repository
 - [x] Subdomain validation
 - [x] Tenant CRUD operations
-- [x] Database routing per tenant (TenantPoolRegistry)
+- [x] Database routing per tenant (TenantPoolRegistry: caches per tenant but uses same shared pool for all tenants; not true per-tenant DB isolation)
 
 ### 1.4 Users Module
 - [x] User management within tenant
-- [x] Role assignment (Admin, User, Viewer)
+- [x] Role assignment (Admin, User, Viewer defined but Viewer role has no differentiated authorization logic)
 - [x] User CRUD endpoints
 - [x] User validation tests
 
@@ -164,8 +164,8 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Material requirements calculation
 
 ### 7.3 Quality Control
-- [x] Inspections
-- [x] Non-conformance reports (NCR)
+- [x] Inspections (model types only - no API endpoints)
+- [x] Non-conformance reports (NCR) (model types only - no API endpoints)
 
 ### 7.4 Shop Floor
 - [x] Work order operations tracking
@@ -187,12 +187,13 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 ## Phase 9: Integration & Polish (Week 12)
 
 ### 9.1 API Documentation
-- [x] OpenAPI/Swagger UI
-- [x] API versioning (/api/v1/ prefix, backward compatibility)
+- [x] OpenAPI/Swagger UI (partial: ~13 paths documented out of ~170 handlers; most v1 endpoints not yet in spec)
+- [x] API versioning (/api/v1/ prefix)
+- [x] Legacy `/api/auth/*` and `/api/users/*` routes exist in codebase but are NOT wired into the production router (dead code; only configured in integration tests)
 - [x] Rate limiting (governor crate)
 
 ### 9.2 Testing & Security
-- [x] Unit tests (264 passing)
+- [x] Unit tests (250 passing)
 - [x] Integration tests (38 passing)
 - [x] Security tests (27 passing - OWASP Top 10)
 - [x] Request ID middleware
@@ -239,7 +240,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - [x] Apply single inner struct pattern consistently
 
 ### 10.4 Code Quality
-- [x] Add #[must_use] attributes to important return types
+- [x] Add #[must_use] attributes to important return types (only 1 applied: `TokenPair::generate_tokens` in jwt.rs)
 - [x] Fix AdminUser extractor role comparison (case sensitivity bug)
 - [x] Fix all Clippy warnings (needless_borrows, manual_range_contains, etc.)
 - [x] Fix InvoiceStatus and ProjectStatus Default implementations (derive macro)
@@ -294,7 +295,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Module | Status | Notes |
 |--------|--------|-------|
 | Auth | ✅ Complete | JWT, bcrypt, rate limiting, OpenAPI, role-based auth |
-| Tenant | ✅ Complete | Subdomain routing, PostgreSQL repo, TenantConfig |
+| Tenant | ⚠️ Partial | Subdomain routing, PostgreSQL repo, TenantConfig domain/repo exist but **no REST API endpoints** for TenantConfig |
 | User | ✅ Complete | CRUD + roles + validation tests + admin auth |
 | Cari | ✅ Complete | Customer/Vendor + PostgreSQL repo, Decimal |
 | Product | ✅ Complete | Categories, units, variants, Decimal |
@@ -306,10 +307,10 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Accounting | ✅ Complete | Journal entries, trial balance, Decimal |
 | Assets | ✅ Complete | Fixed assets, depreciation, maintenance |
 | Project | ✅ Complete | WBS, costs, profitability, Decimal |
-| Manufacturing | ✅ Complete | Work orders, BOM, routing, NCR, Decimal |
+| Manufacturing | ⚠️ Partial | Work orders, BOM, routing, Decimal; NCR/inspection models exist but **no API endpoints** |
 | CRM | ✅ Complete | Leads, opportunities, tickets, Decimal |
 | Feature Flags | ✅ Complete | CRUD, tenant-specific, API v1, admin auth |
-| Product Variants | ✅ Complete | CRUD, API v1 |
+| Product Variants | ⚠️ Partial | CRUD API v1 exists but all endpoints use `AuthUser` (no `AdminUser` checks for create/update/delete) |
 | Purchase Requests | ✅ Complete | CRUD, approval workflow, API v1, state machine, pagination |
 | Audit | ✅ Complete | Request audit trail, batch persistence, admin query API |
 
@@ -325,7 +326,7 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 | Audit Log API | ✅ Complete | `GET /api/v1/audit-logs` with filtering + pagination |
 
 ### Test Coverage
-- **329 tests passing** (264 unit + 38 integration + 27 security)
+- **315 tests passing** (250 unit + 38 integration + 27 security)
 - Unit tests for all domain modules
 - Model validation tests
 - Service business logic tests
@@ -356,16 +357,44 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 - ✅ SQL injection prevention (parameterized queries)
 - ✅ Admin role authorization for sensitive operations (AdminUser extractor)
 - ✅ Tenant isolation enforced at API layer
-- ✅ Secure public path matching (exact match, no bypass)
-- ✅ Encryption key memory security (zeroize on drop)
+- ✅ Secure public path matching (exact match + prefix for directory-like paths; note: non-directory paths like `/health` also match their subpaths e.g. `/health/*`)
+- ✅ Encryption key memory security (`zeroize` crate present but no explicit zeroize-on-drop implementation; `generate_key()` returns plain `[u8; 32]`)
 - ✅ Decimal precision for financial values (all modules)
 - ✅ Required tenant_id in registration (no default tenant exposure)
 - ✅ Thread-safe in-memory repositories (single mutex pattern)
-- ✅ #[must_use] attributes on important return types
+- ✅ #[must_use] attributes (1 applied: `TokenPair::generate_tokens`)
 - ✅ Forbidden (403) error type for authorization failures
 - ✅ AdminUser extractor role comparison (lowercase "admin" fix)
 - ✅ Centralized DB error handling with PG error code detection
 - ⚠️ Default admin credentials (dev only, warning in migrations)
+
+---
+
+## Known Issues & Technical Debt
+
+### API Layer
+| Issue | Severity | Description |
+|-------|----------|-------------|
+| OpenAPI coverage | Medium | Only ~13 of ~170 handlers are registered in the `ApiDoc` OpenAPI schema; most v1 endpoints undocumented in Swagger |
+| Legacy route drift | Medium | `/api/auth/*` and `/api/users/*` legacy modules exist but are never configured in `main.rs` router; integration tests wire them manually, causing test/production divergence |
+| Invoice payments route | High | `POST /api/v1/invoices/payments` is registered after `/v1/invoices/{id}` in `invoice.rs`, so it is shadowed and unreachable (request hits `{id}="payments"` first → 405) |
+| Assets maintenance record route | High | `POST /api/v1/assets/maintenance-records` is registered after `/v1/assets/{id}` in `assets.rs`; shadowed by `{id}="maintenance-records"` (request → 405) |
+| Product variant auth | Medium | All product variant endpoints use `AuthUser`; no `AdminUser` checks for create/update/delete |
+| QC endpoints missing | Medium | NCR and inspection models exist in `domain/manufacturing` but no API endpoints expose them |
+| TenantConfig API missing | Low | `TenantConfig` domain/repo/migration exist but no REST endpoints exposed |
+| Viewer role unused | Low | `Role::Viewer` is defined but no authorization logic differentiates it from `User` |
+
+### Infrastructure
+| Issue | Severity | Description |
+|-------|----------|-------------|
+| TenantPoolRegistry | Low | Caches a connection pool per tenant ID but all pools point to the same database; true per-tenant DB isolation not implemented |
+| Zeroize on drop | Low | `zeroize` crate is present but no struct implements `Zeroize`/`Drop` for keys; `generate_key()` returns a plain `[u8; 32]` array |
+| #[must_use] coverage | Low | Only 1 attribute applied in entire codebase (jwt.rs) |
+
+### Code Quality
+| Issue | Severity | Description |
+|-------|----------|-------------|
+| Test/production route divergence | Medium | Integration tests register legacy routes that don't exist in production `main.rs` |
 
 ---
 
@@ -528,8 +557,8 @@ utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 - `GET /api/v1/invoices/outstanding` - Outstanding invoices (requires auth)
 - `GET /api/v1/invoices/overdue` - Overdue invoices (requires auth)
 - `PUT /api/v1/invoices/{id}/status` - Update invoice status (admin only)
-- `POST /api/v1/invoices/payments` - Add payment (admin only)
 - `GET /api/v1/invoices/{id}/payments` - Get payments by invoice (requires auth)
+- `POST /api/v1/invoices/payments` - Add payment (admin only) **⚠️ Routing conflict: shadowed by `/v1/invoices/{id}` when `id="payments"`. Currently unreachable; must be registered before `{id}`.**
 
 ### Sales (v1)
 - `GET /api/v1/sales/orders` - List sales orders (requires auth, paginated)
@@ -590,7 +619,7 @@ utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 - `POST /api/v1/assets/{id}/maintenance/start` - Start maintenance (admin only)
 - `POST /api/v1/assets/{id}/maintenance/end` - End maintenance (admin only)
 - `GET /api/v1/assets/{id}/maintenance-records` - Get maintenance records (requires auth)
-- `POST /api/v1/assets/maintenance-records` - Create maintenance record (admin only)
+- `POST /api/v1/assets/maintenance-records` - Create maintenance record (admin only) **⚠️ Routing conflict: shadowed by `/v1/assets/{id}` when `id="maintenance-records"`. Currently unreachable; must be registered before `{id}`.**
 
 ### Project (v1)
 - `GET /api/v1/projects` - List projects (requires auth, paginated)

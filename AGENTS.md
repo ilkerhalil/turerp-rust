@@ -3,7 +3,9 @@
 ## Project Overview
 Multi-tenant SaaS ERP system built with Rust, Actix-web, and SQLx.
 
-**Current Production Score: 8.5/10**
+**Current Production Score: 8.2/10**
+
+*Note: Score adjusted to reflect partial OpenAPI coverage (~13/170 handlers documented), legacy route drift (dead code not wired in production), two routing shadow bugs, and missing QC/TenantConfig REST APIs.*
 
 ### Architecture
 
@@ -31,19 +33,23 @@ Multi-tenant SaaS ERP system built with Rust, Actix-web, and SQLx.
 | Domain | Description | Status |
 |--------|-------------|--------|
 | `auth` | Authentication & JWT tokens | ✅ Complete |
-| `user` | User management | ✅ Complete + PostgreSQL |
-| `tenant` | Multi-tenancy | ✅ Complete + PostgreSQL |
-| `cari` | Customer/Vendor accounts | ✅ Complete + PostgreSQL |
-| `product` | Product catalog | ✅ Complete |
-| `stock` | Inventory management | ✅ Complete |
-| `invoice` | Invoicing | ✅ Complete |
-| `accounting` | Chart of accounts | ✅ Complete |
-| `sales` | Sales orders | ✅ Complete |
-| `purchase` | Purchase orders | ✅ Complete |
-| `manufacturing` | BOM & work orders | ✅ Complete |
-| `crm` | CRM (leads, tickets) | ✅ Complete |
-| `hr` | HR & payroll | ✅ Complete |
-| `project` | Project management | ✅ Complete |
+| `user` | User management with role-based access | ✅ Complete + PostgreSQL |
+| `tenant` | Multi-tenancy with subdomain routing | ⚠️ Partial — Tenant CRUD exists, but **TenantConfig REST API is missing** |
+| `cari` | Customer/Vendor accounts with credit limits | ✅ Complete + PostgreSQL |
+| `product` | Product catalog, categories, units, barcodes | ✅ Complete |
+| `product/variant` | Product variant CRUD | ⚠️ Partial — All endpoints use `AuthUser` only; **no `AdminUser` enforcement** for create/update/delete |
+| `stock` | Warehouses, stock levels, movements, valuation | ✅ Complete |
+| `invoice` | Invoice creation, status, payments | ⚠️ Partial — `POST /api/v1/invoices/payments` is **shadowed by `/v1/invoices/{id}` route** and unreachable |
+| `sales` | Sales orders, quotations, conversion | ✅ Complete |
+| `purchase` | Purchase orders, goods receipt, purchase requests (approval workflow) | ✅ Complete |
+| `accounting` | Chart of accounts, journal entries, trial balance | ✅ Complete |
+| `assets` | Fixed assets, depreciation, maintenance | ⚠️ Partial — `POST /api/v1/assets/maintenance-records` is **shadowed by `/v1/assets/{id}` route** and unreachable |
+| `project` | Project management, WBS, costs, profitability | ✅ Complete |
+| `manufacturing` | BOM, work orders, routing, material requirements | ⚠️ Partial — NCR and inspection models exist but have **no exposed REST API endpoints** |
+| `crm` | Leads, opportunities, campaigns, support tickets | ✅ Complete |
+| `hr` | Employee management, attendance, leave, payroll | ✅ Complete |
+| `feature` | Feature flags & tenant-specific toggles | ✅ Complete + API v1 |
+| `audit` | Request audit trail, mpsc batch persistence | ✅ Complete + API v1 |
 
 ---
 
@@ -72,21 +78,33 @@ cargo fmt --check
 ```bash
 # Server
 TURERP_SERVER_HOST=0.0.0.0
-TURERP_SERVER_PORT=8080
+TURERP_SERVER_PORT=8000
 
 # Database (PostgreSQL feature)
 TURERP_DATABASE_URL=postgres://user:pass@localhost:5432/turerp
-TURERP_DATABASE_MAX_CONNECTIONS=10
+TURERP_DB_MAX_CONNECTIONS=10
+TURERP_DB_MIN_CONNECTIONS=5
 
 # JWT
 TURERP_JWT_SECRET=your-secret-key
-TURERP_JWT_ACCESS_TOKEN_EXPIRATION=3600
-TURERP_JWT_REFRESH_TOKEN_EXPIRATION=604800
+TURERP_JWT_ACCESS_EXPIRATION=3600
+TURERP_JWT_REFRESH_EXPIRATION=604800
 
 # CORS
-TURERP_CORS_ALLOWED_ORIGINS=["http://localhost:3000"]
-TURERP_CORS_ALLOWED_METHODS=["GET","POST","PUT","DELETE"]
-TURERP_CORS_ALLOWED_HEADERS=["Authorization","Content-Type"]
+TURERP_CORS_ORIGINS=http://localhost:3000
+TURERP_CORS_METHODS=GET,POST,PUT,DELETE,OPTIONS
+TURERP_CORS_HEADERS=Authorization,Content-Type
+TURERP_CORS_CREDENTIALS=true
+TURERP_CORS_MAX_AGE=3600
+
+# Rate Limiting
+TURERP_TRUSTED_PROXIES=
+TURERP_RATE_LIMIT_REQUESTS_PER_MINUTE=10
+TURERP_RATE_LIMIT_BURST=3
+
+# Metrics
+TURERP_METRICS_ENABLED=true
+TURERP_METRICS_PATH=/metrics
 ```
 
 ---
@@ -292,55 +310,82 @@ pub fn validate_password(password: &str) -> Result<(), PasswordValidationError> 
 turerp/
 ├── src/
 │   ├── main.rs                 # Application entry point
-│   ├── lib.rs                  # Library root, re-exports, AppState
+│   ├── lib.rs                  # Library exports, AppState, create_app_state
 │   ├── config.rs               # Configuration management
 │   ├── error.rs                # Error types (thiserror)
-│   ├── db/                     # Database layer (PostgreSQL)
-│   │   ├── mod.rs
-│   │   └── pool.rs             # Connection pool, migrations
+│   ├── api/                    # API layer
+│   │   ├── mod.rs              # API module + OpenAPI (legacy routes, 13 documented paths)
+│   │   ├── auth.rs             # Legacy auth routes (deprecated, dead code)
+│   │   ├── users.rs            # Legacy users routes (deprecated, dead code)
+│   │   └── v1/                 # API version 1 (all production routes)
+│   │       ├── mod.rs
+│   │       ├── auth.rs
+│   │       ├── users.rs
+│   │       ├── cari.rs
+│   │       ├── stock.rs
+│   │       ├── invoice.rs
+│   │       ├── sales.rs
+│   │       ├── hr.rs
+│   │       ├── accounting.rs
+│   │       ├── assets.rs
+│   │       ├── project.rs
+│   │       ├── manufacturing.rs
+│   │       ├── crm.rs
+│   │       ├── tenant.rs
+│   │       ├── feature_flags.rs
+│   │       ├── product_variants.rs
+│   │       ├── purchase_requests.rs
+│   │       └── audit.rs
+│   ├── middleware/
+│   │   ├── mod.rs              # Middleware exports
+│   │   ├── auth.rs           # JWT authentication + AuthUser/AdminUser extractors
+│   │   ├── rate_limit.rs     # Rate limiting (governor 0.8, trusted proxy support)
+│   │   ├── request_id.rs     # Request ID tracking
+│   │   ├── audit.rs          # Audit logging (channel-based batch persistence)
+│   │   ├── metrics.rs        # Prometheus metrics collection
+│   │   └── tenant.rs         # Tenant context middleware
 │   ├── domain/                 # Domain layer (DDD)
 │   │   ├── mod.rs
-│   │   ├── auth/               # Authentication
-│   │   │   ├── mod.rs
-│   │   │   └── service.rs
-│   │   ├── user/               # User management
-│   │   │   ├── mod.rs
-│   │   │   ├── model.rs
-│   │   │   ├── repository.rs   # Trait + InMemory impl
-│   │   │   ├── postgres_repository.rs  # PostgreSQL impl
-│   │   │   └── service.rs
-│   │   ├── tenant/             # Multi-tenancy
-│   │   │   ├── mod.rs
-│   │   │   ├── model.rs
-│   │   │   ├── repository.rs
-│   │   │   ├── postgres_repository.rs
-│   │   │   └── service.rs
-│   │   ├── cari/              # Customer/Vendor
-│   │   │   ├── mod.rs
-│   │   │   ├── model.rs
-│   │   │   ├── repository.rs
-│   │   │   ├── postgres_repository.rs
-│   │   │   └── service.rs
-│   │   └── [other domains]/
-│   ├── api/                    # API layer
-│   │   ├── mod.rs
-│   │   ├── auth.rs
-│   │   └── users.rs
-│   ├── middleware/
-│   │   ├── mod.rs
-│   │   ├── auth.rs            # JWT authentication
-│   │   ├── rate_limit.rs      # Rate limiting (governor)
-│   │   └── request_id.rs      # Request ID tracing
+│   │   ├── auth/             # Authentication domain
+│   │   ├── user/             # User domain
+│   │   ├── tenant/           # Tenant domain (includes TenantConfig)
+│   │   ├── cari/             # Customer/Vendor domain
+│   │   ├── product/          # Product domain (includes variants)
+│   │   ├── stock/            # Stock domain
+│   │   ├── invoice/          # Invoice domain
+│   │   ├── sales/            # Sales domain
+│   │   ├── purchase/         # Purchase domain (includes requests)
+│   │   ├── hr/               # HR domain
+│   │   ├── accounting/       # Accounting domain
+│   │   ├── assets/           # Fixed assets domain
+│   │   ├── project/          # Project domain
+│   │   ├── manufacturing/    # Manufacturing domain
+│   │   ├── crm/              # CRM domain
+│   │   ├── audit/            # Audit log domain
+│   │   └── feature/          # Feature flags domain
+│   ├── common/
+│   │   └── pagination.rs     # Pagination utilities (PaginatedResult, PaginationParams)
+│   ├── db/
+│   │   ├── mod.rs            # DB module
+│   │   ├── pool.rs           # Connection pool, migrations
+│   │   ├── error.rs          # Centralized DB error handling (map_sqlx_error)
+│   │   └── tenant_registry.rs # Tenant pool registry
 │   └── utils/
 │       ├── mod.rs
-│       ├── password.rs        # Password hashing/validation
-│       └── jwt.rs             # JWT utilities
+│       ├── jwt.rs            # JWT utilities
+│       ├── password.rs       # Password utilities
+│       └── encryption.rs     # AES-256-GCM encryption
 ├── migrations/
-│   └── 001_initial_schema.sql  # Database schema
+│   ├── 001_initial_schema.sql
+│   ├── 002_add_tenant_db_name.sql
+│   ├── 003_business_modules.sql
+│   ├── 004_composite_indexes.sql
+│   └── 005_audit_logs.sql
 ├── tests/
-│   └── api_integration_test.rs
+│   ├── api_integration_test.rs   # Integration tests (38 tests)
+│   └── security_test.rs          # Security tests (27 tests)
 ├── Cargo.toml
-└── .env.example
+└── lefthook.yml
 ```
 
 ---
@@ -383,22 +428,31 @@ pub struct AppState {
 ```rust
 HttpServer::new(move || {
     App::new()
-        .wrap(RequestIdMiddleware)      // 1. Request ID for tracing
-        .wrap(RateLimitMiddleware::new()) // 2. Rate limiting (before auth)
-        .wrap(middleware::Logger::default()) // 3. Logging
-        .wrap(configure_cors(&config.cors)) // 4. CORS
-        // Note: JwtAuthMiddleware applied per-route via service config
+        // Outermost: touches request first, response last
+        .wrap(middleware::Compress::default())          // 1. Response compression
+        .wrap(configure_cors(&config.cors))           // 2. CORS handling
+        .wrap(middleware::Logger::default())          // 3. Access logging
+        .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // 4. Audit logging
+        .wrap(JwtAuthMiddleware::new(...))            // 5. JWT validation
+        .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // 6. Rate limiting
+        .wrap(MetricsMiddleware::new())               // 7. Metrics collection
+        .wrap(TenantMiddleware)                       // 8. Tenant context (after auth)
+        // Innermost: touches request last, response first
+        .wrap(RequestIdMiddleware)                      // 9. Request ID for tracing
+        .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
         .app_data(app_state.auth_service.clone())
         .app_data(app_state.user_service.clone())
         .app_data(app_state.jwt_service.clone())
         #[cfg(feature = "postgres")]
         .app_data(app_state.db_pool.clone())
         .route("/health", web::get().to(health_check))
-        // ... routes
+        .route("/health/live", web::get().to(health_live))
+        .route("/health/ready", web::get().to(health_ready))
+        .route("/metrics", web::get().to(metrics_endpoint))
+        .service(web::scope("/api").configure(v1_*_configure))
+        .service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", ...))
 })
-.shutdown_timeout(30)  // Graceful shutdown
-.run()
-.await
+```
 ```
 
 ---
@@ -410,6 +464,7 @@ HttpServer::new(move || {
 {
   "status": "ok",
   "service": "turerp-erp",
+  "version": "0.1.0",
   "storage": "in-memory"
 }
 ```
@@ -419,8 +474,10 @@ HttpServer::new(move || {
 {
   "status": "ok",
   "service": "turerp-erp",
+  "version": "0.1.0",
   "storage": "postgresql",
-  "database": "healthy"
+  "database": "healthy",
+  "latency_ms": 2
 }
 ```
 
@@ -627,8 +684,8 @@ Pre-commit and pre-push hooks are configured in `lefthook.yml`:
 
 ## OpenAPI / Swagger
 
-**Access Swagger UI:** `http://localhost:8080/swagger-ui/`
+**Access Swagger UI:** `http://localhost:8000/swagger-ui/`
 
-**OpenAPI JSON:** `http://localhost:8080/api-docs/openapi.json`
+**OpenAPI JSON:** `http://localhost:8000/api-docs/openapi.json`
 
-All endpoints are documented with `#[utoipa::path]` annotations.
+~13 paths (auth, users, feature flags) are registered in the `ApiDoc` OpenAPI schema. Most v1 business module endpoints are annotated with `#[utoipa::path]` but are not yet included in the schema, so they do not appear in Swagger UI.

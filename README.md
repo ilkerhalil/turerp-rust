@@ -1,7 +1,7 @@
 # Turerp ERP
 
 [![CI](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-314%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-315%20passing-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **Modern, multi-tenant SaaS ERP system** - Built with Rust, Actix-web, and SQLx.
@@ -14,8 +14,9 @@
 | **Auth** | JWT-based authentication, bcrypt password hashing, token refresh |
 | **Tenant** | Subdomain-based multi-tenant architecture, tenant isolation |
 | **User** | User management, roles (Admin, User, Viewer) |
+| **Feature Flags** | Tenant-specific feature toggles, admin controls |
 | **Cari** | Customer/Vendor accounts, credit limit management |
-| **Product** | Product catalog, categories, units, barcode support |
+| **Product** | Product catalog, categories, units, variants, barcode support |
 | **Stock** | Warehouse management, stock movements, valuation |
 | **Invoice** | Invoice creation, payment tracking, tax calculations |
 
@@ -23,10 +24,11 @@
 | Module | Description |
 |--------|-------------|
 | **Sales** | Sales orders, quotations, pricing |
-| **Purchase** | Purchase orders, goods receipt, vendor management |
+| **Purchase** | Purchase orders, goods receipt, **purchase requests** (approval workflow) |
 | **HR** | Employee management, payroll, leave tracking |
 | **Accounting** | Chart of accounts, journal entries, trial balance |
 | **Assets** | Fixed assets, depreciation calculation, maintenance tracking |
+| **Invoice** | Invoice creation, payment tracking, tax calculations |
 
 ### Advanced Modules
 | Module | Description |
@@ -57,7 +59,7 @@
 | **Database** | PostgreSQL | 14+ |
 | **ORM** | SQLx (runtime queries) | 0.8 |
 | **Auth** | JWT + bcrypt | - |
-| **Validation** | validator | 0.16 |
+| **Validation** | validator | 0.20 |
 | **Rate Limiting** | governor | 0.8 |
 | **Synchronization** | parking_lot (Mutex) | 0.12 |
 | **Metrics** | metrics + metrics-exporter-prometheus | 0.24/0.16 |
@@ -76,8 +78,8 @@
 ```bash
 cd turerp
 docker-compose up -d
-# API: http://localhost:8080
-# Swagger UI: http://localhost:8080/swagger-ui/
+# API: http://localhost:8000
+# Swagger UI: http://localhost:8000/swagger-ui/
 ```
 
 ### Development Setup
@@ -186,10 +188,11 @@ turerp-rust/
 │   │   ├── common/
 │   │   │   └── pagination.rs  # Pagination helpers
 │   │   ├── middleware/       # HTTP middleware
-│   │   │   ├── auth.rs        # JWT authentication
-│   │   │   ├── rate_limit.rs  # Rate limiting (governor, trusted proxy)
+│   │   │   ├── auth.rs        # JWT authentication + AdminUser/AuthUser extractors
+│   │   │   ├── rate_limit.rs  # Rate limiting (governor 0.8, trusted proxy)
 │   │   │   ├── metrics.rs     # Prometheus metrics collection
-│   │   │   ├── audit.rs       # Audit logging (channel-based batch persistence)
+│   │   │   ├── audit.rs       # Audit logging (mpsc channel + batch persistence)
+│   │   │   ├── tenant.rs      # Tenant context extraction
 │   │   │   └── request_id.rs  # Request ID tracing
 │   │   ├── utils/             # Utility functions
 │   │   │   ├── jwt.rs         # JWT utilities
@@ -218,23 +221,23 @@ turerp-rust/
 
 ### Authentication (Public - No JWT required)
 ```
-POST /api/auth/register   - Register new user
-POST /api/auth/login      - Login (returns JWT token)
-POST /api/auth/refresh    - Token refresh
+POST /api/v1/auth/register   - Register new user
+POST /api/v1/auth/login      - Login (returns JWT token)
+POST /api/v1/auth/refresh    - Token refresh
 ```
 
 ### Authentication (Protected - JWT required)
 ```
-GET  /api/auth/me         - Current user info 🔒
+GET  /api/v1/auth/me         - Current user info 🔒
 ```
 
 ### Users (Protected - JWT required)
 ```
-GET    /api/users         - User list (paginated) 🔒
-POST   /api/users         - Create user 🔒
-GET    /api/users/{id}    - User details 🔒
-PUT    /api/users/{id}    - Update user 🔒
-DELETE /api/users/{id}    - Delete user 🔒
+GET    /api/v1/users         - User list (paginated) 🔒
+POST   /api/v1/users         - Create user (admin only) 🔒👑
+GET    /api/v1/users/{id}    - User details 🔒
+PUT    /api/v1/users/{id}    - Update user (self or admin) 🔒
+DELETE /api/v1/users/{id}    - Delete user (admin only) 🔒👑
 ```
 
 ### Audit Logs (Admin only)
@@ -245,7 +248,7 @@ GET    /api/v1/audit-logs - List audit logs (paginated, filterable) 🔒👑
 ### Health & Monitoring
 ```
 GET /health        - Health check (alias for readiness)
-GET /health/live   - Liveness probe (always 200)
+GET /health/live   - Liveness probe (always 200, returns version)
 GET /health/ready  - Readiness probe (checks DB, version, latency)
 GET /metrics       - Prometheus metrics
 ```
@@ -257,7 +260,7 @@ GET /metrics       - Prometheus metrics
 - **Swagger UI**: `http://localhost:8000/swagger-ui/`
 - **OpenAPI Spec**: `http://localhost:8000/api-docs/openapi.json`
 
-**Note**: Click the "Authorize" button in Swagger UI to enter a Bearer token.
+**Note**: Click the "Authorize" button in Swagger UI to enter a Bearer token. The OpenAPI schema currently covers ~13 paths; most v1 endpoints are not yet included.
 
 ## Architecture
 
@@ -295,7 +298,7 @@ JWT Token → User Authentication → Role-Based Access
 ## Testing
 
 ```bash
-# All tests (314 tests)
+# All tests (315 tests)
 cargo test
 
 # Security tests
@@ -341,7 +344,7 @@ Automated via GitHub Actions:
 | `TURERP_CORS_HEADERS` | Allowed headers | `Content-Type,Authorization` |
 | `TURERP_CORS_CREDENTIALS` | CORS credentials | `true` |
 | `TURERP_TRUSTED_PROXIES` | Comma-separated trusted proxy IPs for rate limiting | (none) |
-| `TURERP_RATE_LIMIT_RPM` | Rate limit requests per minute | `10` |
+| `TURERP_RATE_LIMIT_REQUESTS_PER_MINUTE` | Rate limit requests per minute | `10` |
 | `TURERP_RATE_LIMIT_BURST` | Rate limit burst size | `3` |
 | `TURERP_METRICS_ENABLED` | Enable Prometheus metrics | `true` |
 | `TURERP_METRICS_PATH` | Metrics endpoint path | `/metrics` |
@@ -362,14 +365,14 @@ The system has been tested against OWASP Top 10 vulnerabilities:
 ### Security Hardening (Code Review)
 
 Additional security measures:
-- **Public Path Matching** - Exact match to prevent route bypass
-- **Encryption Key Security** - Memory cleanup with `zeroize`
+- **Public Path Matching** - Exact match + prefix for directory-like paths; note non-directory paths like `/health` also match subpaths
+- **Encryption Key Security** - `zeroize` crate present; no explicit zeroize-on-drop implementation yet
 - **Financial Precision** - `Decimal` type for monetary calculations (all modules)
 - **Role-Based Access** - AdminUser extractor for endpoint protection
 - **Mutex Pattern** - Thread-safe repositories with single inner struct
 - **Tenant Isolation** - Mandatory `tenant_id` to prevent tenant data exposure
 - **Thread Safety** - Single mutex pattern to prevent race conditions
-- **Must-Use Attributes** - `#[must_use]` for important return values
+- **Must-Use Attributes** - `#[must_use]` applied to `TokenPair::generate_tokens` only
 - **Audit Trail** - All authenticated requests are logged with batch persistence
 - **Centralized DB Errors** - PostgreSQL error code detection (unique violation, foreign key)
 - **Prometheus Metrics** - Request counters, latency histograms, in-flight gauges
@@ -392,7 +395,7 @@ curl http://localhost:8000/api/users \
 ### Rate Limiting
 
 Auth endpoints are protected with rate limiting:
-- **Limit**: 10 requests/minute (configurable via `TURERP_RATE_LIMIT_RPM`)
+- **Limit**: 10 requests/minute (configurable via `TURERP_RATE_LIMIT_REQUESTS_PER_MINUTE`)
 - **Burst**: 3 requests (configurable via `TURERP_RATE_LIMIT_BURST`)
 - **Trusted Proxies**: Configure `TURERP_TRUSTED_PROXIES` to trust `X-Forwarded-For` headers behind load balancers
 
