@@ -195,8 +195,8 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
         let inner = self.inner.lock();
         Ok(inner
             .invoices
-            .values()
-            .find(|i| i.id == id && i.tenant_id == tenant_id)
+            .get(&id)
+            .filter(|i| i.tenant_id == tenant_id)
             .cloned())
     }
 
@@ -307,9 +307,11 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
         let mut inner = self.inner.lock();
         let invoice = inner
             .invoices
-            .values_mut()
-            .find(|i| i.id == id && i.tenant_id == tenant_id)
+            .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", id)))?;
+        if invoice.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Invoice {} not found", id)));
+        }
         invoice.status = status;
         invoice.updated_at = chrono::Utc::now();
         Ok(invoice.clone())
@@ -324,9 +326,11 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
         let mut inner = self.inner.lock();
         let invoice = inner
             .invoices
-            .values_mut()
-            .find(|i| i.id == id && i.tenant_id == tenant_id)
+            .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", id)))?;
+        if invoice.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Invoice {} not found", id)));
+        }
 
         invoice.paid_amount = paid_amount;
 

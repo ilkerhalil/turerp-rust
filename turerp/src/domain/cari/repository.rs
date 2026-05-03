@@ -149,8 +149,8 @@ impl CariRepository for InMemoryCariRepository {
         let inner = self.inner.lock();
         Ok(inner
             .cari
-            .values()
-            .find(|c| c.id == id && c.tenant_id == tenant_id)
+            .get(&id)
+            .filter(|c| c.tenant_id == tenant_id)
             .cloned())
     }
 

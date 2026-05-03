@@ -137,13 +137,13 @@ pub async fn get_overdue_invoices(
     security(("bearer_auth" = []))
 )]
 pub async fn update_invoice_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     invoice_service: web::Data<InvoiceService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateStatusRequest>,
 ) -> ApiResult<HttpResponse> {
     let invoice = invoice_service
-        .update_invoice_status(*path, _admin_user.0.tenant_id, payload.into_inner().status)
+        .update_invoice_status(*path, admin_user.0.tenant_id, payload.into_inner().status)
         .await?;
     Ok(HttpResponse::Ok().json(invoice))
 }
@@ -156,12 +156,12 @@ pub async fn update_invoice_status(
     security(("bearer_auth" = []))
 )]
 pub async fn delete_invoice(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     invoice_service: web::Data<InvoiceService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
     invoice_service
-        .delete_invoice(*path, _admin_user.0.tenant_id)
+        .delete_invoice(*path, admin_user.0.tenant_id)
         .await?;
     Ok(HttpResponse::NoContent().finish())
 }
