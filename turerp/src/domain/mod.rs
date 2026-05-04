@@ -19,6 +19,7 @@ pub mod purchase;
 pub mod sales;
 pub mod settings;
 pub mod stock;
+pub mod tax;
 pub mod tenant;
 pub mod user;
 
@@ -217,3 +218,14 @@ pub use custom_field::repository::{
     BoxCustomFieldRepository, CustomFieldRepository, InMemoryCustomFieldRepository,
 };
 pub use custom_field::service::CustomFieldService;
+
+// Tax module re-exports
+pub use tax::model::{
+    CreateTaxPeriod, CreateTaxRate, TaxCalculationResult, TaxPeriod, TaxPeriodDetail,
+    TaxPeriodResponse, TaxPeriodStatus, TaxRate, TaxRateResponse, TaxType, UpdateTaxRate,
+};
+pub use tax::repository::{
+    BoxTaxPeriodRepository, BoxTaxRateRepository, InMemoryTaxPeriodRepository,
+    InMemoryTaxRateRepository, TaxPeriodRepository, TaxRateRepository,
+};
+pub use tax::service::TaxService;
