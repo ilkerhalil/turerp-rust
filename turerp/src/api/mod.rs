@@ -35,6 +35,7 @@ pub use v1::sales_configure as v1_sales_configure;
 pub use v1::search_configure as v1_search_configure;
 pub use v1::settings_configure as v1_settings_configure;
 pub use v1::stock_configure as v1_stock_configure;
+pub use v1::tax_configure as v1_tax_configure;
 pub use v1::tenant_configure as v1_tenant_configure;
 pub use v1::users_configure as v1_users_configure;
 
@@ -432,6 +433,19 @@ use utoipa::OpenApi;
         crate::api::v1::search::index_document,
         crate::api::v1::search::remove_document,
         crate::api::v1::search::reindex,
+        // Tax
+        crate::api::v1::tax::create_tax_rate,
+        crate::api::v1::tax::list_tax_rates,
+        crate::api::v1::tax::get_tax_rate,
+        crate::api::v1::tax::update_tax_rate,
+        crate::api::v1::tax::get_effective_rate,
+        crate::api::v1::tax::calculate_tax,
+        crate::api::v1::tax::calculate_invoice_tax,
+        crate::api::v1::tax::create_tax_period,
+        crate::api::v1::tax::list_tax_periods,
+        crate::api::v1::tax::get_tax_period,
+        crate::api::v1::tax::calculate_tax_period,
+        crate::api::v1::tax::file_tax_period,
     ),
     components(
         schemas(
@@ -485,6 +499,21 @@ use utoipa::OpenApi;
             crate::api::v1::search::SearchRequest,
             crate::api::v1::search::SearchResultResponse,
             crate::api::v1::search::IndexDocumentRequest,
+            // Tax
+            crate::domain::tax::model::TaxType,
+            crate::domain::tax::model::TaxRate,
+            crate::domain::tax::model::TaxCalculationResult,
+            crate::domain::tax::model::TaxPeriodStatus,
+            crate::domain::tax::model::TaxPeriod,
+            crate::domain::tax::model::TaxPeriodDetail,
+            crate::domain::tax::model::CreateTaxRate,
+            crate::domain::tax::model::UpdateTaxRate,
+            crate::domain::tax::model::CreateTaxPeriod,
+            crate::domain::tax::model::TaxRateResponse,
+            crate::domain::tax::model::TaxPeriodResponse,
+            crate::api::v1::tax::CalculateTaxRequest,
+            crate::api::v1::tax::CalculateInvoiceTaxRequest,
+            crate::api::v1::tax::EffectiveRateQuery,
         )
     ),
     security(
@@ -517,6 +546,7 @@ use utoipa::OpenApi;
         (name = "Reports", description = "Report generation and management"),
         (name = "Events", description = "Event bus, outbox pattern, and dead letter queue"),
         (name = "Search", description = "Full-text search across entities"),
+        (name = "Tax", description = "Turkish tax rate management, calculation, and KVB period tracking"),
         (name = "Audit", description = "Audit log retrieval")
     )
 )]

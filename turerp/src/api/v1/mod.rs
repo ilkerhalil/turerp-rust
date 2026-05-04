@@ -24,6 +24,7 @@ pub mod sales;
 pub mod search;
 pub mod settings;
 pub mod stock;
+pub mod tax;
 pub mod tenant;
 pub mod users;
 
@@ -52,5 +53,6 @@ pub use sales::configure as sales_configure;
 pub use search::configure as search_configure;
 pub use settings::configure as settings_configure;
 pub use stock::configure as stock_configure;
+pub use tax::configure as tax_configure;
 pub use tenant::configure as tenant_configure;
 pub use users::configure as users_configure;

@@ -95,6 +95,8 @@ pub mod app {
         BoxStockLevelRepository, BoxStockMovementRepository, BoxWarehouseRepository,
     };
     use crate::domain::stock::service::StockService;
+    use crate::domain::tax::repository::{BoxTaxPeriodRepository, BoxTaxRateRepository};
+    use crate::domain::tax::service::TaxService;
     use crate::domain::tenant::repository::BoxTenantRepository;
     use crate::domain::tenant::repository::{
         BoxTenantConfigRepository, InMemoryTenantConfigRepository,
@@ -148,6 +150,7 @@ pub mod app {
     use crate::domain::stock::repository::{
         InMemoryStockLevelRepository, InMemoryStockMovementRepository, InMemoryWarehouseRepository,
     };
+    use crate::domain::tax::repository::{InMemoryTaxPeriodRepository, InMemoryTaxRateRepository};
     use crate::domain::tenant::repository::InMemoryTenantRepository;
     use crate::domain::user::repository::InMemoryUserRepository;
 
@@ -250,6 +253,7 @@ pub mod app {
         pub tracing_service: web::Data<dyn TracingService>,
         pub db_router: web::Data<dyn DbRouter>,
         pub i18n: web::Data<I18n>,
+        pub tax_service: web::Data<TaxService>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
     }
@@ -463,6 +467,12 @@ pub mod app {
                 ReadAfterWriteMode::Eventual,
             )) as Arc<dyn DbRouter>;
 
+            // Tax
+            let tax_rate_repo = Arc::new(InMemoryTaxRateRepository::new()) as BoxTaxRateRepository;
+            let tax_period_repo =
+                Arc::new(InMemoryTaxPeriodRepository::new()) as BoxTaxPeriodRepository;
+            let tax_service = TaxService::new(tax_rate_repo, tax_period_repo);
+
             (
                 auth_service,
                 user_service,
@@ -494,6 +504,7 @@ pub mod app {
                 report_engine,
                 tracing_service,
                 db_router,
+                tax_service,
             )
         }};
     }
@@ -532,6 +543,7 @@ pub mod app {
             report_engine,
             tracing_service,
             db_router,
+            tax_service,
         ) = create_in_memory_services!(config);
 
         let i18n = I18n::init();
@@ -568,6 +580,7 @@ pub mod app {
             tracing_service: web::Data::from(tracing_service),
             db_router: web::Data::from(db_router),
             i18n: web::Data::new(i18n),
+            tax_service: web::Data::new(tax_service),
         }
     }
 
@@ -761,6 +774,12 @@ pub mod app {
             ReadAfterWriteMode::Eventual,
         )) as Arc<dyn DbRouter>;
 
+        // Tax - using in-memory repos (no postgres repo yet)
+        let tax_rate_repo = Arc::new(InMemoryTaxRateRepository::new()) as BoxTaxRateRepository;
+        let tax_period_repo =
+            Arc::new(InMemoryTaxPeriodRepository::new()) as BoxTaxPeriodRepository;
+        let tax_service = TaxService::new(tax_rate_repo, tax_period_repo);
+
         let i18n = I18n::init();
 
         AppState {
@@ -794,6 +813,7 @@ pub mod app {
             report_engine: web::Data::from(report_engine),
             tracing_service: web::Data::from(tracing_service),
             db_router: web::Data::from(db_router),
+            tax_service: web::Data::new(tax_service),
             db_pool: web::Data::new(pool),
             i18n: web::Data::new(i18n),
         }
@@ -839,6 +859,7 @@ pub mod app {
             report_engine,
             tracing_service,
             db_router,
+            tax_service,
         ) = create_in_memory_services!(config);
 
         // For in-memory testing with postgres feature, create a mock pool
@@ -884,6 +905,7 @@ pub mod app {
             report_engine: web::Data::from(report_engine),
             tracing_service: web::Data::from(tracing_service),
             db_router: web::Data::from(db_router),
+            tax_service: web::Data::new(tax_service),
             db_pool,
             i18n: web::Data::new(i18n),
         }

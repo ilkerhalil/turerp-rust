@@ -1,0 +1,406 @@
+//! Tax Engine API endpoints (v1)
+
+use actix_web::{web, HttpResponse};
+use chrono::NaiveDate;
+use rust_decimal::Decimal;
+use serde::Deserialize;
+use utoipa::ToSchema;
+
+use crate::common::pagination::PaginationParams;
+use crate::common::MessageResponse;
+use crate::domain::tax::model::{
+    CreateTaxPeriod, CreateTaxRate, TaxPeriodResponse, TaxRateResponse, TaxType, UpdateTaxRate,
+};
+use crate::domain::tax::service::TaxService;
+use crate::error::ApiResult;
+use crate::i18n::{resolve, I18n, Locale};
+use crate::middleware::{AdminUser, AuthUser};
+
+/// Request body for calculating tax
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CalculateTaxRequest {
+    pub amount: Decimal,
+    pub tax_type: String,
+    pub date: NaiveDate,
+    pub inclusive: Option<bool>,
+}
+
+/// Request body for calculating invoice taxes
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CalculateInvoiceTaxRequest {
+    pub invoice_id: i64,
+}
+
+/// Query params for getting the effective tax rate
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
+pub struct EffectiveRateQuery {
+    pub tax_type: String,
+    pub date: NaiveDate,
+}
+
+/// Create a tax rate (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/tax/rates", tag = "Tax",
+    request_body = CreateTaxRate,
+    responses((status = 201, description = "Tax rate created", body = TaxRateResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn create_tax_rate(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    payload: web::Json<CreateTaxRate>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let create = payload.into_inner();
+    match tax_service
+        .create_tax_rate(create, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(rate) => Ok(HttpResponse::Created().json(TaxRateResponse::from(rate))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List tax rates (paginated, optional tax_type filter)
+#[utoipa::path(
+    get, path = "/api/v1/tax/rates", tag = "Tax",
+    params(
+        PaginationParams,
+        ("tax_type" = Option<String>, Query, description = "Filter by tax type (KDV, OIV, BSMV, Damga, Stopaj, KV, GV)"),
+    ),
+    responses((status = 200, description = "List of tax rates")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_tax_rates(
+    auth_user: AuthUser,
+    tax_service: web::Data<TaxService>,
+    pagination: web::Query<PaginationParams>,
+    tax_type: web::Query<Option<String>>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let tax_type_filter = tax_type
+        .into_inner()
+        .and_then(|s| s.parse::<TaxType>().ok());
+    match tax_service
+        .list_tax_rates(
+            auth_user.0.tenant_id,
+            tax_type_filter,
+            pagination.into_inner(),
+        )
+        .await
+    {
+        Ok(result) => {
+            let mapped = result.map(TaxRateResponse::from);
+            Ok(HttpResponse::Ok().json(mapped))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Get a tax rate by ID
+#[utoipa::path(
+    get, path = "/api/v1/tax/rates/{id}", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax rate ID")),
+    responses((status = 200, description = "Tax rate found", body = TaxRateResponse), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_tax_rate(
+    auth_user: AuthUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    match tax_service.get_tax_rate(id, auth_user.0.tenant_id).await {
+        Ok(rate) => Ok(HttpResponse::Ok().json(TaxRateResponse::from(rate))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Update a tax rate (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/tax/rates/{id}", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax rate ID")),
+    request_body = UpdateTaxRate,
+    responses((status = 200, description = "Tax rate updated", body = TaxRateResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn update_tax_rate(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    payload: web::Json<UpdateTaxRate>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    let update = payload.into_inner();
+    match tax_service
+        .update_tax_rate(id, admin_user.0.tenant_id, update)
+        .await
+    {
+        Ok(rate) => Ok(HttpResponse::Ok().json(TaxRateResponse::from(rate))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Get the effective tax rate for a type and date
+#[utoipa::path(
+    get, path = "/api/v1/tax/rates/effective", tag = "Tax",
+    params(EffectiveRateQuery),
+    responses((status = 200, description = "Effective tax rate", body = TaxRateResponse), (status = 404, description = "No effective rate found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_effective_rate(
+    auth_user: AuthUser,
+    tax_service: web::Data<TaxService>,
+    query: web::Query<EffectiveRateQuery>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let params = query.into_inner();
+    let tax_type = match params.tax_type.parse::<TaxType>() {
+        Ok(tt) => tt,
+        Err(e) => {
+            return Ok(
+                crate::error::ApiError::Validation(e).to_http_response(i18n, locale.as_str())
+            );
+        }
+    };
+    match tax_service
+        .get_effective_rate(tax_type, params.date, auth_user.0.tenant_id)
+        .await
+    {
+        Ok(rate) => Ok(HttpResponse::Ok().json(TaxRateResponse::from(rate))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Calculate tax on an amount
+#[utoipa::path(
+    post, path = "/api/v1/tax/calculate", tag = "Tax",
+    request_body = CalculateTaxRequest,
+    responses((status = 200, description = "Tax calculation result", body = TaxCalculationResult), (status = 404, description = "No effective rate found for date")),
+    security(("bearer_auth" = []))
+)]
+pub async fn calculate_tax(
+    auth_user: AuthUser,
+    tax_service: web::Data<TaxService>,
+    payload: web::Json<CalculateTaxRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let req = payload.into_inner();
+    let tax_type = match req.tax_type.parse::<TaxType>() {
+        Ok(tt) => tt,
+        Err(e) => {
+            return Ok(
+                crate::error::ApiError::Validation(e).to_http_response(i18n, locale.as_str())
+            );
+        }
+    };
+    match tax_service
+        .calculate_tax(
+            tax_type,
+            req.amount,
+            req.date,
+            auth_user.0.tenant_id,
+            req.inclusive.unwrap_or(false),
+        )
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Calculate taxes for an invoice
+#[utoipa::path(
+    post, path = "/api/v1/tax/calculate-invoice", tag = "Tax",
+    request_body = CalculateInvoiceTaxRequest,
+    responses((status = 200, description = "Invoice tax calculation result"), (status = 404, description = "Invoice not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn calculate_invoice_tax(
+    _auth_user: AuthUser,
+    _tax_service: web::Data<TaxService>,
+    _payload: web::Json<CalculateInvoiceTaxRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    // Invoice tax calculation requires cross-domain integration with the invoice service,
+    // which is not yet available. Return a not-implemented response.
+    let msg = i18n.t(locale.as_str(), "tax.invoice_calculation_not_implemented");
+    Ok(HttpResponse::NotImplemented().json(MessageResponse { message: msg }))
+}
+
+/// Create a tax period (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/tax/periods", tag = "Tax",
+    request_body = CreateTaxPeriod,
+    responses((status = 201, description = "Tax period created", body = TaxPeriodResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn create_tax_period(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    payload: web::Json<CreateTaxPeriod>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let create = payload.into_inner();
+    match tax_service
+        .create_tax_period(create, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(period) => Ok(HttpResponse::Created().json(TaxPeriodResponse::from(period))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List tax periods (paginated, optional tax_type filter)
+#[utoipa::path(
+    get, path = "/api/v1/tax/periods", tag = "Tax",
+    params(
+        PaginationParams,
+        ("tax_type" = Option<String>, Query, description = "Filter by tax type"),
+    ),
+    responses((status = 200, description = "List of tax periods")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_tax_periods(
+    auth_user: AuthUser,
+    tax_service: web::Data<TaxService>,
+    pagination: web::Query<PaginationParams>,
+    tax_type: web::Query<Option<String>>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let tax_type_filter = tax_type
+        .into_inner()
+        .and_then(|s| s.parse::<TaxType>().ok());
+    match tax_service
+        .list_tax_periods(
+            auth_user.0.tenant_id,
+            tax_type_filter,
+            pagination.into_inner(),
+        )
+        .await
+    {
+        Ok(result) => {
+            let mapped = result.map(TaxPeriodResponse::from);
+            Ok(HttpResponse::Ok().json(mapped))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Get a tax period by ID
+#[utoipa::path(
+    get, path = "/api/v1/tax/periods/{id}", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax period ID")),
+    responses((status = 200, description = "Tax period found", body = TaxPeriodResponse), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_tax_period(
+    auth_user: AuthUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    match tax_service.get_tax_period(id, auth_user.0.tenant_id).await {
+        Ok(period) => Ok(HttpResponse::Ok().json(TaxPeriodResponse::from(period))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Calculate (recalculate) a tax period (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/tax/periods/{id}/calculate", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax period ID")),
+    responses((status = 200, description = "Tax period calculated", body = TaxPeriodResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn calculate_tax_period(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    match tax_service
+        .calculate_period(id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(period) => Ok(HttpResponse::Ok().json(TaxPeriodResponse::from(period))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// File a tax period (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/tax/periods/{id}/file", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax period ID")),
+    responses((status = 200, description = "Tax period filed", body = TaxPeriodResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn file_tax_period(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    match tax_service.file_period(id, admin_user.0.tenant_id).await {
+        Ok(period) => Ok(HttpResponse::Ok().json(TaxPeriodResponse::from(period))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Configure tax engine routes for v1 API
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("/v1/tax/rates")
+            .route(web::get().to(list_tax_rates))
+            .route(web::post().to(create_tax_rate)),
+    )
+    .service(web::resource("/v1/tax/rates/effective").route(web::get().to(get_effective_rate)))
+    .service(
+        web::resource("/v1/tax/rates/{id}")
+            .route(web::get().to(get_tax_rate))
+            .route(web::put().to(update_tax_rate)),
+    )
+    .service(web::resource("/v1/tax/calculate").route(web::post().to(calculate_tax)))
+    .service(
+        web::resource("/v1/tax/calculate-invoice").route(web::post().to(calculate_invoice_tax)),
+    )
+    .service(
+        web::resource("/v1/tax/periods")
+            .route(web::get().to(list_tax_periods))
+            .route(web::post().to(create_tax_period)),
+    )
+    .service(web::resource("/v1/tax/periods/{id}").route(web::get().to(get_tax_period)))
+    .service(
+        web::resource("/v1/tax/periods/{id}/calculate").route(web::post().to(calculate_tax_period)),
+    )
+    .service(web::resource("/v1/tax/periods/{id}/file").route(web::post().to(file_tax_period)));
+}

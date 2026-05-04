@@ -11359,6 +11359,517 @@
         ]
       }
     },
+    "/api/v1/tax/calculate": {
+      "post": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Calculate tax on an amount",
+        "operationId": "calculate_tax",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalculateTaxRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tax calculation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxCalculationResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No effective rate found for date"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/calculate-invoice": {
+      "post": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Calculate taxes for an invoice",
+        "operationId": "calculate_invoice_tax",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalculateInvoiceTaxRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Invoice tax calculation result"
+          },
+          "404": {
+            "description": "Invoice not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/periods": {
+      "get": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "List tax periods (paginated, optional tax_type filter)",
+        "operationId": "list_tax_periods",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tax_type",
+            "in": "query",
+            "description": "Filter by tax type",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tax periods"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Create a tax period (requires admin role)",
+        "operationId": "create_tax_period",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaxPeriod"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Tax period created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxPeriodResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/periods/{id}": {
+      "get": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Get a tax period by ID",
+        "operationId": "get_tax_period",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tax period found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxPeriodResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/periods/{id}/calculate": {
+      "post": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Calculate (recalculate) a tax period (requires admin role)",
+        "operationId": "calculate_tax_period",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tax period calculated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxPeriodResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/periods/{id}/file": {
+      "post": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "File a tax period (requires admin role)",
+        "operationId": "file_tax_period",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tax period filed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxPeriodResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/rates": {
+      "get": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "List tax rates (paginated, optional tax_type filter)",
+        "operationId": "list_tax_rates",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "tax_type",
+            "in": "query",
+            "description": "Filter by tax type (KDV, OIV, BSMV, Damga, Stopaj, KV, GV)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tax rates"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Create a tax rate (requires admin role)",
+        "operationId": "create_tax_rate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaxRate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Tax rate created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxRateResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/rates/effective": {
+      "get": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Get the effective tax rate for a type and date",
+        "operationId": "get_effective_rate",
+        "parameters": [
+          {
+            "name": "tax_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NaiveDate"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Effective tax rate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxRateResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No effective rate found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/rates/{id}": {
+      "get": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Get a tax rate by ID",
+        "operationId": "get_tax_rate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax rate ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tax rate found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxRateResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Update a tax rate (requires admin role)",
+        "operationId": "update_tax_rate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax rate ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTaxRate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tax rate updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxRateResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/tenant-configs": {
       "get": {
         "tags": [
@@ -12234,6 +12745,43 @@
           "reportread"
         ]
       },
+      "CalculateInvoiceTaxRequest": {
+        "type": "object",
+        "description": "Request body for calculating invoice taxes",
+        "required": [
+          "invoice_id"
+        ],
+        "properties": {
+          "invoice_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CalculateTaxRequest": {
+        "type": "object",
+        "description": "Request body for calculating tax",
+        "required": [
+          "amount",
+          "tax_type",
+          "date"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "inclusive": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "tax_type": {
+            "type": "string"
+          }
+        }
+      },
       "ChartAccount": {
         "type": "object",
         "description": "Chart of Account entity",
@@ -12549,6 +13097,68 @@
           }
         }
       },
+      "CreateTaxPeriod": {
+        "type": "object",
+        "description": "Create a new tax period",
+        "required": [
+          "tax_type",
+          "period_year",
+          "period_month"
+        ],
+        "properties": {
+          "period_month": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "period_year": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tax_type": {
+            "$ref": "#/components/schemas/TaxType"
+          }
+        }
+      },
+      "CreateTaxRate": {
+        "type": "object",
+        "description": "Create a new tax rate",
+        "required": [
+          "tax_type",
+          "rate",
+          "effective_from",
+          "description"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string"
+          },
+          "effective_from": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "effective_to": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tax_type": {
+            "$ref": "#/components/schemas/TaxType"
+          }
+        }
+      },
       "CreateUser": {
         "type": "object",
         "description": "Data for creating a new user",
@@ -12624,6 +13234,22 @@
           "tenant_id": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "EffectiveRateQuery": {
+        "type": "object",
+        "description": "Query params for getting the effective tax rate",
+        "required": [
+          "tax_type",
+          "date"
+        ],
+        "properties": {
+          "date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "tax_type": {
+            "type": "string"
           }
         }
       },
@@ -13243,6 +13869,342 @@
           }
         }
       },
+      "TaxCalculationResult": {
+        "type": "object",
+        "description": "Result of a tax calculation",
+        "required": [
+          "base_amount",
+          "tax_type",
+          "rate",
+          "tax_amount",
+          "inclusive"
+        ],
+        "properties": {
+          "base_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "inclusive": {
+            "type": "boolean"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tax_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tax_type": {
+            "$ref": "#/components/schemas/TaxType"
+          }
+        }
+      },
+      "TaxPeriod": {
+        "type": "object",
+        "description": "A tax filing period (monthly)",
+        "required": [
+          "id",
+          "tenant_id",
+          "tax_type",
+          "period_year",
+          "period_month",
+          "total_base",
+          "total_tax",
+          "total_deduction",
+          "net_tax",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "filed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "net_tax": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "period_month": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "period_year": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaxPeriodStatus"
+          },
+          "tax_type": {
+            "$ref": "#/components/schemas/TaxType"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_base": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_deduction": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_tax": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "TaxPeriodDetail": {
+        "type": "object",
+        "description": "Individual transaction detail within a tax period",
+        "required": [
+          "id",
+          "period_id",
+          "transaction_date",
+          "transaction_type",
+          "base_amount",
+          "tax_rate",
+          "tax_amount",
+          "deduction_amount"
+        ],
+        "properties": {
+          "base_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "deduction_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "period_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reference_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "tax_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tax_rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "transaction_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "transaction_type": {
+            "type": "string"
+          }
+        }
+      },
+      "TaxPeriodResponse": {
+        "type": "object",
+        "description": "Tax period response (same fields as TaxPeriod)",
+        "required": [
+          "id",
+          "tenant_id",
+          "tax_type",
+          "period_year",
+          "period_month",
+          "total_base",
+          "total_tax",
+          "total_deduction",
+          "net_tax",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "filed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "net_tax": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "period_month": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "period_year": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaxPeriodStatus"
+          },
+          "tax_type": {
+            "$ref": "#/components/schemas/TaxType"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_base": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_deduction": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_tax": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "TaxPeriodStatus": {
+        "type": "string",
+        "description": "Status of a tax filing period",
+        "enum": [
+          "Open",
+          "Calculated",
+          "Filed",
+          "Closed"
+        ]
+      },
+      "TaxRate": {
+        "type": "object",
+        "description": "Tax rate configuration per tenant and tax type",
+        "required": [
+          "id",
+          "tenant_id",
+          "tax_type",
+          "rate",
+          "effective_from",
+          "description",
+          "is_default",
+          "created_at"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "description": {
+            "type": "string"
+          },
+          "effective_from": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "effective_to": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tax_type": {
+            "$ref": "#/components/schemas/TaxType"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "TaxRateResponse": {
+        "type": "object",
+        "description": "Tax rate response (same fields as TaxRate)",
+        "required": [
+          "id",
+          "tenant_id",
+          "tax_type",
+          "rate",
+          "effective_from",
+          "description",
+          "is_default",
+          "created_at"
+        ],
+        "properties": {
+          "category": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "description": {
+            "type": "string"
+          },
+          "effective_from": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "effective_to": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tax_type": {
+            "$ref": "#/components/schemas/TaxType"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "TaxType": {
+        "type": "string",
+        "description": "Turkish tax types",
+        "enum": [
+          "KDV",
+          "OIV",
+          "BSMV",
+          "Damga",
+          "Stopaj",
+          "KV",
+          "GV"
+        ]
+      },
       "TrialBalanceEntry": {
         "type": "object",
         "description": "Trial balance entry",
@@ -13349,6 +14311,40 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/FeatureFlagStatus"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "UpdateTaxRate": {
+        "type": "object",
+        "description": "Update an existing tax rate",
+        "properties": {
+          "category": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "effective_to": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "is_default": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "rate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
               }
             ],
             "nullable": true
@@ -13540,6 +14536,10 @@
     {
       "name": "Search",
       "description": "Full-text search across entities"
+    },
+    {
+      "name": "Tax",
+      "description": "Turkish tax rate management, calculation, and KVB period tracking"
     },
     {
       "name": "Audit",
