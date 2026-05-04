@@ -7,16 +7,18 @@ use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
 use turerp::config::Config;
 use turerp::middleware::{
-    audit::spawn_audit_writer, AuditLoggingMiddleware, JwtAuthMiddleware, MetricsMiddleware,
-    RateLimitMiddleware, RequestIdMiddleware, TenantMiddleware,
+    audit::spawn_audit_writer, AuditLoggingMiddleware, IdempotencyMiddleware, JwtAuthMiddleware,
+    MetricsMiddleware, RateLimitMiddleware, RequestIdMiddleware, TenantMiddleware,
 };
 
 use tokio::sync::mpsc;
 use turerp::api::{
-    v1_accounting_configure, v1_assets_configure, v1_audit_configure, v1_auth_configure,
-    v1_cari_configure, v1_crm_configure, v1_feature_flags_configure, v1_hr_configure,
-    v1_invoice_configure, v1_manufacturing_configure, v1_product_variants_configure,
-    v1_project_configure, v1_purchase_requests_configure, v1_sales_configure,
+    v1_accounting_configure, v1_api_keys_configure, v1_assets_configure, v1_audit_configure,
+    v1_auth_configure, v1_cari_configure, v1_chart_of_accounts_configure, v1_crm_configure,
+    v1_custom_fields_configure, v1_events_configure, v1_feature_flags_configure, v1_hr_configure,
+    v1_invoice_configure, v1_jobs_configure, v1_manufacturing_configure,
+    v1_notifications_configure, v1_product_variants_configure, v1_project_configure,
+    v1_purchase_requests_configure, v1_reports_configure, v1_sales_configure, v1_search_configure,
     v1_settings_configure, v1_stock_configure, v1_tenant_configure, v1_users_configure, ApiDoc,
 };
 use turerp::middleware::audit::{AuditEvent, AUDIT_CHANNEL_CAPACITY};
@@ -149,6 +151,16 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!("Starting Turerp ERP server...");
 
+    // Write OpenAPI spec to file so it stays in sync with the code
+    if let Ok(json) = ApiDoc::openapi().to_pretty_json() {
+        let spec_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("openapi.json");
+        if let Err(e) = std::fs::write(&spec_path, &json) {
+            tracing::warn!("Failed to write openapi.json: {}", e);
+        } else {
+            tracing::info!("OpenAPI spec written to {}", spec_path.display());
+        }
+    }
+
     // Load configuration
     let config = Config::new().unwrap_or_else(|e| {
         tracing::warn!("Failed to load config from env: {}, using defaults", e);
@@ -212,6 +224,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(JwtAuthMiddleware::new(
                 app_state.jwt_service.get_ref().clone(),
             )) // JWT validation
+            .wrap(IdempotencyMiddleware::in_memory()) // Idempotency key caching
             .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // Rate limiting
             .wrap(MetricsMiddleware::new()) // Metrics collection
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
@@ -230,6 +243,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.manufacturing_service.clone())
             .app_data(app_state.qc_service.clone())
             .app_data(app_state.crm_service.clone())
+            .app_data(app_state.chart_of_accounts_service.clone())
+            .app_data(app_state.custom_field_service.clone())
             .app_data(app_state.tenant_service.clone())
             .app_data(app_state.tenant_config_service.clone())
             .app_data(app_state.assets_service.clone())
@@ -238,6 +253,13 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.purchase_service.clone())
             .app_data(app_state.audit_service.clone())
             .app_data(app_state.settings_service.clone())
+            .app_data(app_state.api_key_service.clone())
+            .app_data(app_state.job_scheduler.clone())
+            .app_data(app_state.event_bus.clone())
+            .app_data(app_state.notification_service.clone())
+            .app_data(app_state.report_engine.clone())
+            .app_data(app_state.tracing_service.clone())
+            .app_data(app_state.db_router.clone())
             .app_data(app_state.i18n.clone())
             .app_data(app_state.db_pool.clone());
 
@@ -253,6 +275,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(JwtAuthMiddleware::new(
                 app_state.jwt_service.get_ref().clone(),
             )) // JWT validation
+            .wrap(IdempotencyMiddleware::in_memory()) // Idempotency key caching
             .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // Rate limiting
             .wrap(MetricsMiddleware::new()) // Metrics collection
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
@@ -271,6 +294,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.manufacturing_service.clone())
             .app_data(app_state.qc_service.clone())
             .app_data(app_state.crm_service.clone())
+            .app_data(app_state.chart_of_accounts_service.clone())
+            .app_data(app_state.custom_field_service.clone())
             .app_data(app_state.tenant_service.clone())
             .app_data(app_state.tenant_config_service.clone())
             .app_data(app_state.assets_service.clone())
@@ -279,6 +304,13 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.purchase_service.clone())
             .app_data(app_state.audit_service.clone())
             .app_data(app_state.settings_service.clone())
+            .app_data(app_state.api_key_service.clone())
+            .app_data(app_state.job_scheduler.clone())
+            .app_data(app_state.event_bus.clone())
+            .app_data(app_state.notification_service.clone())
+            .app_data(app_state.report_engine.clone())
+            .app_data(app_state.tracing_service.clone())
+            .app_data(app_state.db_router.clone())
             .app_data(app_state.i18n.clone());
 
         app // Health check
@@ -303,10 +335,18 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_project_configure)
                     .configure(v1_manufacturing_configure)
                     .configure(v1_crm_configure)
+                    .configure(v1_chart_of_accounts_configure)
+                    .configure(v1_custom_fields_configure)
                     .configure(v1_tenant_configure)
                     .configure(v1_assets_configure)
                     .configure(v1_audit_configure)
-                    .configure(v1_settings_configure),
+                    .configure(v1_settings_configure)
+                    .configure(v1_api_keys_configure)
+                    .configure(v1_jobs_configure)
+                    .configure(v1_notifications_configure)
+                    .configure(v1_reports_configure)
+                    .configure(v1_events_configure)
+                    .configure(v1_search_configure),
             )
             // Swagger UI
             .service(

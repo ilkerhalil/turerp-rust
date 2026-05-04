@@ -233,6 +233,68 @@ impl ChartOfAccountsService {
         Ok(updated.into())
     }
 
+    /// Get a chart account by code
+    pub async fn get_account_by_code(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<ChartAccountResponse, ApiError> {
+        let account = self
+            .repo
+            .find_by_code(code, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Chart account '{}' not found", code)))?;
+
+        Ok(account.into())
+    }
+
+    /// Update a chart account by code
+    pub async fn update_account_by_code(
+        &self,
+        code: &str,
+        tenant_id: i64,
+        update: UpdateChartAccount,
+    ) -> Result<ChartAccountResponse, ApiError> {
+        let account = self
+            .repo
+            .find_by_code(code, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Chart account '{}' not found", code)))?;
+
+        self.update_account(account.id, tenant_id, update).await
+    }
+
+    /// Delete a chart account by code (soft delete)
+    pub async fn delete_account_by_code(
+        &self,
+        code: &str,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        let account = self
+            .repo
+            .find_by_code(code, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Chart account '{}' not found", code)))?;
+
+        self.delete_account(account.id, tenant_id, deleted_by).await
+    }
+
+    /// Recalculate the balance of a chart account by code
+    pub async fn recalculate_balance_by_code(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<ChartAccountResponse, ApiError> {
+        let account = self
+            .repo
+            .find_by_code(code, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Chart account '{}' not found", code)))?;
+
+        self.recalculate_balance(account.id, tenant_id).await
+    }
+
     /// Get trial balance: all accounts with debit/credit balances
     pub async fn get_trial_balance(
         &self,

@@ -30,6 +30,13 @@ pub mod app {
     use actix_web::web;
     use std::sync::Arc;
 
+    use crate::common::{DbRouter, InMemoryDbRouter, ReadAfterWriteMode};
+    use crate::common::{
+        EventBus, InMemoryEventBus, InMemoryJobScheduler, InMemoryNotificationService,
+        JobScheduler, NotificationService,
+    };
+    use crate::common::{InMemoryReportEngine, ReportEngine};
+    use crate::common::{InMemoryTracingService, TracingService};
     use crate::config::Config;
     use crate::domain::accounting::repository::{
         BoxAccountRepository, BoxJournalEntryRepository, BoxJournalLineRepository,
@@ -43,10 +50,14 @@ pub mod app {
     use crate::domain::auth::AuthService;
     use crate::domain::cari::repository::BoxCariRepository;
     use crate::domain::cari::service::CariService;
+    use crate::domain::chart_of_accounts::repository::BoxChartAccountRepository;
+    use crate::domain::chart_of_accounts::service::ChartOfAccountsService;
     use crate::domain::crm::repository::{
         BoxCampaignRepository, BoxLeadRepository, BoxOpportunityRepository, BoxTicketRepository,
     };
     use crate::domain::crm::service::CrmService;
+    use crate::domain::custom_field::repository::BoxCustomFieldRepository;
+    use crate::domain::custom_field::service::CustomFieldService;
     use crate::domain::feature::service::FeatureFlagService;
     use crate::domain::feature::FeatureFlagRepository;
     use crate::domain::hr::repository::{
@@ -101,10 +112,12 @@ pub mod app {
     use crate::domain::assets::repository::InMemoryAssetsRepository;
     use crate::domain::audit::repository::InMemoryAuditLogRepository;
     use crate::domain::cari::repository::InMemoryCariRepository;
+    use crate::domain::chart_of_accounts::repository::InMemoryChartAccountRepository;
     use crate::domain::crm::repository::{
         InMemoryCampaignRepository, InMemoryLeadRepository, InMemoryOpportunityRepository,
         InMemoryTicketRepository,
     };
+    use crate::domain::custom_field::repository::InMemoryCustomFieldRepository;
     use crate::domain::feature::repository::InMemoryFeatureFlagRepository;
     use crate::domain::hr::repository::{
         InMemoryAttendanceRepository, InMemoryEmployeeRepository, InMemoryLeaveRequestRepository,
@@ -218,6 +231,8 @@ pub mod app {
         pub project_service: web::Data<ProjectService>,
         pub manufacturing_service: web::Data<ManufacturingService>,
         pub crm_service: web::Data<CrmService>,
+        pub chart_of_accounts_service: web::Data<ChartOfAccountsService>,
+        pub custom_field_service: web::Data<CustomFieldService>,
         pub tenant_service: web::Data<TenantService>,
         pub tenant_config_service: web::Data<TenantConfigService>,
         pub assets_service: web::Data<AssetsService>,
@@ -227,6 +242,13 @@ pub mod app {
         pub audit_service: web::Data<AuditService>,
         pub qc_service: web::Data<crate::domain::manufacturing::QualityControlService>,
         pub settings_service: web::Data<crate::domain::settings::SettingsService>,
+        pub api_key_service: web::Data<crate::domain::api_key::ApiKeyService>,
+        pub job_scheduler: web::Data<dyn JobScheduler>,
+        pub event_bus: web::Data<dyn EventBus>,
+        pub notification_service: web::Data<dyn NotificationService>,
+        pub report_engine: web::Data<dyn ReportEngine>,
+        pub tracing_service: web::Data<dyn TracingService>,
+        pub db_router: web::Data<dyn DbRouter>,
         pub i18n: web::Data<I18n>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
@@ -336,6 +358,16 @@ pub mod app {
             let crm_service =
                 CrmService::new(lead_repo, opportunity_repo, campaign_repo, ticket_repo);
 
+            // Chart of Accounts
+            let chart_account_repo =
+                Arc::new(InMemoryChartAccountRepository::new()) as BoxChartAccountRepository;
+            let chart_of_accounts_service = ChartOfAccountsService::new(chart_account_repo);
+
+            // Custom Fields
+            let custom_field_repo =
+                Arc::new(InMemoryCustomFieldRepository::new()) as BoxCustomFieldRepository;
+            let custom_field_service = CustomFieldService::new(custom_field_repo);
+
             // Tenant
             let tenant_repo = Arc::new(InMemoryTenantRepository::new()) as BoxTenantRepository;
             let tenant_service = TenantService::new(tenant_repo);
@@ -403,6 +435,34 @@ pub mod app {
                 as crate::domain::settings::BoxSettingsRepository;
             let settings_service = crate::domain::settings::SettingsService::new(settings_repo);
 
+            // API Keys
+            let api_key_repo = Arc::new(crate::domain::api_key::InMemoryApiKeyRepository::new())
+                as crate::domain::api_key::BoxApiKeyRepository;
+            let api_key_service = crate::domain::api_key::ApiKeyService::new(api_key_repo);
+
+            // Job Scheduler
+            let job_scheduler = Arc::new(InMemoryJobScheduler::new()) as Arc<dyn JobScheduler>;
+
+            // Event Bus
+            let event_bus = Arc::new(InMemoryEventBus::new()) as Arc<dyn EventBus>;
+
+            // Notification Service
+            let notification_service =
+                Arc::new(InMemoryNotificationService::new()) as Arc<dyn NotificationService>;
+
+            // Report Engine
+            let report_engine = Arc::new(InMemoryReportEngine::new()) as Arc<dyn ReportEngine>;
+
+            // Tracing Service
+            let tracing_service =
+                Arc::new(InMemoryTracingService::new("turerp-erp")) as Arc<dyn TracingService>;
+
+            // DB Router
+            let db_router = Arc::new(InMemoryDbRouter::new(
+                "localhost:5432/turerp",
+                ReadAfterWriteMode::Eventual,
+            )) as Arc<dyn DbRouter>;
+
             (
                 auth_service,
                 user_service,
@@ -416,6 +476,8 @@ pub mod app {
                 project_service,
                 manufacturing_service,
                 crm_service,
+                chart_of_accounts_service,
+                custom_field_service,
                 tenant_service,
                 tenant_config_service,
                 assets_service,
@@ -425,6 +487,13 @@ pub mod app {
                 audit_service,
                 qc_service,
                 settings_service,
+                api_key_service,
+                job_scheduler,
+                event_bus,
+                notification_service,
+                report_engine,
+                tracing_service,
+                db_router,
             )
         }};
     }
@@ -445,6 +514,8 @@ pub mod app {
             project_service,
             manufacturing_service,
             crm_service,
+            chart_of_accounts_service,
+            custom_field_service,
             tenant_service,
             tenant_config_service,
             assets_service,
@@ -454,6 +525,13 @@ pub mod app {
             audit_service,
             qc_service,
             settings_service,
+            api_key_service,
+            job_scheduler,
+            event_bus,
+            notification_service,
+            report_engine,
+            tracing_service,
+            db_router,
         ) = create_in_memory_services!(config);
 
         let i18n = I18n::init();
@@ -471,6 +549,8 @@ pub mod app {
             project_service: web::Data::new(project_service),
             manufacturing_service: web::Data::new(manufacturing_service),
             crm_service: web::Data::new(crm_service),
+            chart_of_accounts_service: web::Data::new(chart_of_accounts_service),
+            custom_field_service: web::Data::new(custom_field_service),
             tenant_service: web::Data::new(tenant_service),
             tenant_config_service: web::Data::new(tenant_config_service),
             assets_service: web::Data::new(assets_service),
@@ -480,6 +560,13 @@ pub mod app {
             audit_service: web::Data::new(audit_service),
             qc_service: web::Data::new(qc_service),
             settings_service: web::Data::new(settings_service),
+            api_key_service: web::Data::new(api_key_service),
+            job_scheduler: web::Data::from(job_scheduler),
+            event_bus: web::Data::from(event_bus),
+            notification_service: web::Data::from(notification_service),
+            report_engine: web::Data::from(report_engine),
+            tracing_service: web::Data::from(tracing_service),
+            db_router: web::Data::from(db_router),
             i18n: web::Data::new(i18n),
         }
     }
@@ -579,6 +666,16 @@ pub mod app {
         let ticket_repo = PostgresTicketRepository::new(pool.clone()).into_boxed();
         let crm_service = CrmService::new(lead_repo, opportunity_repo, campaign_repo, ticket_repo);
 
+        // Chart of Accounts - in-memory (no postgres repo yet)
+        let chart_account_repo =
+            Arc::new(InMemoryChartAccountRepository::new()) as BoxChartAccountRepository;
+        let chart_of_accounts_service = ChartOfAccountsService::new(chart_account_repo);
+
+        // Custom Fields - in-memory (no postgres repo yet)
+        let custom_field_repo =
+            Arc::new(InMemoryCustomFieldRepository::new()) as BoxCustomFieldRepository;
+        let custom_field_service = CustomFieldService::new(custom_field_repo);
+
         // Tenant - PostgreSQL
         let tenant_repo = PostgresTenantRepository::new(pool.clone()).into_boxed();
         let tenant_service = TenantService::new(tenant_repo);
@@ -636,6 +733,34 @@ pub mod app {
         let audit_repo = PostgresAuditLogRepository::new(pool.clone()).into_boxed();
         let audit_service = AuditService::new(audit_repo);
 
+        // API Keys - in-memory (no postgres repo yet)
+        let api_key_repo = Arc::new(crate::domain::api_key::InMemoryApiKeyRepository::new())
+            as crate::domain::api_key::BoxApiKeyRepository;
+        let api_key_service = crate::domain::api_key::ApiKeyService::new(api_key_repo);
+
+        // Job Scheduler - in-memory
+        let job_scheduler = Arc::new(InMemoryJobScheduler::new()) as Arc<dyn JobScheduler>;
+
+        // Event Bus - in-memory
+        let event_bus = Arc::new(InMemoryEventBus::new()) as Arc<dyn EventBus>;
+
+        // Notification Service - in-memory
+        let notification_service =
+            Arc::new(InMemoryNotificationService::new()) as Arc<dyn NotificationService>;
+
+        // Report Engine - in-memory
+        let report_engine = Arc::new(InMemoryReportEngine::new()) as Arc<dyn ReportEngine>;
+
+        // Tracing Service - in-memory
+        let tracing_service =
+            Arc::new(InMemoryTracingService::new("turerp-erp")) as Arc<dyn TracingService>;
+
+        // DB Router - in-memory
+        let db_router = Arc::new(InMemoryDbRouter::new(
+            "localhost:5432/turerp",
+            ReadAfterWriteMode::Eventual,
+        )) as Arc<dyn DbRouter>;
+
         let i18n = I18n::init();
 
         AppState {
@@ -651,6 +776,8 @@ pub mod app {
             project_service: web::Data::new(project_service),
             manufacturing_service: web::Data::new(manufacturing_service),
             crm_service: web::Data::new(crm_service),
+            chart_of_accounts_service: web::Data::new(chart_of_accounts_service),
+            custom_field_service: web::Data::new(custom_field_service),
             tenant_service: web::Data::new(tenant_service),
             tenant_config_service: web::Data::new(tenant_config_service),
             assets_service: web::Data::new(assets_service),
@@ -660,6 +787,13 @@ pub mod app {
             audit_service: web::Data::new(audit_service),
             qc_service: web::Data::new(qc_service),
             settings_service: web::Data::new(settings_service),
+            api_key_service: web::Data::new(api_key_service),
+            job_scheduler: web::Data::from(job_scheduler),
+            event_bus: web::Data::from(event_bus),
+            notification_service: web::Data::from(notification_service),
+            report_engine: web::Data::from(report_engine),
+            tracing_service: web::Data::from(tracing_service),
+            db_router: web::Data::from(db_router),
             db_pool: web::Data::new(pool),
             i18n: web::Data::new(i18n),
         }
@@ -687,6 +821,8 @@ pub mod app {
             project_service,
             manufacturing_service,
             crm_service,
+            chart_of_accounts_service,
+            custom_field_service,
             tenant_service,
             tenant_config_service,
             assets_service,
@@ -696,6 +832,13 @@ pub mod app {
             audit_service,
             qc_service,
             settings_service,
+            api_key_service,
+            job_scheduler,
+            event_bus,
+            notification_service,
+            report_engine,
+            tracing_service,
+            db_router,
         ) = create_in_memory_services!(config);
 
         // For in-memory testing with postgres feature, create a mock pool
@@ -723,6 +866,8 @@ pub mod app {
             project_service: web::Data::new(project_service),
             manufacturing_service: web::Data::new(manufacturing_service),
             crm_service: web::Data::new(crm_service),
+            chart_of_accounts_service: web::Data::new(chart_of_accounts_service),
+            custom_field_service: web::Data::new(custom_field_service),
             tenant_service: web::Data::new(tenant_service),
             tenant_config_service: web::Data::new(tenant_config_service),
             assets_service: web::Data::new(assets_service),
@@ -732,6 +877,13 @@ pub mod app {
             audit_service: web::Data::new(audit_service),
             qc_service: web::Data::new(qc_service),
             settings_service: web::Data::new(settings_service),
+            api_key_service: web::Data::new(api_key_service),
+            job_scheduler: web::Data::from(job_scheduler),
+            event_bus: web::Data::from(event_bus),
+            notification_service: web::Data::from(notification_service),
+            report_engine: web::Data::from(report_engine),
+            tracing_service: web::Data::from(tracing_service),
+            db_router: web::Data::from(db_router),
             db_pool,
             i18n: web::Data::new(i18n),
         }

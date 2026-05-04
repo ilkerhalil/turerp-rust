@@ -2346,6 +2346,309 @@
         ]
       }
     },
+    "/api/v1/chart-of-accounts": {
+      "get": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "List chart accounts (paginated, optional group filter)",
+        "operationId": "list_chart_accounts",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "group",
+            "in": "query",
+            "description": "Filter by account group",
+            "required": false,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/AccountGroup"
+                }
+              ],
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of chart accounts"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "Create chart account (requires admin role)",
+        "operationId": "create_chart_account",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChartAccount"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Chart account created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/chart-of-accounts/tree": {
+      "get": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "Get account tree (hierarchical)",
+        "operationId": "get_account_tree",
+        "responses": {
+          "200": {
+            "description": "Account tree"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/chart-of-accounts/trial-balance": {
+      "get": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "Get trial balance",
+        "operationId": "get_trial_balance",
+        "responses": {
+          "200": {
+            "description": "Trial balance"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/chart-of-accounts/{code}": {
+      "get": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "Get chart account by code",
+        "operationId": "get_chart_account_by_code",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Account code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chart account found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "Update chart account (requires admin role)",
+        "operationId": "update_chart_account",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Account code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChartAccount"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Chart account updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "Soft delete chart account (requires admin role)",
+        "operationId": "soft_delete_chart_account",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Account code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chart account soft deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/chart-of-accounts/{code}/children": {
+      "get": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "Get children of a chart account by parent code",
+        "operationId": "get_chart_account_children",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Parent account code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of child accounts"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/chart-of-accounts/{code}/recalculate": {
+      "post": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "Recalculate balance of a chart account (requires admin role)",
+        "operationId": "recalculate_chart_account_balance",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Account code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance recalculated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/crm/campaigns": {
       "get": {
         "tags": [
@@ -11869,6 +12172,50 @@
   },
   "components": {
     "schemas": {
+      "AccountGroup": {
+        "type": "string",
+        "description": "Account group (Turkish UMS layout)",
+        "enum": [
+          "DonenVarliklar",
+          "DuranVarliklar",
+          "KisaVadeliYabanciKaynaklar",
+          "UzunVadeliYabanciKaynaklar",
+          "OzKaynaklar",
+          "GelirTablosu",
+          "GiderTablosu"
+        ]
+      },
+      "AccountTreeNode": {
+        "type": "object",
+        "description": "Hierarchical tree node for chart of accounts",
+        "required": [
+          "code",
+          "name",
+          "group",
+          "balance",
+          "children"
+        ],
+        "properties": {
+          "balance": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountTreeNode"
+            }
+          },
+          "code": {
+            "type": "string"
+          },
+          "group": {
+            "$ref": "#/components/schemas/AccountGroup"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "ApiKeyScope": {
         "type": "string",
         "description": "API Key permission scope",
@@ -11886,6 +12233,155 @@
           "productwrite",
           "reportread"
         ]
+      },
+      "ChartAccount": {
+        "type": "object",
+        "description": "Chart of Account entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "code",
+          "name",
+          "group",
+          "level",
+          "account_type",
+          "is_active",
+          "balance",
+          "allow_posting",
+          "created_at"
+        ],
+        "properties": {
+          "account_type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "allow_posting": {
+            "type": "boolean"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "code": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "group": {
+            "$ref": "#/components/schemas/AccountGroup"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "level": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "ChartAccountResponse": {
+        "type": "object",
+        "description": "Chart of Account response (without deletion metadata)",
+        "required": [
+          "id",
+          "tenant_id",
+          "code",
+          "name",
+          "group",
+          "level",
+          "account_type",
+          "is_active",
+          "balance",
+          "allow_posting",
+          "created_at"
+        ],
+        "properties": {
+          "account_type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "allow_posting": {
+            "type": "boolean"
+          },
+          "balance": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "code": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "group": {
+            "$ref": "#/components/schemas/AccountGroup"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "level": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
       },
       "CreateApiKey": {
         "type": "object",
@@ -11921,6 +12417,38 @@
           "user_id": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "CreateChartAccount": {
+        "type": "object",
+        "description": "Data for creating a new chart account",
+        "required": [
+          "code",
+          "name",
+          "group",
+          "account_type",
+          "allow_posting"
+        ],
+        "properties": {
+          "account_type": {
+            "$ref": "#/components/schemas/AccountType"
+          },
+          "allow_posting": {
+            "type": "boolean"
+          },
+          "code": {
+            "type": "string"
+          },
+          "group": {
+            "$ref": "#/components/schemas/AccountGroup"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_code": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -12715,6 +13243,30 @@
           }
         }
       },
+      "TrialBalanceEntry": {
+        "type": "object",
+        "description": "Trial balance entry",
+        "required": [
+          "account_code",
+          "account_name",
+          "debit_balance",
+          "credit_balance"
+        ],
+        "properties": {
+          "account_code": {
+            "type": "string"
+          },
+          "account_name": {
+            "type": "string"
+          },
+          "credit_balance": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "debit_balance": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
       "UnreadCountResponse": {
         "type": "object",
         "description": "Unread count response",
@@ -12754,6 +13306,32 @@
             "items": {
               "$ref": "#/components/schemas/ApiKeyScope"
             },
+            "nullable": true
+          }
+        }
+      },
+      "UpdateChartAccount": {
+        "type": "object",
+        "description": "Data for updating an existing chart account",
+        "properties": {
+          "allow_posting": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "group": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountGroup"
+              }
+            ],
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
             "nullable": true
           }
         }
@@ -12922,6 +13500,10 @@
     {
       "name": "Products",
       "description": "Product catalog, categories and variants"
+    },
+    {
+      "name": "Chart of Accounts",
+      "description": "Chart of accounts, account tree and trial balance"
     },
     {
       "name": "Feature Flags",
