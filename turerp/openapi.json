@@ -86,6 +86,25 @@
         ]
       }
     },
+    "/api/v1/accounting/accounts/deleted": {
+      "get": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "List soft-deleted accounts (requires admin role)",
+        "operationId": "list_deleted_accounts",
+        "responses": {
+          "200": {
+            "description": "List of deleted accounts"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/accounting/accounts/type/{account_type}": {
       "get": {
         "tags": [
@@ -138,6 +157,113 @@
         "responses": {
           "200": {
             "description": "Account found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Soft delete an account (requires admin role)",
+        "operationId": "soft_delete_account",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account soft deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/accounts/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Hard delete (destroy) an account (requires admin role)",
+        "operationId": "destroy_account",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Account permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/accounts/{id}/restore": {
+      "put": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Restore a soft-deleted account (requires admin role)",
+        "operationId": "restore_account",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Account restored"
           },
           "404": {
             "description": "Not found"
@@ -223,6 +349,25 @@
         ]
       }
     },
+    "/api/v1/accounting/journal-entries/deleted": {
+      "get": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "List soft-deleted journal entries (requires admin role)",
+        "operationId": "list_deleted_journal_entries",
+        "responses": {
+          "200": {
+            "description": "List of deleted journal entries"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/accounting/journal-entries/{id}": {
       "get": {
         "tags": [
@@ -245,6 +390,79 @@
         "responses": {
           "200": {
             "description": "Journal entry found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Soft delete a journal entry (requires admin role)",
+        "operationId": "soft_delete_journal_entry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Journal entry ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journal entry soft deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/journal-entries/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Hard delete (destroy) a journal entry (requires admin role)",
+        "operationId": "destroy_journal_entry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Journal entry ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Journal entry permanently deleted"
           },
           "404": {
             "description": "Not found"
@@ -282,6 +500,40 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/accounting/journal-entries/{id}/restore": {
+      "put": {
+        "tags": [
+          "Accounting"
+        ],
+        "summary": "Restore a soft-deleted journal entry (requires admin role)",
+        "operationId": "restore_journal_entry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Journal entry ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Journal entry restored"
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -354,6 +606,321 @@
         ]
       }
     },
+    "/api/v1/api-keys": {
+      "post": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "Create a new API key (admin only)",
+        "operationId": "create_api_key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApiKey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "API key created"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/api-keys/check-scope/{scope}": {
+      "get": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "Validate API key scope (for testing)",
+        "operationId": "check_scope",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "path",
+            "description": "Scope to check",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scope check result"
+          },
+          "401": {
+            "description": "Unauthorized - valid API key required"
+          }
+        }
+      }
+    },
+    "/api/v1/api-keys/tenant/{tenant_id}": {
+      "get": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "List API keys for a tenant (admin only)",
+        "operationId": "list_api_keys",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of API keys"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/api-keys/tenant/{tenant_id}/paginated": {
+      "get": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "List API keys with pagination (admin only)",
+        "operationId": "list_api_keys_paginated",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of API keys"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/api-keys/{id}/tenant/{tenant_id}": {
+      "get": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "Get a specific API key (admin only)",
+        "operationId": "get_api_key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "API key ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key details"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "API key not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "Update an API key (admin only)",
+        "operationId": "update_api_key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "API key ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateApiKey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "API key updated"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "API key not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "Delete an API key (admin only)",
+        "operationId": "delete_api_key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "API key ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "API key deleted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "API key not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/assets": {
       "get": {
         "tags": [
@@ -394,6 +961,25 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/deleted": {
+      "get": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "List soft-deleted assets (requires admin role)",
+        "operationId": "list_deleted_assets",
+        "responses": {
+          "200": {
+            "description": "List of deleted assets"
           }
         },
         "security": [
@@ -544,8 +1130,8 @@
         "tags": [
           "Assets"
         ],
-        "summary": "Delete asset (requires admin role)",
-        "operationId": "delete_asset",
+        "summary": "Soft delete an asset (requires admin role)",
+        "operationId": "soft_delete_asset",
         "parameters": [
           {
             "name": "id",
@@ -560,7 +1146,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Asset deleted",
+            "description": "Asset soft deleted",
             "content": {
               "application/json": {
                 "schema": {
@@ -646,6 +1232,40 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Hard delete (destroy) an asset (requires admin role)",
+        "operationId": "destroy_asset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Asset permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -789,6 +1409,40 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets/{id}/restore": {
+      "put": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Restore a soft-deleted asset (requires admin role)",
+        "operationId": "restore_asset",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Asset ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Asset restored"
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -1200,6 +1854,31 @@
         ]
       }
     },
+    "/api/v1/cari/deleted": {
+      "get": {
+        "tags": [
+          "Cari"
+        ],
+        "summary": "List soft-deleted cari accounts (admin only)",
+        "operationId": "list_deleted_cari",
+        "responses": {
+          "200": {
+            "description": "List of deleted cari accounts"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/cari/search": {
       "get": {
         "tags": [
@@ -1440,6 +2119,93 @@
         ]
       }
     },
+    "/api/v1/cari/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Cari"
+        ],
+        "summary": "Permanently delete a cari (admin only)",
+        "operationId": "destroy_cari",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cari ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cari permanently deleted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Cari not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cari/{id}/restore": {
+      "put": {
+        "tags": [
+          "Cari"
+        ],
+        "summary": "Restore a soft-deleted cari (admin only)",
+        "operationId": "restore_cari",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cari ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cari restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CariResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Cari not found or not deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/categories": {
       "get": {
         "tags": [
@@ -1477,6 +2243,100 @@
           },
           "401": {
             "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/categories/deleted": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "List soft-deleted categories (admin only)",
+        "operationId": "list_deleted_categories",
+        "responses": {
+          "200": {
+            "description": "List of deleted categories"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/categories/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Permanently delete a category (admin only, after soft delete)",
+        "operationId": "destroy_category",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Category ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Category permanently deleted"
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/categories/{id}/restore": {
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Restore a soft-deleted category (admin only)",
+        "operationId": "restore_category",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Category ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category not found or not deleted"
           }
         },
         "security": [
@@ -1526,6 +2386,25 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/campaigns/deleted": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "List soft-deleted campaigns (admin only)",
+        "operationId": "list_deleted_campaigns",
+        "responses": {
+          "200": {
+            "description": "List of deleted campaigns"
           }
         },
         "security": [
@@ -1590,6 +2469,113 @@
           },
           "404": {
             "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Soft-delete a campaign (requires admin role)",
+        "operationId": "soft_delete_campaign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Campaign ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaign soft-deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/campaigns/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Permanently destroy a campaign (admin only)",
+        "operationId": "destroy_campaign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Campaign ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Campaign permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/campaigns/{id}/restore": {
+      "put": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Restore a soft-deleted campaign (admin only)",
+        "operationId": "restore_campaign",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Campaign ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Campaign restored"
+          },
+          "404": {
+            "description": "Not found or not deleted"
           }
         },
         "security": [
@@ -1692,6 +2678,25 @@
         ]
       }
     },
+    "/api/v1/crm/leads/deleted": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "List soft-deleted leads (admin only)",
+        "operationId": "list_deleted_leads",
+        "responses": {
+          "200": {
+            "description": "List of deleted leads"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/crm/leads/status/{status}": {
       "get": {
         "tags": [
@@ -1754,6 +2759,45 @@
             "bearer_auth": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Soft-delete a lead (requires admin role)",
+        "operationId": "soft_delete_lead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Lead ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lead soft-deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
       }
     },
     "/api/v1/crm/leads/{id}/convert": {
@@ -1791,6 +2835,74 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/leads/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Permanently destroy a lead (admin only)",
+        "operationId": "destroy_lead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Lead ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Lead permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/leads/{id}/restore": {
+      "put": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Restore a soft-deleted lead (admin only)",
+        "operationId": "restore_lead",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Lead ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lead restored"
+          },
+          "404": {
+            "description": "Not found or not deleted"
           }
         },
         "security": [
@@ -1893,6 +3005,25 @@
         ]
       }
     },
+    "/api/v1/crm/opportunities/deleted": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "List soft-deleted opportunities (admin only)",
+        "operationId": "list_deleted_opportunities",
+        "responses": {
+          "200": {
+            "description": "List of deleted opportunities"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/crm/opportunities/status/{status}": {
       "get": {
         "tags": [
@@ -1948,6 +3079,113 @@
           },
           "404": {
             "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Soft-delete an opportunity (requires admin role)",
+        "operationId": "soft_delete_opportunity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Opportunity ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Opportunity soft-deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/opportunities/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Permanently destroy an opportunity (admin only)",
+        "operationId": "destroy_opportunity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Opportunity ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Opportunity permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/opportunities/{id}/restore": {
+      "put": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Restore a soft-deleted opportunity (admin only)",
+        "operationId": "restore_opportunity",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Opportunity ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Opportunity restored"
+          },
+          "404": {
+            "description": "Not found or not deleted"
           }
         },
         "security": [
@@ -2066,6 +3304,25 @@
         ]
       }
     },
+    "/api/v1/crm/tickets/deleted": {
+      "get": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "List soft-deleted tickets (admin only)",
+        "operationId": "list_deleted_tickets",
+        "responses": {
+          "200": {
+            "description": "List of deleted tickets"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/crm/tickets/open-count": {
       "get": {
         "tags": [
@@ -2147,6 +3404,79 @@
             "bearer_auth": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Soft-delete a ticket (requires admin role)",
+        "operationId": "soft_delete_ticket",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ticket ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket soft-deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/tickets/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Permanently destroy a ticket (admin only)",
+        "operationId": "destroy_ticket",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ticket ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Ticket permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
       }
     },
     "/api/v1/crm/tickets/{id}/resolve": {
@@ -2174,6 +3504,40 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/crm/tickets/{id}/restore": {
+      "put": {
+        "tags": [
+          "CRM"
+        ],
+        "summary": "Restore a soft-deleted ticket (admin only)",
+        "operationId": "restore_ticket",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ticket ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket restored"
+          },
+          "404": {
+            "description": "Not found or not deleted"
           }
         },
         "security": [
@@ -2218,6 +3582,333 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-fields": {
+      "get": {
+        "tags": [
+          "Custom Fields"
+        ],
+        "summary": "List custom fields (optionally filtered by module)",
+        "operationId": "list_custom_fields",
+        "parameters": [
+          {
+            "name": "module",
+            "in": "query",
+            "description": "Filter by module",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of custom field definitions"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Custom Fields"
+        ],
+        "summary": "Create a custom field definition (admin only)",
+        "operationId": "create_custom_field",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomFieldDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Custom field created"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "409": {
+            "description": "Field name already exists in module"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-fields/{id}": {
+      "get": {
+        "tags": [
+          "Custom Fields"
+        ],
+        "summary": "Get a custom field by ID",
+        "operationId": "get_custom_field",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Custom field ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Custom field found"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Custom field not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Custom Fields"
+        ],
+        "summary": "Update a custom field definition (admin only)",
+        "operationId": "update_custom_field",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Custom field ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomFieldDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Custom field updated"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Custom field not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Custom Fields"
+        ],
+        "summary": "Delete a custom field definition (admin only)",
+        "operationId": "delete_custom_field",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Custom field ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Custom field deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Custom field not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/events/dead-letters": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Get dead letter events",
+        "operationId": "get_dead_letters",
+        "responses": {
+          "200": {
+            "description": "List of dead letter entries"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/events/dead-letters/{id}/retry": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Retry a dead letter event",
+        "operationId": "retry_dead_letter",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Dead letter entry ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event retried"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/events/outbox/pending": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Get pending outbox events",
+        "operationId": "get_pending_events",
+        "responses": {
+          "200": {
+            "description": "List of pending events"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/events/outbox/process": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Process pending outbox events",
+        "operationId": "process_outbox",
+        "responses": {
+          "200": {
+            "description": "Outbox processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessOutboxResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/events/publish": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Publish a custom domain event",
+        "operationId": "publish_event",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishEventRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Event published"
           }
         },
         "security": [
@@ -2639,6 +4330,28 @@
         ]
       }
     },
+    "/api/v1/hr/attendance/deleted": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "List soft-deleted attendance (requires admin role)",
+        "operationId": "list_deleted_attendance",
+        "responses": {
+          "200": {
+            "description": "List of soft-deleted attendance records"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/hr/attendance/employee/{employee_id}": {
       "get": {
         "tags": [
@@ -2661,6 +4374,117 @@
         "responses": {
           "200": {
             "description": "Attendance records"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/attendance/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Permanently destroy attendance (requires admin role)",
+        "operationId": "destroy_attendance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Attendance ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Attendance permanently deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/attendance/{id}/restore": {
+      "put": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Restore a soft-deleted attendance (requires admin role)",
+        "operationId": "restore_attendance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Attendance ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attendance restored"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/attendance/{id}/soft-delete": {
+      "delete": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Soft-delete attendance (requires admin role)",
+        "operationId": "soft_delete_attendance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Attendance ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attendance soft-deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -2719,6 +4543,28 @@
         ]
       }
     },
+    "/api/v1/hr/employees/deleted": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "List soft-deleted employees (requires admin role)",
+        "operationId": "list_deleted_employees",
+        "responses": {
+          "200": {
+            "description": "List of soft-deleted employees"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/hr/employees/{id}": {
       "get": {
         "tags": [
@@ -2741,6 +4587,117 @@
         "responses": {
           "200": {
             "description": "Employee found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/employees/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Permanently destroy an employee (requires admin role)",
+        "operationId": "destroy_employee",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Employee permanently deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/employees/{id}/restore": {
+      "put": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Restore a soft-deleted employee (requires admin role)",
+        "operationId": "restore_employee",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Employee restored"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/employees/{id}/soft-delete": {
+      "delete": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Soft-delete an employee (requires admin role)",
+        "operationId": "soft_delete_employee",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Employee soft-deleted"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Not found"
@@ -2860,6 +4817,28 @@
         ]
       }
     },
+    "/api/v1/hr/leave-requests/deleted": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "List soft-deleted leave requests (requires admin role)",
+        "operationId": "list_deleted_leave_requests",
+        "responses": {
+          "200": {
+            "description": "List of soft-deleted leave requests"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/hr/leave-requests/employee/{employee_id}": {
       "get": {
         "tags": [
@@ -2925,6 +4904,43 @@
         ]
       }
     },
+    "/api/v1/hr/leave-requests/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Permanently destroy a leave request (requires admin role)",
+        "operationId": "destroy_leave_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Leave request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Leave request permanently deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/hr/leave-requests/{id}/reject": {
       "post": {
         "tags": [
@@ -2959,6 +4975,80 @@
         ]
       }
     },
+    "/api/v1/hr/leave-requests/{id}/restore": {
+      "put": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Restore a soft-deleted leave request (requires admin role)",
+        "operationId": "restore_leave_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Leave request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leave request restored"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/leave-requests/{id}/soft-delete": {
+      "delete": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Soft-delete a leave request (requires admin role)",
+        "operationId": "soft_delete_leave_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Leave request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leave request soft-deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/hr/leave-types": {
       "get": {
         "tags": [
@@ -2969,6 +5059,139 @@
         "responses": {
           "200": {
             "description": "List of leave types"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/leave-types/deleted": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "List soft-deleted leave types (requires admin role)",
+        "operationId": "list_deleted_leave_types",
+        "responses": {
+          "200": {
+            "description": "List of soft-deleted leave types"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/leave-types/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Permanently destroy a leave type (requires admin role)",
+        "operationId": "destroy_leave_type",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Leave type ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Leave type permanently deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/leave-types/{id}/restore": {
+      "put": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Restore a soft-deleted leave type (requires admin role)",
+        "operationId": "restore_leave_type",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Leave type ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leave type restored"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/leave-types/{id}/soft-delete": {
+      "delete": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Soft-delete a leave type (requires admin role)",
+        "operationId": "soft_delete_leave_type",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Leave type ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Leave type soft-deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -2998,6 +5221,28 @@
         "responses": {
           "200": {
             "description": "Payroll calculated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/payroll/deleted": {
+      "get": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "List soft-deleted payroll records (requires admin role)",
+        "operationId": "list_deleted_payroll",
+        "responses": {
+          "200": {
+            "description": "List of soft-deleted payroll records"
           },
           "403": {
             "description": "Forbidden"
@@ -3041,6 +5286,43 @@
         ]
       }
     },
+    "/api/v1/hr/payroll/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Permanently destroy payroll (requires admin role)",
+        "operationId": "destroy_payroll",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Payroll ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Payroll permanently deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/hr/payroll/{id}/paid": {
       "post": {
         "tags": [
@@ -3066,6 +5348,80 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/payroll/{id}/restore": {
+      "put": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Restore a soft-deleted payroll (requires admin role)",
+        "operationId": "restore_payroll",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Payroll ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payroll restored"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/hr/payroll/{id}/soft-delete": {
+      "delete": {
+        "tags": [
+          "HR"
+        ],
+        "summary": "Soft-delete payroll (requires admin role)",
+        "operationId": "soft_delete_payroll",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Payroll ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payroll soft-deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -3136,6 +5492,28 @@
         "responses": {
           "201": {
             "description": "Invoice created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/invoices/deleted": {
+      "get": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "List soft-deleted invoices (admin only)",
+        "operationId": "list_deleted_invoices",
+        "responses": {
+          "200": {
+            "description": "List of deleted invoices"
           },
           "403": {
             "description": "Forbidden"
@@ -3343,6 +5721,43 @@
         ]
       }
     },
+    "/api/v1/invoices/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Permanently delete an invoice (admin only)",
+        "operationId": "destroy_invoice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Invoice permanently deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Invoice not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/invoices/{id}/payments": {
       "get": {
         "tags": [
@@ -3365,6 +5780,50 @@
         "responses": {
           "200": {
             "description": "Payments for invoice"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/invoices/{id}/restore": {
+      "put": {
+        "tags": [
+          "Invoice"
+        ],
+        "summary": "Restore a soft-deleted invoice (admin only)",
+        "operationId": "restore_invoice",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Invoice not found or not deleted"
           }
         },
         "security": [
@@ -3418,6 +5877,372 @@
         ]
       }
     },
+    "/api/v1/jobs": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Schedule a new job",
+        "operationId": "schedule_job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Job scheduled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/cleanup/{days}": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Cleanup old completed/failed jobs",
+        "operationId": "cleanup_jobs",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "path",
+            "description": "Remove jobs older than N days",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Jobs cleaned up"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/next": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get next pending job (for worker processes)",
+        "operationId": "next_pending_job",
+        "responses": {
+          "200": {
+            "description": "Next pending job",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/JobResponse"
+                    }
+                  ],
+                  "nullable": true
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "No pending jobs"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/status/{status}": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "List jobs by status",
+        "operationId": "list_jobs_by_status",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "path",
+            "description": "Job status filter",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of jobs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/JobResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}": {
+      "get": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Get a job by ID",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Cancel a pending/scheduled job",
+        "operationId": "cancel_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job cancelled"
+          },
+          "404": {
+            "description": "Job not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}/complete": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Mark a job as completed",
+        "operationId": "complete_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job marked as completed"
+          },
+          "404": {
+            "description": "Job not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}/fail": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Mark a job as failed",
+        "operationId": "fail_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FailJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Job marked as failed"
+          },
+          "404": {
+            "description": "Job not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}/retry": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Retry a failed job",
+        "operationId": "retry_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job retried"
+          },
+          "404": {
+            "description": "Job not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/jobs/{id}/start": {
+      "post": {
+        "tags": [
+          "Jobs"
+        ],
+        "summary": "Mark a job as running",
+        "operationId": "start_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job marked as running"
+          },
+          "404": {
+            "description": "Job not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/manufacturing/boms": {
       "post": {
         "tags": [
@@ -3441,6 +6266,25 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/boms/deleted": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "List soft-deleted BOMs (requires admin role)",
+        "operationId": "list_deleted_boms",
+        "responses": {
+          "200": {
+            "description": "List of deleted BOMs"
           }
         },
         "security": [
@@ -3576,6 +6420,113 @@
             "bearer_auth": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Soft-delete a BOM (requires admin role)",
+        "operationId": "soft_delete_bom",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "BOM ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BOM soft-deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/boms/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Permanently destroy a BOM (requires admin role)",
+        "operationId": "destroy_bom",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "BOM ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "BOM permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/boms/{id}/restore": {
+      "put": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Restore a soft-deleted BOM (requires admin role)",
+        "operationId": "restore_bom",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "BOM ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BOM restored"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
       }
     },
     "/api/v1/manufacturing/inspections": {
@@ -3618,6 +6569,25 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/inspections/deleted": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "List soft-deleted inspections (requires admin role)",
+        "operationId": "list_deleted_inspections",
+        "responses": {
+          "200": {
+            "description": "List of deleted inspections"
           }
         },
         "security": [
@@ -3742,6 +6712,74 @@
         ]
       }
     },
+    "/api/v1/manufacturing/inspections/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Permanently destroy an inspection (requires admin role)",
+        "operationId": "destroy_inspection",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Inspection ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Inspection permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/inspections/{id}/restore": {
+      "put": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Restore a soft-deleted inspection (requires admin role)",
+        "operationId": "restore_inspection",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Inspection ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Inspection restored"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/manufacturing/material-requirements/{product_id}": {
       "get": {
         "tags": [
@@ -3822,6 +6860,25 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/ncrs/deleted": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "List soft-deleted NCRs (requires admin role)",
+        "operationId": "list_deleted_ncrs",
+        "responses": {
+          "200": {
+            "description": "List of deleted NCRs"
           }
         },
         "security": [
@@ -3946,6 +7003,74 @@
         ]
       }
     },
+    "/api/v1/manufacturing/ncrs/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Permanently destroy an NCR (requires admin role)",
+        "operationId": "destroy_ncr",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "NCR ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "NCR permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/ncrs/{id}/restore": {
+      "put": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Restore a soft-deleted NCR (requires admin role)",
+        "operationId": "restore_ncr",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "NCR ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "NCR restored"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/manufacturing/routings": {
       "post": {
         "tags": [
@@ -3969,6 +7094,25 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/routings/deleted": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "List soft-deleted routings (requires admin role)",
+        "operationId": "list_deleted_routings",
+        "responses": {
+          "200": {
+            "description": "List of deleted routings"
           }
         },
         "security": [
@@ -4073,6 +7217,113 @@
             "bearer_auth": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Soft-delete a routing (requires admin role)",
+        "operationId": "soft_delete_routing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Routing ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Routing soft-deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/routings/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Permanently destroy a routing (requires admin role)",
+        "operationId": "destroy_routing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Routing ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Routing permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/routings/{id}/restore": {
+      "put": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Restore a soft-deleted routing (requires admin role)",
+        "operationId": "restore_routing",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Routing ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Routing restored"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
       }
     },
     "/api/v1/manufacturing/work-orders": {
@@ -4115,6 +7366,25 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/work-orders/deleted": {
+      "get": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "List soft-deleted work orders (requires admin role)",
+        "operationId": "list_deleted_work_orders",
+        "responses": {
+          "200": {
+            "description": "List of deleted work orders"
           }
         },
         "security": [
@@ -4210,6 +7480,113 @@
         "responses": {
           "200": {
             "description": "Work order found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Soft-delete a work order (requires admin role)",
+        "operationId": "soft_delete_work_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Work order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Work order soft-deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/work-orders/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Permanently destroy a work order (requires admin role)",
+        "operationId": "destroy_work_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Work order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Work order permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/manufacturing/work-orders/{id}/restore": {
+      "put": {
+        "tags": [
+          "Manufacturing"
+        ],
+        "summary": "Restore a soft-deleted work order (requires admin role)",
+        "operationId": "restore_work_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Work order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Work order restored"
           },
           "404": {
             "description": "Not found"
@@ -4328,6 +7705,183 @@
         ]
       }
     },
+    "/api/v1/notifications/in-app": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Get in-app notifications for current user",
+        "operationId": "get_in_app_notifications",
+        "parameters": [
+          {
+            "name": "unread_only",
+            "in": "query",
+            "description": "Only unread notifications",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of in-app notifications"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/read-all": {
+      "put": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark all notifications as read",
+        "operationId": "mark_all_read",
+        "responses": {
+          "200": {
+            "description": "All notifications marked as read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/send": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Send a notification",
+        "operationId": "send_notification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendNotificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Notification sent"
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/unread-count": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Get unread notification count",
+        "operationId": "get_unread_count",
+        "responses": {
+          "200": {
+            "description": "Unread count",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/{id}/read": {
+      "put": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark a notification as read",
+        "operationId": "mark_notification_read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Notification ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification marked as read"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/{id}/retry": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Retry a failed notification",
+        "operationId": "retry_notification",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Notification ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification retried"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/products": {
       "get": {
         "tags": [
@@ -4365,6 +7919,100 @@
           },
           "401": {
             "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/products/deleted": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "List soft-deleted products (admin only)",
+        "operationId": "list_deleted_products",
+        "responses": {
+          "200": {
+            "description": "List of deleted products"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/products/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Permanently delete a product (admin only, after soft delete)",
+        "operationId": "destroy_product",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Product permanently deleted"
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/products/{id}/restore": {
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Restore a soft-deleted product (admin only)",
+        "operationId": "restore_product",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found or not deleted"
           }
         },
         "security": [
@@ -4479,6 +8127,37 @@
         ]
       }
     },
+    "/api/v1/products/{product_id}/variants/deleted": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "List soft-deleted product variants for a product (admin only)",
+        "operationId": "list_deleted_variants",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of deleted product variants"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/projects": {
       "get": {
         "tags": [
@@ -4575,6 +8254,25 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/deleted": {
+      "get": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "List soft-deleted projects (requires admin role)",
+        "operationId": "list_deleted_projects",
+        "responses": {
+          "200": {
+            "description": "List of deleted projects"
           }
         },
         "security": [
@@ -4682,6 +8380,113 @@
         "responses": {
           "200": {
             "description": "Project found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Soft delete a project (requires admin role)",
+        "operationId": "soft_delete_project",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project soft deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Hard delete (destroy) a project (requires admin role)",
+        "operationId": "destroy_project",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Project permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{id}/restore": {
+      "put": {
+        "tags": [
+          "Project"
+        ],
+        "summary": "Restore a soft-deleted project (requires admin role)",
+        "operationId": "restore_project",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Project ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Project restored"
           },
           "404": {
             "description": "Not found"
@@ -4945,6 +8750,25 @@
         ]
       }
     },
+    "/api/v1/purchase-requests/deleted": {
+      "get": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "List soft-deleted purchase requests (admin only)",
+        "operationId": "list_deleted_requests",
+        "responses": {
+          "200": {
+            "description": "List of deleted purchase requests"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/purchase-requests/{id}": {
       "get": {
         "tags": [
@@ -5047,7 +8871,7 @@
         "tags": [
           "Purchase Requests"
         ],
-        "summary": "Delete purchase request endpoint (requires authentication)",
+        "summary": "Delete purchase request endpoint (requires admin role, soft delete)",
         "operationId": "delete_request",
         "parameters": [
           {
@@ -5072,8 +8896,8 @@
               }
             }
           },
-          "401": {
-            "description": "Not authenticated - missing or invalid JWT token"
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Purchase request not found"
@@ -5133,6 +8957,40 @@
         ]
       }
     },
+    "/api/v1/purchase-requests/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "Permanently delete a purchase request (admin only)",
+        "operationId": "destroy_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Purchase request permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/purchase-requests/{id}/reject": {
       "post": {
         "tags": [
@@ -5180,6 +9038,47 @@
         ]
       }
     },
+    "/api/v1/purchase-requests/{id}/restore": {
+      "put": {
+        "tags": [
+          "Purchase Requests"
+        ],
+        "summary": "Restore a soft-deleted purchase request (admin only)",
+        "operationId": "restore_request",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase request ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase request restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseRequestResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/purchase-requests/{id}/submit": {
       "post": {
         "tags": [
@@ -5215,6 +9114,122 @@
           },
           "404": {
             "description": "Purchase request not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "List generated reports",
+        "operationId": "list_reports",
+        "responses": {
+          "200": {
+            "description": "List of report metadata"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reports/generate": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Generate a report",
+        "operationId": "generate_report",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Report generated"
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reports/{id}": {
+      "delete": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Delete a generated report",
+        "operationId": "delete_report",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Report ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/reports/{id}/download": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Download a generated report",
+        "operationId": "download_report",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Report ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report file"
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -5288,6 +9303,25 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/orders/deleted": {
+      "get": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "List soft-deleted sales orders (admin only)",
+        "operationId": "list_deleted_sales_orders",
+        "responses": {
+          "200": {
+            "description": "List of deleted sales orders"
           }
         },
         "security": [
@@ -5386,7 +9420,7 @@
         "tags": [
           "Sales"
         ],
-        "summary": "Delete sales order (requires admin role)",
+        "summary": "Delete sales order (requires admin role, soft delete)",
         "operationId": "delete_sales_order",
         "parameters": [
           {
@@ -5413,6 +9447,81 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Permanently delete a sales order (admin only)",
+        "operationId": "destroy_sales_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Sales order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sales order permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/orders/{id}/restore": {
+      "put": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Restore a soft-deleted sales order (admin only)",
+        "operationId": "restore_sales_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Sales order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sales order restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesOrderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not deleted"
           }
         },
         "security": [
@@ -5539,6 +9648,25 @@
         ]
       }
     },
+    "/api/v1/sales/quotations/deleted": {
+      "get": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "List soft-deleted quotations (admin only)",
+        "operationId": "list_deleted_quotations",
+        "responses": {
+          "200": {
+            "description": "List of deleted quotations"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/sales/quotations/status/{status}": {
       "get": {
         "tags": [
@@ -5628,7 +9756,7 @@
         "tags": [
           "Sales"
         ],
-        "summary": "Delete quotation (requires admin role)",
+        "summary": "Delete quotation (requires admin role, soft delete)",
         "operationId": "delete_quotation",
         "parameters": [
           {
@@ -5698,6 +9826,81 @@
         ]
       }
     },
+    "/api/v1/sales/quotations/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Permanently delete a quotation (admin only)",
+        "operationId": "destroy_quotation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Quotation ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Quotation permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/quotations/{id}/restore": {
+      "put": {
+        "tags": [
+          "Sales"
+        ],
+        "summary": "Restore a soft-deleted quotation (admin only)",
+        "operationId": "restore_quotation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Quotation ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quotation restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuotationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/sales/quotations/{id}/status": {
       "put": {
         "tags": [
@@ -5740,6 +9943,413 @@
             "bearer_auth": []
           }
         ]
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Search across entities",
+        "operationId": "search",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_type",
+            "in": "query",
+            "description": "Filter by entity type",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Max results",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/search/index": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Index a document for search",
+        "operationId": "index_document",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IndexDocumentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Document indexed"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/search/reindex": {
+      "post": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Reindex all documents for a tenant",
+        "operationId": "reindex",
+        "responses": {
+          "200": {
+            "description": "Reindex started"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/search/{entity_type}/{id}": {
+      "delete": {
+        "tags": [
+          "Search"
+        ],
+        "summary": "Remove a document from search index",
+        "operationId": "remove_document",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Document removed"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List all settings for the current tenant",
+        "operationId": "list_settings",
+        "parameters": [
+          {
+            "name": "group",
+            "in": "query",
+            "description": "Filter by group",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of settings"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Create a new setting (admin only)",
+        "operationId": "create_setting",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSetting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Setting created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          },
+          "409": {
+            "description": "Setting already exists"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/bulk": {
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Bulk update settings by key (admin only)",
+        "operationId": "bulk_update_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkUpdateSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Settings updated"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/seed": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Seed default settings for the current tenant (admin only)",
+        "operationId": "seed_settings",
+        "responses": {
+          "201": {
+            "description": "Default settings seeded"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/{id}": {
+      "put": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update a setting by ID (admin only)",
+        "operationId": "update_setting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Setting ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSetting"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Setting updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          },
+          "404": {
+            "description": "Setting not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Delete a setting by ID (admin only)",
+        "operationId": "delete_setting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Setting ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Setting deleted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          },
+          "404": {
+            "description": "Setting not found"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/{key}": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get a setting by key",
+        "operationId": "get_setting_by_key",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "description": "Setting key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Setting found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Setting not found"
+          }
+        }
       }
     },
     "/api/v1/stock/levels/product/{product_id}": {
@@ -5801,6 +10411,132 @@
           },
           "401": {
             "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/levels/warehouse/{warehouse_id}/deleted": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "List soft-deleted stock levels for a warehouse (admin only)",
+        "operationId": "list_deleted_stock_levels",
+        "parameters": [
+          {
+            "name": "warehouse_id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of deleted stock levels"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/levels/warehouse/{warehouse_id}/product/{product_id}/destroy": {
+      "delete": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Permanently delete a stock level (admin only)",
+        "operationId": "destroy_stock_level",
+        "parameters": [
+          {
+            "name": "warehouse_id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Stock level permanently deleted"
+          },
+          "404": {
+            "description": "Stock level not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/levels/warehouse/{warehouse_id}/product/{product_id}/restore": {
+      "put": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Restore a soft-deleted stock level (admin only)",
+        "operationId": "restore_stock_level",
+        "parameters": [
+          {
+            "name": "warehouse_id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stock level restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockLevelResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stock level not found or not deleted"
           }
         },
         "security": [
@@ -5910,6 +10646,112 @@
         ]
       }
     },
+    "/api/v1/stock/movements/warehouse/{warehouse_id}/deleted": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "List soft-deleted stock movements for a warehouse (admin only)",
+        "operationId": "list_deleted_stock_movements",
+        "parameters": [
+          {
+            "name": "warehouse_id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of deleted stock movements"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/movements/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Permanently delete a stock movement (admin only)",
+        "operationId": "destroy_stock_movement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Movement ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Stock movement permanently deleted"
+          },
+          "404": {
+            "description": "Stock movement not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/movements/{id}/restore": {
+      "put": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Restore a soft-deleted stock movement (admin only)",
+        "operationId": "restore_stock_movement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Movement ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stock movement restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMovementResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Stock movement not found or not deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/stock/summary/{product_id}": {
       "get": {
         "tags": [
@@ -5990,6 +10832,25 @@
           },
           "403": {
             "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/warehouses/deleted": {
+      "get": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "List soft-deleted warehouses (admin only)",
+        "operationId": "list_deleted_warehouses",
+        "responses": {
+          "200": {
+            "description": "List of deleted warehouses"
           }
         },
         "security": [
@@ -6081,7 +10942,7 @@
         "tags": [
           "Stock"
         ],
-        "summary": "Delete warehouse (requires admin role)",
+        "summary": "Delete warehouse (soft delete, requires admin role)",
         "operationId": "delete_warehouse",
         "parameters": [
           {
@@ -6111,6 +10972,81 @@
           },
           "404": {
             "description": "Warehouse not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/warehouses/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Permanently delete a warehouse (admin only)",
+        "operationId": "destroy_warehouse",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Warehouse permanently deleted"
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stock/warehouses/{id}/restore": {
+      "put": {
+        "tags": [
+          "Stock"
+        ],
+        "summary": "Restore a soft-deleted warehouse (admin only)",
+        "operationId": "restore_warehouse",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Warehouse ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Warehouse restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehouseResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Warehouse not found or not deleted"
           }
         },
         "security": [
@@ -6813,7 +11749,7 @@
         "tags": [
           "Products"
         ],
-        "summary": "Delete product variant endpoint (requires admin role)",
+        "summary": "Soft delete product variant endpoint (requires admin role)",
         "operationId": "delete_variant",
         "parameters": [
           {
@@ -6829,7 +11765,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Product variant deleted",
+            "description": "Product variant soft deleted",
             "content": {
               "application/json": {
                 "schema": {
@@ -6854,10 +11790,140 @@
           }
         ]
       }
+    },
+    "/api/v1/variants/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Permanently delete a product variant (admin only, after soft delete)",
+        "operationId": "destroy_variant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Variant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Product variant permanently deleted"
+          },
+          "404": {
+            "description": "Variant not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/variants/{id}/restore": {
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Restore a soft-deleted product variant (admin only)",
+        "operationId": "restore_variant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Variant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product variant restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductVariantResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Variant not found or not deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
+      "ApiKeyScope": {
+        "type": "string",
+        "description": "API Key permission scope",
+        "enum": [
+          "all",
+          "cariread",
+          "cariwrite",
+          "invoiceread",
+          "invoicewrite",
+          "stockread",
+          "stockwrite",
+          "salesread",
+          "saleswrite",
+          "productread",
+          "productwrite",
+          "reportread"
+        ]
+      },
+      "CreateApiKey": {
+        "type": "object",
+        "description": "Create API Key request",
+        "required": [
+          "name",
+          "tenant_id",
+          "user_id",
+          "scopes"
+        ],
+        "properties": {
+          "expires_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyScope"
+            }
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "CreateFeatureFlag": {
         "type": "object",
         "description": "Create feature flag request",
@@ -6887,6 +11953,71 @@
             "format": "int64",
             "description": "Optional tenant ID for tenant-specific flags",
             "nullable": true
+          }
+        }
+      },
+      "CreateJobRequest": {
+        "type": "object",
+        "description": "Create job request",
+        "required": [
+          "job_type",
+          "tenant_id"
+        ],
+        "properties": {
+          "asset_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "custom_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "custom_payload": {
+            "type": "string",
+            "nullable": true
+          },
+          "job_type": {
+            "type": "string"
+          },
+          "max_attempts": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          },
+          "older_than_days": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "params": {
+            "type": "string",
+            "nullable": true
+          },
+          "period": {
+            "type": "string",
+            "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "nullable": true
+          },
+          "report_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "scheduled_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -6927,9 +12058,62 @@
           }
         }
       },
+      "DeadLetterResponse": {
+        "type": "object",
+        "description": "Dead letter entry response",
+        "required": [
+          "id",
+          "original_event_id",
+          "event_type",
+          "tenant_id",
+          "error",
+          "attempts",
+          "created_at"
+        ],
+        "properties": {
+          "attempts": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "original_event_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "ErrorResponse": {
         "type": "object",
         "description": "Error response structure for JSON API responses",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
+      "FailJobRequest": {
+        "type": "object",
+        "description": "Fail job request",
         "required": [
           "error"
         ],
@@ -7009,6 +12193,182 @@
           }
         }
       },
+      "GenerateReportRequest": {
+        "type": "object",
+        "description": "Generate report request",
+        "required": [
+          "report_type",
+          "format",
+          "title",
+          "parameters"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "locale": {
+            "type": "string",
+            "nullable": true
+          },
+          "parameters": {},
+          "report_type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "InAppNotificationResponse": {
+        "type": "object",
+        "description": "In-app notification response",
+        "required": [
+          "id",
+          "tenant_id",
+          "user_id",
+          "title",
+          "message",
+          "notification_type",
+          "read",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "link": {
+            "type": "string",
+            "nullable": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "notification_type": {
+            "type": "string"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "IndexDocumentRequest": {
+        "type": "object",
+        "description": "Index document request",
+        "required": [
+          "entity_type",
+          "entity_id",
+          "title",
+          "searchable_text"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "entity_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "searchable_text": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "JobResponse": {
+        "type": "object",
+        "description": "Job response DTO",
+        "required": [
+          "id",
+          "job_type",
+          "status",
+          "priority",
+          "tenant_id",
+          "attempts",
+          "max_attempts",
+          "created_at"
+        ],
+        "properties": {
+          "attempts": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "completed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "job_type": {
+            "type": "string"
+          },
+          "last_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "max_attempts": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "priority": {
+            "type": "string"
+          },
+          "scheduled_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "started_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "LoginRequest": {
         "type": "object",
         "description": "Login request",
@@ -7041,6 +12401,20 @@
           }
         }
       },
+      "MarkReadResponse": {
+        "type": "object",
+        "description": "Mark read response",
+        "required": [
+          "marked"
+        ],
+        "properties": {
+          "marked": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
       "MessageResponse": {
         "type": "object",
         "description": "Simple localized success message payload.",
@@ -7050,6 +12424,55 @@
         "properties": {
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "OutboxEventResponse": {
+        "type": "object",
+        "description": "Outbox event response",
+        "required": [
+          "id",
+          "event_type",
+          "aggregate_type",
+          "aggregate_id",
+          "tenant_id",
+          "status",
+          "attempts",
+          "created_at"
+        ],
+        "properties": {
+          "aggregate_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "aggregate_type": {
+            "type": "string"
+          },
+          "attempts": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -7068,6 +12491,36 @@
             "format": "int32",
             "description": "Number of items per page (default: 20, max: 100)",
             "minimum": 0
+          }
+        }
+      },
+      "ProcessOutboxResponse": {
+        "type": "object",
+        "description": "Process outbox response",
+        "required": [
+          "processed"
+        ],
+        "properties": {
+          "processed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "PublishEventRequest": {
+        "type": "object",
+        "description": "Publish event request",
+        "required": [
+          "name",
+          "payload"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "string"
           }
         }
       },
@@ -7118,6 +12571,190 @@
           },
           "username": {
             "type": "string"
+          }
+        }
+      },
+      "ReportMetaResponse": {
+        "type": "object",
+        "description": "Report metadata response",
+        "required": [
+          "id",
+          "report_type",
+          "format",
+          "tenant_id",
+          "title",
+          "filename",
+          "size_bytes",
+          "generated_at"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "generated_at": {
+            "type": "string"
+          },
+          "generated_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "report_type": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "SearchRequest": {
+        "type": "object",
+        "description": "Search request",
+        "required": [
+          "query"
+        ],
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          },
+          "min_score": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "query": {
+            "type": "string"
+          }
+        }
+      },
+      "SearchResultResponse": {
+        "type": "object",
+        "description": "Search result response",
+        "required": [
+          "id",
+          "entity_type",
+          "tenant_id",
+          "title",
+          "description",
+          "score"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "score": {
+            "type": "number",
+            "format": "double"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "SendNotificationRequest": {
+        "type": "object",
+        "description": "Send notification request",
+        "required": [
+          "channel",
+          "template_key",
+          "template_vars",
+          "recipient"
+        ],
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string",
+            "nullable": true
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "template_key": {
+            "type": "string"
+          },
+          "template_vars": {},
+          "user_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "UnreadCountResponse": {
+        "type": "object",
+        "description": "Unread count response",
+        "required": [
+          "count"
+        ],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "UpdateApiKey": {
+        "type": "object",
+        "description": "Update API Key request",
+        "properties": {
+          "expires_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "scopes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiKeyScope"
+            },
+            "nullable": true
           }
         }
       },
@@ -7289,6 +12926,38 @@
     {
       "name": "Feature Flags",
       "description": "Feature flag management endpoints"
+    },
+    {
+      "name": "Custom Fields",
+      "description": "Custom field definitions for dynamic module attributes"
+    },
+    {
+      "name": "Settings",
+      "description": "Configuration management endpoints"
+    },
+    {
+      "name": "Jobs",
+      "description": "Background job scheduler endpoints"
+    },
+    {
+      "name": "API Keys",
+      "description": "API key management and scope validation"
+    },
+    {
+      "name": "Notifications",
+      "description": "In-app notifications, email/SMS sending"
+    },
+    {
+      "name": "Reports",
+      "description": "Report generation and management"
+    },
+    {
+      "name": "Events",
+      "description": "Event bus, outbox pattern, and dead letter queue"
+    },
+    {
+      "name": "Search",
+      "description": "Full-text search across entities"
     },
     {
       "name": "Audit",

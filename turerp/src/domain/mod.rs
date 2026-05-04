@@ -1,11 +1,14 @@
 //! Domain layer
 
 pub mod accounting;
+pub mod api_key;
 pub mod assets;
 pub mod audit;
 pub mod auth;
 pub mod cari;
+pub mod chart_of_accounts;
 pub mod crm;
+pub mod custom_field;
 pub mod feature;
 pub mod hr;
 pub mod invoice;
@@ -49,6 +52,16 @@ pub use project::service::ProjectService;
 pub use cari::model::{Cari, CariResponse, CariStatus, CariType, CreateCari, UpdateCari};
 pub use cari::repository::{BoxCariRepository, CariRepository, InMemoryCariRepository};
 pub use cari::service::CariService;
+
+// Chart of Accounts module re-exports
+pub use chart_of_accounts::model::{
+    AccountGroup, AccountTreeNode, ChartAccount, ChartAccountResponse, CreateChartAccount,
+    TrialBalanceEntry, UpdateChartAccount,
+};
+pub use chart_of_accounts::repository::{
+    BoxChartAccountRepository, ChartAccountRepository, InMemoryChartAccountRepository,
+};
+pub use chart_of_accounts::service::ChartOfAccountsService;
 
 // HR module re-exports
 pub use hr::model::{
@@ -187,3 +200,20 @@ pub use settings::repository::{
     BoxSettingsRepository, InMemorySettingsRepository, SettingsRepository,
 };
 pub use settings::service::SettingsService;
+
+// API Key module re-exports
+pub use api_key::model::{
+    ApiKey, ApiKeyCreationResult, ApiKeyResponse, ApiKeyScope, CreateApiKey, UpdateApiKey,
+};
+pub use api_key::repository::{ApiKeyRepository, BoxApiKeyRepository, InMemoryApiKeyRepository};
+pub use api_key::service::ApiKeyService;
+
+// Custom Field module re-exports
+pub use custom_field::model::{
+    CreateCustomFieldDefinition, CustomFieldDefinition, CustomFieldDefinitionResponse,
+    CustomFieldModule, CustomFieldType, CustomFieldValues, UpdateCustomFieldDefinition,
+};
+pub use custom_field::repository::{
+    BoxCustomFieldRepository, CustomFieldRepository, InMemoryCustomFieldRepository,
+};
+pub use custom_field::service::CustomFieldService;
