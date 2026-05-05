@@ -54,6 +54,26 @@ Multi-tenant SaaS ERP system built with Rust, Actix-web, and SQLx.
 
 ---
 
+## Git Workflow
+
+### Branching Rules
+
+| Rule | Description |
+|------|-------------|
+| **No direct pushes to `main`** | All changes must be made on a feature branch and merged via pull request. |
+| **Branch from `main`** | Always create your feature branch from the latest `main`. |
+| **Branch naming** | Use `feature/<short-description>` or `fix/<short-description>`. |
+
+### Creating a Pull Request
+
+1. Create a branch: `git checkout -b feature/my-feature`
+2. Make changes and commit with [Conventional Commits](https://www.conventionalcommits.org/)
+3. Push the branch: `git push -u origin feature/my-feature`
+4. Open a pull request on GitHub
+5. Merge only after CI passes and approval
+
+---
+
 ## Quick Start
 
 ```bash

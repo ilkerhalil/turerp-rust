@@ -10,6 +10,7 @@
 - NEVER commit secrets, credentials, or .env files
 - Keep files under 500 lines
 - Validate input at system boundaries
+- NEVER push directly to `main` — always use a feature branch and open a pull request
 
 ## Agent Comms (SendMessage-First Coordination)
 
