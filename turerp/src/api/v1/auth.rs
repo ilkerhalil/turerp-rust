@@ -113,11 +113,7 @@ pub async fn me(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let user_id: i64 = auth_user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
+    let user_id: i64 = auth_user.0.user_id()?;
 
     let tenant_id = auth_user.0.tenant_id;
 

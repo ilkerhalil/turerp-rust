@@ -43,6 +43,13 @@ impl AuthClaims {
             iss: "turerp-auth".to_string(),
         }
     }
+
+    /// Parse the `sub` claim as a user ID, returning an error on invalid tokens.
+    pub fn user_id(&self) -> Result<i64, ApiError> {
+        self.sub
+            .parse()
+            .map_err(|_| ApiError::InvalidToken("Invalid user ID in token".to_string()))
+    }
 }
 
 /// JWT token pair

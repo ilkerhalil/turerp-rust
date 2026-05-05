@@ -109,7 +109,7 @@ pub async fn get_in_app_notifications(
     let notifications = service
         .get_in_app_notifications(
             admin_user.0.tenant_id,
-            admin_user.0.sub.parse::<i64>().unwrap_or(0),
+            admin_user.0.user_id()?,
             query.unread_only.unwrap_or(false),
         )
         .await
@@ -144,10 +144,7 @@ pub async fn get_unread_count(
     service: web::Data<dyn NotificationService>,
 ) -> Result<HttpResponse, ApiError> {
     let count = service
-        .unread_count(
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse::<i64>().unwrap_or(0),
-        )
+        .unread_count(admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
         .map_err(ApiError::Internal)?;
     Ok(HttpResponse::Ok().json(UnreadCountResponse { count }))
@@ -185,10 +182,7 @@ pub async fn mark_all_read(
     service: web::Data<dyn NotificationService>,
 ) -> Result<HttpResponse, ApiError> {
     let count = service
-        .mark_all_as_read(
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse::<i64>().unwrap_or(0),
-        )
+        .mark_all_as_read(admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
         .map_err(ApiError::Internal)?;
     Ok(HttpResponse::Ok().json(MarkReadResponse { marked: count }))

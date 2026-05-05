@@ -79,7 +79,7 @@ pub async fn generate_report(
         tenant_id: admin_user.0.tenant_id,
         title: body.title.clone(),
         parameters: body.parameters.clone(),
-        requested_by: Some(admin_user.0.sub.parse::<i64>().unwrap_or(0)),
+        requested_by: Some(admin_user.0.user_id()?),
         locale: body.locale.clone(),
     };
     let report = engine.generate(request).await.map_err(ApiError::Internal)?;

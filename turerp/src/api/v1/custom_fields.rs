@@ -161,11 +161,7 @@ pub async fn delete_custom_field(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match service
-        .soft_delete(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .soft_delete(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {

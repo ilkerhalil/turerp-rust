@@ -80,11 +80,7 @@ pub async fn delete_product(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match service
-        .soft_delete_product(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .soft_delete_product(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {
@@ -233,11 +229,7 @@ pub async fn delete_category(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match service
-        .soft_delete_category(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .soft_delete_category(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {
@@ -343,11 +335,7 @@ pub async fn delete_unit(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match service
-        .soft_delete_unit(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .soft_delete_unit(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {
@@ -593,7 +581,7 @@ pub async fn delete_variant(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match service
-        .soft_delete_variant(*path, _admin_user.0.sub.parse().unwrap_or(0))
+        .soft_delete_variant(*path, _admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {

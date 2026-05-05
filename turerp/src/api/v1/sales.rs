@@ -165,7 +165,7 @@ pub async fn delete_sales_order(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let deleted_by = admin_user.0.sub.parse().unwrap_or(0);
+    let deleted_by = admin_user.0.user_id()?;
     let tenant_id = admin_user.0.tenant_id;
     match sales_service
         .soft_delete_order(*path, tenant_id, deleted_by)
@@ -417,7 +417,7 @@ pub async fn delete_quotation(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let deleted_by = admin_user.0.sub.parse().unwrap_or(0);
+    let deleted_by = admin_user.0.user_id()?;
     let tenant_id = admin_user.0.tenant_id;
     match sales_service
         .soft_delete_quotation(*path, tenant_id, deleted_by)

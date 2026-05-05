@@ -137,7 +137,7 @@ pub async fn soft_delete_employee(
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     hr_service
         .soft_delete_employee(*path, admin_user.0.tenant_id, user_id)
         .await?;
@@ -253,7 +253,7 @@ pub async fn soft_delete_attendance(
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     hr_service.soft_delete_attendance(*path, user_id).await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Attendance soft-deleted"})))
 }
@@ -361,11 +361,7 @@ pub async fn approve_leave_request(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let approver_id: i64 = admin_user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
+    let approver_id: i64 = admin_user.0.user_id()?;
     match hr_service.approve_leave_request(*path, approver_id).await {
         Ok(request) => Ok(HttpResponse::Ok().json(request)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
@@ -387,11 +383,7 @@ pub async fn reject_leave_request(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let approver_id: i64 = admin_user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
+    let approver_id: i64 = admin_user.0.user_id()?;
     match hr_service.reject_leave_request(*path, approver_id).await {
         Ok(request) => Ok(HttpResponse::Ok().json(request)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
@@ -410,7 +402,7 @@ pub async fn soft_delete_leave_request(
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     hr_service.soft_delete_leave_request(*path, user_id).await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Leave request soft-deleted"})))
 }
@@ -492,7 +484,7 @@ pub async fn soft_delete_leave_type(
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     hr_service
         .soft_delete_leave_type(*path, admin_user.0.tenant_id, user_id)
         .await?;
@@ -634,7 +626,7 @@ pub async fn soft_delete_payroll(
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     hr_service
         .soft_delete_payroll(*path, admin_user.0.tenant_id, user_id)
         .await?;

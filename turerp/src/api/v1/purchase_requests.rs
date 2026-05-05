@@ -382,7 +382,7 @@ pub async fn delete_request(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let deleted_by = admin_user.0.sub.parse().unwrap_or(0);
+    let deleted_by = admin_user.0.user_id()?;
     let tenant_id = admin_user.0.tenant_id;
     match service
         .soft_delete_request(*path, tenant_id, deleted_by)

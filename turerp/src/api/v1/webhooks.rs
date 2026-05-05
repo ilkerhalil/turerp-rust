@@ -163,11 +163,7 @@ pub async fn delete_webhook(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match service
-        .delete_webhook(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .delete_webhook(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {

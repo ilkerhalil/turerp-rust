@@ -145,11 +145,7 @@ pub async fn update_user(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let tenant_id = auth_user.0.tenant_id;
-    let user_id = auth_user
-        .0
-        .sub
-        .parse::<i64>()
-        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
+    let user_id = auth_user.0.user_id()?;
     let id = *path;
     let update = payload.into_inner();
 

@@ -122,11 +122,7 @@ pub async fn create_journal_entry(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    create.created_by = admin_user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
+    create.created_by = admin_user.0.user_id()?;
     match accounting_service.create_journal_entry(create).await {
         Ok(entry) => Ok(HttpResponse::Created().json(entry)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
@@ -278,7 +274,7 @@ pub async fn soft_delete_account(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     match accounting_service
         .soft_delete_account(*path, admin_user.0.tenant_id, user_id)
         .await
@@ -370,7 +366,7 @@ pub async fn soft_delete_journal_entry(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     match accounting_service
         .soft_delete_journal_entry(*path, admin_user.0.tenant_id, user_id)
         .await

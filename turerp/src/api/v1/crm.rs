@@ -626,7 +626,7 @@ pub async fn soft_delete_lead(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     match crm_service
         .soft_delete_lead(*path, admin_user.0.tenant_id, user_id)
         .await
@@ -705,7 +705,7 @@ pub async fn soft_delete_opportunity(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     match crm_service
         .soft_delete_opportunity(*path, admin_user.0.tenant_id, user_id)
         .await
@@ -784,7 +784,7 @@ pub async fn soft_delete_campaign(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     match crm_service
         .soft_delete_campaign(*path, admin_user.0.tenant_id, user_id)
         .await
@@ -863,7 +863,7 @@ pub async fn soft_delete_ticket(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     match crm_service
         .soft_delete_ticket(*path, admin_user.0.tenant_id, user_id)
         .await

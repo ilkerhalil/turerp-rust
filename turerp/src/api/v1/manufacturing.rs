@@ -550,11 +550,7 @@ pub async fn delete_inspection(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match qc_service
-        .delete_inspection(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .delete_inspection(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {
@@ -668,11 +664,7 @@ pub async fn delete_ncr(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match qc_service
-        .delete_ncr(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .delete_ncr(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {
@@ -701,11 +693,7 @@ pub async fn soft_delete_work_order(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match mfg_service
-        .soft_delete_work_order(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .soft_delete_work_order(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => Ok(HttpResponse::Ok().json(MessageResponse {
@@ -783,11 +771,7 @@ pub async fn soft_delete_bom(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match mfg_service
-        .soft_delete_bom(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .soft_delete_bom(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => Ok(HttpResponse::Ok().json(MessageResponse {
@@ -865,11 +849,7 @@ pub async fn soft_delete_routing(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match mfg_service
-        .soft_delete_routing(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .soft_delete_routing(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => Ok(HttpResponse::Ok().json(MessageResponse {

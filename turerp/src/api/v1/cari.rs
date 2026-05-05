@@ -228,11 +228,7 @@ pub async fn delete_cari(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match cari_service
-        .delete_cari(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .delete_cari(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {

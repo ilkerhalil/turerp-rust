@@ -155,7 +155,7 @@ pub async fn soft_delete_chart_account(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let code = path.into_inner();
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     match chart_of_accounts_service
         .delete_account_by_code(&code, admin_user.0.tenant_id, user_id)
         .await

@@ -161,11 +161,7 @@ pub async fn delete_warehouse(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match stock_service
-        .delete_warehouse(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .delete_warehouse(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {
@@ -267,11 +263,7 @@ pub async fn create_stock_movement(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
-    create.created_by = admin_user
-        .0
-        .sub
-        .parse()
-        .map_err(|_| crate::error::ApiError::InvalidToken("Invalid user ID in token".into()))?;
+    create.created_by = admin_user.0.user_id()?;
     match stock_service
         .create_stock_movement(create, admin_user.0.tenant_id)
         .await
@@ -381,11 +373,7 @@ pub async fn delete_stock_movement(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match stock_service
-        .delete_stock_movement(
-            *path,
-            admin_user.0.tenant_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .delete_stock_movement(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {
@@ -542,11 +530,7 @@ pub async fn delete_stock_level(
     let i18n = resolve(&i18n);
     let (warehouse_id, product_id) = path.into_inner();
     match stock_service
-        .delete_stock_level(
-            warehouse_id,
-            product_id,
-            admin_user.0.sub.parse().unwrap_or(0),
-        )
+        .delete_stock_level(warehouse_id, product_id, admin_user.0.user_id()?)
         .await
     {
         Ok(()) => {

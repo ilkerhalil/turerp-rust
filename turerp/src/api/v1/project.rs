@@ -281,7 +281,7 @@ pub async fn soft_delete_project(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    let user_id: i64 = admin_user.0.user_id()?;
     match project_service
         .soft_delete_project(*path, admin_user.0.tenant_id, user_id)
         .await
