@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-675%20passing-brightgreen)]()
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 **Modern, multi-tenant SaaS ERP system** - Built with Rust, Actix-web, and SQLx.
 
@@ -485,7 +485,22 @@ Each tenant has its own database and is isolated via `tenant_id` from the JWT to
 
 ## License
 
-MIT License
+GNU Affero General Public License v3.0 (AGPL-3.0)
+
+TurERP is free software: you can redistribute it and/or modify it under the terms
+of the GNU Affero General Public License as published by the Free Software Foundation,
+either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along with this
+program. If not, see <https://www.gnu.org/licenses/>.
+
+**SaaS Copyleft Notice:** If you run a modified version of TurERP on a network server,
+Section 13 of the AGPL requires you to make the Corresponding Source available to users
+interacting with it remotely.
 
 ```
 Copyright (c) 2024 Turerp Team
