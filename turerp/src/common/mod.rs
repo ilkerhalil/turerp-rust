@@ -10,6 +10,7 @@ pub mod pagination;
 pub mod read_replicas;
 pub mod reports;
 pub mod search;
+pub mod search_postgres;
 pub mod soft_delete;
 pub mod tracing_mod;
 
@@ -45,6 +46,8 @@ pub use search::{
     BoxSearchService, InMemorySearchService, SearchDocument, SearchQuery, SearchResult,
     SearchService,
 };
+#[cfg(feature = "postgres")]
+pub use search_postgres::PostgresSearchService;
 pub use soft_delete::{SoftDeletable, SoftDeleteMeta};
 pub use tracing_mod::{
     BoxTracingService, InMemoryTracingService, SpanStatus, TraceContext, TraceQuery, TraceSpan,

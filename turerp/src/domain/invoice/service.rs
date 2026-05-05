@@ -226,6 +226,31 @@ impl InvoiceService {
     }
 
     // Utility methods
+    /// Search invoices by number or notes (full-text)
+    pub async fn search_invoices(
+        &self,
+        tenant_id: i64,
+        query: &str,
+    ) -> Result<Vec<Invoice>, ApiError> {
+        self.invoice_repo.search(tenant_id, query).await
+    }
+
+    /// Search invoices by number or notes with pagination
+    pub async fn search_invoices_paginated(
+        &self,
+        tenant_id: i64,
+        query: &str,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError> {
+        crate::common::pagination::PaginationParams { page, per_page }
+            .validate()
+            .map_err(ApiError::Validation)?;
+        self.invoice_repo
+            .search_paginated(tenant_id, query, page, per_page)
+            .await
+    }
+
     pub async fn get_outstanding_invoices(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
         let invoices = self.invoice_repo.find_by_tenant(tenant_id).await?;
 

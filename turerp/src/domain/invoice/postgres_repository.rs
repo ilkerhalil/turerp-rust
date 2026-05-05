@@ -612,6 +612,84 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             .ok_or_else(|| ApiError::NotFound("Invoice not found".to_string()))
     }
 
+    async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Invoice>, ApiError> {
+        let rows: Vec<InvoiceRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+                   issue_date, due_date, subtotal, tax_amount, discount_amount,
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by
+            FROM invoices
+            WHERE tenant_id = $1 AND deleted_at IS NULL
+              AND (
+                  unaccent(invoice_number) % unaccent($2)
+                  OR unaccent(COALESCE(notes, '')) % unaccent($2)
+                  OR search_vector @@ plainto_tsquery('turkish', $2)
+              )
+            ORDER BY GREATEST(
+                similarity(unaccent(invoice_number), unaccent($2)),
+                similarity(unaccent(COALESCE(notes, '')), unaccent($2)),
+                COALESCE(ts_rank_cd(search_vector, plainto_tsquery('turkish', $2), 32), 0.0)
+            ) DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(query)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to search invoices: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn search_paginated(
+        &self,
+        tenant_id: i64,
+        query: &str,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError> {
+        let offset = page.saturating_sub(1) * per_page;
+
+        let rows: Vec<InvoiceRowWithTotal> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+                   issue_date, due_date, subtotal, tax_amount, discount_amount,
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by,
+                   COUNT(*) OVER() as total_count
+            FROM invoices
+            WHERE tenant_id = $1 AND deleted_at IS NULL
+              AND (
+                  unaccent(invoice_number) % unaccent($2)
+                  OR unaccent(COALESCE(notes, '')) % unaccent($2)
+                  OR search_vector @@ plainto_tsquery('turkish', $2)
+              )
+            ORDER BY GREATEST(
+                similarity(unaccent(invoice_number), unaccent($2)),
+                similarity(unaccent(COALESCE(notes, '')), unaccent($2)),
+                COALESCE(ts_rank_cd(search_vector, plainto_tsquery('turkish', $2), 32), 0.0)
+            ) DESC
+            LIMIT $3 OFFSET $4
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(query)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to search invoices: {}", e)))?;
+
+        let total = rows.first().map(|r| r.total_count as u64).unwrap_or(0);
+        let items: Vec<Invoice> = rows
+            .into_iter()
+            .map(|r| r.into())
+            .map(|(invoice, _)| invoice)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
         let rows: Vec<InvoiceRow> = sqlx::query_as(
             r#"

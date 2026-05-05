@@ -202,8 +202,6 @@ impl ProductRepository for PostgresProductRepository {
     }
 
     async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Product>, ApiError> {
-        let pattern = format!("%{}%", query);
-
         let rows: Vec<ProductRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, code, name, description, category_id, unit_id,
@@ -211,12 +209,20 @@ impl ProductRepository for PostgresProductRepository {
                    created_at, updated_at, deleted_at, deleted_by
             FROM products
             WHERE tenant_id = $1 AND deleted_at IS NULL
-              AND (LOWER(code) LIKE LOWER($2) OR LOWER(name) LIKE LOWER($2))
-            ORDER BY created_at DESC
+              AND (
+                  unaccent(name) % unaccent($2)
+                  OR unaccent(code) % unaccent($2)
+                  OR search_vector @@ plainto_tsquery('turkish', $2)
+              )
+            ORDER BY GREATEST(
+                similarity(unaccent(name), unaccent($2)),
+                similarity(unaccent(code), unaccent($2)),
+                COALESCE(ts_rank_cd(search_vector, plainto_tsquery('turkish', $2), 32), 0.0)
+            ) DESC
             "#,
         )
         .bind(tenant_id)
-        .bind(&pattern)
+        .bind(query)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to search products: {}", e)))?;

@@ -10,6 +10,7 @@ use utoipa::ToSchema;
 /// Search request
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct SearchRequest {
+    #[serde(rename = "q")]
     pub query: String,
     pub entity_type: Option<String>,
     pub limit: Option<u32>,

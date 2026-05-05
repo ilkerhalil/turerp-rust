@@ -37,6 +37,7 @@ pub mod app {
         JobScheduler, NotificationService,
     };
     use crate::common::{InMemoryReportEngine, ReportEngine};
+    use crate::common::{InMemorySearchService, SearchService};
     use crate::common::{InMemoryTracingService, TracingService};
     use crate::config::Config;
     use crate::domain::accounting::repository::{
@@ -168,6 +169,8 @@ pub mod app {
     };
 
     #[cfg(feature = "postgres")]
+    use crate::common::PostgresSearchService;
+    #[cfg(feature = "postgres")]
     use crate::db;
     #[cfg(feature = "postgres")]
     use crate::domain::accounting::postgres_repository::{
@@ -292,6 +295,7 @@ pub mod app {
         pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
         pub webhook_service: web::Data<WebhookService>,
         pub cache_service: web::Data<dyn crate::cache::CacheService>,
+        pub search_service: web::Data<dyn SearchService>,
         pub rate_limit_stats: web::Data<crate::middleware::rate_limit::RateLimitStatsStore>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
@@ -549,6 +553,10 @@ pub mod app {
                 Arc::new(InMemoryExchangeRateRepository::new()) as BoxExchangeRateRepository;
             let currency_service = CurrencyService::new(currency_repo, exchange_rate_repo);
 
+            // Search
+            let search_service: Arc<dyn SearchService> =
+                Arc::new(InMemorySearchService::new()) as Arc<dyn SearchService>;
+
             // Rate limit stats
             let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
 
@@ -589,6 +597,7 @@ pub mod app {
                 edefter_service,
                 webhook_service,
                 cache_service,
+                search_service,
                 rate_limit_stats,
             )
         }};
@@ -634,6 +643,7 @@ pub mod app {
             edefter_service,
             webhook_service,
             cache_service,
+            search_service,
             rate_limit_stats,
         ) = create_in_memory_services!(config);
 
@@ -677,6 +687,7 @@ pub mod app {
             edefter_service: web::Data::new(edefter_service),
             webhook_service: web::Data::new(webhook_service),
             cache_service: web::Data::from(cache_service),
+            search_service: web::Data::from(search_service),
             rate_limit_stats: web::Data::new(rate_limit_stats),
         }
     }
@@ -931,6 +942,14 @@ pub mod app {
             Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>
         };
 
+        // Search
+        #[cfg(feature = "postgres")]
+        let search_service: Arc<dyn SearchService> =
+            Arc::new(PostgresSearchService::new(pool.clone())) as Arc<dyn SearchService>;
+        #[cfg(not(feature = "postgres"))]
+        let search_service: Arc<dyn SearchService> =
+            Arc::new(InMemorySearchService::new()) as Arc<dyn SearchService>;
+
         let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
 
         let i18n = I18n::init();
@@ -972,6 +991,7 @@ pub mod app {
             edefter_service: web::Data::new(edefter_service),
             webhook_service: web::Data::new(webhook_service),
             cache_service: web::Data::from(cache_service),
+            search_service: web::Data::from(search_service),
             rate_limit_stats: web::Data::new(rate_limit_stats),
             db_pool: web::Data::new(pool),
             i18n: web::Data::new(i18n),
@@ -1024,6 +1044,7 @@ pub mod app {
             edefter_service,
             webhook_service,
             cache_service,
+            search_service,
             rate_limit_stats,
         ) = create_in_memory_services!(config);
 
@@ -1085,6 +1106,7 @@ pub mod app {
             edefter_service: web::Data::new(edefter_service),
             webhook_service: web::Data::new(webhook_service),
             cache_service: web::Data::from(cache_service),
+            search_service: web::Data::from(search_service),
             rate_limit_stats: web::Data::new(rate_limit_stats),
             db_pool,
             i18n: web::Data::new(i18n),

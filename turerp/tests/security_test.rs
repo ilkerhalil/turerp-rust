@@ -12,7 +12,8 @@ use turerp::api::{
     auth_configure, users_configure, v1_accounting_configure, v1_assets_configure,
     v1_cari_configure, v1_chart_of_accounts_configure, v1_crm_configure, v1_hr_configure,
     v1_invoice_configure, v1_manufacturing_configure, v1_project_configure, v1_sales_configure,
-    v1_stock_configure, v1_tax_configure, v1_tenant_configure, v1_webhooks_configure,
+    v1_search_configure, v1_stock_configure, v1_tax_configure, v1_tenant_configure,
+    v1_webhooks_configure,
 };
 use turerp::app::create_app_state_in_memory;
 use turerp::config::Config;
@@ -38,7 +39,8 @@ fn configure_all_routes(cfg: &mut web::ServiceConfig) {
             .configure(v1_assets_configure)
             .configure(v1_chart_of_accounts_configure)
             .configure(v1_tax_configure)
-            .configure(v1_webhooks_configure),
+            .configure(v1_webhooks_configure)
+            .configure(v1_search_configure),
     );
 }
 
@@ -88,6 +90,7 @@ fn build_full_test_app(
         .app_data(state.chart_of_accounts_service.clone())
         .app_data(state.tax_service.clone())
         .app_data(state.webhook_service.clone())
+        .app_data(state.search_service.clone())
         .configure(configure_all_routes)
 }
 
@@ -105,6 +108,7 @@ macro_rules! test_app {
             .app_data($state.chart_of_accounts_service.clone())
             .app_data($state.tax_service.clone())
             .app_data($state.webhook_service.clone())
+            .app_data($state.search_service.clone())
             .configure(configure_all_routes)
     };
 }
@@ -1509,5 +1513,207 @@ async fn test_normal_user_cannot_test_webhook() {
         resp.status(),
         StatusCode::FORBIDDEN,
         "Normal user should not be able to test webhooks"
+    );
+}
+
+// ============================================================================
+// Search Security Tests
+// ============================================================================
+
+#[actix_web::test]
+async fn test_search_sql_injection_prevention() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let admin_token = sec_register_admin!(&state, 1);
+
+    // Malicious payloads should not crash the server or bypass auth
+    let malicious = vec![
+        "%27%20OR%20%271%27%3D%271",
+        "%27%3B%20DROP%20TABLE%20users%3B%20--",
+        "1%20UNION%20SELECT%20*%20FROM%20users",
+        "%27%20UNION%20SELECT%20password%20FROM%20users%20--",
+    ];
+
+    for payload in &malicious {
+        let req = test::TestRequest::get()
+            .uri(&format!("/api/v1/search?q={}", payload))
+            .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert!(
+            resp.status() == StatusCode::OK || resp.status() == StatusCode::BAD_REQUEST,
+            "SQL injection '{}' crashed the server with {:?}",
+            payload,
+            resp.status()
+        );
+    }
+}
+
+#[actix_web::test]
+async fn test_search_tenant_isolation_security() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let admin1 = sec_register_admin!(&state, 1);
+    let admin2 = sec_register_admin!(&state, 2);
+
+    // Admin 1 indexes a document
+    let index_req = test::TestRequest::post()
+        .uri("/api/v1/search/index")
+        .insert_header(("Authorization", format!("Bearer {}", admin1)))
+        .set_json(json!({
+            "entity_type": "cari",
+            "entity_id": 1,
+            "title": "Secret Corp",
+            "searchable_text": "Secret Corp confidential"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, index_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // Admin 2 searches for it - should get empty results (tenant isolation)
+    let search_req = test::TestRequest::get()
+        .uri("/api/v1/search?q=Secret")
+        .insert_header(("Authorization", format!("Bearer {}", admin2)))
+        .to_request();
+
+    let resp = test::call_service(&app, search_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let results = json.as_array().unwrap();
+    assert!(
+        results.is_empty(),
+        "Tenant 2 should not find tenant 1's indexed documents"
+    );
+}
+
+#[actix_web::test]
+async fn test_search_index_requires_admin_security() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let user_token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/search/index")
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .set_json(json!({
+            "entity_type": "cari",
+            "entity_id": 1,
+            "title": "Test",
+            "searchable_text": "Test"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[actix_web::test]
+async fn test_search_reindex_requires_admin_security() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let user_token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/search/reindex")
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[actix_web::test]
+async fn test_search_remove_requires_admin_security() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let admin_token = sec_register_admin!(&state, 1);
+    let user_token = sec_register_user!(&app, 1);
+
+    // Admin indexes a document
+    let index_req = test::TestRequest::post()
+        .uri("/api/v1/search/index")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "entity_type": "cari",
+            "entity_id": 99,
+            "title": "RemoveMe",
+            "searchable_text": "RemoveMe"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, index_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // Normal user tries to remove it
+    let remove_req = test::TestRequest::delete()
+        .uri("/api/v1/search/cari/99")
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, remove_req).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[actix_web::test]
+async fn test_search_unauthenticated_rejected() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/search?q=test")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[actix_web::test]
+async fn test_search_cari_tenant_isolation_security() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let admin1 = sec_register_admin!(&state, 1);
+    let admin2 = sec_register_admin!(&state, 2);
+
+    // Admin 1 creates a cari
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/cari")
+        .insert_header(("Authorization", format!("Bearer {}", admin1)))
+        .set_json(json!({
+            "code": "SEC001",
+            "name": "Secure Company",
+            "cari_type": "customer",
+            "tenant_id": 1,
+            "created_by": 1
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // Admin 2 searches for it via cari search endpoint
+    let search_req = test::TestRequest::get()
+        .uri("/api/v1/cari/search?q=Secure")
+        .insert_header(("Authorization", format!("Bearer {}", admin2)))
+        .to_request();
+
+    let resp = test::call_service(&app, search_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = json["items"].as_array().unwrap();
+    assert!(
+        items.is_empty(),
+        "Tenant 2 should not find tenant 1's cari records"
     );
 }
