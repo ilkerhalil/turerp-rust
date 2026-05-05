@@ -606,6 +606,33 @@
         ]
       }
     },
+    "/api/v1/admin/rate-limits": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Get rate limit statistics (admin only)",
+        "operationId": "get_rate_limit_stats",
+        "responses": {
+          "200": {
+            "description": "Rate limit statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitDashboardResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          }
+        }
+      }
+    },
     "/api/v1/api-keys": {
       "post": {
         "tags": [
@@ -2250,6 +2277,49 @@
             "bearer_auth": []
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Create a new category (admin only)",
+        "operationId": "create_category",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCategory"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Category created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
       }
     },
     "/api/v1/categories/deleted": {
@@ -2262,6 +2332,153 @@
         "responses": {
           "200": {
             "description": "List of deleted categories"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/categories/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get a single category by ID",
+        "operationId": "get_category",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Category ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Update a category (admin only)",
+        "operationId": "update_category",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Category ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCategory"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Soft delete a category (admin only)",
+        "operationId": "delete_category",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Category ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category soft deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Category not found"
           }
         },
         "security": [
@@ -5321,6 +5538,339 @@
           },
           "404": {
             "description": "Feature flag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/goods-receipts": {
+      "post": {
+        "tags": [
+          "Goods Receipts"
+        ],
+        "summary": "Create goods receipt endpoint (requires authentication)",
+        "operationId": "create_receipt",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGoodsReceipt"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Goods receipt created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.purchase.model.GoodsReceiptResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/goods-receipts/deleted": {
+      "get": {
+        "tags": [
+          "Goods Receipts"
+        ],
+        "summary": "List soft-deleted goods receipts (admin only)",
+        "operationId": "list_deleted_receipts",
+        "responses": {
+          "200": {
+            "description": "List of deleted goods receipts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.purchase.model.GoodsReceipt"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/goods-receipts/order/{order_id}": {
+      "get": {
+        "tags": [
+          "Goods Receipts"
+        ],
+        "summary": "Get goods receipts by purchase order ID endpoint (requires authentication)",
+        "operationId": "get_receipts_by_order",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "description": "Purchase order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of goods receipts for order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.purchase.model.GoodsReceipt"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/goods-receipts/{id}": {
+      "get": {
+        "tags": [
+          "Goods Receipts"
+        ],
+        "summary": "Get goods receipt by ID endpoint (requires authentication)",
+        "operationId": "get_receipt",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Goods receipt ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Goods receipt found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.purchase.model.GoodsReceiptResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Goods receipt not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Goods Receipts"
+        ],
+        "summary": "Delete goods receipt endpoint (requires admin role, soft delete)",
+        "operationId": "delete_receipt",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Goods receipt ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Goods receipt deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Goods receipt not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/goods-receipts/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Goods Receipts"
+        ],
+        "summary": "Permanently delete a goods receipt (admin only)",
+        "operationId": "destroy_receipt",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Goods receipt ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Goods receipt permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/goods-receipts/{id}/restore": {
+      "post": {
+        "tags": [
+          "Goods Receipts"
+        ],
+        "summary": "Restore a soft-deleted goods receipt (admin only)",
+        "operationId": "restore_receipt",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Goods receipt ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Goods receipt restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.purchase.model.GoodsReceiptResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/goods-receipts/{id}/status": {
+      "put": {
+        "tags": [
+          "Goods Receipts"
+        ],
+        "summary": "Update goods receipt status endpoint (requires authentication)",
+        "operationId": "update_receipt_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Goods receipt ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReceiptStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Goods receipt status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.purchase.model.GoodsReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Goods receipt not found"
           }
         },
         "security": [
@@ -8958,6 +9508,52 @@
             "bearer_auth": []
           }
         ]
+      },
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Create a new product (admin only)",
+        "operationId": "create_product",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProduct"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Product created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "409": {
+            "description": "Product code already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
       }
     },
     "/api/v1/products/deleted": {
@@ -8970,6 +9566,153 @@
         "responses": {
           "200": {
             "description": "List of deleted products"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/products/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get a single product by ID",
+        "operationId": "get_product",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Update a product (admin only)",
+        "operationId": "update_product",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProduct"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Product updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Soft delete a product (admin only)",
+        "operationId": "delete_product",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Product ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product soft deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Product not found"
           }
         },
         "security": [
@@ -9668,6 +10411,348 @@
         "responses": {
           "200": {
             "description": "WBS items for project"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-orders": {
+      "get": {
+        "tags": [
+          "Purchase Orders"
+        ],
+        "summary": "Get all purchase orders for tenant endpoint (requires authentication)",
+        "operationId": "get_orders",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number (default: 1)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Items per page (default: 20, max: 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of purchase orders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Purchase Orders"
+        ],
+        "summary": "Create purchase order endpoint (requires authentication)",
+        "operationId": "create_order",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePurchaseOrder"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Purchase order created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/deleted": {
+      "get": {
+        "tags": [
+          "Purchase Orders"
+        ],
+        "summary": "List soft-deleted purchase orders (admin only)",
+        "operationId": "list_deleted_orders",
+        "responses": {
+          "200": {
+            "description": "List of deleted purchase orders"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{id}": {
+      "get": {
+        "tags": [
+          "Purchase Orders"
+        ],
+        "summary": "Get purchase order by ID endpoint (requires authentication)",
+        "operationId": "get_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase order found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Purchase Orders"
+        ],
+        "summary": "Delete purchase order endpoint (requires admin role, soft delete)",
+        "operationId": "delete_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase order deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Purchase order not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Purchase Orders"
+        ],
+        "summary": "Permanently delete a purchase order (admin only)",
+        "operationId": "destroy_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Purchase order permanently deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{id}/restore": {
+      "post": {
+        "tags": [
+          "Purchase Orders"
+        ],
+        "summary": "Restore a soft-deleted purchase order (admin only)",
+        "operationId": "restore_order",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Purchase order restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/purchase-orders/{id}/status": {
+      "put": {
+        "tags": [
+          "Purchase Orders"
+        ],
+        "summary": "Update purchase order status endpoint (requires authentication)",
+        "operationId": "update_order_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Purchase order ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderStatusRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Purchase order status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOrder"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "404": {
+            "description": "Purchase order not found"
           }
         },
         "security": [
@@ -12951,6 +14036,336 @@
         ]
       }
     },
+    "/api/v1/units": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get all units (paginated)",
+        "operationId": "get_units",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of units"
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Create a new unit (admin only)",
+        "operationId": "create_unit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUnit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Unit created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/units/deleted": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "List soft-deleted units (admin only)",
+        "operationId": "list_deleted_units",
+        "responses": {
+          "200": {
+            "description": "List of deleted units"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/units/{id}": {
+      "get": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Get a single unit by ID",
+        "operationId": "get_unit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Unit ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unit found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Unit not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Update a unit (admin only)",
+        "operationId": "update_unit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Unit ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUnit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Unit updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Unit not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Soft delete a unit (admin only)",
+        "operationId": "delete_unit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Unit ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unit soft deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Unit not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/units/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Permanently delete a unit (admin only, after soft delete)",
+        "operationId": "destroy_unit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Unit ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Unit permanently deleted"
+          },
+          "404": {
+            "description": "Unit not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/units/{id}/restore": {
+      "put": {
+        "tags": [
+          "Products"
+        ],
+        "summary": "Restore a soft-deleted unit (admin only)",
+        "operationId": "restore_unit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Unit ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unit restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnitResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unit not found or not deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/users": {
       "get": {
         "tags": [
@@ -14260,6 +15675,39 @@
           }
         }
       },
+      "CreateGoodsReceipt": {
+        "type": "object",
+        "description": "Create goods receipt request",
+        "required": [
+          "tenant_id",
+          "purchase_order_id",
+          "receipt_date",
+          "lines"
+        ],
+        "properties": {
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreateGoodsReceiptLine"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "purchase_order_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "receipt_date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "CreateJobRequest": {
         "type": "object",
         "description": "Create job request",
@@ -14754,6 +16202,113 @@
           }
         }
       },
+      "GoodsReceipt": {
+        "type": "object",
+        "description": "Goods receipt entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "receipt_number",
+          "purchase_order_id",
+          "status",
+          "receipt_date",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "purchase_order_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "receipt_date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "receipt_number": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GoodsReceiptStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "GoodsReceiptResponse": {
+        "type": "object",
+        "description": "Goods receipt response",
+        "required": [
+          "id",
+          "receipt_number",
+          "purchase_order_id",
+          "status",
+          "receipt_date",
+          "lines"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GoodsReceiptLine"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "purchase_order_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "receipt_date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "receipt_number": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/GoodsReceiptStatus"
+          }
+        }
+      },
+      "GoodsReceiptStatus": {
+        "type": "string",
+        "description": "Goods receipt status",
+        "enum": [
+          "Pending",
+          "Partial",
+          "Completed",
+          "Cancelled"
+        ]
+      },
       "InAppNotificationResponse": {
         "type": "object",
         "description": "In-app notification response",
@@ -15179,6 +16734,78 @@
           },
           "payload": {
             "type": "string"
+          }
+        }
+      },
+      "RateLimitDashboardResponse": {
+        "type": "object",
+        "description": "Overall dashboard response",
+        "required": [
+          "total_clients",
+          "total_requests",
+          "total_blocked",
+          "total_allowed",
+          "entries"
+        ],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RateLimitEntryResponse"
+            }
+          },
+          "total_allowed": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "total_blocked": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "total_clients": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total_requests": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "RateLimitEntryResponse": {
+        "type": "object",
+        "description": "Summary of rate-limit activity for one client IP",
+        "required": [
+          "client_key",
+          "total_requests",
+          "blocked_requests",
+          "allowed_requests"
+        ],
+        "properties": {
+          "allowed_requests": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "blocked_requests": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "client_key": {
+            "type": "string"
+          },
+          "last_request_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "total_requests": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
           }
         }
       },
@@ -15821,6 +17448,18 @@
           }
         }
       },
+      "UpdateReceiptStatusRequest": {
+        "type": "object",
+        "description": "Request body for updating goods receipt status",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/GoodsReceiptStatus"
+          }
+        }
+      },
       "UpdateTaxRate": {
         "type": "object",
         "description": "Update an existing tax rate",
@@ -16176,6 +17815,10 @@
   ],
   "tags": [
     {
+      "name": "Admin",
+      "description": "Administrative endpoints (rate limits, system status)"
+    },
+    {
       "name": "Auth",
       "description": "Authentication endpoints (login, register, token refresh)"
     },
@@ -16204,8 +17847,16 @@
       "description": "Sales orders and quotations"
     },
     {
+      "name": "Purchase Orders",
+      "description": "Purchase orders and vendor management"
+    },
+    {
       "name": "Purchase Requests",
       "description": "Purchase requests and approval workflow"
+    },
+    {
+      "name": "Goods Receipts",
+      "description": "Goods receipts for purchase orders"
     },
     {
       "name": "HR",

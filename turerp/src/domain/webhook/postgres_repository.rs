@@ -163,7 +163,7 @@ impl PostgresWebhookRepository {
 #[async_trait]
 impl WebhookRepository for PostgresWebhookRepository {
     async fn create(&self, tenant_id: i64, webhook: CreateWebhook) -> Result<Webhook, ApiError> {
-        let secret = webhook.secret.unwrap_or_else(|| generate_secret());
+        let secret = webhook.secret.unwrap_or_else(generate_secret);
         let row: WebhookRow = sqlx::query_as(
             r#"
             INSERT INTO webhooks (tenant_id, url, description, event_types, secret, status)

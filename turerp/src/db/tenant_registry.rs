@@ -141,8 +141,8 @@ mod tests {
     fn test_database_config_from_config() {
         let config = Config::default();
         let db_config = DatabaseConfig::from(&config);
-        assert_eq!(db_config.max_connections, 5);
-        assert_eq!(db_config.min_connections, 1);
+        assert_eq!(db_config.max_connections, 10);
+        assert_eq!(db_config.min_connections, 5);
     }
 
     #[test]

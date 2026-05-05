@@ -6,7 +6,6 @@ use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
-use crate::common::SoftDeletable;
 use crate::db::error::map_sqlx_error;
 use crate::domain::purchase::model::{
     CreateGoodsReceipt, CreateGoodsReceiptLine, CreatePurchaseOrder, CreatePurchaseOrderLine,

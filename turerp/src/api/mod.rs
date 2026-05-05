@@ -24,6 +24,7 @@ pub use v1::edefter_configure as v1_edefter_configure;
 pub use v1::efatura_configure as v1_efatura_configure;
 pub use v1::events_configure as v1_events_configure;
 pub use v1::feature_flags_configure as v1_feature_flags_configure;
+pub use v1::goods_receipts_configure as v1_goods_receipts_configure;
 pub use v1::hr_configure as v1_hr_configure;
 pub use v1::invoice_configure as v1_invoice_configure;
 pub use v1::jobs_configure as v1_jobs_configure;
@@ -31,7 +32,9 @@ pub use v1::manufacturing_configure as v1_manufacturing_configure;
 pub use v1::notifications_configure as v1_notifications_configure;
 pub use v1::product_variants_configure as v1_product_variants_configure;
 pub use v1::project_configure as v1_project_configure;
+pub use v1::purchase_orders_configure as v1_purchase_orders_configure;
 pub use v1::purchase_requests_configure as v1_purchase_requests_configure;
+pub use v1::rate_limits_configure as v1_rate_limits_configure;
 pub use v1::reports_configure as v1_reports_configure;
 pub use v1::sales_configure as v1_sales_configure;
 pub use v1::search_configure as v1_search_configure;
@@ -162,6 +165,15 @@ use utoipa::OpenApi;
         crate::api::v1::sales::restore_quotation,
         crate::api::v1::sales::list_deleted_quotations,
         crate::api::v1::sales::destroy_quotation,
+        // Purchase Orders
+        crate::api::v1::purchase_orders::create_order,
+        crate::api::v1::purchase_orders::get_orders,
+        crate::api::v1::purchase_orders::get_order,
+        crate::api::v1::purchase_orders::update_order_status,
+        crate::api::v1::purchase_orders::delete_order,
+        crate::api::v1::purchase_orders::restore_order,
+        crate::api::v1::purchase_orders::list_deleted_orders,
+        crate::api::v1::purchase_orders::destroy_order,
         // Purchase Requests
         crate::api::v1::purchase_requests::create_request,
         crate::api::v1::purchase_requests::get_requests,
@@ -174,6 +186,17 @@ use utoipa::OpenApi;
         crate::api::v1::purchase_requests::restore_request,
         crate::api::v1::purchase_requests::list_deleted_requests,
         crate::api::v1::purchase_requests::destroy_request,
+        // Rate Limits
+        crate::api::v1::rate_limits::get_rate_limit_stats,
+        // Goods Receipts
+        crate::api::v1::goods_receipts::create_receipt,
+        crate::api::v1::goods_receipts::get_receipt,
+        crate::api::v1::goods_receipts::get_receipts_by_order,
+        crate::api::v1::goods_receipts::update_receipt_status,
+        crate::api::v1::goods_receipts::delete_receipt,
+        crate::api::v1::goods_receipts::restore_receipt,
+        crate::api::v1::goods_receipts::list_deleted_receipts,
+        crate::api::v1::goods_receipts::destroy_receipt,
         // HR
         crate::api::v1::hr::create_employee,
         crate::api::v1::hr::get_employees,
@@ -363,13 +386,29 @@ use utoipa::OpenApi;
         crate::api::v1::chart_of_accounts::get_trial_balance,
         // Products
         crate::api::v1::product_variants::get_products,
+        crate::api::v1::product_variants::create_product,
+        crate::api::v1::product_variants::get_product,
+        crate::api::v1::product_variants::update_product,
+        crate::api::v1::product_variants::delete_product,
         crate::api::v1::product_variants::restore_product,
         crate::api::v1::product_variants::list_deleted_products,
         crate::api::v1::product_variants::destroy_product,
         crate::api::v1::product_variants::get_categories,
+        crate::api::v1::product_variants::create_category,
+        crate::api::v1::product_variants::get_category,
+        crate::api::v1::product_variants::update_category,
+        crate::api::v1::product_variants::delete_category,
         crate::api::v1::product_variants::restore_category,
         crate::api::v1::product_variants::list_deleted_categories,
         crate::api::v1::product_variants::destroy_category,
+        crate::api::v1::product_variants::get_units,
+        crate::api::v1::product_variants::create_unit,
+        crate::api::v1::product_variants::get_unit,
+        crate::api::v1::product_variants::update_unit,
+        crate::api::v1::product_variants::delete_unit,
+        crate::api::v1::product_variants::restore_unit,
+        crate::api::v1::product_variants::list_deleted_units,
+        crate::api::v1::product_variants::destroy_unit,
         crate::api::v1::product_variants::create_variant,
         crate::api::v1::product_variants::get_variants_by_product,
         crate::api::v1::product_variants::get_variant,
@@ -530,6 +569,9 @@ use utoipa::OpenApi;
             crate::api::v1::search::SearchRequest,
             crate::api::v1::search::SearchResultResponse,
             crate::api::v1::search::IndexDocumentRequest,
+            // Rate Limits
+            crate::api::v1::rate_limits::RateLimitDashboardResponse,
+            crate::api::v1::rate_limits::RateLimitEntryResponse,
             // Tax
             crate::domain::tax::model::TaxType,
             crate::domain::tax::model::TaxRate,
@@ -545,6 +587,12 @@ use utoipa::OpenApi;
             crate::api::v1::tax::CalculateTaxRequest,
             crate::api::v1::tax::CalculateInvoiceTaxRequest,
             crate::api::v1::tax::EffectiveRateQuery,
+            // Goods Receipts
+            crate::domain::purchase::model::GoodsReceipt,
+            crate::domain::purchase::model::GoodsReceiptResponse,
+            crate::domain::purchase::model::CreateGoodsReceipt,
+            crate::domain::purchase::model::GoodsReceiptStatus,
+            crate::api::v1::goods_receipts::UpdateReceiptStatusRequest,
             // e-Fatura
             crate::domain::efatura::model::EFaturaStatus,
             crate::domain::efatura::model::EFaturaProfile,
@@ -576,6 +624,7 @@ use utoipa::OpenApi;
     ),
     modifiers(&SecurityAddon),
     tags(
+        (name = "Admin", description = "Administrative endpoints (rate limits, system status)"),
         (name = "Auth", description = "Authentication endpoints (login, register, token refresh)"),
         (name = "Users", description = "User management endpoints (CRUD operations)"),
         (name = "Tenant", description = "Tenant management and configuration"),
@@ -583,7 +632,9 @@ use utoipa::OpenApi;
         (name = "Stock", description = "Warehouses, stock movements and inventory"),
         (name = "Invoice", description = "Invoices and payments"),
         (name = "Sales", description = "Sales orders and quotations"),
+        (name = "Purchase Orders", description = "Purchase orders and vendor management"),
         (name = "Purchase Requests", description = "Purchase requests and approval workflow"),
+        (name = "Goods Receipts", description = "Goods receipts for purchase orders"),
         (name = "HR", description = "Employees, attendance, leave and payroll"),
         (name = "Accounting", description = "Chart of accounts and journal entries"),
         (name = "Assets", description = "Fixed assets, depreciation and maintenance"),

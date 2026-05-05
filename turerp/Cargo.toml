@@ -57,6 +57,9 @@ async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 
+# Redis caching
+redis = { version = "0.27", features = ["tokio-comp"] }
+
 # Rate limiting
 governor = "0.8"
 nonzero_ext = "0.3"

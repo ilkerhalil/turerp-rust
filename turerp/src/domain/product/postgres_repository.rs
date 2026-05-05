@@ -507,6 +507,32 @@ impl CategoryRepository for PostgresCategoryRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: crate::domain::product::model::UpdateCategory,
+    ) -> Result<Category, ApiError> {
+        let row: CategoryRow = sqlx::query_as(
+            r#"
+            UPDATE categories
+            SET name = COALESCE($1, name),
+                parent_id = COALESCE($2, parent_id)
+            WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL
+            RETURNING id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
+            "#,
+        )
+        .bind(&update.name)
+        .bind(update.parent_id)
+        .bind(id)
+        .bind(tenant_id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Category"))?;
+
+        Ok(row.into())
+    }
+
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
@@ -627,6 +653,7 @@ struct UnitRow {
     created_at: chrono::DateTime<chrono::Utc>,
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
     deleted_by: Option<i64>,
+    total_count: Option<i64>,
 }
 
 impl From<UnitRow> for Unit {
@@ -714,6 +741,62 @@ impl UnitRepository for PostgresUnitRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find units by tenant: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Unit>, ApiError> {
+        let offset = (page.saturating_sub(1)) * per_page;
+        let rows: Vec<UnitRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
+            FROM units
+            WHERE tenant_id = $1 AND deleted_at IS NULL
+            ORDER BY id DESC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(per_page as i64)
+        .bind(offset as i64)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Unit"))?;
+
+        let total = rows.first().and_then(|r| r.total_count).unwrap_or(0) as u64;
+        let items: Vec<Unit> = rows.into_iter().map(|r| r.into()).collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: crate::domain::product::model::UpdateUnit,
+    ) -> Result<Unit, ApiError> {
+        let row: UnitRow = sqlx::query_as(
+            r#"
+            UPDATE units
+            SET code = COALESCE($1, code),
+                name = COALESCE($2, name),
+                is_integer = COALESCE($3, is_integer)
+            WHERE id = $4 AND tenant_id = $5 AND deleted_at IS NULL
+            RETURNING id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            "#,
+        )
+        .bind(&update.code)
+        .bind(&update.name)
+        .bind(update.is_integer)
+        .bind(id)
+        .bind(tenant_id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Unit"))?;
+
+        Ok(row.into())
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {

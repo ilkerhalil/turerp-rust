@@ -10,7 +10,7 @@ pub mod service;
 pub use model::{
     Category, CategoryResponse, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit,
     Product, ProductResponse, ProductVariant, ProductVariantResponse, Unit, UnitResponse,
-    UpdateProduct, UpdateProductVariant,
+    UpdateCategory, UpdateProduct, UpdateProductVariant, UpdateUnit,
 };
 #[cfg(feature = "postgres")]
 pub use postgres_repository::{

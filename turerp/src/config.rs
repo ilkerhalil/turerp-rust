@@ -65,6 +65,44 @@ impl DatabaseConfig {
     }
 }
 
+/// Redis configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct RedisConfig {
+    pub url: String,
+    pub enabled: bool,
+    pub ttl_seconds: u64,
+}
+
+impl Default for RedisConfig {
+    fn default() -> Self {
+        Self {
+            url: "redis://127.0.0.1:6379".to_string(),
+            enabled: false,
+            ttl_seconds: 300,
+        }
+    }
+}
+
+impl RedisConfig {
+    pub fn from_env() -> Self {
+        let enabled = std::env::var("TURERP_REDIS_ENABLED")
+            .ok()
+            .map(|v| v.to_lowercase() == "true" || v == "1")
+            .unwrap_or(false);
+
+        Self {
+            url: std::env::var("REDIS_URL")
+                .or_else(|_| std::env::var("TURERP_REDIS_URL"))
+                .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string()),
+            enabled,
+            ttl_seconds: std::env::var("TURERP_REDIS_TTL")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(300),
+        }
+    }
+}
+
 /// JWT configuration
 #[derive(Debug, Clone, Deserialize)]
 pub struct JwtConfig {
@@ -282,6 +320,7 @@ pub struct Config {
     pub environment: Environment,
     pub server: ServerConfig,
     pub database: DatabaseConfig,
+    pub redis: RedisConfig,
     pub jwt: JwtConfig,
     pub cors: CorsConfig,
     pub rate_limit: RateLimitConfig,
@@ -299,6 +338,7 @@ impl Default for Config {
                 max_connections: 10,
                 min_connections: 5,
             },
+            redis: RedisConfig::default(),
             jwt: JwtConfig {
                 secret: "dev-secret-do-not-use-in-production".to_string(),
                 access_token_expiration: 3600,
@@ -358,6 +398,7 @@ impl Config {
         };
 
         let database = DatabaseConfig::from_env()?;
+        let redis = RedisConfig::from_env();
         let jwt = JwtConfig::from_env()?;
         let cors = CorsConfig::from_env()?;
         let rate_limit = RateLimitConfig::from_env();
@@ -368,6 +409,7 @@ impl Config {
             environment,
             server,
             database,
+            redis,
             jwt,
             cors,
             rate_limit,

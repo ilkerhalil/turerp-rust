@@ -420,13 +420,13 @@ Multi-tenant SaaS ERP system built with Rust using Actix-web and SQLx.
 ### Medium Priority
 | Feature | Description | Status |
 |---------|-------------|--------|
-| Performance Testing | Load testing with realistic data | Planned |
-| API Response Caching | Cache frequently accessed data | Planned |
+| Performance Testing | Load testing with realistic data | Done |
+| API Response Caching | Cache frequently accessed data | ✅ Done — Redis cache module with `CacheService` trait, `NoopCacheService`, `RedisCacheService`, tenant-scoped cache keys, integrated into `AppState` |
 
 ### Low Priority
 | Feature | Description | Status |
 |---------|-------------|--------|
-| API Rate Limit Dashboard | Visual dashboard for rate limit metrics | Planned |
+| API Rate Limit Dashboard | Visual dashboard for rate limit metrics | Done |
 | Webhook System | Event-driven webhook subscriptions, delivery tracking, retry logic | ✅ Complete |
 
 ---

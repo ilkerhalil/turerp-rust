@@ -8,7 +8,7 @@ use crate::common::pagination::PaginatedResult;
 use crate::common::SoftDeletable;
 use crate::domain::product::model::{
     Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
-    ProductVariant, Unit, UpdateProduct, UpdateProductVariant,
+    ProductVariant, Unit, UpdateCategory, UpdateProduct, UpdateProductVariant, UpdateUnit,
 };
 use crate::error::ApiError;
 
@@ -55,6 +55,12 @@ pub trait CategoryRepository: Send + Sync {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<Category>, ApiError>;
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        category: UpdateCategory,
+    ) -> Result<Category, ApiError>;
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
     /// Soft delete a category
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
@@ -72,6 +78,13 @@ pub trait UnitRepository: Send + Sync {
     async fn create(&self, unit: CreateUnit) -> Result<Unit, ApiError>;
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Unit>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError>;
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Unit>, ApiError>;
+    async fn update(&self, id: i64, tenant_id: i64, unit: UpdateUnit) -> Result<Unit, ApiError>;
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
     /// Soft delete a unit
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
@@ -478,6 +491,33 @@ impl CategoryRepository for InMemoryCategoryRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateCategory,
+    ) -> Result<Category, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let category = inner
+            .categories
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", id)))?;
+
+        if category.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Category {} not found", id)));
+        }
+
+        if let Some(name) = update.name {
+            category.name = name;
+        }
+        if let Some(parent_id) = update.parent_id {
+            category.parent_id = Some(parent_id);
+        }
+
+        Ok(category.clone())
+    }
+
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         let category = inner
@@ -649,6 +689,53 @@ impl UnitRepository for InMemoryUnitRepository {
             .filter(|u| u.tenant_id == tenant_id && !u.is_deleted())
             .cloned()
             .collect())
+    }
+
+    async fn find_by_tenant_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Unit>, ApiError> {
+        let inner = self.inner.lock();
+        let all: Vec<_> = inner
+            .units
+            .values()
+            .filter(|u| u.tenant_id == tenant_id && !u.is_deleted())
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
+    }
+
+    async fn update(&self, id: i64, tenant_id: i64, update: UpdateUnit) -> Result<Unit, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let unit = inner
+            .units
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", id)))?;
+
+        if unit.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Unit {} not found", id)));
+        }
+
+        if let Some(code) = update.code {
+            unit.code = code;
+        }
+        if let Some(name) = update.name {
+            unit.name = name;
+        }
+        if let Some(is_integer) = update.is_integer {
+            unit.is_integer = is_integer;
+        }
+
+        Ok(unit.clone())
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {

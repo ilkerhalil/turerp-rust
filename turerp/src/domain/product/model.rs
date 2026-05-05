@@ -290,6 +290,13 @@ impl CreateCategory {
     }
 }
 
+/// Update category request
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
+pub struct UpdateCategory {
+    pub name: Option<String>,
+    pub parent_id: Option<i64>,
+}
+
 /// Create unit request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateUnit {
@@ -314,6 +321,14 @@ impl CreateUnit {
             Err(errors)
         }
     }
+}
+
+/// Update unit request
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
+pub struct UpdateUnit {
+    pub code: Option<String>,
+    pub name: Option<String>,
+    pub is_integer: Option<bool>,
 }
 
 /// Product response (without tenant_id/deleted fields for external API)

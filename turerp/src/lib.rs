@@ -4,6 +4,7 @@
 //! Actix-web, and SQLx.
 
 pub mod api;
+pub mod cache;
 pub mod common;
 pub mod config;
 #[cfg(feature = "postgres")]
@@ -181,10 +182,6 @@ pub mod app {
         PostgresTicketRepository,
     };
     #[cfg(feature = "postgres")]
-    use crate::domain::edefter::postgres_repository::PostgresEDefterRepository;
-    #[cfg(feature = "postgres")]
-    use crate::domain::edefter::repository::BoxEDefterRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::efatura::postgres_repository::PostgresEFaturaRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::feature::postgres_repository::PostgresFeatureFlagRepository;
@@ -280,6 +277,8 @@ pub mod app {
         pub efatura_service: web::Data<crate::domain::efatura::EFaturaService>,
         pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
         pub webhook_service: web::Data<WebhookService>,
+        pub cache_service: web::Data<dyn crate::cache::CacheService>,
+        pub rate_limit_stats: web::Data<crate::middleware::rate_limit::RateLimitStatsStore>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
     }
@@ -518,6 +517,13 @@ pub mod app {
                 Arc::new(InMemoryWebhookDeliveryRepository::new()) as BoxWebhookDeliveryRepository;
             let webhook_service = WebhookService::new(webhook_repo, delivery_repo);
 
+            // Cache
+            let cache_service: Arc<dyn crate::cache::CacheService> =
+                Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>;
+
+            // Rate limit stats
+            let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
+
             (
                 auth_service,
                 user_service,
@@ -553,6 +559,8 @@ pub mod app {
                 efatura_service,
                 edefter_service,
                 webhook_service,
+                cache_service,
+                rate_limit_stats,
             )
         }};
     }
@@ -595,6 +603,8 @@ pub mod app {
             efatura_service,
             edefter_service,
             webhook_service,
+            cache_service,
+            rate_limit_stats,
         ) = create_in_memory_services!(config);
 
         let i18n = I18n::init();
@@ -635,6 +645,8 @@ pub mod app {
             efatura_service: web::Data::new(efatura_service),
             edefter_service: web::Data::new(edefter_service),
             webhook_service: web::Data::new(webhook_service),
+            cache_service: web::Data::from(cache_service),
+            rate_limit_stats: web::Data::new(rate_limit_stats),
         }
     }
 
@@ -760,7 +772,7 @@ pub mod app {
 
         // Assets - PostgreSQL
         let asset_repo = PostgresAssetsRepository::new(pool.clone());
-        let asset_category_repo = PostgresAssetCategoryRepository::new(pool.clone());
+        let _asset_category_repo = PostgresAssetCategoryRepository::new(pool.clone());
         let assets_service = AssetsService::new(Arc::new(asset_repo) as Arc<dyn AssetsRepository>);
 
         // Feature Flags - PostgreSQL
@@ -859,6 +871,26 @@ pub mod app {
             .await
             .ok();
 
+        let cache_service: Arc<dyn crate::cache::CacheService> = if config.redis.enabled {
+            match crate::cache::RedisCacheService::new(&config.redis.url, config.redis.ttl_seconds)
+                .await
+            {
+                Ok(redis_cache) => {
+                    tracing::info!("Redis cache connected at {}", config.redis.url);
+                    redis_cache.into_arc()
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to connect to Redis ({}), using no-op cache", e);
+                    Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>
+                }
+            }
+        } else {
+            tracing::info!("Redis caching disabled");
+            Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>
+        };
+
+        let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
+
         let i18n = I18n::init();
 
         AppState {
@@ -896,6 +928,8 @@ pub mod app {
             efatura_service: web::Data::new(efatura_service),
             edefter_service: web::Data::new(edefter_service),
             webhook_service: web::Data::new(webhook_service),
+            cache_service: web::Data::from(cache_service),
+            rate_limit_stats: web::Data::new(rate_limit_stats),
             db_pool: web::Data::new(pool),
             i18n: web::Data::new(i18n),
         }
@@ -945,20 +979,19 @@ pub mod app {
             efatura_service,
             edefter_service,
             webhook_service,
+            cache_service,
+            rate_limit_stats,
         ) = create_in_memory_services!(config);
 
         // For in-memory testing with postgres feature, create a mock pool
-        let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
-        let pool = rt.block_on(async {
-            sqlx::postgres::PgPoolOptions::new()
-                .max_connections(1)
-                .connect_lazy("postgres://localhost/dummy")
-                .expect("Failed to create lazy pool")
-        });
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect_lazy("postgres://localhost/dummy")
+            .expect("Failed to create lazy pool");
         let db_pool = web::Data::new(Arc::new(pool));
 
         // Register webhook subscriber on event bus
-        rt.block_on(async {
+        futures::executor::block_on(async {
             event_bus
                 .subscribe(Arc::new(
                     crate::domain::webhook::subscriber::WebhookSubscriber::new(Arc::new(
@@ -1006,6 +1039,8 @@ pub mod app {
             efatura_service: web::Data::new(efatura_service),
             edefter_service: web::Data::new(edefter_service),
             webhook_service: web::Data::new(webhook_service),
+            cache_service: web::Data::from(cache_service),
+            rate_limit_stats: web::Data::new(rate_limit_stats),
             db_pool,
             i18n: web::Data::new(i18n),
         }
@@ -1041,8 +1076,8 @@ mod tests {
         assert!(config.is_development());
     }
 
-    #[test]
-    fn test_app_state_creation() {
+    #[tokio::test]
+    async fn test_app_state_creation() {
         let config = Config::default();
         let state = app::create_app_state_in_memory(&config);
         // Verify services are created

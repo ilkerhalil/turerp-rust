@@ -2,7 +2,7 @@
 use crate::common::pagination::PaginatedResult;
 use crate::domain::product::model::{
     Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
-    ProductVariantResponse, Unit, UpdateProduct, UpdateProductVariant,
+    ProductVariantResponse, Unit, UpdateCategory, UpdateProduct, UpdateProductVariant, UpdateUnit,
 };
 use crate::domain::product::repository::{
     BoxCategoryRepository, BoxProductRepository, BoxProductVariantRepository, BoxUnitRepository,
@@ -176,6 +176,15 @@ impl ProductService {
             .await
     }
 
+    pub async fn update_category(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateCategory,
+    ) -> Result<Category, ApiError> {
+        self.category_repo.update(id, tenant_id, update).await
+    }
+
     pub async fn delete_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.category_repo.delete(id, tenant_id).await
     }
@@ -224,6 +233,28 @@ impl ProductService {
 
     pub async fn get_units_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
         self.unit_repo.find_by_tenant(tenant_id).await
+    }
+
+    pub async fn get_units_paginated(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Unit>, ApiError> {
+        let params = crate::common::pagination::PaginationParams { page, per_page };
+        params.validate().map_err(ApiError::Validation)?;
+        self.unit_repo
+            .find_by_tenant_paginated(tenant_id, page, per_page)
+            .await
+    }
+
+    pub async fn update_unit(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateUnit,
+    ) -> Result<Unit, ApiError> {
+        self.unit_repo.update(id, tenant_id, update).await
     }
 
     pub async fn delete_unit(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {

@@ -33,6 +33,47 @@ pub fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
 mod tests {
     use super::*;
     use sqlx::error::DatabaseError;
+    use std::borrow::Cow;
+
+    #[derive(Debug)]
+    struct MockDbError {
+        code: Option<String>,
+        message: String,
+    }
+
+    impl std::fmt::Display for MockDbError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.message)
+        }
+    }
+
+    impl std::error::Error for MockDbError {}
+
+    impl DatabaseError for MockDbError {
+        fn message(&self) -> &str {
+            &self.message
+        }
+
+        fn code(&self) -> Option<Cow<'_, str>> {
+            self.code.as_deref().map(Cow::Borrowed)
+        }
+
+        fn as_error(&self) -> &(dyn std::error::Error + Send + Sync + 'static) {
+            self
+        }
+
+        fn as_error_mut(&mut self) -> &mut (dyn std::error::Error + Send + Sync + 'static) {
+            self
+        }
+
+        fn into_error(self: Box<Self>) -> Box<dyn std::error::Error + Send + Sync + 'static> {
+            self
+        }
+
+        fn kind(&self) -> sqlx::error::ErrorKind {
+            sqlx::error::ErrorKind::Other
+        }
+    }
 
     #[test]
     fn test_map_sqlx_error_row_not_found() {
@@ -43,11 +84,10 @@ mod tests {
 
     #[test]
     fn test_map_sqlx_error_unique_violation() {
-        // Create a DatabaseError with code "23505"
-        let db_err = DatabaseError::new(
-            Some(std::borrow::Cow::Borrowed("23505")),
-            std::borrow::Cow::Borrowed("unique constraint violation"),
-        );
+        let db_err = MockDbError {
+            code: Some("23505".to_string()),
+            message: "unique constraint violation".to_string(),
+        };
         let err = sqlx::Error::Database(Box::new(db_err));
         let result = map_sqlx_error(err, "User");
         assert!(matches!(result, ApiError::Conflict(msg) if msg == "User already exists"));
@@ -55,10 +95,10 @@ mod tests {
 
     #[test]
     fn test_map_sqlx_error_foreign_key_violation() {
-        let db_err = DatabaseError::new(
-            Some(std::borrow::Cow::Borrowed("23503")),
-            std::borrow::Cow::Borrowed("foreign key constraint violation"),
-        );
+        let db_err = MockDbError {
+            code: Some("23503".to_string()),
+            message: "foreign key constraint violation".to_string(),
+        };
         let err = sqlx::Error::Database(Box::new(db_err));
         let result = map_sqlx_error(err, "Cari");
         assert!(matches!(result, ApiError::BadRequest(msg) if msg.contains("Referenced")));
@@ -66,10 +106,10 @@ mod tests {
 
     #[test]
     fn test_map_sqlx_error_generic_database() {
-        let db_err = DatabaseError::new(
-            Some(std::borrow::Cow::Borrowed("08006")),
-            std::borrow::Cow::Borrowed("connection failure"),
-        );
+        let db_err = MockDbError {
+            code: Some("08006".to_string()),
+            message: "connection failure".to_string(),
+        };
         let err = sqlx::Error::Database(Box::new(db_err));
         let result = map_sqlx_error(err, "Invoice");
         assert!(matches!(result, ApiError::Database(_)));

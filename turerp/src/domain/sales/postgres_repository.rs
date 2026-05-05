@@ -7,7 +7,6 @@ use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
-use crate::common::SoftDeletable;
 use crate::db::error::map_sqlx_error;
 use crate::domain::sales::model::{
     CreateQuotation, CreateQuotationLine, CreateSalesOrder, CreateSalesOrderLine, Quotation,

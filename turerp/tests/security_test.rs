@@ -14,7 +14,7 @@ use turerp::api::{
     v1_invoice_configure, v1_manufacturing_configure, v1_project_configure, v1_sales_configure,
     v1_stock_configure, v1_tax_configure, v1_tenant_configure, v1_webhooks_configure,
 };
-use turerp::app::create_app_state;
+use turerp::app::create_app_state_in_memory;
 use turerp::config::Config;
 use turerp::middleware::JwtAuthMiddleware;
 use turerp::utils::jwt::JwtService;
@@ -44,7 +44,7 @@ fn configure_all_routes(cfg: &mut web::ServiceConfig) {
 
 fn create_test_app_state() -> turerp::app::AppState {
     let config = Config::default();
-    create_app_state(&config)
+    create_app_state_in_memory(&config)
 }
 
 /// Build a full test app with all services and JWT middleware

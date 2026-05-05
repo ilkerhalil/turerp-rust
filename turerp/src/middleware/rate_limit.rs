@@ -9,6 +9,7 @@ use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
 use futures::future::LocalBoxFuture;
 use governor::{clock::DefaultClock, state::keyed::DashMapStateStore, Quota, RateLimiter};
 use nonzero_ext::nonzero;
+use std::collections::HashMap;
 use std::net::IpAddr;
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -25,10 +26,22 @@ const DEFAULT_BURST_SIZE: u32 = 3;
 /// Keyed rate limiter type
 pub type KeyedRateLimiter = RateLimiter<String, DashMapStateStore<String>, DefaultClock>;
 
+/// Statistics for a single client IP
+#[derive(Default, Debug, Clone)]
+pub struct RateLimitStats {
+    pub total_requests: u64,
+    pub blocked_requests: u64,
+    pub last_request_at: Option<std::time::SystemTime>,
+}
+
+/// Shared store for rate limit statistics
+pub type RateLimitStatsStore = Arc<parking_lot::RwLock<HashMap<String, RateLimitStats>>>;
 /// Rate limiting middleware
+#[derive(Clone)]
 pub struct RateLimitMiddleware {
     limiter: Arc<KeyedRateLimiter>,
     trusted_proxies: Vec<IpAddr>,
+    stats: RateLimitStatsStore,
 }
 
 impl RateLimitMiddleware {
@@ -42,6 +55,7 @@ impl RateLimitMiddleware {
         Self {
             limiter: Arc::new(limiter),
             trusted_proxies: Vec::new(),
+            stats: RateLimitStatsStore::default(),
         }
     }
 
@@ -75,6 +89,7 @@ impl RateLimitMiddleware {
         Self {
             limiter: Arc::new(limiter),
             trusted_proxies,
+            stats: RateLimitStatsStore::default(),
         }
     }
 
@@ -86,7 +101,19 @@ impl RateLimitMiddleware {
         Self {
             limiter: Arc::new(limiter),
             trusted_proxies: Vec::new(),
+            stats: RateLimitStatsStore::default(),
         }
+    }
+
+    /// Get a clone of the internal stats store for dashboard access
+    pub fn stats_store(&self) -> RateLimitStatsStore {
+        self.stats.clone()
+    }
+
+    /// Replace the internal stats store with a shared one (used by main.rs)
+    pub fn with_stats_store(mut self, stats: RateLimitStatsStore) -> Self {
+        self.stats = stats;
+        self
     }
 
     /// Check if a peer IP is a trusted proxy.
@@ -131,6 +158,7 @@ where
             service,
             limiter: self.limiter.clone(),
             trusted_proxies: self.trusted_proxies.clone(),
+            stats: self.stats.clone(),
         }))
     }
 }
@@ -140,6 +168,7 @@ pub struct RateLimitMiddlewareService<S> {
     service: S,
     limiter: Arc<KeyedRateLimiter>,
     trusted_proxies: Vec<IpAddr>,
+    stats: RateLimitStatsStore,
 }
 
 impl<S, B> actix_web::dev::Service<ServiceRequest> for RateLimitMiddlewareService<S>
@@ -158,9 +187,17 @@ where
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let key = self.get_client_key(&req);
+        let stats = self.stats.clone();
 
         match self.limiter.check_key(&key) {
             Ok(_) => {
+                // Record allowed request
+                {
+                    let mut map = stats.write();
+                    let entry = map.entry(key.clone()).or_default();
+                    entry.total_requests += 1;
+                    entry.last_request_at = Some(std::time::SystemTime::now());
+                }
                 // Request allowed
                 let fut = self.service.call(req);
                 Box::pin(async move {
@@ -169,6 +206,14 @@ where
                 })
             }
             Err(_) => {
+                // Record blocked request
+                {
+                    let mut map = stats.write();
+                    let entry = map.entry(key).or_default();
+                    entry.total_requests += 1;
+                    entry.blocked_requests += 1;
+                    entry.last_request_at = Some(std::time::SystemTime::now());
+                }
                 // Rate limit exceeded
                 let response = actix_web::HttpResponse::TooManyRequests()
                     .json(crate::error::ErrorResponse {

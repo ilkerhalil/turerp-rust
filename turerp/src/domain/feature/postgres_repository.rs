@@ -380,6 +380,7 @@ mod tests {
             tenant_id: None,
             created_at: now,
             updated_at: now,
+            total_count: None,
         };
 
         let flag: FeatureFlag = row.into();
@@ -400,6 +401,7 @@ mod tests {
             tenant_id: Some(42),
             created_at: now,
             updated_at: now,
+            total_count: None,
         };
 
         let flag: FeatureFlag = row.into();

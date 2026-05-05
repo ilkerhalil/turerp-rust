@@ -16,11 +16,12 @@ use turerp::api::{
     v1_accounting_configure, v1_api_keys_configure, v1_assets_configure, v1_audit_configure,
     v1_auth_configure, v1_cari_configure, v1_chart_of_accounts_configure, v1_crm_configure,
     v1_custom_fields_configure, v1_edefter_configure, v1_efatura_configure, v1_events_configure,
-    v1_feature_flags_configure, v1_hr_configure, v1_invoice_configure, v1_jobs_configure,
-    v1_manufacturing_configure, v1_notifications_configure, v1_product_variants_configure,
-    v1_project_configure, v1_purchase_requests_configure, v1_reports_configure, v1_sales_configure,
-    v1_search_configure, v1_settings_configure, v1_stock_configure, v1_tax_configure,
-    v1_tenant_configure, v1_users_configure, v1_webhooks_configure, ApiDoc,
+    v1_feature_flags_configure, v1_goods_receipts_configure, v1_hr_configure, v1_invoice_configure,
+    v1_jobs_configure, v1_manufacturing_configure, v1_notifications_configure,
+    v1_product_variants_configure, v1_project_configure, v1_purchase_orders_configure,
+    v1_purchase_requests_configure, v1_rate_limits_configure, v1_reports_configure,
+    v1_sales_configure, v1_search_configure, v1_settings_configure, v1_stock_configure,
+    v1_tax_configure, v1_tenant_configure, v1_users_configure, v1_webhooks_configure, ApiDoc,
 };
 use turerp::middleware::audit::{AuditEvent, AUDIT_CHANNEL_CAPACITY};
 use turerp::setup_logging;
@@ -55,7 +56,7 @@ async fn health_ready() -> actix_web::Result<actix_web::HttpResponse> {
 async fn health_ready(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
-    let pool: &sqlx::PgPool = &*app_state.db_pool;
+    let pool: &sqlx::PgPool = app_state.db_pool.as_ref();
 
     let start = std::time::Instant::now();
     let db_result = sqlx::query("SELECT 1").execute(pool).await;
@@ -206,6 +207,12 @@ async fn main() -> std::io::Result<()> {
         turerp::app::create_app_state(&config).await
     };
 
+    // Build rate-limit middleware with shared stats store so the dashboard can read them
+    let rate_limit_middleware = {
+        let stats_store = app_state.rate_limit_stats.get_ref().clone();
+        RateLimitMiddleware::with_config(&config.rate_limit).with_stats_store(stats_store)
+    };
+
     // Set up audit log channel (bounded to prevent unbounded memory growth under load)
     let (audit_tx, audit_rx) = mpsc::channel::<AuditEvent>(AUDIT_CHANNEL_CAPACITY);
     let audit_sender: std::sync::Arc<mpsc::Sender<AuditEvent>> = std::sync::Arc::new(audit_tx);
@@ -226,7 +233,7 @@ async fn main() -> std::io::Result<()> {
                 app_state.jwt_service.get_ref().clone(),
             )) // JWT validation
             .wrap(IdempotencyMiddleware::in_memory()) // Idempotency key caching
-            .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // Rate limiting
+            .wrap(rate_limit_middleware.clone()) // Rate limiting (shared stats)
             .wrap(MetricsMiddleware::new()) // Metrics collection
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
             .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
@@ -266,6 +273,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.efatura_service.clone())
             .app_data(app_state.edefter_service.clone())
             .app_data(app_state.webhook_service.clone())
+            .app_data(app_state.cache_service.clone())
+            .app_data(app_state.rate_limit_stats.clone())
             .app_data(app_state.db_pool.clone());
 
         #[cfg(not(feature = "postgres"))]
@@ -281,7 +290,7 @@ async fn main() -> std::io::Result<()> {
                 app_state.jwt_service.get_ref().clone(),
             )) // JWT validation
             .wrap(IdempotencyMiddleware::in_memory()) // Idempotency key caching
-            .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // Rate limiting
+            .wrap(rate_limit_middleware.clone()) // Rate limiting (shared stats)
             .wrap(MetricsMiddleware::new()) // Metrics collection
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
             .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
@@ -320,7 +329,9 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.tax_service.clone())
             .app_data(app_state.efatura_service.clone())
             .app_data(app_state.edefter_service.clone())
-            .app_data(app_state.webhook_service.clone());
+            .app_data(app_state.webhook_service.clone())
+            .app_data(app_state.cache_service.clone())
+            .app_data(app_state.rate_limit_stats.clone());
 
         app // Health check
             .route("/health", web::get().to(health_check))
@@ -335,6 +346,9 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_feature_flags_configure)
                     .configure(v1_product_variants_configure)
                     .configure(v1_purchase_requests_configure)
+                    .configure(v1_rate_limits_configure)
+                    .configure(v1_purchase_orders_configure)
+                    .configure(v1_goods_receipts_configure)
                     .configure(v1_cari_configure)
                     .configure(v1_stock_configure)
                     .configure(v1_invoice_configure)

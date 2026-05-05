@@ -5,8 +5,9 @@ use actix_web::{web, HttpResponse};
 use crate::common::pagination::PaginationParams;
 use crate::common::MessageResponse;
 use crate::domain::product::{
-    CategoryResponse, CreateProductVariant, ProductResponse, ProductService, UnitResponse,
-    UpdateProductVariant,
+    CategoryResponse, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit,
+    ProductResponse, ProductService, UnitResponse, UpdateCategory, UpdateProduct,
+    UpdateProductVariant, UpdateUnit,
 };
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
@@ -53,6 +54,105 @@ pub async fn get_products(
             );
             Ok(HttpResponse::Ok().json(response))
         }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Create a new product (admin only)
+#[utoipa::path(
+    post,
+    path = "/api/v1/products",
+    tag = "Products",
+    request_body = CreateProduct,
+    responses(
+        (status = 201, description = "Product created successfully", body = ProductResponse),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 409, description = "Product code already exists")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn create_product(
+    admin_user: AdminUser,
+    service: web::Data<ProductService>,
+    payload: web::Json<CreateProduct>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
+
+    match service.create_product(create).await {
+        Ok(product) => Ok(HttpResponse::Created().json(ProductResponse::from(product))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Get a single product by ID
+#[utoipa::path(
+    get,
+    path = "/api/v1/products/{id}",
+    tag = "Products",
+    params(("id" = i64, Path, description = "Product ID")),
+    responses(
+        (status = 200, description = "Product found", body = ProductResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Product not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn get_product(
+    auth_user: AuthUser,
+    service: web::Data<ProductService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service.get_product(*path, auth_user.0.tenant_id).await {
+        Ok(product) => Ok(HttpResponse::Ok().json(ProductResponse::from(product))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Update a product (admin only)
+#[utoipa::path(
+    put,
+    path = "/api/v1/products/{id}",
+    tag = "Products",
+    params(("id" = i64, Path, description = "Product ID")),
+    request_body = UpdateProduct,
+    responses(
+        (status = 200, description = "Product updated", body = ProductResponse),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 404, description = "Product not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn update_product(
+    admin_user: AdminUser,
+    service: web::Data<ProductService>,
+    path: web::Path<i64>,
+    payload: web::Json<UpdateProduct>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service
+        .update_product(*path, admin_user.0.tenant_id, payload.into_inner())
+        .await
+    {
+        Ok(product) => Ok(HttpResponse::Ok().json(ProductResponse::from(product))),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
 }
@@ -206,6 +306,104 @@ pub async fn get_categories(
     }
 }
 
+/// Create a new category (admin only)
+#[utoipa::path(
+    post,
+    path = "/api/v1/categories",
+    tag = "Products",
+    request_body = CreateCategory,
+    responses(
+        (status = 201, description = "Category created successfully", body = CategoryResponse),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn create_category(
+    admin_user: AdminUser,
+    service: web::Data<ProductService>,
+    payload: web::Json<CreateCategory>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
+
+    match service.create_category(create).await {
+        Ok(category) => Ok(HttpResponse::Created().json(CategoryResponse::from(category))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Get a single category by ID
+#[utoipa::path(
+    get,
+    path = "/api/v1/categories/{id}",
+    tag = "Products",
+    params(("id" = i64, Path, description = "Category ID")),
+    responses(
+        (status = 200, description = "Category found", body = CategoryResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Category not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn get_category(
+    auth_user: AuthUser,
+    service: web::Data<ProductService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service.get_category(*path, auth_user.0.tenant_id).await {
+        Ok(category) => Ok(HttpResponse::Ok().json(CategoryResponse::from(category))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Update a category (admin only)
+#[utoipa::path(
+    put,
+    path = "/api/v1/categories/{id}",
+    tag = "Products",
+    params(("id" = i64, Path, description = "Category ID")),
+    request_body = UpdateCategory,
+    responses(
+        (status = 200, description = "Category updated", body = CategoryResponse),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 404, description = "Category not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn update_category(
+    admin_user: AdminUser,
+    service: web::Data<ProductService>,
+    path: web::Path<i64>,
+    payload: web::Json<UpdateCategory>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service
+        .update_category(*path, admin_user.0.tenant_id, payload.into_inner())
+        .await
+    {
+        Ok(category) => Ok(HttpResponse::Ok().json(CategoryResponse::from(category))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
 /// Soft delete a category (admin only)
 #[utoipa::path(
     delete,
@@ -311,6 +509,143 @@ pub async fn destroy_category(
 }
 
 // --- Units ---
+
+/// Get all units (paginated)
+#[utoipa::path(
+    get,
+    path = "/api/v1/units",
+    tag = "Products",
+    params(PaginationParams),
+    responses(
+        (status = 200, description = "Paginated list of units"),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn get_units(
+    auth_user: AuthUser,
+    service: web::Data<ProductService>,
+    query: web::Query<PaginationParams>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service
+        .get_units_paginated(auth_user.0.tenant_id, query.page, query.per_page)
+        .await
+    {
+        Ok(result) => {
+            let response = crate::common::pagination::PaginatedResult::new(
+                result.items.into_iter().map(UnitResponse::from).collect(),
+                result.page,
+                result.per_page,
+                result.total,
+            );
+            Ok(HttpResponse::Ok().json(response))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Create a new unit (admin only)
+#[utoipa::path(
+    post,
+    path = "/api/v1/units",
+    tag = "Products",
+    request_body = CreateUnit,
+    responses(
+        (status = 201, description = "Unit created successfully", body = UnitResponse),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn create_unit(
+    admin_user: AdminUser,
+    service: web::Data<ProductService>,
+    payload: web::Json<CreateUnit>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
+
+    match service.create_unit(create).await {
+        Ok(unit) => Ok(HttpResponse::Created().json(UnitResponse::from(unit))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Get a single unit by ID
+#[utoipa::path(
+    get,
+    path = "/api/v1/units/{id}",
+    tag = "Products",
+    params(("id" = i64, Path, description = "Unit ID")),
+    responses(
+        (status = 200, description = "Unit found", body = UnitResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Unit not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn get_unit(
+    auth_user: AuthUser,
+    service: web::Data<ProductService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service.get_unit(*path, auth_user.0.tenant_id).await {
+        Ok(unit) => Ok(HttpResponse::Ok().json(UnitResponse::from(unit))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Update a unit (admin only)
+#[utoipa::path(
+    put,
+    path = "/api/v1/units/{id}",
+    tag = "Products",
+    params(("id" = i64, Path, description = "Unit ID")),
+    request_body = UpdateUnit,
+    responses(
+        (status = 200, description = "Unit updated", body = UnitResponse),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 404, description = "Unit not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn update_unit(
+    admin_user: AdminUser,
+    service: web::Data<ProductService>,
+    path: web::Path<i64>,
+    payload: web::Json<UpdateUnit>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service
+        .update_unit(*path, admin_user.0.tenant_id, payload.into_inner())
+        .await
+    {
+        Ok(unit) => Ok(HttpResponse::Ok().json(UnitResponse::from(unit))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
 
 /// Soft delete a unit (admin only)
 #[utoipa::path(
@@ -656,45 +991,63 @@ pub async fn destroy_variant(
 
 /// Configure product variant routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::resource("/v1/products").route(web::get().to(get_products)))
-        .service(web::resource("/v1/products/deleted").route(web::get().to(list_deleted_products)))
-        .service(web::resource("/v1/products/{id}").route(web::delete().to(delete_product)))
-        .service(web::resource("/v1/products/{id}/restore").route(web::put().to(restore_product)))
-        .service(
-            web::resource("/v1/products/{id}/destroy").route(web::delete().to(destroy_product)),
-        )
-        .service(web::resource("/v1/categories").route(web::get().to(get_categories)))
-        .service(
-            web::resource("/v1/categories/deleted").route(web::get().to(list_deleted_categories)),
-        )
-        .service(web::resource("/v1/categories/{id}").route(web::delete().to(delete_category)))
-        .service(
-            web::resource("/v1/categories/{id}/restore").route(web::put().to(restore_category)),
-        )
-        .service(
-            web::resource("/v1/categories/{id}/destroy").route(web::delete().to(destroy_category)),
-        )
-        .service(web::resource("/v1/units/deleted").route(web::get().to(list_deleted_units)))
-        .service(web::resource("/v1/units/{id}").route(web::delete().to(delete_unit)))
-        .service(web::resource("/v1/units/{id}/restore").route(web::put().to(restore_unit)))
-        .service(web::resource("/v1/units/{id}/destroy").route(web::delete().to(destroy_unit)))
-        .service(
-            web::resource("/v1/products/{product_id}/variants")
-                .route(web::get().to(get_variants_by_product))
-                .route(web::post().to(create_variant)),
-        )
-        .service(
-            web::resource("/v1/products/{product_id}/variants/deleted")
-                .route(web::get().to(list_deleted_variants)),
-        )
-        .service(
-            web::resource("/v1/variants/{id}")
-                .route(web::get().to(get_variant))
-                .route(web::put().to(update_variant))
-                .route(web::delete().to(delete_variant)),
-        )
-        .service(web::resource("/v1/variants/{id}/restore").route(web::put().to(restore_variant)))
-        .service(
-            web::resource("/v1/variants/{id}/destroy").route(web::delete().to(destroy_variant)),
-        );
+    cfg.service(
+        web::resource("/v1/products")
+            .route(web::get().to(get_products))
+            .route(web::post().to(create_product)),
+    )
+    .service(web::resource("/v1/products/deleted").route(web::get().to(list_deleted_products)))
+    .service(
+        web::resource("/v1/products/{id}")
+            .route(web::get().to(get_product))
+            .route(web::put().to(update_product))
+            .route(web::delete().to(delete_product)),
+    )
+    .service(web::resource("/v1/products/{id}/restore").route(web::put().to(restore_product)))
+    .service(web::resource("/v1/products/{id}/destroy").route(web::delete().to(destroy_product)))
+    .service(
+        web::resource("/v1/categories")
+            .route(web::get().to(get_categories))
+            .route(web::post().to(create_category)),
+    )
+    .service(web::resource("/v1/categories/deleted").route(web::get().to(list_deleted_categories)))
+    .service(
+        web::resource("/v1/categories/{id}")
+            .route(web::get().to(get_category))
+            .route(web::put().to(update_category))
+            .route(web::delete().to(delete_category)),
+    )
+    .service(web::resource("/v1/categories/{id}/restore").route(web::put().to(restore_category)))
+    .service(web::resource("/v1/categories/{id}/destroy").route(web::delete().to(destroy_category)))
+    .service(
+        web::resource("/v1/units")
+            .route(web::get().to(get_units))
+            .route(web::post().to(create_unit)),
+    )
+    .service(web::resource("/v1/units/deleted").route(web::get().to(list_deleted_units)))
+    .service(
+        web::resource("/v1/units/{id}")
+            .route(web::get().to(get_unit))
+            .route(web::put().to(update_unit))
+            .route(web::delete().to(delete_unit)),
+    )
+    .service(web::resource("/v1/units/{id}/restore").route(web::put().to(restore_unit)))
+    .service(web::resource("/v1/units/{id}/destroy").route(web::delete().to(destroy_unit)))
+    .service(
+        web::resource("/v1/products/{product_id}/variants")
+            .route(web::get().to(get_variants_by_product))
+            .route(web::post().to(create_variant)),
+    )
+    .service(
+        web::resource("/v1/products/{product_id}/variants/deleted")
+            .route(web::get().to(list_deleted_variants)),
+    )
+    .service(
+        web::resource("/v1/variants/{id}")
+            .route(web::get().to(get_variant))
+            .route(web::put().to(update_variant))
+            .route(web::delete().to(delete_variant)),
+    )
+    .service(web::resource("/v1/variants/{id}/restore").route(web::put().to(restore_variant)))
+    .service(web::resource("/v1/variants/{id}/destroy").route(web::delete().to(destroy_variant)));
 }
