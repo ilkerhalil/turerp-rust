@@ -32,6 +32,8 @@ struct WarehouseRow {
     address: Option<String>,
     is_active: bool,
     created_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -45,6 +47,8 @@ impl From<WarehouseRow> for Warehouse {
             address: row.address,
             is_active: row.is_active,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -73,7 +77,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
             r#"
             INSERT INTO warehouses (tenant_id, code, name, address, is_active, created_at)
             VALUES ($1, $2, $3, $4, true, NOW())
-            RETURNING id, tenant_id, code, name, address, is_active, created_at
+            RETURNING id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(warehouse.tenant_id)
@@ -87,15 +91,16 @@ impl WarehouseRepository for PostgresWarehouseRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Warehouse>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Warehouse>, ApiError> {
         let result: Option<WarehouseRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, address, is_active, created_at
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
             FROM warehouses
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find warehouse by id: {}", e)))?;
@@ -106,9 +111,9 @@ impl WarehouseRepository for PostgresWarehouseRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError> {
         let rows: Vec<WarehouseRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, address, is_active, created_at
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
             FROM warehouses
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -129,9 +134,9 @@ impl WarehouseRepository for PostgresWarehouseRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<WarehouseRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, address, is_active, created_at, COUNT(*) OVER() as total_count
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
             FROM warehouses
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -151,6 +156,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         code: Option<String>,
         name: Option<String>,
         address: Option<String>,
@@ -164,8 +170,8 @@ impl WarehouseRepository for PostgresWarehouseRepository {
                 name = COALESCE($2, name),
                 address = COALESCE($3, address),
                 is_active = COALESCE($4, is_active)
-            WHERE id = $5
-            RETURNING id, tenant_id, code, name, address, is_active, created_at
+            WHERE id = $5 AND tenant_id = $6 AND deleted_at IS NULL
+            RETURNING id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(&code)
@@ -173,6 +179,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
         .bind(&address)
         .bind(is_active)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Warehouse"))?;
@@ -180,17 +187,102 @@ impl WarehouseRepository for PostgresWarehouseRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM warehouses
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete warehouse: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Warehouse not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE warehouses
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete warehouse: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Warehouse not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Warehouse, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE warehouses
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore warehouse: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Warehouse not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Warehouse not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError> {
+        let rows: Vec<WarehouseRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            FROM warehouses
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted warehouses: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM warehouses
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy warehouse: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Warehouse not found".to_string()));
@@ -213,6 +305,8 @@ struct StockLevelRow {
     quantity: Decimal,
     reserved_quantity: Decimal,
     updated_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<StockLevelRow> for StockLevel {
@@ -224,6 +318,8 @@ impl From<StockLevelRow> for StockLevel {
             quantity: row.quantity,
             reserved_quantity: row.reserved_quantity,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -254,9 +350,9 @@ impl StockLevelRepository for PostgresStockLevelRepository {
     ) -> Result<Option<StockLevel>, ApiError> {
         let result: Option<StockLevelRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at
+            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             FROM stock_levels
-            WHERE warehouse_id = $1 AND product_id = $2
+            WHERE warehouse_id = $1 AND product_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(warehouse_id)
@@ -271,9 +367,9 @@ impl StockLevelRepository for PostgresStockLevelRepository {
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockLevel>, ApiError> {
         let rows: Vec<StockLevelRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at
+            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             FROM stock_levels
-            WHERE product_id = $1
+            WHERE product_id = $1 AND deleted_at IS NULL
             ORDER BY warehouse_id
             "#,
         )
@@ -290,9 +386,9 @@ impl StockLevelRepository for PostgresStockLevelRepository {
     async fn find_by_warehouse(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError> {
         let rows: Vec<StockLevelRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at
+            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             FROM stock_levels
-            WHERE warehouse_id = $1
+            WHERE warehouse_id = $1 AND deleted_at IS NULL
             ORDER BY product_id
             "#,
         )
@@ -319,7 +415,7 @@ impl StockLevelRepository for PostgresStockLevelRepository {
             VALUES ($1, $2, $3, 0, NOW())
             ON CONFLICT (warehouse_id, product_id)
             DO UPDATE SET quantity = $3, updated_at = NOW()
-            RETURNING id, warehouse_id, product_id, quantity, reserved_quantity, updated_at
+            RETURNING id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(warehouse_id)
@@ -345,7 +441,7 @@ impl StockLevelRepository for PostgresStockLevelRepository {
             VALUES ($1, $2, 0, $3, NOW())
             ON CONFLICT (warehouse_id, product_id)
             DO UPDATE SET reserved_quantity = reserved_quantity + $3, updated_at = NOW()
-            RETURNING id, warehouse_id, product_id, quantity, reserved_quantity, updated_at
+            RETURNING id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(warehouse_id)
@@ -398,7 +494,7 @@ impl StockLevelRepository for PostgresStockLevelRepository {
             VALUES ($1, $2, 0, 0, NOW())
             ON CONFLICT (warehouse_id, product_id)
             DO UPDATE SET reserved_quantity = GREATEST(reserved_quantity - $3, 0), updated_at = NOW()
-            RETURNING id, warehouse_id, product_id, quantity, reserved_quantity, updated_at
+            RETURNING id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(warehouse_id)
@@ -409,6 +505,95 @@ impl StockLevelRepository for PostgresStockLevelRepository {
         .map_err(|e| ApiError::Database(format!("Failed to release stock quantity: {}", e)))?;
 
         Ok(row.into())
+    }
+
+    async fn soft_delete(
+        &self,
+        warehouse_id: i64,
+        product_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE stock_levels
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE warehouse_id = $1 AND product_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(warehouse_id)
+        .bind(product_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete stock level: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Stock level not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, warehouse_id: i64, product_id: i64) -> Result<StockLevel, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE stock_levels
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE warehouse_id = $1 AND product_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(warehouse_id)
+        .bind(product_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore stock level: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Stock level not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_warehouse_product(warehouse_id, product_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))
+    }
+
+    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError> {
+        let rows: Vec<StockLevelRow> = sqlx::query_as(
+            r#"
+            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
+            FROM stock_levels
+            WHERE warehouse_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(warehouse_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted stock levels: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, warehouse_id: i64, product_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM stock_levels
+            WHERE warehouse_id = $1 AND product_id = $2
+            "#,
+        )
+        .bind(warehouse_id)
+        .bind(product_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy stock level: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Stock level not found".to_string()));
+        }
+
+        Ok(())
     }
 }
 
@@ -429,6 +614,8 @@ struct StockMovementRow {
     notes: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     created_by: i64,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<StockMovementRow> for StockMovement {
@@ -453,6 +640,8 @@ impl From<StockMovementRow> for StockMovement {
             notes: row.notes,
             created_at: row.created_at,
             created_by: row.created_by,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -485,7 +674,7 @@ impl StockMovementRepository for PostgresStockMovementRepository {
                                           reference_type, reference_id, notes, created_at, created_by)
             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
             RETURNING id, warehouse_id, product_id, movement_type, quantity,
-                      reference_type, reference_id, notes, created_at, created_by
+                      reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
             "#,
         )
         .bind(movement.warehouse_id)
@@ -503,16 +692,19 @@ impl StockMovementRepository for PostgresStockMovementRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<StockMovement>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<StockMovement>, ApiError> {
+        // StockMovement does not have tenant_id; join warehouses to enforce tenant isolation
         let result: Option<StockMovementRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, movement_type, quantity,
-                   reference_type, reference_id, notes, created_at, created_by
-            FROM stock_movements
-            WHERE id = $1
+            SELECT sm.id, sm.warehouse_id, sm.product_id, sm.movement_type, sm.quantity,
+                   sm.reference_type, sm.reference_id, sm.notes, sm.created_at, sm.created_by, sm.deleted_at, sm.deleted_by
+            FROM stock_movements sm
+            JOIN warehouses w ON w.id = sm.warehouse_id
+            WHERE sm.id = $1 AND w.tenant_id = $2 AND sm.deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find stock movement by id: {}", e)))?;
@@ -524,9 +716,9 @@ impl StockMovementRepository for PostgresStockMovementRepository {
         let rows: Vec<StockMovementRow> = sqlx::query_as(
             r#"
             SELECT id, warehouse_id, product_id, movement_type, quantity,
-                   reference_type, reference_id, notes, created_at, created_by
+                   reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
             FROM stock_movements
-            WHERE product_id = $1
+            WHERE product_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -544,9 +736,9 @@ impl StockMovementRepository for PostgresStockMovementRepository {
         let rows: Vec<StockMovementRow> = sqlx::query_as(
             r#"
             SELECT id, warehouse_id, product_id, movement_type, quantity,
-                   reference_type, reference_id, notes, created_at, created_by
+                   reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
             FROM stock_movements
-            WHERE warehouse_id = $1
+            WHERE warehouse_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -571,9 +763,9 @@ impl StockMovementRepository for PostgresStockMovementRepository {
         let rows: Vec<StockMovementRow> = sqlx::query_as(
             r#"
             SELECT id, warehouse_id, product_id, movement_type, quantity,
-                   reference_type, reference_id, notes, created_at, created_by
+                   reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
             FROM stock_movements
-            WHERE reference_type = $1 AND reference_id = $2
+            WHERE reference_type = $1 AND reference_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -589,5 +781,93 @@ impl StockMovementRepository for PostgresStockMovementRepository {
         })?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE stock_movements
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND deleted_at IS NULL
+            AND warehouse_id IN (SELECT id FROM warehouses WHERE tenant_id = $2)
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete stock movement: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Stock movement not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<StockMovement, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE stock_movements
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND deleted_at IS NOT NULL
+            AND warehouse_id IN (SELECT id FROM warehouses WHERE tenant_id = $2)
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore stock movement: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Stock movement not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Stock movement not found".to_string()))
+    }
+
+    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError> {
+        let rows: Vec<StockMovementRow> = sqlx::query_as(
+            r#"
+            SELECT id, warehouse_id, product_id, movement_type, quantity,
+                   reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
+            FROM stock_movements
+            WHERE warehouse_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(warehouse_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted stock movements: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM stock_movements
+            WHERE id = $1
+            AND warehouse_id IN (SELECT id FROM warehouses WHERE tenant_id = $2)
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy stock movement: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Stock movement not found".to_string()));
+        }
+
+        Ok(())
     }
 }

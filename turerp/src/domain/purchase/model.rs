@@ -3,9 +3,10 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Purchase order status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum PurchaseOrderStatus {
     Draft,
     PendingApproval,
@@ -33,7 +34,7 @@ impl std::fmt::Display for PurchaseOrderStatus {
 }
 
 /// Purchase request status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum PurchaseRequestStatus {
     Draft,
     PendingApproval,
@@ -81,7 +82,7 @@ impl std::fmt::Display for PurchaseRequestStatus {
 }
 
 /// Goods receipt status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum GoodsReceiptStatus {
     Pending,
     Partial,
@@ -90,7 +91,7 @@ pub enum GoodsReceiptStatus {
 }
 
 /// Purchase order entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PurchaseOrder {
     pub id: i64,
     pub tenant_id: i64,
@@ -106,10 +107,32 @@ pub struct PurchaseOrder {
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for PurchaseOrder {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Purchase order line item
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PurchaseOrderLine {
     pub id: i64,
     pub order_id: i64,
@@ -125,7 +148,7 @@ pub struct PurchaseOrderLine {
 }
 
 /// Purchase request entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PurchaseRequest {
     pub id: i64,
     pub tenant_id: i64,
@@ -137,10 +160,32 @@ pub struct PurchaseRequest {
     pub reason: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for PurchaseRequest {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Purchase request line
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PurchaseRequestLine {
     pub id: i64,
     pub request_id: i64,
@@ -152,7 +197,7 @@ pub struct PurchaseRequestLine {
 }
 
 /// Goods receipt entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct GoodsReceipt {
     pub id: i64,
     pub tenant_id: i64,
@@ -162,10 +207,32 @@ pub struct GoodsReceipt {
     pub receipt_date: DateTime<Utc>,
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for GoodsReceipt {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Goods receipt line
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct GoodsReceiptLine {
     pub id: i64,
     pub receipt_id: i64,
@@ -177,7 +244,7 @@ pub struct GoodsReceiptLine {
 }
 
 /// Create purchase request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreatePurchaseRequest {
     pub tenant_id: i64,
     pub requested_by: i64,
@@ -205,7 +272,7 @@ impl CreatePurchaseRequest {
 }
 
 /// Create purchase request line
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreatePurchaseRequestLine {
     pub product_id: Option<i64>,
     pub description: String,
@@ -231,7 +298,7 @@ impl CreatePurchaseRequestLine {
 }
 
 /// Update purchase request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UpdatePurchaseRequest {
     pub department: Option<String>,
     pub priority: Option<String>,
@@ -240,7 +307,7 @@ pub struct UpdatePurchaseRequest {
 }
 
 /// Update purchase request line
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UpdatePurchaseRequestLine {
     pub product_id: Option<i64>,
     pub description: Option<String>,
@@ -249,7 +316,7 @@ pub struct UpdatePurchaseRequestLine {
 }
 
 /// Purchase request response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PurchaseRequestResponse {
     pub id: i64,
     pub request_number: String,
@@ -281,7 +348,7 @@ impl From<(PurchaseRequest, Vec<PurchaseRequestLine>)> for PurchaseRequestRespon
 }
 
 /// Create purchase order request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreatePurchaseOrder {
     pub tenant_id: i64,
     pub cari_id: i64,
@@ -306,7 +373,7 @@ impl CreatePurchaseOrder {
 }
 
 /// Create purchase order line
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreatePurchaseOrderLine {
     pub product_id: Option<i64>,
     pub description: String,
@@ -345,7 +412,7 @@ impl CreatePurchaseOrderLine {
 }
 
 /// Create goods receipt request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateGoodsReceipt {
     pub tenant_id: i64,
     pub purchase_order_id: i64,
@@ -369,7 +436,7 @@ impl CreateGoodsReceipt {
 }
 
 /// Create goods receipt line
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateGoodsReceiptLine {
     pub order_line_id: i64,
     pub product_id: Option<i64>,
@@ -396,7 +463,7 @@ impl CreateGoodsReceiptLine {
 }
 
 /// Purchase order response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PurchaseOrderResponse {
     pub id: i64,
     pub order_number: String,
@@ -432,7 +499,7 @@ impl From<(PurchaseOrder, Vec<PurchaseOrderLine>)> for PurchaseOrderResponse {
 }
 
 /// Goods receipt response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct GoodsReceiptResponse {
     pub id: i64,
     pub receipt_number: String,
@@ -460,6 +527,7 @@ impl From<(GoodsReceipt, Vec<GoodsReceiptLine>)> for GoodsReceiptResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::SoftDeletable;
 
     #[test]
     fn test_create_purchase_order_validation() {

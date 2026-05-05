@@ -3,9 +3,10 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Invoice status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, ToSchema)]
 pub enum InvoiceStatus {
     #[default]
     Draft,
@@ -55,7 +56,7 @@ impl std::str::FromStr for InvoiceStatus {
 }
 
 /// Invoice type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum InvoiceType {
     SalesInvoice,
     PurchaseInvoice,
@@ -89,7 +90,7 @@ impl std::str::FromStr for InvoiceType {
 }
 
 /// Invoice entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Invoice {
     pub id: i64,
     pub tenant_id: i64,
@@ -108,10 +109,32 @@ pub struct Invoice {
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Invoice {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Invoice line item
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InvoiceLine {
     pub id: i64,
     pub invoice_id: i64,
@@ -126,7 +149,7 @@ pub struct InvoiceLine {
 }
 
 /// Payment record
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Payment {
     pub id: i64,
     pub tenant_id: i64,
@@ -140,7 +163,7 @@ pub struct Payment {
 }
 
 /// Create invoice request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateInvoice {
     pub tenant_id: i64,
     pub invoice_type: InvoiceType,
@@ -175,7 +198,7 @@ impl CreateInvoice {
 }
 
 /// Create invoice line
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateInvoiceLine {
     pub product_id: Option<i64>,
     pub description: String,
@@ -222,7 +245,7 @@ impl CreateInvoiceLine {
 }
 
 /// Create payment request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreatePayment {
     pub tenant_id: i64,
     pub invoice_id: i64,
@@ -253,7 +276,7 @@ impl CreatePayment {
 }
 
 /// Invoice response for API
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InvoiceResponse {
     pub id: i64,
     pub invoice_number: String,
@@ -270,6 +293,8 @@ pub struct InvoiceResponse {
     pub currency: String,
     pub notes: Option<String>,
     pub lines: Vec<InvoiceLine>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
 
 impl From<(Invoice, Vec<InvoiceLine>)> for InvoiceResponse {
@@ -290,6 +315,8 @@ impl From<(Invoice, Vec<InvoiceLine>)> for InvoiceResponse {
             currency: invoice.currency,
             notes: invoice.notes,
             lines,
+            deleted_at: invoice.deleted_at,
+            deleted_by: invoice.deleted_by,
         }
     }
 }
@@ -297,6 +324,7 @@ impl From<(Invoice, Vec<InvoiceLine>)> for InvoiceResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::SoftDeletable;
     use chrono::Utc;
     use rust_decimal_macros::dec;
 

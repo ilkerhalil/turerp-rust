@@ -3,6 +3,7 @@
 use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
+use crate::common::MessageResponse;
 use crate::domain::project::model::{CreateProject, CreateWbsItem, ProjectStatus};
 use crate::domain::project::service::ProjectService;
 use crate::error::{ApiError, ApiResult};
@@ -64,14 +65,17 @@ pub async fn get_projects(
     security(("bearer_auth" = []))
 )]
 pub async fn get_project(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match project_service.get_project(*path).await {
+    match project_service
+        .get_project(*path, auth_user.0.tenant_id)
+        .await
+    {
         Ok(project) => Ok(HttpResponse::Ok().json(project)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -86,7 +90,7 @@ pub async fn get_project(
     security(("bearer_auth" = []))
 )]
 pub async fn update_project_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateProjectStatusRequest>,
@@ -95,7 +99,7 @@ pub async fn update_project_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match project_service
-        .update_project_status(*path, payload.into_inner().status)
+        .update_project_status(*path, admin_user.0.tenant_id, payload.into_inner().status)
         .await
     {
         Ok(project) => Ok(HttpResponse::Ok().json(project)),
@@ -225,7 +229,7 @@ pub async fn get_project_costs(
     security(("bearer_auth" = []))
 )]
 pub async fn get_profitability(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
     query: web::Query<ProfitabilityQuery>,
@@ -237,7 +241,10 @@ pub async fn get_profitability(
         let msg = i18n.t(locale.as_str(), "generic.validation_error");
         ApiError::Validation(msg)
     })?;
-    match project_service.get_profitability(*path, revenue).await {
+    match project_service
+        .get_profitability(*path, auth_user.0.tenant_id, revenue)
+        .await
+    {
         Ok(profitability) => Ok(HttpResponse::Ok().json(profitability)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -259,6 +266,98 @@ pub struct ProfitabilityQuery {
     pub revenue: String,
 }
 
+/// Soft delete a project (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/projects/{id}", tag = "Project",
+    params(("id" = i64, Path, description = "Project ID")),
+    responses((status = 200, description = "Project soft deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn soft_delete_project(
+    admin_user: AdminUser,
+    project_service: web::Data<ProjectService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    match project_service
+        .soft_delete_project(*path, admin_user.0.tenant_id, user_id)
+        .await
+    {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "project.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore a soft-deleted project (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/projects/{id}/restore", tag = "Project",
+    params(("id" = i64, Path, description = "Project ID")),
+    responses((status = 200, description = "Project restored"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_project(
+    admin_user: AdminUser,
+    project_service: web::Data<ProjectService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match project_service
+        .restore_project(*path, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(project) => Ok(HttpResponse::Ok().json(project)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List soft-deleted projects (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/projects/deleted", tag = "Project",
+    responses((status = 200, description = "List of deleted projects")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_projects(
+    admin_user: AdminUser,
+    project_service: web::Data<ProjectService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match project_service
+        .list_deleted_projects(admin_user.0.tenant_id)
+        .await
+    {
+        Ok(projects) => Ok(HttpResponse::Ok().json(projects)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Hard delete (destroy) a project (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/projects/{id}/destroy", tag = "Project",
+    params(("id" = i64, Path, description = "Project ID")),
+    responses((status = 204, description = "Project permanently deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_project(
+    admin_user: AdminUser,
+    project_service: web::Data<ProjectService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    project_service
+        .destroy_project(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 /// Configure project routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -266,8 +365,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_projects))
             .route(web::post().to(create_project)),
     )
-    .service(web::resource("/v1/projects/{id}").route(web::get().to(get_project)))
+    .service(web::resource("/v1/projects/deleted").route(web::get().to(list_deleted_projects)))
+    .service(
+        web::resource("/v1/projects/{id}")
+            .route(web::get().to(get_project))
+            .route(web::delete().to(soft_delete_project)),
+    )
     .service(web::resource("/v1/projects/{id}/status").route(web::put().to(update_project_status)))
+    .service(web::resource("/v1/projects/{id}/restore").route(web::put().to(restore_project)))
+    .service(web::resource("/v1/projects/{id}/destroy").route(web::delete().to(destroy_project)))
     .service(
         web::resource("/v1/projects/{project_id}/wbs").route(web::get().to(get_wbs_by_project)),
     )

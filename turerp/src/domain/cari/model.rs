@@ -3,10 +3,11 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use validator::Validate;
 
 /// Cari account type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum CariType {
@@ -40,7 +41,7 @@ impl std::str::FromStr for CariType {
 }
 
 /// Cari status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 #[derive(Default)]
 pub enum CariStatus {
@@ -74,7 +75,7 @@ impl std::str::FromStr for CariStatus {
 }
 
 /// Cari entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Cari {
     pub id: i64,
     pub code: String,
@@ -96,6 +97,28 @@ pub struct Cari {
     pub created_by: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Cari {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 impl Cari {
@@ -129,12 +152,14 @@ impl Cari {
             created_by,
             created_at: Utc::now(),
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         }
     }
 }
 
 /// Data for creating a new cari
-#[derive(Debug, Clone, Deserialize, Serialize, Validate)]
+#[derive(Debug, Clone, Deserialize, Serialize, Validate, ToSchema)]
 pub struct CreateCari {
     #[validate(length(min = 1, max = 50))]
     pub code: String,
@@ -194,7 +219,7 @@ fn default_credit_limit() -> Decimal {
 }
 
 /// Data for updating an existing cari
-#[derive(Debug, Clone, Deserialize, Serialize, Default, Validate)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default, Validate, ToSchema)]
 pub struct UpdateCari {
     #[validate(length(min = 1, max = 50))]
     #[serde(default)]
@@ -251,7 +276,7 @@ pub struct UpdateCari {
 }
 
 /// Cari response (without sensitive internal data)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CariResponse {
     pub id: i64,
     pub code: String,
@@ -303,6 +328,7 @@ impl From<Cari> for CariResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::SoftDeletable;
     use rust_decimal_macros::dec;
     use std::str::FromStr;
 

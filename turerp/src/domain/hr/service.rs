@@ -52,10 +52,14 @@ impl HrService {
         Ok(EmployeeResponse::from(employee))
     }
 
-    pub async fn get_employee(&self, id: i64) -> Result<EmployeeResponse, ApiError> {
+    pub async fn get_employee(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<EmployeeResponse, ApiError> {
         let employee = self
             .employee_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Employee {} not found", id)))?;
         Ok(EmployeeResponse::from(employee))
@@ -107,6 +111,30 @@ impl HrService {
             .await
     }
 
+    // Employee soft-delete operations
+    pub async fn soft_delete_employee(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.employee_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    pub async fn restore_employee(&self, id: i64, tenant_id: i64) -> Result<Employee, ApiError> {
+        self.employee_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_employees(&self, tenant_id: i64) -> Result<Vec<Employee>, ApiError> {
+        self.employee_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_employee(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.employee_repo.destroy(id, tenant_id).await
+    }
+
     // Attendance operations
     pub async fn record_attendance(
         &self,
@@ -127,6 +155,23 @@ impl HrService {
         date: chrono::DateTime<Utc>,
     ) -> Result<Vec<Attendance>, ApiError> {
         self.attendance_repo.find_by_date(date).await
+    }
+
+    // Attendance soft-delete operations
+    pub async fn soft_delete_attendance(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        self.attendance_repo.soft_delete(id, deleted_by).await
+    }
+
+    pub async fn restore_attendance(&self, id: i64) -> Result<Attendance, ApiError> {
+        self.attendance_repo.restore(id).await
+    }
+
+    pub async fn list_deleted_attendance(&self) -> Result<Vec<Attendance>, ApiError> {
+        self.attendance_repo.find_deleted().await
+    }
+
+    pub async fn destroy_attendance(&self, id: i64) -> Result<(), ApiError> {
+        self.attendance_repo.destroy(id).await
     }
 
     // Leave operations
@@ -164,21 +209,70 @@ impl HrService {
             .await
     }
 
+    // Leave request soft-delete operations
+    pub async fn soft_delete_leave_request(
+        &self,
+        id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.leave_request_repo.soft_delete(id, deleted_by).await
+    }
+
+    pub async fn restore_leave_request(&self, id: i64) -> Result<LeaveRequest, ApiError> {
+        self.leave_request_repo.restore(id).await
+    }
+
+    pub async fn list_deleted_leave_requests(&self) -> Result<Vec<LeaveRequest>, ApiError> {
+        self.leave_request_repo.find_deleted().await
+    }
+
+    pub async fn destroy_leave_request(&self, id: i64) -> Result<(), ApiError> {
+        self.leave_request_repo.destroy(id).await
+    }
+
     // Leave type operations
     pub async fn get_leave_types(&self, tenant_id: i64) -> Result<Vec<LeaveType>, ApiError> {
         self.leave_type_repo.find_by_tenant(tenant_id).await
     }
 
+    // Leave type soft-delete operations
+    pub async fn soft_delete_leave_type(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.leave_type_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    pub async fn restore_leave_type(&self, id: i64, tenant_id: i64) -> Result<LeaveType, ApiError> {
+        self.leave_type_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_leave_types(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<LeaveType>, ApiError> {
+        self.leave_type_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_leave_type(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.leave_type_repo.destroy(id, tenant_id).await
+    }
+
     // Payroll operations
     pub async fn calculate_payroll(
         &self,
+        tenant_id: i64,
         employee_id: i64,
         period_start: chrono::DateTime<Utc>,
         period_end: chrono::DateTime<Utc>,
     ) -> Result<Payroll, ApiError> {
         let employee = self
             .employee_repo
-            .find_by_id(employee_id)
+            .find_by_id(employee_id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Employee not found".to_string()))?;
 
@@ -214,6 +308,8 @@ impl HrService {
             status: PayrollStatus::Calculated,
             paid_at: None,
             created_at: chrono::Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         self.payroll_repo.create(payroll).await
@@ -228,6 +324,30 @@ impl HrService {
 
     pub async fn mark_payroll_paid(&self, id: i64) -> Result<Payroll, ApiError> {
         self.payroll_repo.mark_paid(id).await
+    }
+
+    // Payroll soft-delete operations
+    pub async fn soft_delete_payroll(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.payroll_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    pub async fn restore_payroll(&self, id: i64, tenant_id: i64) -> Result<Payroll, ApiError> {
+        self.payroll_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_payroll(&self, tenant_id: i64) -> Result<Vec<Payroll>, ApiError> {
+        self.payroll_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_payroll(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.payroll_repo.destroy(id, tenant_id).await
     }
 }
 

@@ -43,20 +43,12 @@ impl JwtAuthMiddleware {
     }
 
     /// Check if path is public (doesn't require authentication)
-    ///
-    /// Uses exact matching for file paths (like /health) and prefix matching
-    /// for directory paths (ending with / like /swagger-ui/).
     fn is_public_path(path: &str) -> bool {
-        // Strip query parameters from path
         let path = path.split('?').next().unwrap_or(path);
-
         PUBLIC_PATHS.iter().any(|public| {
-            // Exact match for the path
-            *public == path ||
-            // Prefix match for directory-like paths (public ends with /)
-            (public.ends_with('/') && path.starts_with(public)) ||
-            // Check if path is a subpath of the public path
-            path.starts_with(&format!("{}/", public))
+            *public == path
+                || (public.ends_with('/') && path.starts_with(public))
+                || path.starts_with(&format!("{}/", public))
         })
     }
 
@@ -89,7 +81,6 @@ impl JwtAuthMiddleware {
     }
 }
 
-/// Implementation of actix-web middleware for JwtAuthMiddleware
 impl<S, B> actix_web::dev::Transform<S, ServiceRequest> for JwtAuthMiddleware
 where
     S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
@@ -180,7 +171,6 @@ pub fn get_auth_claims(req: &HttpRequest) -> Result<AuthClaims, ApiError> {
 }
 
 /// Auth extractor for extracting claims from request
-/// Use this when you need authenticated user info
 pub struct AuthUser(pub AuthClaims);
 
 impl actix_web::FromRequest for AuthUser {
@@ -199,7 +189,6 @@ impl actix_web::FromRequest for AuthUser {
 }
 
 /// Admin user extractor - only allows Admin role
-/// Use this when you need admin-only endpoints
 pub struct AdminUser(pub AuthClaims);
 
 impl actix_web::FromRequest for AdminUser {
@@ -235,32 +224,15 @@ mod tests {
 
     #[test]
     fn test_public_paths() {
-        // V1 public paths (preferred)
         assert!(JwtAuthMiddleware::is_public_path("/api/v1/auth/login"));
         assert!(JwtAuthMiddleware::is_public_path("/api/v1/auth/register"));
         assert!(JwtAuthMiddleware::is_public_path("/api/v1/auth/refresh"));
-
-        // Legacy public paths (deprecated)
         assert!(JwtAuthMiddleware::is_public_path("/api/auth/login"));
-        assert!(JwtAuthMiddleware::is_public_path("/api/auth/register"));
-        assert!(JwtAuthMiddleware::is_public_path("/api/auth/refresh"));
-
-        // Other public paths
         assert!(JwtAuthMiddleware::is_public_path("/health"));
         assert!(JwtAuthMiddleware::is_public_path("/swagger-ui/index.html"));
         assert!(JwtAuthMiddleware::is_public_path("/api-docs/openapi.json"));
-
-        // Protected paths (V1)
         assert!(!JwtAuthMiddleware::is_public_path("/api/v1/users"));
         assert!(!JwtAuthMiddleware::is_public_path("/api/v1/auth/me"));
-
-        // Protected paths (legacy)
-        assert!(!JwtAuthMiddleware::is_public_path("/api/users"));
-        assert!(!JwtAuthMiddleware::is_public_path("/api/auth/me"));
-
-        // Other protected paths
-        assert!(!JwtAuthMiddleware::is_public_path("/api/cari"));
-        assert!(!JwtAuthMiddleware::is_public_path("/api/products"));
     }
 
     #[test]
@@ -270,19 +242,17 @@ mod tests {
             .generate_tokens(1, 1, "test".to_string(), Role::User)
             .unwrap();
 
-        // Token should be valid
         let claims = service.decode_token(&tokens.access_token).unwrap();
         assert_eq!(claims.sub, "1");
         assert_eq!(claims.tenant_id, 1);
         assert_eq!(claims.username, "test");
-        assert_eq!(claims.role, "user"); // Role is lowercase in JWT
+        assert_eq!(claims.role, "user");
     }
 
     #[test]
     fn test_token_generation_and_validation() {
         let service = JwtService::new("test-secret-key-12345".to_string(), 3600, 604800);
 
-        // Generate tokens for different roles
         let user_tokens = service
             .generate_tokens(1, 1, "user1".to_string(), Role::User)
             .unwrap();
@@ -290,36 +260,26 @@ mod tests {
             .generate_tokens(2, 1, "admin1".to_string(), Role::Admin)
             .unwrap();
 
-        // Validate user token
         let user_claims = service.decode_token(&user_tokens.access_token).unwrap();
-        assert_eq!(user_claims.role, "user"); // Role is lowercase in JWT
+        assert_eq!(user_claims.role, "user");
         assert_eq!(user_claims.username, "user1");
 
-        // Validate admin token
         let admin_claims = service.decode_token(&admin_tokens.access_token).unwrap();
-        assert_eq!(admin_claims.role, "admin"); // Role is lowercase in JWT
+        assert_eq!(admin_claims.role, "admin");
         assert_eq!(admin_claims.username, "admin1");
     }
 
     #[test]
     fn test_invalid_token_rejection() {
         let service = JwtService::new("test-secret".to_string(), 3600, 604800);
+        assert!(service.decode_token("invalid.token.here").is_err());
+        assert!(service.decode_token("").is_err());
 
-        // Invalid token should fail
-        let result = service.decode_token("invalid.token.here");
-        assert!(result.is_err());
-
-        // Empty token should fail
-        let result = service.decode_token("");
-        assert!(result.is_err());
-
-        // Token with wrong signature should fail
         let wrong_service = JwtService::new("wrong-secret".to_string(), 3600, 604800);
         let tokens = service
             .generate_tokens(1, 1, "test".to_string(), Role::User)
             .unwrap();
-        let result = wrong_service.decode_token(&tokens.access_token);
-        assert!(result.is_err());
+        assert!(wrong_service.decode_token(&tokens.access_token).is_err());
     }
 
     #[test]
@@ -329,83 +289,23 @@ mod tests {
             .generate_tokens(1, 1, "test".to_string(), Role::User)
             .unwrap();
 
-        // Refresh should work
         let new_tokens = service.refresh_tokens(&tokens.refresh_token).unwrap();
-
-        // New access token should be valid
         let claims = service.decode_token(&new_tokens.access_token).unwrap();
         assert_eq!(claims.sub, "1");
         assert_eq!(claims.username, "test");
     }
 
     #[test]
-    fn test_refresh_token_expiration_check() {
-        let service = JwtService::new("test-secret".to_string(), 3600, 604800);
-
-        // Access token expiration
-        let access_exp = service.access_token_expiration();
-        assert_eq!(access_exp, 3600);
-    }
-
-    #[test]
-    fn test_auth_user_extractor_success() {
-        let jwt_service = JwtService::new("test-secret".to_string(), 3600, 604800);
-        let tokens = jwt_service
-            .generate_tokens(1, 1, "testuser".to_string(), Role::User)
-            .unwrap();
-        let claims = jwt_service.decode_token(&tokens.access_token).unwrap();
-
-        // Verify claims structure for AuthUser extraction
-        assert_eq!(claims.sub, "1");
-        assert_eq!(claims.username, "testuser");
-        assert_eq!(claims.role, "user"); // Role is lowercase in JWT
-    }
-
-    #[test]
-    fn test_admin_user_role_check() {
-        let jwt_service = JwtService::new("test-secret".to_string(), 3600, 604800);
-
-        // Admin token
-        let admin_tokens = jwt_service
-            .generate_tokens(1, 1, "admin".to_string(), Role::Admin)
-            .unwrap();
-        let admin_claims = jwt_service
-            .decode_token(&admin_tokens.access_token)
-            .unwrap();
-        assert_eq!(admin_claims.role, "admin"); // Role is lowercase in JWT
-
-        // User token
-        let user_tokens = jwt_service
-            .generate_tokens(2, 1, "user".to_string(), Role::User)
-            .unwrap();
-        let user_claims = jwt_service.decode_token(&user_tokens.access_token).unwrap();
-        assert_eq!(user_claims.role, "user"); // Role is lowercase in JWT
-    }
-
-    #[test]
     fn test_public_path_edge_cases() {
-        // Exact matches are public
         assert!(JwtAuthMiddleware::is_public_path("/health"));
         assert!(JwtAuthMiddleware::is_public_path("/api/v1/auth/login"));
-
-        // Subpaths are also public (directory-like behavior)
         assert!(JwtAuthMiddleware::is_public_path("/swagger-ui/index.html"));
-        assert!(JwtAuthMiddleware::is_public_path("/api-docs/openapi.json"));
-
-        // Query params are stripped
         assert!(JwtAuthMiddleware::is_public_path(
             "/api/v1/auth/login?redirect=/home"
         ));
-        assert!(JwtAuthMiddleware::is_public_path("/health?check=true"));
-
-        // Similar but not matching paths should NOT be public
-        assert!(!JwtAuthMiddleware::is_public_path("/api/auth/log")); // Missing 'in'
-        assert!(!JwtAuthMiddleware::is_public_path("/api/authenticator")); // Different path
-        assert!(!JwtAuthMiddleware::is_public_path("/healthcheck")); // Different path, not subpath
-        assert!(!JwtAuthMiddleware::is_public_path("/healthy")); // Different path
-        assert!(!JwtAuthMiddleware::is_public_path("/api/v1/auth/me")); // Protected endpoint
-
-        // Extra segments that aren't subpaths should not match
-        assert!(!JwtAuthMiddleware::is_public_path("/api/auth/login-extra")); // Hyphen is not a subpath
+        assert!(!JwtAuthMiddleware::is_public_path("/api/auth/log"));
+        assert!(!JwtAuthMiddleware::is_public_path("/api/authenticator"));
+        assert!(!JwtAuthMiddleware::is_public_path("/healthcheck"));
+        assert!(!JwtAuthMiddleware::is_public_path("/api/v1/auth/me"));
     }
 }

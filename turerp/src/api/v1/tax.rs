@@ -6,7 +6,7 @@ use rust_decimal::Decimal;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
-use crate::common::pagination::PaginationParams;
+use crate::common::pagination::{default_page, default_per_page, PaginationParams};
 use crate::common::MessageResponse;
 use crate::domain::tax::model::{
     CreateTaxPeriod, CreateTaxRate, TaxPeriodResponse, TaxRateResponse, TaxType, UpdateTaxRate,
@@ -15,6 +15,44 @@ use crate::domain::tax::service::TaxService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
+
+/// Query parameters for listing tax rates
+#[derive(Debug, Deserialize)]
+pub struct ListTaxRatesQuery {
+    #[serde(default = "default_page")]
+    pub page: u32,
+    #[serde(default = "default_per_page")]
+    pub per_page: u32,
+    pub tax_type: Option<String>,
+}
+
+impl From<ListTaxRatesQuery> for PaginationParams {
+    fn from(q: ListTaxRatesQuery) -> Self {
+        Self {
+            page: q.page,
+            per_page: q.per_page,
+        }
+    }
+}
+
+/// Query parameters for listing tax periods
+#[derive(Debug, Deserialize)]
+pub struct ListTaxPeriodsQuery {
+    #[serde(default = "default_page")]
+    pub page: u32,
+    #[serde(default = "default_per_page")]
+    pub per_page: u32,
+    pub tax_type: Option<String>,
+}
+
+impl From<ListTaxPeriodsQuery> for PaginationParams {
+    fn from(q: ListTaxPeriodsQuery) -> Self {
+        Self {
+            page: q.page,
+            per_page: q.per_page,
+        }
+    }
+}
 
 /// Request body for calculating tax
 #[derive(Debug, Deserialize, ToSchema)]
@@ -76,21 +114,15 @@ pub async fn create_tax_rate(
 pub async fn list_tax_rates(
     auth_user: AuthUser,
     tax_service: web::Data<TaxService>,
-    pagination: web::Query<PaginationParams>,
-    tax_type: web::Query<Option<String>>,
+    query: web::Query<ListTaxRatesQuery>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let tax_type_filter = tax_type
-        .into_inner()
-        .and_then(|s| s.parse::<TaxType>().ok());
+    let q = query.into_inner();
+    let tax_type_filter = q.tax_type.clone().and_then(|s| s.parse::<TaxType>().ok());
     match tax_service
-        .list_tax_rates(
-            auth_user.0.tenant_id,
-            tax_type_filter,
-            pagination.into_inner(),
-        )
+        .list_tax_rates(auth_user.0.tenant_id, tax_type_filter, q.into())
         .await
     {
         Ok(result) => {
@@ -282,21 +314,15 @@ pub async fn create_tax_period(
 pub async fn list_tax_periods(
     auth_user: AuthUser,
     tax_service: web::Data<TaxService>,
-    pagination: web::Query<PaginationParams>,
-    tax_type: web::Query<Option<String>>,
+    query: web::Query<ListTaxPeriodsQuery>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let tax_type_filter = tax_type
-        .into_inner()
-        .and_then(|s| s.parse::<TaxType>().ok());
+    let q = query.into_inner();
+    let tax_type_filter = q.tax_type.clone().and_then(|s| s.parse::<TaxType>().ok());
     match tax_service
-        .list_tax_periods(
-            auth_user.0.tenant_id,
-            tax_type_filter,
-            pagination.into_inner(),
-        )
+        .list_tax_periods(auth_user.0.tenant_id, tax_type_filter, q.into())
         .await
     {
         Ok(result) => {

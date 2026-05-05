@@ -3,9 +3,10 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Work order status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum WorkOrderStatus {
     Draft,
     Scheduled,
@@ -16,7 +17,7 @@ pub enum WorkOrderStatus {
 }
 
 /// Work order priority
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum WorkOrderPriority {
     Low,
     Normal,
@@ -25,7 +26,7 @@ pub enum WorkOrderPriority {
 }
 
 /// Work order entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WorkOrder {
     pub id: i64,
     pub tenant_id: i64,
@@ -42,10 +43,32 @@ pub struct WorkOrder {
     pub actual_end: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for WorkOrder {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Work order operation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WorkOrderOperation {
     pub id: i64,
     pub work_order_id: i64,
@@ -60,7 +83,7 @@ pub struct WorkOrderOperation {
 }
 
 /// Work order material
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WorkOrderMaterial {
     pub id: i64,
     pub work_order_id: i64,
@@ -71,7 +94,7 @@ pub struct WorkOrderMaterial {
 }
 
 /// Create work order request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateWorkOrder {
     pub tenant_id: i64,
     pub name: String,
@@ -105,7 +128,7 @@ impl CreateWorkOrder {
 }
 
 /// Create work order operation request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateWorkOrderOperation {
     pub work_order_id: i64,
     pub operation_sequence: i32,
@@ -132,7 +155,7 @@ impl CreateWorkOrderOperation {
 }
 
 /// Create work order material request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateWorkOrderMaterial {
     pub work_order_id: i64,
     pub product_id: i64,
@@ -159,7 +182,7 @@ impl CreateWorkOrderMaterial {
 // ==================== BILL OF MATERIALS ====================
 
 /// Bill of Materials entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct BillOfMaterials {
     pub id: i64,
     pub tenant_id: i64,
@@ -171,10 +194,32 @@ pub struct BillOfMaterials {
     pub valid_to: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for BillOfMaterials {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// BOM line item
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct BillOfMaterialsLine {
     pub id: i64,
     pub bom_id: i64,
@@ -187,7 +232,7 @@ pub struct BillOfMaterialsLine {
 }
 
 /// Create BOM request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateBillOfMaterials {
     pub tenant_id: i64,
     pub product_id: i64,
@@ -216,7 +261,7 @@ impl CreateBillOfMaterials {
 }
 
 /// Create BOM line request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateBillOfMaterialsLine {
     pub bom_id: i64,
     pub component_product_id: i64,
@@ -250,7 +295,7 @@ impl CreateBillOfMaterialsLine {
 // ==================== ROUTING ====================
 
 /// Routing entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Routing {
     pub id: i64,
     pub tenant_id: i64,
@@ -260,10 +305,32 @@ pub struct Routing {
     pub is_primary: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Routing {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Routing operation
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RoutingOperation {
     pub id: i64,
     pub routing_id: i64,
@@ -276,7 +343,7 @@ pub struct RoutingOperation {
 }
 
 /// Create routing request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateRouting {
     pub tenant_id: i64,
     pub product_id: i64,
@@ -286,7 +353,7 @@ pub struct CreateRouting {
 }
 
 /// Create routing operation request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateRoutingOperation {
     pub routing_id: i64,
     pub sequence: i32,
@@ -338,7 +405,7 @@ impl CreateRouting {
 }
 
 /// Create inspection request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateInspection {
     pub tenant_id: i64,
     pub work_order_id: Option<i64>,
@@ -382,7 +449,7 @@ impl CreateInspection {
 }
 
 /// Update inspection request
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 pub struct UpdateInspection {
     pub status: Option<InspectionStatus>,
     pub quantity_passed: Option<Decimal>,
@@ -392,7 +459,7 @@ pub struct UpdateInspection {
 }
 
 /// Create non-conformance report request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateNonConformanceReport {
     pub tenant_id: i64,
     pub inspection_id: Option<i64>,
@@ -425,7 +492,7 @@ impl CreateNonConformanceReport {
 }
 
 /// Update NCR request
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 pub struct UpdateNonConformanceReport {
     pub ncr_type: Option<NcrType>,
     pub description: Option<String>,
@@ -437,7 +504,7 @@ pub struct UpdateNonConformanceReport {
 // ==================== QUALITY CONTROL ====================
 
 /// Inspection status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum InspectionStatus {
     Pending,
     InProgress,
@@ -447,7 +514,7 @@ pub enum InspectionStatus {
 }
 
 /// Inspection entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Inspection {
     pub id: i64,
     pub tenant_id: i64,
@@ -462,10 +529,32 @@ pub struct Inspection {
     pub inspected_at: Option<DateTime<Utc>>,
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Inspection {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// NCR type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum NcrType {
     Minor,
     Major,
@@ -473,7 +562,7 @@ pub enum NcrType {
 }
 
 /// NCR status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum NcrStatus {
     Open,
     UnderReview,
@@ -483,7 +572,7 @@ pub enum NcrStatus {
 }
 
 /// Non-conformance report
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct NonConformanceReport {
     pub id: i64,
     pub tenant_id: i64,
@@ -497,11 +586,34 @@ pub struct NonConformanceReport {
     pub raised_by: i64,
     pub raised_at: DateTime<Utc>,
     pub closed_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for NonConformanceReport {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::SoftDeletable;
     use rust_decimal_macros::dec;
 
     #[test]

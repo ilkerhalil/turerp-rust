@@ -40,9 +40,9 @@ impl CrmService {
         self.lead_repo.create(create).await
     }
 
-    pub async fn get_lead(&self, id: i64) -> Result<Lead, ApiError> {
+    pub async fn get_lead(&self, id: i64, tenant_id: i64) -> Result<Lead, ApiError> {
         self.lead_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Lead not found".to_string()))
     }
@@ -98,6 +98,27 @@ impl CrmService {
         self.lead_repo.convert_to_customer(id, customer_id).await
     }
 
+    pub async fn soft_delete_lead(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.lead_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    pub async fn restore_lead(&self, id: i64, tenant_id: i64) -> Result<Lead, ApiError> {
+        self.lead_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_leads(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError> {
+        self.lead_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_lead(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.lead_repo.destroy(id, tenant_id).await
+    }
+
     // Opportunity methods
     pub async fn create_opportunity(
         &self,
@@ -106,9 +127,9 @@ impl CrmService {
         self.opportunity_repo.create(create).await
     }
 
-    pub async fn get_opportunity(&self, id: i64) -> Result<Opportunity, ApiError> {
+    pub async fn get_opportunity(&self, id: i64, tenant_id: i64) -> Result<Opportunity, ApiError> {
         self.opportunity_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Opportunity not found".to_string()))
     }
@@ -172,14 +193,44 @@ impl CrmService {
         self.opportunity_repo.update_status(id, status).await
     }
 
+    pub async fn soft_delete_opportunity(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.opportunity_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    pub async fn restore_opportunity(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Opportunity, ApiError> {
+        self.opportunity_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_opportunities(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Opportunity>, ApiError> {
+        self.opportunity_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_opportunity(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.opportunity_repo.destroy(id, tenant_id).await
+    }
+
     // Campaign methods
     pub async fn create_campaign(&self, create: CreateCampaign) -> Result<Campaign, ApiError> {
         self.campaign_repo.create(create).await
     }
 
-    pub async fn get_campaign(&self, id: i64) -> Result<Campaign, ApiError> {
+    pub async fn get_campaign(&self, id: i64, tenant_id: i64) -> Result<Campaign, ApiError> {
         self.campaign_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Campaign not found".to_string()))
     }
@@ -231,14 +282,37 @@ impl CrmService {
         self.campaign_repo.update_status(id, status).await
     }
 
+    pub async fn soft_delete_campaign(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.campaign_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    pub async fn restore_campaign(&self, id: i64, tenant_id: i64) -> Result<Campaign, ApiError> {
+        self.campaign_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_campaigns(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError> {
+        self.campaign_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_campaign(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.campaign_repo.destroy(id, tenant_id).await
+    }
+
     // Ticket methods
     pub async fn create_ticket(&self, create: CreateTicket) -> Result<Ticket, ApiError> {
         self.ticket_repo.create(create).await
     }
 
-    pub async fn get_ticket(&self, id: i64) -> Result<Ticket, ApiError> {
+    pub async fn get_ticket(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError> {
         self.ticket_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Ticket not found".to_string()))
     }
@@ -306,6 +380,29 @@ impl CrmService {
 
     pub async fn resolve_ticket(&self, id: i64) -> Result<Ticket, ApiError> {
         self.ticket_repo.resolve(id).await
+    }
+
+    pub async fn soft_delete_ticket(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.ticket_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    pub async fn restore_ticket(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError> {
+        self.ticket_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_tickets(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError> {
+        self.ticket_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_ticket(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.ticket_repo.destroy(id, tenant_id).await
     }
 
     // Dashboard metrics

@@ -6,6 +6,7 @@ use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::purchase::model::{
     CreateGoodsReceipt, CreateGoodsReceiptLine, CreatePurchaseOrder, CreatePurchaseOrderLine,
     CreatePurchaseRequest, CreatePurchaseRequestLine, GoodsReceipt, GoodsReceiptLine,
@@ -18,7 +19,7 @@ use crate::error::ApiError;
 #[async_trait]
 pub trait PurchaseOrderRepository: Send + Sync {
     async fn create(&self, order: CreatePurchaseOrder) -> Result<PurchaseOrder, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseOrder>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<PurchaseOrder>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseOrder>, ApiError>;
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<PurchaseOrder>, ApiError>;
     async fn find_by_status(
@@ -36,10 +37,22 @@ pub trait PurchaseOrderRepository: Send + Sync {
         line_id: i64,
         received_qty: Decimal,
     ) -> Result<PurchaseOrderLine, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a purchase order
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted purchase order
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<PurchaseOrder, ApiError>;
+    /// Find soft-deleted purchase orders
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<PurchaseOrder>, ApiError>;
+    /// Hard delete a purchase order (permanent destruction -- admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for PurchaseOrderLine operations
+/// Note: Line entities don't have tenant_id directly; they should only be accessed
+/// through their parent PurchaseOrder to ensure tenant isolation.
 #[async_trait]
 pub trait PurchaseOrderLineRepository: Send + Sync {
     async fn create_many(
@@ -56,14 +69,24 @@ pub trait PurchaseOrderLineRepository: Send + Sync {
 #[async_trait]
 pub trait GoodsReceiptRepository: Send + Sync {
     async fn create(&self, receipt: CreateGoodsReceipt) -> Result<GoodsReceipt, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<GoodsReceipt>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<GoodsReceipt>, ApiError>;
     async fn find_by_order(&self, order_id: i64) -> Result<Vec<GoodsReceipt>, ApiError>;
     async fn update_status(
         &self,
         id: i64,
         status: GoodsReceiptStatus,
     ) -> Result<GoodsReceipt, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a goods receipt
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted goods receipt
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<GoodsReceipt, ApiError>;
+    /// Find soft-deleted goods receipts
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<GoodsReceipt>, ApiError>;
+    /// Hard delete a goods receipt (permanent destruction -- admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for GoodsReceiptLine operations
@@ -90,7 +113,11 @@ pub type BoxPurchaseRequestLineRepository = Arc<dyn PurchaseRequestLineRepositor
 #[async_trait]
 pub trait PurchaseRequestRepository: Send + Sync {
     async fn create(&self, request: CreatePurchaseRequest) -> Result<PurchaseRequest, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseRequest>, ApiError>;
+    async fn find_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<PurchaseRequest>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -127,7 +154,17 @@ pub trait PurchaseRequestRepository: Send + Sync {
         id: i64,
         status: PurchaseRequestStatus,
     ) -> Result<PurchaseRequest, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a purchase request
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted purchase request
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<PurchaseRequest, ApiError>;
+    /// Find soft-deleted purchase requests
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError>;
+    /// Hard delete a purchase request (permanent destruction -- admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for PurchaseRequestLine operations
@@ -228,15 +265,21 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
             notes: create.notes,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.orders.insert(id, order.clone());
         Ok(order)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseOrder>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<PurchaseOrder>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.orders.get(&id).cloned())
+        Ok(inner
+            .orders
+            .get(&id)
+            .filter(|o| o.tenant_id == tenant_id && !o.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseOrder>, ApiError> {
@@ -244,7 +287,7 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
         Ok(inner
             .orders
             .values()
-            .filter(|o| o.tenant_id == tenant_id)
+            .filter(|o| o.tenant_id == tenant_id && !o.is_deleted())
             .cloned()
             .collect())
     }
@@ -254,7 +297,7 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
         Ok(inner
             .orders
             .values()
-            .filter(|o| o.cari_id == cari_id)
+            .filter(|o| o.cari_id == cari_id && !o.is_deleted())
             .cloned()
             .collect())
     }
@@ -268,7 +311,7 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
         Ok(inner
             .orders
             .values()
-            .filter(|o| o.tenant_id == tenant_id && o.status == status)
+            .filter(|o| o.tenant_id == tenant_id && o.status == status && !o.is_deleted())
             .cloned()
             .collect())
     }
@@ -297,8 +340,62 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
         Err(ApiError::NotFound("Line not found".to_string()))
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let order = inner
+            .orders
+            .get_mut(&id)
+            .filter(|o| o.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Purchase order {} not found", id)))?;
+        order.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<PurchaseOrder, ApiError> {
+        let mut inner = self.inner.lock();
+        let order = inner
+            .orders
+            .get_mut(&id)
+            .filter(|o| o.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Purchase order {} not found", id)))?;
+        order.restore();
+        Ok(order.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<PurchaseOrder>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .orders
+            .values()
+            .filter(|o| o.tenant_id == tenant_id && o.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(order) = inner.orders.get(&id) {
+            if order.tenant_id != tenant_id {
+                return Err(ApiError::NotFound(format!(
+                    "Purchase order {} not found",
+                    id
+                )));
+            }
+        }
+        inner.orders.remove(&id);
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(order) = inner.orders.get(&id) {
+            if order.tenant_id != tenant_id {
+                return Err(ApiError::NotFound(format!(
+                    "Purchase order {} not found",
+                    id
+                )));
+            }
+        }
         inner.orders.remove(&id);
         Ok(())
     }
@@ -436,15 +533,21 @@ impl GoodsReceiptRepository for InMemoryGoodsReceiptRepository {
             receipt_date: create.receipt_date,
             notes: create.notes,
             created_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.receipts.insert(id, receipt.clone());
         Ok(receipt)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<GoodsReceipt>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<GoodsReceipt>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.receipts.get(&id).cloned())
+        Ok(inner
+            .receipts
+            .get(&id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
+            .cloned())
     }
 
     async fn find_by_order(&self, order_id: i64) -> Result<Vec<GoodsReceipt>, ApiError> {
@@ -452,7 +555,7 @@ impl GoodsReceiptRepository for InMemoryGoodsReceiptRepository {
         Ok(inner
             .receipts
             .values()
-            .filter(|r| r.purchase_order_id == order_id)
+            .filter(|r| r.purchase_order_id == order_id && !r.is_deleted())
             .cloned()
             .collect())
     }
@@ -471,8 +574,56 @@ impl GoodsReceiptRepository for InMemoryGoodsReceiptRepository {
         Ok(receipt.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let receipt = inner
+            .receipts
+            .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound("Not found".to_string()))?;
+        receipt.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<GoodsReceipt, ApiError> {
+        let mut inner = self.inner.lock();
+        let receipt = inner
+            .receipts
+            .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound("Not found".to_string()))?;
+        receipt.restore();
+        Ok(receipt.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<GoodsReceipt>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .receipts
+            .values()
+            .filter(|r| r.tenant_id == tenant_id && r.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(receipt) = inner.receipts.get(&id) {
+            if receipt.tenant_id != tenant_id {
+                return Err(ApiError::NotFound("Not found".to_string()));
+            }
+        }
+        inner.receipts.remove(&id);
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(receipt) = inner.receipts.get(&id) {
+            if receipt.tenant_id != tenant_id {
+                return Err(ApiError::NotFound("Not found".to_string()));
+            }
+        }
         inner.receipts.remove(&id);
         Ok(())
     }
@@ -596,15 +747,25 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
             reason: create.reason,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.requests.insert(id, request.clone());
         Ok(request)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseRequest>, ApiError> {
+    async fn find_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<PurchaseRequest>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.requests.get(&id).cloned())
+        Ok(inner
+            .requests
+            .get(&id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
@@ -612,7 +773,7 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         Ok(inner
             .requests
             .values()
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .cloned()
             .collect())
     }
@@ -627,13 +788,13 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         let total = inner
             .requests
             .values()
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .count() as u64;
 
         let items: Vec<PurchaseRequest> = inner
             .requests
             .values()
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .skip(((page.saturating_sub(1)) * per_page) as usize)
             .take(per_page as usize)
             .cloned()
@@ -651,7 +812,7 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         Ok(inner
             .requests
             .values()
-            .filter(|r| r.tenant_id == tenant_id && r.status == status)
+            .filter(|r| r.tenant_id == tenant_id && r.status == status && !r.is_deleted())
             .cloned()
             .collect())
     }
@@ -667,13 +828,13 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         let total = inner
             .requests
             .values()
-            .filter(|r| r.tenant_id == tenant_id && r.status == status)
+            .filter(|r| r.tenant_id == tenant_id && r.status == status && !r.is_deleted())
             .count() as u64;
 
         let items: Vec<PurchaseRequest> = inner
             .requests
             .values()
-            .filter(|r| r.tenant_id == tenant_id && r.status == status)
+            .filter(|r| r.tenant_id == tenant_id && r.status == status && !r.is_deleted())
             .skip(((page.saturating_sub(1)) * per_page) as usize)
             .take(per_page as usize)
             .cloned()
@@ -687,7 +848,7 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         Ok(inner
             .requests
             .values()
-            .filter(|r| r.requested_by == requested_by)
+            .filter(|r| r.requested_by == requested_by && !r.is_deleted())
             .cloned()
             .collect())
     }
@@ -697,7 +858,7 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         Ok(inner
             .requests
             .values()
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .count() as u64)
     }
 
@@ -710,7 +871,7 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         Ok(inner
             .requests
             .values()
-            .filter(|r| r.tenant_id == tenant_id && r.status == status)
+            .filter(|r| r.tenant_id == tenant_id && r.status == status && !r.is_deleted())
             .count() as u64)
     }
 
@@ -757,8 +918,56 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         Ok(request.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let request = inner
+            .requests
+            .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound("Not found".to_string()))?;
+        request.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<PurchaseRequest, ApiError> {
+        let mut inner = self.inner.lock();
+        let request = inner
+            .requests
+            .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound("Not found".to_string()))?;
+        request.restore();
+        Ok(request.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .requests
+            .values()
+            .filter(|r| r.tenant_id == tenant_id && r.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(request) = inner.requests.get(&id) {
+            if request.tenant_id != tenant_id {
+                return Err(ApiError::NotFound("Not found".to_string()));
+            }
+        }
+        inner.requests.remove(&id);
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(request) = inner.requests.get(&id) {
+            if request.tenant_id != tenant_id {
+                return Err(ApiError::NotFound("Not found".to_string()));
+            }
+        }
         inner.requests.remove(&id);
         Ok(())
     }

@@ -8,10 +8,11 @@ use serde_json::json;
 // Import application modules
 use turerp::api::{
     auth_configure, users_configure, v1_accounting_configure, v1_assets_configure,
-    v1_cari_configure, v1_crm_configure, v1_feature_flags_configure, v1_hr_configure,
-    v1_invoice_configure, v1_manufacturing_configure, v1_product_variants_configure,
-    v1_project_configure, v1_purchase_requests_configure, v1_sales_configure, v1_stock_configure,
-    v1_tenant_configure,
+    v1_cari_configure, v1_chart_of_accounts_configure, v1_crm_configure,
+    v1_feature_flags_configure, v1_hr_configure, v1_invoice_configure, v1_manufacturing_configure,
+    v1_product_variants_configure, v1_project_configure, v1_purchase_requests_configure,
+    v1_sales_configure, v1_stock_configure, v1_tax_configure, v1_tenant_configure,
+    v1_webhooks_configure,
 };
 use turerp::app::create_app_state;
 use turerp::config::Config;
@@ -39,7 +40,10 @@ fn configure_v1_routes(cfg: &mut web::ServiceConfig) {
         .configure(v1_assets_configure)
         .configure(v1_feature_flags_configure)
         .configure(v1_product_variants_configure)
-        .configure(v1_purchase_requests_configure);
+        .configure(v1_purchase_requests_configure)
+        .configure(v1_chart_of_accounts_configure)
+        .configure(v1_tax_configure)
+        .configure(v1_webhooks_configure);
 }
 
 /// Create app state with default config for testing
@@ -98,6 +102,9 @@ fn build_full_test_app(
         .app_data(state.feature_service.clone())
         .app_data(state.product_service.clone())
         .app_data(state.purchase_service.clone())
+        .app_data(state.chart_of_accounts_service.clone())
+        .app_data(state.tax_service.clone())
+        .app_data(state.webhook_service.clone())
         .service(
             web::scope("/api")
                 .configure(configure_all_routes)
@@ -1728,6 +1735,385 @@ async fn test_asset_crud() {
 }
 
 // ============================================================================
+// Chart of Accounts Module Tests
+// ============================================================================
+
+#[actix_web::test]
+async fn test_chart_of_accounts_crud() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create chart account
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "code": "100.01",
+            "name": "Kasa",
+            "group": "DonenVarliklar",
+            "account_type": "Asset",
+            "allow_posting": true
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["code"], "100.01");
+    assert_eq!(json["name"], "Kasa");
+
+    // List chart accounts
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["items"].is_array());
+
+    // Get chart account by code
+    let get_req = test::TestRequest::get()
+        .uri("/api/v1/chart-of-accounts/100.01")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, get_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["code"], "100.01");
+
+    // Update chart account
+    let update_req = test::TestRequest::put()
+        .uri("/api/v1/chart-of-accounts/100.01")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "name": "Kasa ve Banka"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, update_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["name"], "Kasa ve Banka");
+
+    // Soft delete chart account
+    let delete_req = test::TestRequest::delete()
+        .uri("/api/v1/chart-of-accounts/100.01")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+    let del_body = to_bytes(resp.into_body()).await.unwrap();
+    let del_json: serde_json::Value = serde_json::from_slice(&del_body).unwrap();
+    assert!(del_json["message"].as_str().unwrap().contains("deleted"));
+
+    // Verify deletion
+    let get_req = test::TestRequest::get()
+        .uri("/api/v1/chart-of-accounts/100.01")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, get_req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_chart_of_accounts_tree_and_trial_balance() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create parent account
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "code": "100",
+            "name": "Donen Varliklar",
+            "group": "DonenVarliklar",
+            "account_type": "Asset",
+            "allow_posting": false
+        }))
+        .to_request();
+
+    let _ = test::call_service(&app, create_req).await;
+
+    // Create child account
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "code": "100.01",
+            "name": "Kasa",
+            "group": "DonenVarliklar",
+            "parent_code": "100",
+            "account_type": "Asset",
+            "allow_posting": true
+        }))
+        .to_request();
+
+    let _ = test::call_service(&app, create_req).await;
+
+    // Get account tree
+    let tree_req = test::TestRequest::get()
+        .uri("/api/v1/chart-of-accounts/tree")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, tree_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json.is_array());
+
+    // Get children of parent
+    let children_req = test::TestRequest::get()
+        .uri("/api/v1/chart-of-accounts/100/children")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, children_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Get trial balance
+    let tb_req = test::TestRequest::get()
+        .uri("/api/v1/chart-of-accounts/trial-balance")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, tb_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json.is_array());
+}
+
+#[actix_web::test]
+async fn test_chart_of_accounts_write_requires_admin() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_user!(&app, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "code": "100.02",
+            "name": "Should Fail",
+            "group": "DonenVarliklar",
+            "account_type": "Asset",
+            "allow_posting": true
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+// ============================================================================
+// Tax Engine Module Tests
+// ============================================================================
+
+#[actix_web::test]
+async fn test_tax_rate_crud() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create tax rate
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "rate": "0.20",
+            "effective_from": "2024-01-01",
+            "description": "Standard KDV",
+            "is_default": true
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let rate_id = json["id"].as_i64().unwrap();
+    assert_eq!(json["tax_type"], "KDV");
+
+    // List tax rates
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Get tax rate by ID
+    let get_req = test::TestRequest::get()
+        .uri(&format!("/api/v1/tax/rates/{}", rate_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, get_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Update tax rate
+    let update_req = test::TestRequest::put()
+        .uri(&format!("/api/v1/tax/rates/{}", rate_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "description": "Updated KDV"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, update_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["description"], "Updated KDV");
+}
+
+#[actix_web::test]
+async fn test_tax_calculate() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create a tax rate first
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "rate": "0.20",
+            "effective_from": "2024-01-01",
+            "description": "Standard KDV",
+            "is_default": true
+        }))
+        .to_request();
+
+    let _ = test::call_service(&app, create_req).await;
+
+    // Calculate tax
+    let calc_req = test::TestRequest::post()
+        .uri("/api/v1/tax/calculate")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "amount": "10000.00",
+            "tax_type": "KDV",
+            "date": "2024-06-15",
+            "inclusive": false
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, calc_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["base_amount"], "10000.00");
+    assert_eq!(json["tax_amount"], "2000.00");
+}
+
+#[actix_web::test]
+async fn test_tax_period_lifecycle() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create tax period
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/periods")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "period_year": 2024,
+            "period_month": 6
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let period_id = json["id"].as_i64().unwrap();
+    assert_eq!(json["status"], "Open");
+
+    // Calculate period
+    let calc_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/tax/periods/{}/calculate", period_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, calc_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "Calculated");
+
+    // File period
+    let file_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/tax/periods/{}/file", period_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, file_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "Filed");
+}
+
+#[actix_web::test]
+async fn test_tax_write_requires_admin() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_user!(&app, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "rate": "0.20",
+            "effective_from": "2024-01-01",
+            "description": "Should Fail",
+            "is_default": true
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+// ============================================================================
 // Unauthenticated Access Tests
 // ============================================================================
 
@@ -1752,6 +2138,13 @@ async fn test_business_endpoints_require_auth() {
         ("/api/v1/crm/leads", "GET"),
         ("/api/v1/tenants", "GET"),
         ("/api/v1/assets", "GET"),
+        ("/api/v1/chart-of-accounts", "GET"),
+        ("/api/v1/chart-of-accounts/tree", "GET"),
+        ("/api/v1/chart-of-accounts/trial-balance", "GET"),
+        ("/api/v1/tax/rates", "GET"),
+        ("/api/v1/tax/periods", "GET"),
+        ("/api/v1/webhooks", "GET"),
+        ("/api/v1/webhooks/1/deliveries", "GET"),
     ];
 
     for (path, _method) in protected_endpoints {
@@ -1856,6 +2249,90 @@ async fn test_hr_tenant_isolation() {
     );
 }
 
+#[actix_web::test]
+async fn test_chart_of_accounts_tenant_isolation() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    // Admin in tenant 1 creates account
+    let (token1, _) = register_admin!(&app_state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "code": "100",
+            "name": "Tenant 1 Account",
+            "group": "DonenVarliklar",
+            "account_type": "Asset",
+            "allow_posting": true
+        }))
+        .to_request();
+
+    let _ = test::call_service(&app, create_req).await;
+
+    // Admin in tenant 2 should not see tenant 1's accounts
+    let (token2, _) = register_admin!(&app_state, 2);
+
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let accounts = json["items"].as_array().unwrap();
+    assert!(
+        accounts.is_empty(),
+        "Tenant 2 should not see tenant 1's chart accounts"
+    );
+}
+
+#[actix_web::test]
+async fn test_tax_tenant_isolation() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    // Admin in tenant 1 creates tax rate
+    let (token1, _) = register_admin!(&app_state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "rate": "0.20",
+            "effective_from": "2024-01-01",
+            "description": "Tenant 1 KDV",
+            "is_default": true
+        }))
+        .to_request();
+
+    let _ = test::call_service(&app, create_req).await;
+
+    // Admin in tenant 2 should not see tenant 1's tax rates
+    let (token2, _) = register_admin!(&app_state, 2);
+
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let rates = json["items"].as_array().unwrap();
+    assert!(
+        rates.is_empty(),
+        "Tenant 2 should not see tenant 1's tax rates"
+    );
+}
+
 // ============================================================================
 // Authorization Tests (Admin vs User)
 // ============================================================================
@@ -1880,6 +2357,14 @@ async fn test_admin_only_write_endpoints() {
         ("/api/v1/crm/leads", "POST"),
         ("/api/v1/tenants", "POST"),
         ("/api/v1/assets", "POST"),
+        ("/api/v1/chart-of-accounts", "POST"),
+        ("/api/v1/tax/rates", "POST"),
+        ("/api/v1/tax/periods", "POST"),
+        ("/api/v1/webhooks", "POST"),
+        ("/api/v1/webhooks/1", "PUT"),
+        ("/api/v1/webhooks/1", "DELETE"),
+        ("/api/v1/webhooks/1/test", "POST"),
+        ("/api/v1/webhooks/deliveries/1/retry", "POST"),
     ];
 
     for (path, method) in write_endpoints {
@@ -1888,6 +2373,15 @@ async fn test_admin_only_write_endpoints() {
                 .uri(path)
                 .insert_header(("Authorization", format!("Bearer {}", user_token)))
                 .set_json(json!({}))
+                .to_request(),
+            "PUT" => test::TestRequest::put()
+                .uri(path)
+                .insert_header(("Authorization", format!("Bearer {}", user_token)))
+                .set_json(json!({}))
+                .to_request(),
+            "DELETE" => test::TestRequest::delete()
+                .uri(path)
+                .insert_header(("Authorization", format!("Bearer {}", user_token)))
                 .to_request(),
             _ => panic!("Unsupported method"),
         };
@@ -1901,4 +2395,265 @@ async fn test_admin_only_write_endpoints() {
             path
         );
     }
+}
+
+// ============================================================================
+// Webhook System Tests
+// ============================================================================
+
+#[actix_web::test]
+async fn test_webhook_crud() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create webhook
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "url": "https://example.com/webhook",
+            "description": "Test webhook",
+            "event_types": ["invoice_created", "payment_received"],
+            "secret": "my-super-secret-123"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["url"], "https://example.com/webhook");
+    assert_eq!(json["description"], "Test webhook");
+    // secret is not returned in WebhookResponse for security
+    let webhook_id = json["id"].as_i64().unwrap();
+
+    // List webhooks
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json.is_array());
+    assert_eq!(json.as_array().unwrap().len(), 1);
+
+    // Get webhook by id
+    let get_req = test::TestRequest::get()
+        .uri(&format!("/api/v1/webhooks/{}", webhook_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, get_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["url"], "https://example.com/webhook");
+
+    // Update webhook
+    let update_req = test::TestRequest::put()
+        .uri(&format!("/api/v1/webhooks/{}", webhook_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "url": "https://new-example.com/webhook",
+            "status": "inactive"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, update_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["url"], "https://new-example.com/webhook");
+    assert_eq!(json["status"], "inactive");
+
+    // Delete webhook
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/webhooks/{}", webhook_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Verify deletion
+    let get_req = test::TestRequest::get()
+        .uri(&format!("/api/v1/webhooks/{}", webhook_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, get_req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_webhook_validation() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Reject HTTP URL
+    let req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "url": "http://insecure.com/webhook",
+            "event_types": []
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+    // Reject short secret
+    let req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "url": "https://secure.com/webhook",
+            "secret": "short"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_webhook_test_endpoint() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create webhook first
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "url": "https://example.com/webhook",
+            "event_types": ["*"]
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let webhook_id = json["id"].as_i64().unwrap();
+
+    // Trigger test event
+    let test_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/webhooks/{}/test", webhook_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, test_req).await;
+    // Returns 200 even if delivery fails, since it just spawns the delivery
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[actix_web::test]
+async fn test_webhook_deliveries_list() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create webhook
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "url": "https://example.com/webhook",
+            "event_types": ["*"]
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let webhook_id = json["id"].as_i64().unwrap();
+
+    // List deliveries (should be empty or paginated)
+    let list_req = test::TestRequest::get()
+        .uri(&format!("/api/v1/webhooks/{}/deliveries", webhook_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json["items"].is_array());
+}
+
+#[actix_web::test]
+async fn test_webhook_write_requires_admin() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "url": "https://example.com/webhook",
+            "event_types": []
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[actix_web::test]
+async fn test_webhook_tenant_isolation() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    // Admin in tenant 1 creates webhook
+    let (token1, _) = register_admin!(&app_state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "url": "https://tenant1.com/webhook",
+            "event_types": ["invoice_created"]
+        }))
+        .to_request();
+
+    let _ = test::call_service(&app, create_req).await;
+
+    // Admin in tenant 2 should not see tenant 1's webhooks
+    let (token2, _) = register_admin!(&app_state, 2);
+
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let webhooks = json.as_array().unwrap();
+    assert!(
+        webhooks.is_empty(),
+        "Tenant 2 should not see tenant 1's webhooks"
+    );
 }

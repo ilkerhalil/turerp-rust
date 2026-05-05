@@ -57,10 +57,14 @@ impl SalesService {
         Ok(SalesOrderResponse::from((order, lines)))
     }
 
-    pub async fn get_sales_order(&self, id: i64) -> Result<SalesOrderResponse, ApiError> {
+    pub async fn get_sales_order(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<SalesOrderResponse, ApiError> {
         let order = self
             .order_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", id)))?;
 
@@ -125,9 +129,46 @@ impl SalesService {
         self.order_repo.update_status(id, status).await
     }
 
-    pub async fn delete_order(&self, id: i64) -> Result<(), ApiError> {
+    pub async fn delete_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.order_line_repo.delete_by_order(id).await?;
-        self.order_repo.delete(id).await
+        self.order_repo.delete(id, tenant_id).await
+    }
+
+    /// Soft delete a sales order (sets deleted_at)
+    pub async fn soft_delete_order(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.order_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted sales order
+    pub async fn restore_order(&self, id: i64, tenant_id: i64) -> Result<SalesOrder, ApiError> {
+        self.order_repo.restore(id, tenant_id).await
+    }
+
+    /// Restore a soft-deleted sales order and return as response
+    pub async fn restore_order_response(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<SalesOrderResponse, ApiError> {
+        let order = self.order_repo.restore(id, tenant_id).await?;
+        let lines = self.order_line_repo.find_by_order(order.id).await?;
+        Ok(SalesOrderResponse::from((order, lines)))
+    }
+
+    /// List soft-deleted sales orders
+    pub async fn list_deleted_orders(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
+        self.order_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete a sales order (admin only, after soft delete)
+    pub async fn destroy_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.order_line_repo.delete_by_order(id).await?;
+        self.order_repo.destroy(id, tenant_id).await
     }
 
     // Quotation operations
@@ -153,10 +194,14 @@ impl SalesService {
         Ok(QuotationResponse::from((quotation, lines)))
     }
 
-    pub async fn get_quotation(&self, id: i64) -> Result<QuotationResponse, ApiError> {
+    pub async fn get_quotation(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<QuotationResponse, ApiError> {
         let quotation = self
             .quotation_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", id)))?;
 
@@ -228,16 +273,17 @@ impl SalesService {
     pub async fn convert_quotation_to_order(
         &self,
         quotation_id: i64,
+        tenant_id: i64,
     ) -> Result<SalesOrderResponse, ApiError> {
         let quotation = self
             .quotation_repo
-            .find_by_id(quotation_id)
+            .find_by_id(quotation_id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", quotation_id)))?;
 
         // Idempotency: if already converted, return the existing order
         if let Some(order_id) = quotation.sales_order_id {
-            return self.get_sales_order(order_id).await;
+            return self.get_sales_order(order_id, tenant_id).await;
         }
 
         if quotation.status == QuotationStatus::ConvertedToOrder {
@@ -279,22 +325,81 @@ impl SalesService {
         };
 
         let order = self.order_repo.create(create).await?;
-        let lines = self
+
+        let lines = match self
             .order_line_repo
             .create_many(order.id, order_lines_clone)
-            .await?;
+            .await
+        {
+            Ok(lines) => lines,
+            Err(e) => {
+                let _ = self.order_repo.delete(order.id, quotation.tenant_id).await;
+                return Err(e);
+            }
+        };
 
-        // Update quotation status
-        self.quotation_repo
+        // Update quotation status — if this fails, roll back order + lines
+        if let Err(e) = self
+            .quotation_repo
             .link_to_order(quotation_id, order.id)
-            .await?;
+            .await
+        {
+            let _ = self.order_line_repo.delete_by_order(order.id).await;
+            let _ = self.order_repo.delete(order.id, quotation.tenant_id).await;
+            return Err(e);
+        }
 
         Ok(SalesOrderResponse::from((order, lines)))
     }
 
-    pub async fn delete_quotation(&self, id: i64) -> Result<(), ApiError> {
+    pub async fn delete_quotation(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.quotation_line_repo.delete_by_quotation(id).await?;
-        self.quotation_repo.delete(id).await
+        self.quotation_repo.delete(id, tenant_id).await
+    }
+
+    /// Soft delete a quotation (sets deleted_at)
+    pub async fn soft_delete_quotation(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.quotation_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted quotation
+    pub async fn restore_quotation(&self, id: i64, tenant_id: i64) -> Result<Quotation, ApiError> {
+        self.quotation_repo.restore(id, tenant_id).await
+    }
+
+    /// Restore a soft-deleted quotation and return as response
+    pub async fn restore_quotation_response(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<QuotationResponse, ApiError> {
+        let quotation = self.quotation_repo.restore(id, tenant_id).await?;
+        let lines = self
+            .quotation_line_repo
+            .find_by_quotation(quotation.id)
+            .await?;
+        Ok(QuotationResponse::from((quotation, lines)))
+    }
+
+    /// List soft-deleted quotations
+    pub async fn list_deleted_quotations(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Quotation>, ApiError> {
+        self.quotation_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete a quotation (admin only, after soft delete)
+    pub async fn destroy_quotation(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.quotation_line_repo.delete_by_quotation(id).await?;
+        self.quotation_repo.destroy(id, tenant_id).await
     }
 }
 
@@ -401,11 +506,11 @@ mod tests {
         let quotation = service.create_quotation(quote_create).await.unwrap();
 
         // Convert to order
-        let order_result = service.convert_quotation_to_order(quotation.id).await;
+        let order_result = service.convert_quotation_to_order(quotation.id, 1).await;
         assert!(order_result.is_ok());
 
         // Check quotation status updated
-        let updated_quote = service.get_quotation(quotation.id).await.unwrap();
+        let updated_quote = service.get_quotation(quotation.id, 1).await.unwrap();
         assert_eq!(updated_quote.status, QuotationStatus::ConvertedToOrder);
         assert!(updated_quote.sales_order_id.is_some());
     }

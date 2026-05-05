@@ -126,15 +126,16 @@ impl AssetCategoryRepository for PostgresAssetCategoryRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<AssetCategory>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<AssetCategory>, ApiError> {
         let result: Option<AssetCategoryRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, name, description, default_useful_life_years, default_depreciation_method, created_at
             FROM asset_categories
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find asset category by id: {}", e)))?;
@@ -159,14 +160,15 @@ impl AssetCategoryRepository for PostgresAssetCategoryRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM asset_categories
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete asset category: {}", e)))?;
@@ -209,6 +211,8 @@ struct AssetRow {
     notes: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<AssetRow> for Asset {
@@ -237,6 +241,8 @@ impl From<AssetRow> for Asset {
             notes: row.notes,
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -267,6 +273,8 @@ struct AssetRowWithTotal {
     notes: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
     total: i64,
 }
 
@@ -296,6 +304,8 @@ impl From<AssetRowWithTotal> for (Asset, i64) {
             notes: row.notes,
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         };
         (asset, row.total)
     }
@@ -343,7 +353,7 @@ impl AssetsRepository for PostgresAssetsRepository {
                       acquisition_cost, salvage_value, useful_life_years,
                       depreciation_method, accumulated_depreciation, book_value,
                       warranty_expiry, insurance_number, insurance_expiry,
-                      responsible_person_id, notes, created_at, updated_at
+                      responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -373,7 +383,7 @@ impl AssetsRepository for PostgresAssetsRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Asset>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Asset>, ApiError> {
         let result: Option<AssetRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, asset_code, name, category_id, description,
@@ -381,12 +391,13 @@ impl AssetsRepository for PostgresAssetsRepository {
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,
                    warranty_expiry, insurance_number, insurance_expiry,
-                   responsible_person_id, notes, created_at, updated_at
+                   responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by
             FROM assets
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find asset by id: {}", e)))?;
@@ -402,9 +413,9 @@ impl AssetsRepository for PostgresAssetsRepository {
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,
                    warranty_expiry, insurance_number, insurance_expiry,
-                   responsible_person_id, notes, created_at, updated_at
+                   responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by
             FROM assets
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -431,10 +442,10 @@ impl AssetsRepository for PostgresAssetsRepository {
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,
                    warranty_expiry, insurance_number, insurance_expiry,
-                   responsible_person_id, notes, created_at, updated_at,
+                   responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by,
                    COUNT(*) OVER() as total
             FROM assets
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -472,9 +483,9 @@ impl AssetsRepository for PostgresAssetsRepository {
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,
                    warranty_expiry, insurance_number, insurance_expiry,
-                   responsible_person_id, notes, created_at, updated_at
+                   responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by
             FROM assets
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -499,9 +510,9 @@ impl AssetsRepository for PostgresAssetsRepository {
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,
                    warranty_expiry, insurance_number, insurance_expiry,
-                   responsible_person_id, notes, created_at, updated_at
+                   responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by
             FROM assets
-            WHERE tenant_id = $1 AND category_id = $2
+            WHERE tenant_id = $1 AND category_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -514,7 +525,12 @@ impl AssetsRepository for PostgresAssetsRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn update(&self, id: i64, update: UpdateAsset) -> Result<Asset, ApiError> {
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateAsset,
+    ) -> Result<Asset, ApiError> {
         let status_str = update.status.map(|s| s.to_string());
 
         let row: AssetRow = sqlx::query_as(
@@ -529,13 +545,13 @@ impl AssetsRepository for PostgresAssetsRepository {
                 responsible_person_id = COALESCE($6, responsible_person_id),
                 notes = COALESCE($7, notes),
                 updated_at = NOW()
-            WHERE id = $8
+            WHERE id = $8 AND tenant_id = $9 AND deleted_at IS NULL
             RETURNING id, tenant_id, asset_code, name, category_id, description,
                       serial_number, location, status, acquisition_date,
                       acquisition_cost, salvage_value, useful_life_years,
                       depreciation_method, accumulated_depreciation, book_value,
                       warranty_expiry, insurance_number, insurance_expiry,
-                      responsible_person_id, notes, created_at, updated_at
+                      responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.name)
@@ -546,6 +562,7 @@ impl AssetsRepository for PostgresAssetsRepository {
         .bind(update.responsible_person_id)
         .bind(&update.notes)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Asset"))?;
@@ -553,24 +570,30 @@ impl AssetsRepository for PostgresAssetsRepository {
         Ok(row.into())
     }
 
-    async fn update_status(&self, id: i64, status: AssetStatus) -> Result<Asset, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: AssetStatus,
+    ) -> Result<Asset, ApiError> {
         let status_str = status.to_string();
 
         let row: AssetRow = sqlx::query_as(
             r#"
             UPDATE assets
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, asset_code, name, category_id, description,
                       serial_number, location, status, acquisition_date,
                       acquisition_cost, salvage_value, useful_life_years,
                       depreciation_method, accumulated_depreciation, book_value,
                       warranty_expiry, insurance_number, insurance_expiry,
-                      responsible_person_id, notes, created_at, updated_at
+                      responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Asset"))?;
@@ -578,24 +601,30 @@ impl AssetsRepository for PostgresAssetsRepository {
         Ok(row.into())
     }
 
-    async fn record_depreciation(&self, id: i64, amount: Decimal) -> Result<Asset, ApiError> {
+    async fn record_depreciation(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        amount: Decimal,
+    ) -> Result<Asset, ApiError> {
         let row: AssetRow = sqlx::query_as(
             r#"
             UPDATE assets
             SET accumulated_depreciation = accumulated_depreciation + $1,
                 book_value = book_value - $1,
                 updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, asset_code, name, category_id, description,
                       serial_number, location, status, acquisition_date,
                       acquisition_cost, salvage_value, useful_life_years,
                       depreciation_method, accumulated_depreciation, book_value,
                       warranty_expiry, insurance_number, insurance_expiry,
-                      responsible_person_id, notes, created_at, updated_at
+                      responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(amount)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Asset"))?;
@@ -603,14 +632,102 @@ impl AssetsRepository for PostgresAssetsRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM assets
-            WHERE id = $1
+            UPDATE assets
+            SET deleted_at = NOW(), deleted_by = $3, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete asset: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Asset not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
+        let row: AssetRow = sqlx::query_as(
+            r#"
+            UPDATE assets
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            RETURNING id, tenant_id, asset_code, name, category_id, description,
+                      serial_number, location, status, acquisition_date,
+                      acquisition_cost, salvage_value, useful_life_years,
+                      depreciation_method, accumulated_depreciation, book_value,
+                      warranty_expiry, insurance_number, insurance_expiry,
+                      responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Asset"))?;
+
+        Ok(row.into())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError> {
+        let rows: Vec<AssetRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, asset_code, name, category_id, description,
+                   serial_number, location, status, acquisition_date,
+                   acquisition_cost, salvage_value, useful_life_years,
+                   depreciation_method, accumulated_depreciation, book_value,
+                   warranty_expiry, insurance_number, insurance_expiry,
+                   responsible_person_id, notes, created_at, updated_at, deleted_at, deleted_by
+            FROM assets
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted assets: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM assets
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy asset: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Asset not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM assets
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete asset: {}", e)))?;

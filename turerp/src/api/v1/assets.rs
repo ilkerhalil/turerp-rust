@@ -66,14 +66,14 @@ pub async fn get_assets(
     security(("bearer_auth" = []))
 )]
 pub async fn get_asset(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match assets_service.get_asset(*path).await {
+    match assets_service.get_asset(*path, auth_user.0.tenant_id).await {
         Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -112,7 +112,7 @@ pub async fn get_assets_by_status(
     security(("bearer_auth" = []))
 )]
 pub async fn update_asset(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateAsset>,
@@ -121,7 +121,7 @@ pub async fn update_asset(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match assets_service
-        .update_asset(*path, payload.into_inner())
+        .update_asset(*path, admin_user.0.tenant_id, payload.into_inner())
         .await
     {
         Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
@@ -138,7 +138,7 @@ pub async fn update_asset(
     security(("bearer_auth" = []))
 )]
 pub async fn update_asset_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateAssetStatusRequest>,
@@ -147,7 +147,7 @@ pub async fn update_asset_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match assets_service
-        .update_asset_status(*path, payload.into_inner().status)
+        .update_asset_status(*path, admin_user.0.tenant_id, payload.into_inner().status)
         .await
     {
         Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
@@ -163,14 +163,17 @@ pub async fn update_asset_status(
     security(("bearer_auth" = []))
 )]
 pub async fn calculate_depreciation(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match assets_service.calculate_depreciation(*path).await {
+    match assets_service
+        .calculate_depreciation(*path, admin_user.0.tenant_id)
+        .await
+    {
         Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -185,7 +188,7 @@ pub async fn calculate_depreciation(
     security(("bearer_auth" = []))
 )]
 pub async fn record_depreciation(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     payload: web::Json<RecordDepreciationRequest>,
@@ -194,7 +197,7 @@ pub async fn record_depreciation(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match assets_service
-        .record_depreciation(*path, payload.amount)
+        .record_depreciation(*path, admin_user.0.tenant_id, payload.amount)
         .await
     {
         Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
@@ -210,14 +213,17 @@ pub async fn record_depreciation(
     security(("bearer_auth" = []))
 )]
 pub async fn dispose_asset(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match assets_service.dispose_asset(*path).await {
+    match assets_service
+        .dispose_asset(*path, admin_user.0.tenant_id)
+        .await
+    {
         Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -231,14 +237,17 @@ pub async fn dispose_asset(
     security(("bearer_auth" = []))
 )]
 pub async fn write_off_asset(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match assets_service.write_off_asset(*path).await {
+    match assets_service
+        .write_off_asset(*path, admin_user.0.tenant_id)
+        .await
+    {
         Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -252,14 +261,17 @@ pub async fn write_off_asset(
     security(("bearer_auth" = []))
 )]
 pub async fn start_maintenance(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match assets_service.start_maintenance(*path).await {
+    match assets_service
+        .start_maintenance(*path, admin_user.0.tenant_id)
+        .await
+    {
         Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -274,7 +286,7 @@ pub async fn start_maintenance(
     security(("bearer_auth" = []))
 )]
 pub async fn end_maintenance(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     payload: web::Json<EndMaintenanceRequest>,
@@ -283,7 +295,7 @@ pub async fn end_maintenance(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match assets_service
-        .end_maintenance(*path, payload.new_status)
+        .end_maintenance(*path, admin_user.0.tenant_id, payload.new_status)
         .await
     {
         Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
@@ -291,28 +303,96 @@ pub async fn end_maintenance(
     }
 }
 
-/// Delete asset (requires admin role)
+/// Soft delete an asset (requires admin role)
 #[utoipa::path(
     delete, path = "/api/v1/assets/{id}", tag = "Assets",
     params(("id" = i64, Path, description = "Asset ID")),
-    responses((status = 200, description = "Asset deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "Asset soft deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
-pub async fn delete_asset(
-    _admin_user: AdminUser,
+pub async fn soft_delete_asset(
+    admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match assets_service.delete_asset(*path).await {
+    let user_id: i64 = admin_user.0.sub.parse().unwrap_or(0);
+    match assets_service
+        .soft_delete_asset(*path, admin_user.0.tenant_id, user_id)
+        .await
+    {
         Ok(()) => {
             let msg = i18n.t(locale.as_str(), "asset.deleted");
             Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
+}
+
+/// Restore a soft-deleted asset (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/assets/{id}/restore", tag = "Assets",
+    params(("id" = i64, Path, description = "Asset ID")),
+    responses((status = 200, description = "Asset restored"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_asset(
+    admin_user: AdminUser,
+    assets_service: web::Data<AssetsService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match assets_service
+        .restore_asset(*path, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(asset) => Ok(HttpResponse::Ok().json(asset)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List soft-deleted assets (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/assets/deleted", tag = "Assets",
+    responses((status = 200, description = "List of deleted assets")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_assets(
+    admin_user: AdminUser,
+    assets_service: web::Data<AssetsService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match assets_service
+        .list_deleted_assets(admin_user.0.tenant_id)
+        .await
+    {
+        Ok(assets) => Ok(HttpResponse::Ok().json(assets)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Hard delete (destroy) an asset (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/assets/{id}/destroy", tag = "Assets",
+    params(("id" = i64, Path, description = "Asset ID")),
+    responses((status = 204, description = "Asset permanently deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_asset(
+    admin_user: AdminUser,
+    assets_service: web::Data<AssetsService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    assets_service
+        .destroy_asset(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Create maintenance record (requires admin role)
@@ -382,6 +462,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_assets))
             .route(web::post().to(create_asset)),
     )
+    .service(web::resource("/v1/assets/deleted").route(web::get().to(list_deleted_assets)))
     .service(web::resource("/v1/assets/status/{status}").route(web::get().to(get_assets_by_status)))
     // MUST register /maintenance-records BEFORE /{id} to avoid route shadowing
     .service(
@@ -392,8 +473,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         web::resource("/v1/assets/{id}")
             .route(web::get().to(get_asset))
             .route(web::put().to(update_asset))
-            .route(web::delete().to(delete_asset)),
+            .route(web::delete().to(soft_delete_asset)),
     )
+    .service(web::resource("/v1/assets/{id}/restore").route(web::put().to(restore_asset)))
+    .service(web::resource("/v1/assets/{id}/destroy").route(web::delete().to(destroy_asset)))
     .service(web::resource("/v1/assets/{id}/status").route(web::put().to(update_asset_status)))
     .service(
         web::resource("/v1/assets/{id}/depreciation").route(web::post().to(calculate_depreciation)),

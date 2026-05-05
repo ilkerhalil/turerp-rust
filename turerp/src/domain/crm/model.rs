@@ -3,11 +3,12 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 // ==================== LEADS ====================
 
 /// Lead status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum LeadStatus {
     New,
     Contacted,
@@ -44,7 +45,7 @@ impl std::str::FromStr for LeadStatus {
 }
 
 /// Lead entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Lead {
     pub id: i64,
     pub tenant_id: i64,
@@ -59,10 +60,32 @@ pub struct Lead {
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Lead {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Create lead request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateLead {
     pub tenant_id: i64,
     pub name: String,
@@ -94,7 +117,7 @@ impl CreateLead {
 // ==================== OPPORTUNITIES ====================
 
 /// Opportunity status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum OpportunityStatus {
     Open,
     Won,
@@ -128,7 +151,7 @@ impl std::str::FromStr for OpportunityStatus {
 }
 
 /// Opportunity entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Opportunity {
     pub id: i64,
     pub tenant_id: i64,
@@ -143,10 +166,32 @@ pub struct Opportunity {
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Opportunity {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Create opportunity request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateOpportunity {
     pub tenant_id: i64,
     pub lead_id: Option<i64>,
@@ -182,7 +227,7 @@ impl CreateOpportunity {
 // ==================== CAMPAIGNS ====================
 
 /// Campaign status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum CampaignStatus {
     Draft,
     Scheduled,
@@ -219,7 +264,7 @@ impl std::str::FromStr for CampaignStatus {
 }
 
 /// Campaign entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Campaign {
     pub id: i64,
     pub tenant_id: i64,
@@ -233,10 +278,32 @@ pub struct Campaign {
     pub end_date: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Campaign {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Create campaign request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateCampaign {
     pub tenant_id: i64,
     pub name: String,
@@ -270,7 +337,7 @@ impl CreateCampaign {
 // ==================== TICKETS ====================
 
 /// Ticket status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum TicketStatus {
     Open,
     InProgress,
@@ -307,7 +374,7 @@ impl std::str::FromStr for TicketStatus {
 }
 
 /// Ticket priority
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum TicketPriority {
     Low,
     Medium,
@@ -341,7 +408,7 @@ impl std::str::FromStr for TicketPriority {
 }
 
 /// Ticket entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Ticket {
     pub id: i64,
     pub tenant_id: i64,
@@ -356,10 +423,32 @@ pub struct Ticket {
     pub resolved_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Ticket {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Create ticket request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateTicket {
     pub tenant_id: i64,
     pub subject: String,
@@ -390,6 +479,7 @@ impl CreateTicket {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::SoftDeletable;
     use rust_decimal_macros::dec;
 
     #[test]

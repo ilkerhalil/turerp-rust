@@ -7,6 +7,7 @@ use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::crm::model::{
     Campaign, CampaignStatus, CreateCampaign, CreateLead, CreateOpportunity, CreateTicket, Lead,
     LeadStatus, Opportunity, OpportunityStatus, Ticket, TicketStatus,
@@ -16,7 +17,7 @@ use crate::error::ApiError;
 #[async_trait]
 pub trait LeadRepository: Send + Sync {
     async fn create(&self, lead: CreateLead) -> Result<Lead, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Lead>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Lead>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -38,13 +39,16 @@ pub trait LeadRepository: Send + Sync {
     ) -> Result<PaginatedResult<Lead>, ApiError>;
     async fn update_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError>;
     async fn convert_to_customer(&self, id: i64, customer_id: i64) -> Result<Lead, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Lead, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 #[async_trait]
 pub trait OpportunityRepository: Send + Sync {
     async fn create(&self, opp: CreateOpportunity) -> Result<Opportunity, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Opportunity>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Opportunity>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Opportunity>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -70,13 +74,16 @@ pub trait OpportunityRepository: Send + Sync {
         id: i64,
         status: OpportunityStatus,
     ) -> Result<Opportunity, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Opportunity, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Opportunity>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 #[async_trait]
 pub trait CampaignRepository: Send + Sync {
     async fn create(&self, campaign: CreateCampaign) -> Result<Campaign, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Campaign>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Campaign>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -97,13 +104,16 @@ pub trait CampaignRepository: Send + Sync {
         per_page: u32,
     ) -> Result<PaginatedResult<Campaign>, ApiError>;
     async fn update_status(&self, id: i64, status: CampaignStatus) -> Result<Campaign, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Campaign, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 #[async_trait]
 pub trait TicketRepository: Send + Sync {
     async fn create(&self, ticket: CreateTicket) -> Result<Ticket, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Ticket>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Ticket>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -131,7 +141,10 @@ pub trait TicketRepository: Send + Sync {
     async fn find_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError>;
     async fn update_status(&self, id: i64, status: TicketStatus) -> Result<Ticket, ApiError>;
     async fn resolve(&self, id: i64) -> Result<Ticket, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 pub type BoxLeadRepository = Arc<dyn LeadRepository>;
@@ -191,14 +204,20 @@ impl LeadRepository for InMemoryLeadRepository {
             notes: create.notes,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.leads.insert(id, lead.clone());
         Ok(lead)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Lead>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Lead>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.leads.get(&id).cloned())
+        Ok(inner
+            .leads
+            .get(&id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError> {
@@ -206,7 +225,7 @@ impl LeadRepository for InMemoryLeadRepository {
         Ok(inner
             .leads
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -221,7 +240,7 @@ impl LeadRepository for InMemoryLeadRepository {
         let all: Vec<_> = inner
             .leads
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -242,7 +261,7 @@ impl LeadRepository for InMemoryLeadRepository {
         Ok(inner
             .leads
             .values()
-            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .filter(|x| x.tenant_id == tenant_id && x.status == status && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -258,7 +277,7 @@ impl LeadRepository for InMemoryLeadRepository {
         let all: Vec<_> = inner
             .leads
             .values()
-            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .filter(|x| x.tenant_id == tenant_id && x.status == status && !x.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -293,8 +312,51 @@ impl LeadRepository for InMemoryLeadRepository {
         Ok(lead.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let lead = inner
+            .leads
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Lead not found".to_string()))?;
+        if lead.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Lead not found".to_string()));
+        }
+        lead.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Lead, ApiError> {
+        let mut inner = self.inner.lock();
+        let lead = inner
+            .leads
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Lead not found".to_string()))?;
+        if lead.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Lead not found".to_string()));
+        }
+        lead.restore();
+        Ok(lead.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .leads
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let lead = inner
+            .leads
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("Lead not found".to_string()))?;
+        if lead.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Lead not found".to_string()));
+        }
         inner.leads.remove(&id);
         Ok(())
     }
@@ -350,14 +412,20 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
             notes: create.notes,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.opportunities.insert(id, opp.clone());
         Ok(opp)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Opportunity>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Opportunity>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.opportunities.get(&id).cloned())
+        Ok(inner
+            .opportunities
+            .get(&id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Opportunity>, ApiError> {
@@ -365,7 +433,7 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
         Ok(inner
             .opportunities
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -380,7 +448,7 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
         let all: Vec<_> = inner
             .opportunities
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -401,7 +469,7 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
         Ok(inner
             .opportunities
             .values()
-            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .filter(|x| x.tenant_id == tenant_id && x.status == status && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -417,7 +485,7 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
         let all: Vec<_> = inner
             .opportunities
             .values()
-            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .filter(|x| x.tenant_id == tenant_id && x.status == status && !x.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -434,7 +502,7 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
         Ok(inner
             .opportunities
             .values()
-            .filter(|x| x.customer_id == Some(customer_id))
+            .filter(|x| x.customer_id == Some(customer_id) && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -454,8 +522,51 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
         Ok(opp.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let opp = inner
+            .opportunities
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Opportunity not found".to_string()))?;
+        if opp.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Opportunity not found".to_string()));
+        }
+        opp.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Opportunity, ApiError> {
+        let mut inner = self.inner.lock();
+        let opp = inner
+            .opportunities
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Opportunity not found".to_string()))?;
+        if opp.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Opportunity not found".to_string()));
+        }
+        opp.restore();
+        Ok(opp.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Opportunity>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .opportunities
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let opp = inner
+            .opportunities
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("Opportunity not found".to_string()))?;
+        if opp.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Opportunity not found".to_string()));
+        }
         inner.opportunities.remove(&id);
         Ok(())
     }
@@ -510,14 +621,20 @@ impl CampaignRepository for InMemoryCampaignRepository {
             end_date: create.end_date,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.campaigns.insert(id, campaign.clone());
         Ok(campaign)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Campaign>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Campaign>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.campaigns.get(&id).cloned())
+        Ok(inner
+            .campaigns
+            .get(&id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError> {
@@ -525,7 +642,7 @@ impl CampaignRepository for InMemoryCampaignRepository {
         Ok(inner
             .campaigns
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -540,7 +657,7 @@ impl CampaignRepository for InMemoryCampaignRepository {
         let all: Vec<_> = inner
             .campaigns
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -561,7 +678,7 @@ impl CampaignRepository for InMemoryCampaignRepository {
         Ok(inner
             .campaigns
             .values()
-            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .filter(|x| x.tenant_id == tenant_id && x.status == status && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -577,7 +694,7 @@ impl CampaignRepository for InMemoryCampaignRepository {
         let all: Vec<_> = inner
             .campaigns
             .values()
-            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .filter(|x| x.tenant_id == tenant_id && x.status == status && !x.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -600,8 +717,51 @@ impl CampaignRepository for InMemoryCampaignRepository {
         Ok(campaign.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let campaign = inner
+            .campaigns
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Campaign not found".to_string()))?;
+        if campaign.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Campaign not found".to_string()));
+        }
+        campaign.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Campaign, ApiError> {
+        let mut inner = self.inner.lock();
+        let campaign = inner
+            .campaigns
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Campaign not found".to_string()))?;
+        if campaign.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Campaign not found".to_string()));
+        }
+        campaign.restore();
+        Ok(campaign.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .campaigns
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let campaign = inner
+            .campaigns
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("Campaign not found".to_string()))?;
+        if campaign.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Campaign not found".to_string()));
+        }
         inner.campaigns.remove(&id);
         Ok(())
     }
@@ -662,14 +822,20 @@ impl TicketRepository for InMemoryTicketRepository {
             resolved_at: None,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.tickets.insert(id, ticket.clone());
         Ok(ticket)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Ticket>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Ticket>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.tickets.get(&id).cloned())
+        Ok(inner
+            .tickets
+            .get(&id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError> {
@@ -677,7 +843,7 @@ impl TicketRepository for InMemoryTicketRepository {
         Ok(inner
             .tickets
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -692,7 +858,7 @@ impl TicketRepository for InMemoryTicketRepository {
         let all: Vec<_> = inner
             .tickets
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -713,7 +879,9 @@ impl TicketRepository for InMemoryTicketRepository {
         Ok(inner
             .tickets
             .values()
-            .find(|x| x.tenant_id == tenant_id && x.ticket_number == ticket_number)
+            .find(|x| {
+                x.tenant_id == tenant_id && x.ticket_number == ticket_number && !x.is_deleted()
+            })
             .cloned())
     }
 
@@ -726,7 +894,7 @@ impl TicketRepository for InMemoryTicketRepository {
         Ok(inner
             .tickets
             .values()
-            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .filter(|x| x.tenant_id == tenant_id && x.status == status && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -742,7 +910,7 @@ impl TicketRepository for InMemoryTicketRepository {
         let all: Vec<_> = inner
             .tickets
             .values()
-            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .filter(|x| x.tenant_id == tenant_id && x.status == status && !x.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -759,7 +927,7 @@ impl TicketRepository for InMemoryTicketRepository {
         Ok(inner
             .tickets
             .values()
-            .filter(|x| x.assigned_to == Some(assignee_id))
+            .filter(|x| x.assigned_to == Some(assignee_id) && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -787,8 +955,51 @@ impl TicketRepository for InMemoryTicketRepository {
         Ok(ticket.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let ticket = inner
+            .tickets
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Ticket not found".to_string()))?;
+        if ticket.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Ticket not found".to_string()));
+        }
+        ticket.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError> {
+        let mut inner = self.inner.lock();
+        let ticket = inner
+            .tickets
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Ticket not found".to_string()))?;
+        if ticket.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Ticket not found".to_string()));
+        }
+        ticket.restore();
+        Ok(ticket.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .tickets
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let ticket = inner
+            .tickets
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("Ticket not found".to_string()))?;
+        if ticket.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Ticket not found".to_string()));
+        }
         inner.tickets.remove(&id);
         Ok(())
     }

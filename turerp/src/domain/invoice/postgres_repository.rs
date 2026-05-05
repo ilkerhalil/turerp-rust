@@ -39,6 +39,8 @@ struct InvoiceRow {
     notes: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<InvoiceRow> for Invoice {
@@ -79,6 +81,8 @@ impl From<InvoiceRow> for Invoice {
             notes: row.notes,
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -103,6 +107,8 @@ struct InvoiceRowWithTotal {
     notes: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
     total_count: i64,
 }
 
@@ -144,6 +150,8 @@ impl From<InvoiceRowWithTotal> for (Invoice, i64) {
             notes: row.notes,
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         };
         (invoice, row.total_count)
     }
@@ -261,7 +269,8 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
             RETURNING id, tenant_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
-                      total_amount, paid_amount, currency, notes, created_at, updated_at
+                      total_amount, paid_amount, currency, notes, created_at, updated_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -290,9 +299,10 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM invoices
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -309,9 +319,10 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM invoices
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -332,9 +343,10 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM invoices
-            WHERE tenant_id = $1 AND invoice_number = $2
+            WHERE tenant_id = $1 AND invoice_number = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(tenant_id)
@@ -351,9 +363,10 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM invoices
-            WHERE cari_id = $1
+            WHERE cari_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -376,9 +389,10 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM invoices
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -404,9 +418,10 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM invoices
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -442,9 +457,10 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM invoices
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -481,7 +497,8 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
-                      total_amount, paid_amount, currency, notes, created_at, updated_at
+                      total_amount, paid_amount, currency, notes, created_at, updated_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
@@ -507,7 +524,8 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
-                      total_amount, paid_amount, currency, notes, created_at, updated_at
+                      total_amount, paid_amount, currency, notes, created_at, updated_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(paid_amount)
@@ -532,6 +550,94 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete invoice: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Invoice not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE invoices
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete invoice: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Invoice not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Invoice, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE invoices
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore invoice: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Invoice not found or not deleted".to_string(),
+            ));
+        }
+
+        // After restore, find_by_id will work because deleted_at is now NULL
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Invoice not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
+        let rows: Vec<InvoiceRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+                   issue_date, due_date, subtotal, tax_amount, discount_amount,
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by
+            FROM invoices
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted invoices: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM invoices
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy invoice: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Invoice not found".to_string()));
@@ -681,16 +787,17 @@ impl PaymentRepository for PostgresPaymentRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Payment>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Payment>, ApiError> {
         let result: Option<PaymentRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, invoice_id, amount, payment_date,
                    payment_method, reference_number, notes, created_at
             FROM payments
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find payment by id: {}", e)))?;
@@ -716,14 +823,15 @@ impl PaymentRepository for PostgresPaymentRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM payments
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete payment: {}", e)))?;

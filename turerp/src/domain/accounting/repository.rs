@@ -7,6 +7,7 @@ use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::accounting::model::{
     Account, AccountSubType, AccountType, CreateAccount, CreateJournalEntry, CreateJournalLine,
     JournalEntry, JournalEntryStatus, JournalLine,
@@ -17,7 +18,7 @@ use crate::error::ApiError;
 #[async_trait]
 pub trait AccountRepository: Send + Sync {
     async fn create(&self, account: CreateAccount) -> Result<Account, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Account>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Account>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Account>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -34,17 +35,22 @@ pub trait AccountRepository: Send + Sync {
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         name: Option<String>,
         is_active: Option<bool>,
     ) -> Result<Account, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Account, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Account>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for JournalEntry operations
 #[async_trait]
 pub trait JournalEntryRepository: Send + Sync {
     async fn create(&self, entry: CreateJournalEntry) -> Result<JournalEntry, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<JournalEntry>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<JournalEntry>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<JournalEntry>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -58,9 +64,13 @@ pub trait JournalEntryRepository: Send + Sync {
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<JournalEntry>, ApiError>;
-    async fn post(&self, id: i64) -> Result<JournalEntry, ApiError>;
-    async fn void(&self, id: i64) -> Result<JournalEntry, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn post(&self, id: i64, tenant_id: i64) -> Result<JournalEntry, ApiError>;
+    async fn void(&self, id: i64, tenant_id: i64) -> Result<JournalEntry, ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<JournalEntry, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<JournalEntry>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for JournalLine operations
@@ -210,6 +220,8 @@ impl InMemoryAccountRepository {
                     is_active: true,
                     allow_transaction: true,
                     created_at: Utc::now(),
+                    deleted_at: None,
+                    deleted_by: None,
                 },
             );
         }
@@ -245,15 +257,21 @@ impl AccountRepository for InMemoryAccountRepository {
             is_active: true,
             allow_transaction: create.allow_transaction,
             created_at: Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.accounts.insert(id, account.clone());
         Ok(account)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Account>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Account>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.accounts.get(&id).cloned())
+        Ok(inner
+            .accounts
+            .get(&id)
+            .filter(|a| a.tenant_id == tenant_id && !a.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Account>, ApiError> {
@@ -261,7 +279,7 @@ impl AccountRepository for InMemoryAccountRepository {
         Ok(inner
             .accounts
             .values()
-            .filter(|a| a.tenant_id == tenant_id)
+            .filter(|a| a.tenant_id == tenant_id && !a.is_deleted())
             .cloned()
             .collect())
     }
@@ -276,7 +294,7 @@ impl AccountRepository for InMemoryAccountRepository {
         let all: Vec<_> = inner
             .accounts
             .values()
-            .filter(|a| a.tenant_id == tenant_id)
+            .filter(|a| a.tenant_id == tenant_id && !a.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -293,7 +311,7 @@ impl AccountRepository for InMemoryAccountRepository {
         Ok(inner
             .accounts
             .values()
-            .find(|a| a.tenant_id == tenant_id && a.code == code)
+            .find(|a| a.tenant_id == tenant_id && a.code == code && !a.is_deleted())
             .cloned())
     }
 
@@ -306,7 +324,9 @@ impl AccountRepository for InMemoryAccountRepository {
         Ok(inner
             .accounts
             .values()
-            .filter(|a| a.tenant_id == tenant_id && a.account_type == account_type)
+            .filter(|a| {
+                a.tenant_id == tenant_id && a.account_type == account_type && !a.is_deleted()
+            })
             .cloned()
             .collect())
     }
@@ -314,6 +334,7 @@ impl AccountRepository for InMemoryAccountRepository {
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         name: Option<String>,
         is_active: Option<bool>,
     ) -> Result<Account, ApiError> {
@@ -322,6 +343,11 @@ impl AccountRepository for InMemoryAccountRepository {
             .accounts
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Account {} not found", id)))?;
+
+        if account.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Account {} not found", id)));
+        }
+
         if let Some(n) = name {
             account.name = n;
         }
@@ -331,8 +357,72 @@ impl AccountRepository for InMemoryAccountRepository {
         Ok(account.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let account = inner
+            .accounts
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Account {} not found", id)))?;
+
+        if account.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Account {} not found", id)));
+        }
+
+        inner.accounts.remove(&id);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let account = inner
+            .accounts
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Account {} not found", id)))?;
+
+        if account.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Account {} not found", id)));
+        }
+
+        account.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Account, ApiError> {
+        let mut inner = self.inner.lock();
+        let account = inner
+            .accounts
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Account {} not found", id)))?;
+
+        if account.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Account {} not found", id)));
+        }
+
+        account.restore();
+        Ok(account.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Account>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .accounts
+            .values()
+            .filter(|a| a.tenant_id == tenant_id && a.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let account = inner
+            .accounts
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Account {} not found", id)))?;
+
+        if account.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Account {} not found", id)));
+        }
+
         inner.accounts.remove(&id);
         Ok(())
     }
@@ -393,15 +483,21 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
             created_by: create.created_by,
             created_at: Utc::now(),
             posted_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.entries.insert(id, entry.clone());
         Ok(entry)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<JournalEntry>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<JournalEntry>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.entries.get(&id).cloned())
+        Ok(inner
+            .entries
+            .get(&id)
+            .filter(|e| e.tenant_id == tenant_id && !e.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<JournalEntry>, ApiError> {
@@ -409,7 +505,7 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
         Ok(inner
             .entries
             .values()
-            .filter(|e| e.tenant_id == tenant_id)
+            .filter(|e| e.tenant_id == tenant_id && !e.is_deleted())
             .cloned()
             .collect())
     }
@@ -424,7 +520,7 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
         let all: Vec<_> = inner
             .entries
             .values()
-            .filter(|e| e.tenant_id == tenant_id)
+            .filter(|e| e.tenant_id == tenant_id && !e.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -446,17 +542,27 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
         Ok(inner
             .entries
             .values()
-            .filter(|e| e.tenant_id == tenant_id && e.date >= start && e.date <= end)
+            .filter(|e| {
+                e.tenant_id == tenant_id && !e.is_deleted() && e.date >= start && e.date <= end
+            })
             .cloned()
             .collect())
     }
 
-    async fn post(&self, id: i64) -> Result<JournalEntry, ApiError> {
+    async fn post(&self, id: i64, tenant_id: i64) -> Result<JournalEntry, ApiError> {
         let mut inner = self.inner.lock();
         let entry = inner
             .entries
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))?;
+
+        if entry.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Journal entry {} not found",
+                id
+            )));
+        }
+
         if entry.status == JournalEntryStatus::Posted {
             return Err(ApiError::BadRequest("Entry already posted".to_string()));
         }
@@ -465,18 +571,102 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
         Ok(entry.clone())
     }
 
-    async fn void(&self, id: i64) -> Result<JournalEntry, ApiError> {
+    async fn void(&self, id: i64, tenant_id: i64) -> Result<JournalEntry, ApiError> {
         let mut inner = self.inner.lock();
         let entry = inner
             .entries
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))?;
+
+        if entry.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Journal entry {} not found",
+                id
+            )));
+        }
+
         entry.status = JournalEntryStatus::Voided;
         Ok(entry.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let entry = inner
+            .entries
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))?;
+
+        if entry.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Journal entry {} not found",
+                id
+            )));
+        }
+
+        inner.entries.remove(&id);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let entry = inner
+            .entries
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))?;
+
+        if entry.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Journal entry {} not found",
+                id
+            )));
+        }
+
+        entry.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<JournalEntry, ApiError> {
+        let mut inner = self.inner.lock();
+        let entry = inner
+            .entries
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))?;
+
+        if entry.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Journal entry {} not found",
+                id
+            )));
+        }
+
+        entry.restore();
+        Ok(entry.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<JournalEntry>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .entries
+            .values()
+            .filter(|e| e.tenant_id == tenant_id && e.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let entry = inner
+            .entries
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))?;
+
+        if entry.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Journal entry {} not found",
+                id
+            )));
+        }
+
         inner.entries.remove(&id);
         Ok(())
     }

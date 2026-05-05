@@ -3,9 +3,10 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Project status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, ToSchema)]
 pub enum ProjectStatus {
     #[default]
     Planning,
@@ -43,7 +44,7 @@ impl std::str::FromStr for ProjectStatus {
 }
 
 /// Project entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Project {
     pub id: i64,
     pub tenant_id: i64,
@@ -57,10 +58,32 @@ pub struct Project {
     pub actual_cost: Decimal,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Project {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Work Breakdown Structure (WBS) item
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WbsItem {
     pub id: i64,
     pub project_id: i64,
@@ -74,7 +97,7 @@ pub struct WbsItem {
 }
 
 /// Project cost record
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ProjectCost {
     pub id: i64,
     pub project_id: i64,
@@ -87,7 +110,7 @@ pub struct ProjectCost {
 }
 
 /// Cost type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum CostType {
     Labor,
     Material,
@@ -124,7 +147,7 @@ impl std::str::FromStr for CostType {
 }
 
 /// Project profitability
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ProjectProfitability {
     pub project_id: i64,
     pub project_name: String,
@@ -136,7 +159,7 @@ pub struct ProjectProfitability {
 }
 
 /// Create project request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateProject {
     pub tenant_id: i64,
     pub name: String,
@@ -165,7 +188,7 @@ impl CreateProject {
 }
 
 /// Create WBS item request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateWbsItem {
     pub project_id: i64,
     pub parent_id: Option<i64>,
@@ -192,7 +215,7 @@ impl CreateWbsItem {
 }
 
 /// Create project cost request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateProjectCost {
     pub project_id: i64,
     pub wbs_item_id: Option<i64>,
@@ -222,6 +245,7 @@ impl CreateProjectCost {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::SoftDeletable;
     use rust_decimal_macros::dec;
 
     #[test]

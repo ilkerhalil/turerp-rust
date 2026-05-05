@@ -38,6 +38,8 @@ struct ProjectRow {
     actual_cost: Decimal,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -65,6 +67,8 @@ impl From<ProjectRow> for Project {
             actual_cost: row.actual_cost,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -176,7 +180,7 @@ impl ProjectRepository for PostgresProjectRepository {
                                    start_date, end_date, budget, actual_cost, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
             RETURNING id, tenant_id, name, description, cari_id, status,
-                      start_date, end_date, budget, actual_cost, created_at, updated_at
+                      start_date, end_date, budget, actual_cost, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -195,16 +199,17 @@ impl ProjectRepository for PostgresProjectRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Project>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Project>, ApiError> {
         let result: Option<ProjectRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, name, description, cari_id, status,
-                   start_date, end_date, budget, actual_cost, created_at, updated_at
+                   start_date, end_date, budget, actual_cost, created_at, updated_at, deleted_at, deleted_by
             FROM projects
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find project by id: {}", e)))?;
@@ -216,9 +221,9 @@ impl ProjectRepository for PostgresProjectRepository {
         let rows: Vec<ProjectRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, name, description, cari_id, status,
-                   start_date, end_date, budget, actual_cost, created_at, updated_at
+                   start_date, end_date, budget, actual_cost, created_at, updated_at, deleted_at, deleted_by
             FROM projects
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -240,10 +245,10 @@ impl ProjectRepository for PostgresProjectRepository {
         let rows: Vec<ProjectRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, name, description, cari_id, status,
-                   start_date, end_date, budget, actual_cost, created_at, updated_at,
+                   start_date, end_date, budget, actual_cost, created_at, updated_at, deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM projects
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -260,17 +265,18 @@ impl ProjectRepository for PostgresProjectRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Project>, ApiError> {
+    async fn find_by_cari(&self, cari_id: i64, tenant_id: i64) -> Result<Vec<Project>, ApiError> {
         let rows: Vec<ProjectRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, name, description, cari_id, status,
-                   start_date, end_date, budget, actual_cost, created_at, updated_at
+                   start_date, end_date, budget, actual_cost, created_at, updated_at, deleted_at, deleted_by
             FROM projects
-            WHERE cari_id = $1
+            WHERE cari_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(cari_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find projects by cari: {}", e)))?;
@@ -288,9 +294,9 @@ impl ProjectRepository for PostgresProjectRepository {
         let rows: Vec<ProjectRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, name, description, cari_id, status,
-                   start_date, end_date, budget, actual_cost, created_at, updated_at
+                   start_date, end_date, budget, actual_cost, created_at, updated_at, deleted_at, deleted_by
             FROM projects
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -303,20 +309,26 @@ impl ProjectRepository for PostgresProjectRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn update_status(&self, id: i64, status: ProjectStatus) -> Result<Project, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: ProjectStatus,
+    ) -> Result<Project, ApiError> {
         let status_str = status.to_string();
 
         let row: ProjectRow = sqlx::query_as(
             r#"
             UPDATE projects
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, name, description, cari_id, status,
-                      start_date, end_date, budget, actual_cost, created_at, updated_at
+                      start_date, end_date, budget, actual_cost, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Project"))?;
@@ -324,18 +336,24 @@ impl ProjectRepository for PostgresProjectRepository {
         Ok(row.into())
     }
 
-    async fn update_actual_cost(&self, id: i64, cost: Decimal) -> Result<Project, ApiError> {
+    async fn update_actual_cost(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        cost: Decimal,
+    ) -> Result<Project, ApiError> {
         let row: ProjectRow = sqlx::query_as(
             r#"
             UPDATE projects
             SET actual_cost = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, name, description, cari_id, status,
-                      start_date, end_date, budget, actual_cost, created_at, updated_at
+                      start_date, end_date, budget, actual_cost, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(cost)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Project"))?;
@@ -343,14 +361,94 @@ impl ProjectRepository for PostgresProjectRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM projects
-            WHERE id = $1
+            UPDATE projects
+            SET deleted_at = NOW(), deleted_by = $3, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete project: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Project not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Project, ApiError> {
+        let row: ProjectRow = sqlx::query_as(
+            r#"
+            UPDATE projects
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            RETURNING id, tenant_id, name, description, cari_id, status,
+                      start_date, end_date, budget, actual_cost, created_at, updated_at, deleted_at, deleted_by
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Project"))?;
+
+        Ok(row.into())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Project>, ApiError> {
+        let rows: Vec<ProjectRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, description, cari_id, status,
+                   start_date, end_date, budget, actual_cost, created_at, updated_at, deleted_at, deleted_by
+            FROM projects
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted projects: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM projects
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy project: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Project not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM projects
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete project: {}", e)))?;

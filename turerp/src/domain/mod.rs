@@ -9,6 +9,8 @@ pub mod cari;
 pub mod chart_of_accounts;
 pub mod crm;
 pub mod custom_field;
+pub mod edefter;
+pub mod efatura;
 pub mod feature;
 pub mod hr;
 pub mod invoice;
@@ -22,6 +24,7 @@ pub mod stock;
 pub mod tax;
 pub mod tenant;
 pub mod user;
+pub mod webhook;
 
 // Re-exports with explicit naming to avoid ambiguity
 pub use auth::AuthService;
@@ -229,3 +232,32 @@ pub use tax::repository::{
     InMemoryTaxRateRepository, TaxPeriodRepository, TaxRateRepository,
 };
 pub use tax::service::TaxService;
+
+// e-Fatura module re-exports
+pub use efatura::model::{
+    AddressInfo, CreateEFatura, EFatura, EFaturaLine, EFaturaProfile, EFaturaResponse,
+    EFaturaStatus, MonetaryTotal, PartyInfo, TaxSubtotal,
+};
+pub use efatura::repository::{BoxEFaturaRepository, EFaturaRepository, InMemoryEFaturaRepository};
+pub use efatura::service::EFaturaService;
+
+// e-Defter module re-exports
+pub use edefter::gib::{generate_berat_xml, generate_buyuk_defter_xml, generate_yevmiye_xml};
+pub use edefter::model::{
+    BalanceCheckResult, BeratInfo, CreateLedgerPeriod, EDefterStatus, LedgerPeriod,
+    LedgerPeriodResponse, LedgerType, YevmiyeEntry, YevmiyeLine,
+};
+pub use edefter::repository::{BoxEDefterRepository, EDefterRepository, InMemoryEDefterRepository};
+pub use edefter::service::EDefterService;
+
+// Webhook module re-exports
+pub use webhook::model::{
+    CreateWebhook, DeliveryStatus, UpdateWebhook, Webhook, WebhookDelivery,
+    WebhookDeliveryResponse, WebhookResponse, WebhookStatus,
+};
+pub use webhook::repository::{
+    BoxWebhookDeliveryRepository, BoxWebhookRepository, InMemoryWebhookDeliveryRepository,
+    InMemoryWebhookRepository, WebhookDeliveryRepository, WebhookRepository,
+};
+pub use webhook::service::WebhookService;
+pub use webhook::subscriber::WebhookSubscriber;

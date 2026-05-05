@@ -8,9 +8,9 @@ pub mod service;
 
 // Re-exports
 pub use model::{
-    Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
-    ProductResponse, ProductVariant, ProductVariantResponse, Unit, UpdateProduct,
-    UpdateProductVariant,
+    Category, CategoryResponse, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit,
+    Product, ProductResponse, ProductVariant, ProductVariantResponse, Unit, UnitResponse,
+    UpdateProduct, UpdateProductVariant,
 };
 #[cfg(feature = "postgres")]
 pub use postgres_repository::{

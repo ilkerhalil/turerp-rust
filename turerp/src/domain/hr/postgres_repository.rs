@@ -19,8 +19,6 @@ use crate::domain::hr::repository::{
 };
 use crate::error::ApiError;
 
-/// Convert sqlx errors to ApiError with proper detection of error types
-
 // ---------------------------------------------------------------------------
 // Employee row and repository
 // ---------------------------------------------------------------------------
@@ -44,6 +42,8 @@ struct EmployeeRow {
     salary: Decimal,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -75,6 +75,8 @@ impl From<EmployeeRow> for Employee {
             salary: row.salary,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -110,7 +112,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
             RETURNING id, tenant_id, user_id, employee_number, first_name, last_name,
                       email, phone, department, position, hire_date, termination_date,
-                      status, salary, created_at, updated_at
+                      status, salary, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -119,9 +121,9 @@ impl EmployeeRepository for PostgresEmployeeRepository {
         .bind(&create.first_name)
         .bind(&create.last_name)
         .bind(&create.email)
-        .bind(&create.phone)
-        .bind(&create.department)
-        .bind(&create.position)
+        .bind(create.phone)
+        .bind(create.department)
+        .bind(create.position)
         .bind(create.hire_date)
         .bind(termination_date)
         .bind(&status)
@@ -133,17 +135,18 @@ impl EmployeeRepository for PostgresEmployeeRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Employee>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Employee>, ApiError> {
         let result: Option<EmployeeRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
                    email, phone, department, position, hire_date, termination_date,
-                   status, salary, created_at, updated_at
+                   status, salary, created_at, updated_at, deleted_at, deleted_by
             FROM employees
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find employee by id: {}", e)))?;
@@ -156,9 +159,9 @@ impl EmployeeRepository for PostgresEmployeeRepository {
             r#"
             SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
                    email, phone, department, position, hire_date, termination_date,
-                   status, salary, created_at, updated_at
+                   status, salary, created_at, updated_at, deleted_at, deleted_by
             FROM employees
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -181,9 +184,10 @@ impl EmployeeRepository for PostgresEmployeeRepository {
             r#"
             SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
                    email, phone, department, position, hire_date, termination_date,
-                   status, salary, created_at, updated_at, COUNT(*) OVER() as total_count
+                   status, salary, created_at, updated_at, deleted_at, deleted_by,
+                   COUNT(*) OVER() as total_count
             FROM employees
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -205,9 +209,9 @@ impl EmployeeRepository for PostgresEmployeeRepository {
             r#"
             SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
                    email, phone, department, position, hire_date, termination_date,
-                   status, salary, created_at, updated_at
+                   status, salary, created_at, updated_at, deleted_at, deleted_by
             FROM employees
-            WHERE user_id = $1
+            WHERE user_id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(user_id)
@@ -235,7 +239,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
             WHERE id = $3
             RETURNING id, tenant_id, user_id, employee_number, first_name, last_name,
                       email, phone, department, position, hire_date, termination_date,
-                      status, salary, created_at, updated_at
+                      status, salary, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
@@ -249,6 +253,8 @@ impl EmployeeRepository for PostgresEmployeeRepository {
     }
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
+        // Note: This is a hard delete without tenant_id check.
+        // Prefer soft_delete(id, tenant_id, deleted_by) for tenant-scoped operations.
         let result = sqlx::query(
             r#"
             DELETE FROM employees
@@ -259,6 +265,92 @@ impl EmployeeRepository for PostgresEmployeeRepository {
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete employee: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Employee not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE employees
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete employee: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Employee not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Employee, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE employees
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore employee: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Employee not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Employee not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Employee>, ApiError> {
+        let rows: Vec<EmployeeRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
+                   email, phone, department, position, hire_date, termination_date,
+                   status, salary, created_at, updated_at, deleted_at, deleted_by
+            FROM employees
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted employees: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM employees
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy employee: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Employee not found".to_string()));
@@ -283,6 +375,8 @@ struct AttendanceRow {
     hours_worked: Decimal,
     status: String,
     notes: Option<String>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<AttendanceRow> for Attendance {
@@ -305,6 +399,8 @@ impl From<AttendanceRow> for Attendance {
             hours_worked: row.hours_worked,
             status,
             notes: row.notes,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -347,7 +443,8 @@ impl AttendanceRepository for PostgresAttendanceRepository {
             r#"
             INSERT INTO attendance (employee_id, date, check_in, check_out, hours_worked, status, notes)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id, employee_id, date, check_in, check_out, hours_worked, status, notes
+            RETURNING id, employee_id, date, check_in, check_out, hours_worked, status, notes,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(create.employee_id)
@@ -367,9 +464,10 @@ impl AttendanceRepository for PostgresAttendanceRepository {
     async fn find_by_id(&self, id: i64) -> Result<Option<Attendance>, ApiError> {
         let result: Option<AttendanceRow> = sqlx::query_as(
             r#"
-            SELECT id, employee_id, date, check_in, check_out, hours_worked, status, notes
+            SELECT id, employee_id, date, check_in, check_out, hours_worked, status, notes,
+                   deleted_at, deleted_by
             FROM attendance
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -383,9 +481,10 @@ impl AttendanceRepository for PostgresAttendanceRepository {
     async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<Attendance>, ApiError> {
         let rows: Vec<AttendanceRow> = sqlx::query_as(
             r#"
-            SELECT id, employee_id, date, check_in, check_out, hours_worked, status, notes
+            SELECT id, employee_id, date, check_in, check_out, hours_worked, status, notes,
+                   deleted_at, deleted_by
             FROM attendance
-            WHERE employee_id = $1
+            WHERE employee_id = $1 AND deleted_at IS NULL
             ORDER BY date DESC
             "#,
         )
@@ -400,9 +499,10 @@ impl AttendanceRepository for PostgresAttendanceRepository {
     async fn find_by_date(&self, date: DateTime<Utc>) -> Result<Vec<Attendance>, ApiError> {
         let rows: Vec<AttendanceRow> = sqlx::query_as(
             r#"
-            SELECT id, employee_id, date, check_in, check_out, hours_worked, status, notes
+            SELECT id, employee_id, date, check_in, check_out, hours_worked, status, notes,
+                   deleted_at, deleted_by
             FROM attendance
-            WHERE date::date = $1::date
+            WHERE date::date = $1::date AND deleted_at IS NULL
             ORDER BY employee_id
             "#,
         )
@@ -432,6 +532,87 @@ impl AttendanceRepository for PostgresAttendanceRepository {
 
         Ok(())
     }
+
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE attendance
+            SET deleted_at = NOW(), deleted_by = $2
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete attendance: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Attendance not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64) -> Result<Attendance, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE attendance
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore attendance: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Attendance not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Attendance not found".to_string()))
+    }
+
+    async fn find_deleted(&self) -> Result<Vec<Attendance>, ApiError> {
+        let rows: Vec<AttendanceRow> = sqlx::query_as(
+            r#"
+            SELECT id, employee_id, date, check_in, check_out, hours_worked, status, notes,
+                   deleted_at, deleted_by
+            FROM attendance
+            WHERE deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted attendance: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM attendance
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy attendance: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Attendance not found".to_string()));
+        }
+
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -447,6 +628,8 @@ struct LeaveTypeRow {
     description: Option<String>,
     max_days_per_year: Decimal,
     requires_approval: bool,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<LeaveTypeRow> for LeaveType {
@@ -458,6 +641,8 @@ impl From<LeaveTypeRow> for LeaveType {
             description: row.description,
             max_days_per_year: row.max_days_per_year,
             requires_approval: row.requires_approval,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -486,7 +671,8 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
             r#"
             INSERT INTO leave_types (tenant_id, name, description, max_days_per_year, requires_approval)
             VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, tenant_id, name, description, max_days_per_year, requires_approval
+            RETURNING id, tenant_id, name, description, max_days_per_year, requires_approval,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(leave_type.tenant_id)
@@ -501,15 +687,17 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<LeaveType>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<LeaveType>, ApiError> {
         let result: Option<LeaveTypeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval
+            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval,
+                   deleted_at, deleted_by
             FROM leave_types
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find leave type by id: {}", e)))?;
@@ -520,9 +708,10 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<LeaveType>, ApiError> {
         let rows: Vec<LeaveTypeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval
+            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval,
+                   deleted_at, deleted_by
             FROM leave_types
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY name
             "#,
         )
@@ -552,6 +741,91 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
 
         Ok(())
     }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE leave_types
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete leave type: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Leave type not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<LeaveType, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE leave_types
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore leave type: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Leave type not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Leave type not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<LeaveType>, ApiError> {
+        let rows: Vec<LeaveTypeRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval,
+                   deleted_at, deleted_by
+            FROM leave_types
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted leave types: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM leave_types
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy leave type: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Leave type not found".to_string()));
+        }
+
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -572,6 +846,8 @@ struct LeaveRequestRow {
     approved_by: Option<i64>,
     approved_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<LeaveRequestRow> for LeaveRequest {
@@ -597,6 +873,8 @@ impl From<LeaveRequestRow> for LeaveRequest {
             approved_by: row.approved_by,
             approved_at: row.approved_at,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -634,7 +912,8 @@ impl LeaveRequestRepository for PostgresLeaveRequestRepository {
                                         total_days, reason, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
             RETURNING id, employee_id, leave_type_id, status, start_date, end_date,
-                      total_days, reason, approved_by, approved_at, created_at
+                      total_days, reason, approved_by, approved_at, created_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(create.employee_id)
@@ -655,9 +934,10 @@ impl LeaveRequestRepository for PostgresLeaveRequestRepository {
         let result: Option<LeaveRequestRow> = sqlx::query_as(
             r#"
             SELECT id, employee_id, leave_type_id, status, start_date, end_date,
-                   total_days, reason, approved_by, approved_at, created_at
+                   total_days, reason, approved_by, approved_at, created_at,
+                   deleted_at, deleted_by
             FROM leave_requests
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -672,9 +952,10 @@ impl LeaveRequestRepository for PostgresLeaveRequestRepository {
         let rows: Vec<LeaveRequestRow> = sqlx::query_as(
             r#"
             SELECT id, employee_id, leave_type_id, status, start_date, end_date,
-                   total_days, reason, approved_by, approved_at, created_at
+                   total_days, reason, approved_by, approved_at, created_at,
+                   deleted_at, deleted_by
             FROM leave_requests
-            WHERE employee_id = $1
+            WHERE employee_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -704,7 +985,8 @@ impl LeaveRequestRepository for PostgresLeaveRequestRepository {
                 approved_at = CASE WHEN $2 IS NOT NULL THEN NOW() ELSE approved_at END
             WHERE id = $3
             RETURNING id, employee_id, leave_type_id, status, start_date, end_date,
-                      total_days, reason, approved_by, approved_at, created_at
+                      total_days, reason, approved_by, approved_at, created_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
@@ -735,6 +1017,88 @@ impl LeaveRequestRepository for PostgresLeaveRequestRepository {
 
         Ok(())
     }
+
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE leave_requests
+            SET deleted_at = NOW(), deleted_by = $2
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete leave request: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Leave request not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64) -> Result<LeaveRequest, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE leave_requests
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore leave request: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Leave request not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Leave request not found".to_string()))
+    }
+
+    async fn find_deleted(&self) -> Result<Vec<LeaveRequest>, ApiError> {
+        let rows: Vec<LeaveRequestRow> = sqlx::query_as(
+            r#"
+            SELECT id, employee_id, leave_type_id, status, start_date, end_date,
+                   total_days, reason, approved_by, approved_at, created_at,
+                   deleted_at, deleted_by
+            FROM leave_requests
+            WHERE deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted leave requests: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM leave_requests
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy leave request: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Leave request not found".to_string()));
+        }
+
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -758,6 +1122,8 @@ struct PayrollRow {
     status: String,
     paid_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<PayrollRow> for Payroll {
@@ -786,6 +1152,8 @@ impl From<PayrollRow> for Payroll {
             status,
             paid_at: row.paid_at,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -820,7 +1188,8 @@ impl PayrollRepository for PostgresPayrollRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
             RETURNING id, tenant_id, employee_id, period_start, period_end,
                       basic_salary, overtime_hours, overtime_pay, bonuses,
-                      deductions, net_salary, status, paid_at, created_at
+                      deductions, net_salary, status, paid_at, created_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(payroll.tenant_id)
@@ -842,17 +1211,19 @@ impl PayrollRepository for PostgresPayrollRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Payroll>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Payroll>, ApiError> {
         let result: Option<PayrollRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, employee_id, period_start, period_end,
                    basic_salary, overtime_hours, overtime_pay, bonuses,
-                   deductions, net_salary, status, paid_at, created_at
+                   deductions, net_salary, status, paid_at, created_at,
+                   deleted_at, deleted_by
             FROM payrolls
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find payroll by id: {}", e)))?;
@@ -865,9 +1236,10 @@ impl PayrollRepository for PostgresPayrollRepository {
             r#"
             SELECT id, tenant_id, employee_id, period_start, period_end,
                    basic_salary, overtime_hours, overtime_pay, bonuses,
-                   deductions, net_salary, status, paid_at, created_at
+                   deductions, net_salary, status, paid_at, created_at,
+                   deleted_at, deleted_by
             FROM payrolls
-            WHERE employee_id = $1
+            WHERE employee_id = $1 AND deleted_at IS NULL
             ORDER BY period_start DESC
             "#,
         )
@@ -889,9 +1261,11 @@ impl PayrollRepository for PostgresPayrollRepository {
             r#"
             SELECT id, tenant_id, employee_id, period_start, period_end,
                    basic_salary, overtime_hours, overtime_pay, bonuses,
-                   deductions, net_salary, status, paid_at, created_at
+                   deductions, net_salary, status, paid_at, created_at,
+                   deleted_at, deleted_by
             FROM payrolls
             WHERE tenant_id = $1 AND period_start >= $2 AND period_end <= $3
+              AND deleted_at IS NULL
             ORDER BY period_start DESC
             "#,
         )
@@ -915,7 +1289,8 @@ impl PayrollRepository for PostgresPayrollRepository {
             WHERE id = $2
             RETURNING id, tenant_id, employee_id, period_start, period_end,
                       basic_salary, overtime_hours, overtime_pay, bonuses,
-                      deductions, net_salary, status, paid_at, created_at
+                      deductions, net_salary, status, paid_at, created_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
@@ -936,7 +1311,8 @@ impl PayrollRepository for PostgresPayrollRepository {
             WHERE id = $1
             RETURNING id, tenant_id, employee_id, period_start, period_end,
                       basic_salary, overtime_hours, overtime_pay, bonuses,
-                      deductions, net_salary, status, paid_at, created_at
+                      deductions, net_salary, status, paid_at, created_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(id)
@@ -945,5 +1321,92 @@ impl PayrollRepository for PostgresPayrollRepository {
         .map_err(|e| map_sqlx_error(e, "Payroll"))?;
 
         Ok(row.into())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE payrolls
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete payroll: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Payroll not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Payroll, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE payrolls
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore payroll: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Payroll not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Payroll not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Payroll>, ApiError> {
+        let rows: Vec<PayrollRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, employee_id, period_start, period_end,
+                   basic_salary, overtime_hours, overtime_pay, bonuses,
+                   deductions, net_salary, status, paid_at, created_at,
+                   deleted_at, deleted_by
+            FROM payrolls
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted payroll: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM payrolls
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy payroll: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Payroll not found".to_string()));
+        }
+
+        Ok(())
     }
 }

@@ -3,9 +3,10 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Account type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum AccountType {
     Asset,
     Liability,
@@ -42,7 +43,7 @@ impl std::str::FromStr for AccountType {
 }
 
 /// Account subtype
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum AccountSubType {
     // Asset
     CurrentAsset,
@@ -99,7 +100,7 @@ impl std::str::FromStr for AccountSubType {
 }
 
 /// Account entity (Chart of Accounts)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Account {
     pub id: i64,
     pub tenant_id: i64,
@@ -111,10 +112,32 @@ pub struct Account {
     pub is_active: bool,
     pub allow_transaction: bool,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Account {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Journal entry
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct JournalEntry {
     pub id: i64,
     pub tenant_id: i64,
@@ -128,10 +151,32 @@ pub struct JournalEntry {
     pub created_by: i64,
     pub created_at: DateTime<Utc>,
     pub posted_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for JournalEntry {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Journal entry status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum JournalEntryStatus {
     Draft,
     Posted,
@@ -162,7 +207,7 @@ impl std::str::FromStr for JournalEntryStatus {
 }
 
 /// Journal line item
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct JournalLine {
     pub id: i64,
     pub entry_id: i64,
@@ -174,7 +219,7 @@ pub struct JournalLine {
 }
 
 /// Account balance
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AccountBalance {
     pub account_id: i64,
     pub account_code: String,
@@ -186,7 +231,7 @@ pub struct AccountBalance {
 }
 
 /// Trial balance report
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TrialBalance {
     pub period_start: DateTime<Utc>,
     pub period_end: DateTime<Utc>,
@@ -196,7 +241,7 @@ pub struct TrialBalance {
 }
 
 /// Create account request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateAccount {
     pub tenant_id: i64,
     pub code: String,
@@ -225,7 +270,7 @@ impl CreateAccount {
 }
 
 /// Create journal entry request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateJournalEntry {
     pub tenant_id: i64,
     pub date: DateTime<Utc>,
@@ -255,7 +300,7 @@ impl CreateJournalEntry {
 }
 
 /// Create journal line
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateJournalLine {
     pub account_id: i64,
     pub debit: Decimal,
@@ -287,6 +332,7 @@ impl CreateJournalLine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::SoftDeletable;
     use rust_decimal_macros::dec;
 
     #[test]

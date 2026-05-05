@@ -116,16 +116,17 @@ impl LeadRepository for PostgresLeadRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Lead>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Lead>, ApiError> {
         let result: Option<LeadRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, name, company, email, phone, source,
                    status, assigned_to, converted_to_customer_id, notes, created_at, updated_at
             FROM leads
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find lead by id: {}", e)))?;
@@ -279,17 +280,83 @@ impl LeadRepository for PostgresLeadRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM leads
-            WHERE id = $1
+            UPDATE leads
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
         .execute(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to delete lead: {}", e)))?;
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete lead: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Lead not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Lead, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE leads
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore lead: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Lead not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Lead not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError> {
+        let rows: Vec<LeadRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, company, email, phone, source,
+                   status, assigned_to, converted_to_customer_id, notes, created_at, updated_at
+            FROM leads
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted leads: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM leads
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy lead: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Lead not found".to_string()));
@@ -397,16 +464,17 @@ impl OpportunityRepository for PostgresOpportunityRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Opportunity>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Opportunity>, ApiError> {
         let result: Option<OpportunityRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, lead_id, name, customer_id, value, probability,
                    expected_close_date, status, assigned_to, notes, created_at, updated_at
             FROM opportunities
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find opportunity by id: {}", e)))?;
@@ -565,17 +633,83 @@ impl OpportunityRepository for PostgresOpportunityRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM opportunities
-            WHERE id = $1
+            UPDATE opportunities
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
         .execute(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to delete opportunity: {}", e)))?;
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete opportunity: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Opportunity not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Opportunity, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE opportunities
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore opportunity: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Opportunity not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Opportunity not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Opportunity>, ApiError> {
+        let rows: Vec<OpportunityRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, lead_id, name, customer_id, value, probability,
+                   expected_close_date, status, assigned_to, notes, created_at, updated_at
+            FROM opportunities
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted opportunities: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM opportunities
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy opportunity: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Opportunity not found".to_string()));
@@ -680,16 +814,17 @@ impl CampaignRepository for PostgresCampaignRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Campaign>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Campaign>, ApiError> {
         let result: Option<CampaignRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, name, description, campaign_type, status,
                    budget, actual_cost, start_date, end_date, created_at, updated_at
             FROM campaigns
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find campaign by id: {}", e)))?;
@@ -824,17 +959,83 @@ impl CampaignRepository for PostgresCampaignRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM campaigns
-            WHERE id = $1
+            UPDATE campaigns
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
         .execute(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to delete campaign: {}", e)))?;
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete campaign: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Campaign not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Campaign, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE campaigns
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore campaign: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Campaign not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Campaign not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError> {
+        let rows: Vec<CampaignRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, description, campaign_type, status,
+                   budget, actual_cost, start_date, end_date, created_at, updated_at
+            FROM campaigns
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted campaigns: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM campaigns
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy campaign: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Campaign not found".to_string()));
@@ -954,17 +1155,18 @@ impl TicketRepository for PostgresTicketRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Ticket>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Ticket>, ApiError> {
         let result: Option<TicketRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, ticket_number, subject, description,
                    customer_id, assigned_to, status, priority, category,
                    resolved_at, created_at, updated_at
             FROM tickets
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find ticket by id: {}", e)))?;
@@ -1163,17 +1365,84 @@ impl TicketRepository for PostgresTicketRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM tickets
-            WHERE id = $1
+            UPDATE tickets
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
         .execute(&*self.pool)
         .await
-        .map_err(|e| ApiError::Database(format!("Failed to delete ticket: {}", e)))?;
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete ticket: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Ticket not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE tickets
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore ticket: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Ticket not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Ticket not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError> {
+        let rows: Vec<TicketRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, ticket_number, subject, description,
+                   customer_id, assigned_to, status, priority, category,
+                   resolved_at, created_at, updated_at
+            FROM tickets
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted tickets: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM tickets
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy ticket: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Ticket not found".to_string()));

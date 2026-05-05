@@ -37,6 +37,8 @@ struct AccountRow {
     is_active: bool,
     allow_transaction: bool,
     created_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -71,6 +73,8 @@ impl From<AccountRow> for Account {
             is_active: row.is_active,
             allow_transaction: row.allow_transaction,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -94,6 +98,8 @@ struct JournalEntryRow {
     created_by: i64,
     created_at: DateTime<Utc>,
     posted_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -121,6 +127,8 @@ impl From<JournalEntryRow> for JournalEntry {
             created_by: row.created_by,
             created_at: row.created_at,
             posted_at: row.posted_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -186,7 +194,7 @@ impl AccountRepository for PostgresAccountRepository {
             r#"
             INSERT INTO accounts (tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-            RETURNING id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at
+            RETURNING id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -204,15 +212,16 @@ impl AccountRepository for PostgresAccountRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Account>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Account>, ApiError> {
         let result: Option<AccountRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at
+            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at, deleted_at, deleted_by
             FROM accounts
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find account by id: {}", e)))?;
@@ -223,9 +232,9 @@ impl AccountRepository for PostgresAccountRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Account>, ApiError> {
         let rows: Vec<AccountRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at
+            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at, deleted_at, deleted_by
             FROM accounts
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY code ASC
             "#,
         )
@@ -246,10 +255,10 @@ impl AccountRepository for PostgresAccountRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<AccountRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at,
+            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at, deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM accounts
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -269,9 +278,9 @@ impl AccountRepository for PostgresAccountRepository {
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Account>, ApiError> {
         let result: Option<AccountRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at
+            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at, deleted_at, deleted_by
             FROM accounts
-            WHERE tenant_id = $1 AND code = $2
+            WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(tenant_id)
@@ -292,9 +301,9 @@ impl AccountRepository for PostgresAccountRepository {
 
         let rows: Vec<AccountRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at
+            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at, deleted_at, deleted_by
             FROM accounts
-            WHERE tenant_id = $1 AND account_type = $2
+            WHERE tenant_id = $1 AND account_type = $2 AND deleted_at IS NULL
             ORDER BY code ASC
             "#,
         )
@@ -310,6 +319,7 @@ impl AccountRepository for PostgresAccountRepository {
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         name: Option<String>,
         is_active: Option<bool>,
     ) -> Result<Account, ApiError> {
@@ -319,13 +329,14 @@ impl AccountRepository for PostgresAccountRepository {
             SET
                 name = COALESCE($1, name),
                 is_active = COALESCE($2, is_active)
-            WHERE id = $3
-            RETURNING id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at
+            WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL
+            RETURNING id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(&name)
         .bind(is_active)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Account"))?;
@@ -333,17 +344,102 @@ impl AccountRepository for PostgresAccountRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM accounts
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete account: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Account not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE accounts
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete account: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Account not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Account, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE accounts
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore account: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Account not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Account not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Account>, ApiError> {
+        let rows: Vec<AccountRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, code, name, account_type, sub_type, parent_id, is_active, allow_transaction, created_at, deleted_at, deleted_by
+            FROM accounts
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted accounts: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM accounts
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy account: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Account not found".to_string()));
@@ -397,7 +493,7 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
             r#"
             INSERT INTO journal_entries (tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at)
             VALUES ($1, $2, $3, $4, $5, 'Draft', $6, $7, $8, NOW())
-            RETURNING id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at
+            RETURNING id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -415,15 +511,16 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<JournalEntry>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<JournalEntry>, ApiError> {
         let result: Option<JournalEntryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at
+            SELECT id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at, deleted_at, deleted_by
             FROM journal_entries
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find journal entry by id: {}", e)))?;
@@ -434,9 +531,9 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<JournalEntry>, ApiError> {
         let rows: Vec<JournalEntryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at
+            SELECT id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at, deleted_at, deleted_by
             FROM journal_entries
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -457,10 +554,10 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<JournalEntryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at,
+            SELECT id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at, deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM journal_entries
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -485,9 +582,9 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
     ) -> Result<Vec<JournalEntry>, ApiError> {
         let rows: Vec<JournalEntryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at
+            SELECT id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at, deleted_at, deleted_by
             FROM journal_entries
-            WHERE tenant_id = $1 AND date >= $2 AND date <= $3
+            WHERE tenant_id = $1 AND date >= $2 AND date <= $3 AND deleted_at IS NULL
             ORDER BY date ASC
             "#,
         )
@@ -501,16 +598,17 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn post(&self, id: i64) -> Result<JournalEntry, ApiError> {
+    async fn post(&self, id: i64, tenant_id: i64) -> Result<JournalEntry, ApiError> {
         let row: JournalEntryRow = sqlx::query_as(
             r#"
             UPDATE journal_entries
             SET status = 'Posted', posted_at = NOW()
-            WHERE id = $1
-            RETURNING id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at
+            WHERE id = $1 AND tenant_id = $2
+            RETURNING id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at, deleted_at, deleted_by
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "JournalEntry"))?;
@@ -518,16 +616,17 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
         Ok(row.into())
     }
 
-    async fn void(&self, id: i64) -> Result<JournalEntry, ApiError> {
+    async fn void(&self, id: i64, tenant_id: i64) -> Result<JournalEntry, ApiError> {
         let row: JournalEntryRow = sqlx::query_as(
             r#"
             UPDATE journal_entries
             SET status = 'Voided'
-            WHERE id = $1
-            RETURNING id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at
+            WHERE id = $1 AND tenant_id = $2
+            RETURNING id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at, deleted_at, deleted_by
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "JournalEntry"))?;
@@ -535,17 +634,102 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM journal_entries
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete journal entry: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Journal entry not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE journal_entries
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete journal entry: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Journal entry not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<JournalEntry, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE journal_entries
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore journal entry: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Journal entry not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Journal entry not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<JournalEntry>, ApiError> {
+        let rows: Vec<JournalEntryRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at, deleted_at, deleted_by
+            FROM journal_entries
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted journal entries: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM journal_entries
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy journal entry: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Journal entry not found".to_string()));

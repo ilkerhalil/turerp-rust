@@ -7,6 +7,7 @@ use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::manufacturing::model::{
     BillOfMaterials, BillOfMaterialsLine, CreateBillOfMaterials, CreateBillOfMaterialsLine,
     CreateInspection, CreateNonConformanceReport, CreateRouting, CreateRoutingOperation,
@@ -19,7 +20,7 @@ use crate::error::ApiError;
 #[async_trait]
 pub trait WorkOrderRepository: Send + Sync {
     async fn create(&self, work_order: CreateWorkOrder) -> Result<WorkOrder, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<WorkOrder>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<WorkOrder>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<WorkOrder>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -45,13 +46,20 @@ pub trait WorkOrderRepository: Send + Sync {
         mat: CreateWorkOrderMaterial,
     ) -> Result<WorkOrderMaterial, ApiError>;
     async fn get_materials(&self, work_order_id: i64) -> Result<Vec<WorkOrderMaterial>, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<WorkOrder, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<WorkOrder>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 #[async_trait]
 pub trait BillOfMaterialsRepository: Send + Sync {
     async fn create(&self, bom: CreateBillOfMaterials) -> Result<BillOfMaterials, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<BillOfMaterials>, ApiError>;
+    async fn find_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<BillOfMaterials>, ApiError>;
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<BillOfMaterials>, ApiError>;
     async fn find_primary_by_product(
         &self,
@@ -62,13 +70,16 @@ pub trait BillOfMaterialsRepository: Send + Sync {
         line: CreateBillOfMaterialsLine,
     ) -> Result<BillOfMaterialsLine, ApiError>;
     async fn get_lines(&self, bom_id: i64) -> Result<Vec<BillOfMaterialsLine>, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<BillOfMaterials, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<BillOfMaterials>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 #[async_trait]
 pub trait RoutingRepository: Send + Sync {
     async fn create(&self, routing: CreateRouting) -> Result<Routing, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Routing>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Routing>, ApiError>;
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<Routing>, ApiError>;
     async fn find_primary_by_product(&self, product_id: i64) -> Result<Option<Routing>, ApiError>;
     async fn add_operation(
@@ -76,7 +87,10 @@ pub trait RoutingRepository: Send + Sync {
         create: CreateRoutingOperation,
     ) -> Result<RoutingOperation, ApiError>;
     async fn get_operations(&self, routing_id: i64) -> Result<Vec<RoutingOperation>, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Routing, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Routing>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 pub type BoxWorkOrderRepository = Arc<dyn WorkOrderRepository>;
@@ -88,11 +102,14 @@ pub type BoxRoutingRepository = Arc<dyn RoutingRepository>;
 #[async_trait]
 pub trait InspectionRepository: Send + Sync {
     async fn create(&self, inspection: CreateInspection) -> Result<Inspection, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Inspection>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Inspection>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Inspection>, ApiError>;
     async fn find_by_work_order(&self, work_order_id: i64) -> Result<Vec<Inspection>, ApiError>;
     async fn update(&self, id: i64, update: UpdateInspection) -> Result<Inspection, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Inspection, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Inspection>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 #[async_trait]
@@ -101,7 +118,11 @@ pub trait NcrRepository: Send + Sync {
         &self,
         ncr: CreateNonConformanceReport,
     ) -> Result<NonConformanceReport, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<NonConformanceReport>, ApiError>;
+    async fn find_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<NonConformanceReport>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<NonConformanceReport>, ApiError>;
     async fn find_by_inspection(
         &self,
@@ -112,7 +133,10 @@ pub trait NcrRepository: Send + Sync {
         id: i64,
         update: UpdateNonConformanceReport,
     ) -> Result<NonConformanceReport, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<NonConformanceReport, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<NonConformanceReport>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 pub type BoxInspectionRepository = Arc<dyn InspectionRepository>;
@@ -180,14 +204,20 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
             actual_end: None,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.work_orders.insert(id, work_order.clone());
         Ok(work_order)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<WorkOrder>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<WorkOrder>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.work_orders.get(&id).cloned())
+        Ok(inner
+            .work_orders
+            .get(&id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<WorkOrder>, ApiError> {
@@ -195,7 +225,7 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
         Ok(inner
             .work_orders
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -210,13 +240,13 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
         let total = inner
             .work_orders
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .count() as u64;
 
         let items: Vec<WorkOrder> = inner
             .work_orders
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .skip(((page.saturating_sub(1)) * per_page) as usize)
             .take(per_page as usize)
             .cloned()
@@ -230,7 +260,7 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
         Ok(inner
             .work_orders
             .values()
-            .filter(|x| x.product_id == product_id)
+            .filter(|x| x.product_id == product_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -244,7 +274,7 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
         Ok(inner
             .work_orders
             .values()
-            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .filter(|x| x.tenant_id == tenant_id && x.status == status && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -335,8 +365,51 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
             .unwrap_or_default())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let order = inner
+            .work_orders
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))?;
+        if order.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Work order not found".to_string()));
+        }
+        order.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<WorkOrder, ApiError> {
+        let mut inner = self.inner.lock();
+        let order = inner
+            .work_orders
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))?;
+        if order.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Work order not found".to_string()));
+        }
+        order.restore();
+        Ok(order.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<WorkOrder>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .work_orders
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let order = inner
+            .work_orders
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))?;
+        if order.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Work order not found".to_string()));
+        }
         inner.work_orders.remove(&id);
         Ok(())
     }
@@ -393,14 +466,24 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
             valid_to: create.valid_to,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.boms.insert(id, bom.clone());
         Ok(bom)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<BillOfMaterials>, ApiError> {
+    async fn find_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<BillOfMaterials>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.boms.get(&id).cloned())
+        Ok(inner
+            .boms
+            .get(&id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
+            .cloned())
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<BillOfMaterials>, ApiError> {
@@ -408,7 +491,7 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
         Ok(inner
             .boms
             .values()
-            .filter(|x| x.product_id == product_id)
+            .filter(|x| x.product_id == product_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -421,7 +504,9 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
         Ok(inner
             .boms
             .values()
-            .filter(|x| x.product_id == product_id && x.is_primary && x.is_active)
+            .filter(|x| {
+                x.product_id == product_id && x.is_primary && x.is_active && !x.is_deleted()
+            })
             .cloned()
             .collect::<Vec<_>>()
             .pop())
@@ -459,8 +544,51 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
         Ok(inner.lines.get(&bom_id).cloned().unwrap_or_default())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let bom = inner
+            .boms
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("BOM not found".to_string()))?;
+        if bom.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("BOM not found".to_string()));
+        }
+        bom.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<BillOfMaterials, ApiError> {
+        let mut inner = self.inner.lock();
+        let bom = inner
+            .boms
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("BOM not found".to_string()))?;
+        if bom.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("BOM not found".to_string()));
+        }
+        bom.restore();
+        Ok(bom.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<BillOfMaterials>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .boms
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let bom = inner
+            .boms
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("BOM not found".to_string()))?;
+        if bom.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("BOM not found".to_string()));
+        }
         inner.boms.remove(&id);
         Ok(())
     }
@@ -515,14 +643,20 @@ impl RoutingRepository for InMemoryRoutingRepository {
             is_primary: create.is_primary,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.routings.insert(id, routing.clone());
         Ok(routing)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Routing>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Routing>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.routings.get(&id).cloned())
+        Ok(inner
+            .routings
+            .get(&id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
+            .cloned())
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<Routing>, ApiError> {
@@ -530,7 +664,7 @@ impl RoutingRepository for InMemoryRoutingRepository {
         Ok(inner
             .routings
             .values()
-            .filter(|x| x.product_id == product_id)
+            .filter(|x| x.product_id == product_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -540,7 +674,9 @@ impl RoutingRepository for InMemoryRoutingRepository {
         Ok(inner
             .routings
             .values()
-            .filter(|x| x.product_id == product_id && x.is_primary && x.is_active)
+            .filter(|x| {
+                x.product_id == product_id && x.is_primary && x.is_active && !x.is_deleted()
+            })
             .cloned()
             .collect::<Vec<_>>()
             .pop())
@@ -583,8 +719,51 @@ impl RoutingRepository for InMemoryRoutingRepository {
             .unwrap_or_default())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let routing = inner
+            .routings
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Routing not found".to_string()))?;
+        if routing.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Routing not found".to_string()));
+        }
+        routing.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Routing, ApiError> {
+        let mut inner = self.inner.lock();
+        let routing = inner
+            .routings
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Routing not found".to_string()))?;
+        if routing.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Routing not found".to_string()));
+        }
+        routing.restore();
+        Ok(routing.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Routing>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .routings
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let routing = inner
+            .routings
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("Routing not found".to_string()))?;
+        if routing.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Routing not found".to_string()));
+        }
         inner.routings.remove(&id);
         Ok(())
     }
@@ -649,14 +828,20 @@ impl InspectionRepository for InMemoryInspectionRepository {
             },
             notes: create.notes,
             created_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.inspections.insert(id, inspection.clone());
         Ok(inspection)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Inspection>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Inspection>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.inspections.get(&id).cloned())
+        Ok(inner
+            .inspections
+            .get(&id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Inspection>, ApiError> {
@@ -664,7 +849,7 @@ impl InspectionRepository for InMemoryInspectionRepository {
         Ok(inner
             .inspections
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -674,7 +859,7 @@ impl InspectionRepository for InMemoryInspectionRepository {
         Ok(inner
             .inspections
             .values()
-            .filter(|x| x.work_order_id == Some(work_order_id))
+            .filter(|x| x.work_order_id == Some(work_order_id) && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -708,8 +893,51 @@ impl InspectionRepository for InMemoryInspectionRepository {
         Ok(inspection.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let inspection = inner
+            .inspections
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Inspection not found".to_string()))?;
+        if inspection.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Inspection not found".to_string()));
+        }
+        inspection.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Inspection, ApiError> {
+        let mut inner = self.inner.lock();
+        let inspection = inner
+            .inspections
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Inspection not found".to_string()))?;
+        if inspection.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Inspection not found".to_string()));
+        }
+        inspection.restore();
+        Ok(inspection.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Inspection>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .inspections
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let inspection = inner
+            .inspections
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("Inspection not found".to_string()))?;
+        if inspection.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Inspection not found".to_string()));
+        }
         inner.inspections.remove(&id);
         Ok(())
     }
@@ -769,14 +997,24 @@ impl NcrRepository for InMemoryNcrRepository {
             raised_by: create.raised_by,
             raised_at: now,
             closed_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.ncrs.insert(id, ncr.clone());
         Ok(ncr)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<NonConformanceReport>, ApiError> {
+    async fn find_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<NonConformanceReport>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.ncrs.get(&id).cloned())
+        Ok(inner
+            .ncrs
+            .get(&id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<NonConformanceReport>, ApiError> {
@@ -784,7 +1022,7 @@ impl NcrRepository for InMemoryNcrRepository {
         Ok(inner
             .ncrs
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -797,7 +1035,7 @@ impl NcrRepository for InMemoryNcrRepository {
         Ok(inner
             .ncrs
             .values()
-            .filter(|x| x.inspection_id == Some(inspection_id))
+            .filter(|x| x.inspection_id == Some(inspection_id) && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -833,8 +1071,51 @@ impl NcrRepository for InMemoryNcrRepository {
         Ok(ncr.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let ncr = inner
+            .ncrs
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("NCR not found".to_string()))?;
+        if ncr.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("NCR not found".to_string()));
+        }
+        ncr.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<NonConformanceReport, ApiError> {
+        let mut inner = self.inner.lock();
+        let ncr = inner
+            .ncrs
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("NCR not found".to_string()))?;
+        if ncr.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("NCR not found".to_string()));
+        }
+        ncr.restore();
+        Ok(ncr.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<NonConformanceReport>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .ncrs
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let ncr = inner
+            .ncrs
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("NCR not found".to_string()))?;
+        if ncr.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("NCR not found".to_string()));
+        }
         inner.ncrs.remove(&id);
         Ok(())
     }

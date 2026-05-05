@@ -3,8 +3,8 @@ use rust_decimal::Decimal;
 
 use crate::common::pagination::PaginatedResult;
 use crate::domain::stock::model::{
-    CreateStockMovement, CreateWarehouse, MovementType, StockLevel, StockMovement, StockSummary,
-    Warehouse, WarehouseStock,
+    CreateStockMovement, CreateWarehouse, MovementType, StockLevel, StockLevelResponse,
+    StockMovement, StockMovementResponse, StockSummary, Warehouse, WarehouseResponse,
 };
 use crate::domain::stock::repository::{
     BoxStockLevelRepository, BoxStockMovementRepository, BoxWarehouseRepository,
@@ -33,25 +33,36 @@ impl StockService {
     }
 
     // Warehouse operations
-    pub async fn create_warehouse(&self, create: CreateWarehouse) -> Result<Warehouse, ApiError> {
+    pub async fn create_warehouse(
+        &self,
+        create: CreateWarehouse,
+    ) -> Result<WarehouseResponse, ApiError> {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        self.warehouse_repo.create(create).await
+        let warehouse = self.warehouse_repo.create(create).await?;
+        Ok(warehouse.into())
     }
 
-    pub async fn get_warehouse(&self, id: i64) -> Result<Warehouse, ApiError> {
-        self.warehouse_repo
-            .find_by_id(id)
+    pub async fn get_warehouse(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<WarehouseResponse, ApiError> {
+        let warehouse = self
+            .warehouse_repo
+            .find_by_id(id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Warehouse {} not found", id)))
+            .ok_or_else(|| ApiError::NotFound(format!("Warehouse {} not found", id)))?;
+        Ok(warehouse.into())
     }
 
     pub async fn get_warehouses_by_tenant(
         &self,
         tenant_id: i64,
-    ) -> Result<Vec<Warehouse>, ApiError> {
-        self.warehouse_repo.find_by_tenant(tenant_id).await
+    ) -> Result<Vec<WarehouseResponse>, ApiError> {
+        let warehouses = self.warehouse_repo.find_by_tenant(tenant_id).await?;
+        Ok(warehouses.into_iter().map(|w| w.into()).collect())
     }
 
     pub async fn get_warehouses_paginated(
@@ -59,29 +70,64 @@ impl StockService {
         tenant_id: i64,
         page: u32,
         per_page: u32,
-    ) -> Result<PaginatedResult<Warehouse>, ApiError> {
+    ) -> Result<PaginatedResult<WarehouseResponse>, ApiError> {
         let params = crate::common::pagination::PaginationParams { page, per_page };
         params.validate().map_err(ApiError::Validation)?;
-        self.warehouse_repo
+        let result = self
+            .warehouse_repo
             .find_by_tenant_paginated(tenant_id, page, per_page)
-            .await
+            .await?;
+        Ok(PaginatedResult::new(
+            result.items.into_iter().map(|w| w.into()).collect(),
+            result.page,
+            result.per_page,
+            result.total,
+        ))
     }
 
     pub async fn update_warehouse(
         &self,
         id: i64,
+        tenant_id: i64,
         code: Option<String>,
         name: Option<String>,
         address: Option<String>,
         is_active: Option<bool>,
-    ) -> Result<Warehouse, ApiError> {
+    ) -> Result<WarehouseResponse, ApiError> {
+        let warehouse = self
+            .warehouse_repo
+            .update(id, tenant_id, code, name, address, is_active)
+            .await?;
+        Ok(warehouse.into())
+    }
+
+    pub async fn delete_warehouse(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
         self.warehouse_repo
-            .update(id, code, name, address, is_active)
+            .soft_delete(id, tenant_id, deleted_by)
             .await
     }
 
-    pub async fn delete_warehouse(&self, id: i64) -> Result<(), ApiError> {
-        self.warehouse_repo.delete(id).await
+    /// Restore a soft-deleted warehouse (admin only)
+    pub async fn restore_warehouse(&self, id: i64, tenant_id: i64) -> Result<Warehouse, ApiError> {
+        self.warehouse_repo.restore(id, tenant_id).await
+    }
+
+    /// List soft-deleted warehouses (admin only)
+    pub async fn list_deleted_warehouses(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Warehouse>, ApiError> {
+        self.warehouse_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete a warehouse (admin only, after soft delete)
+    pub async fn destroy_warehouse(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.warehouse_repo.destroy(id, tenant_id).await
     }
 
     // Stock level operations
@@ -89,25 +135,39 @@ impl StockService {
         &self,
         warehouse_id: i64,
         product_id: i64,
-    ) -> Result<StockLevel, ApiError> {
-        self.stock_level_repo
+    ) -> Result<StockLevelResponse, ApiError> {
+        let level = self
+            .stock_level_repo
             .find_by_warehouse_product(warehouse_id, product_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))
+            .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))?;
+        Ok(level.into())
     }
 
-    pub async fn get_stock_by_product(&self, product_id: i64) -> Result<Vec<StockLevel>, ApiError> {
-        self.stock_level_repo.find_by_product(product_id).await
+    pub async fn get_stock_by_product(
+        &self,
+        product_id: i64,
+    ) -> Result<Vec<StockLevelResponse>, ApiError> {
+        let levels = self.stock_level_repo.find_by_product(product_id).await?;
+        Ok(levels.into_iter().map(|l| l.into()).collect())
     }
 
     pub async fn get_stock_by_warehouse(
         &self,
         warehouse_id: i64,
-    ) -> Result<Vec<StockLevel>, ApiError> {
-        self.stock_level_repo.find_by_warehouse(warehouse_id).await
+    ) -> Result<Vec<StockLevelResponse>, ApiError> {
+        let levels = self
+            .stock_level_repo
+            .find_by_warehouse(warehouse_id)
+            .await?;
+        Ok(levels.into_iter().map(|l| l.into()).collect())
     }
 
-    pub async fn get_stock_summary(&self, product_id: i64) -> Result<StockSummary, ApiError> {
+    pub async fn get_stock_summary(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<StockSummary, ApiError> {
         let levels = self.stock_level_repo.find_by_product(product_id).await?;
 
         let total_quantity: Decimal = levels.iter().map(|l| l.quantity).sum();
@@ -115,8 +175,12 @@ impl StockService {
 
         let mut warehouses = Vec::new();
         for level in &levels {
-            if let Ok(Some(warehouse)) = self.warehouse_repo.find_by_id(level.warehouse_id).await {
-                warehouses.push(WarehouseStock {
+            if let Ok(Some(warehouse)) = self
+                .warehouse_repo
+                .find_by_id(level.warehouse_id, tenant_id)
+                .await
+            {
+                warehouses.push(crate::domain::stock::model::WarehouseStock {
                     warehouse_id: level.warehouse_id,
                     warehouse_name: warehouse.name,
                     quantity: level.quantity,
@@ -134,19 +198,62 @@ impl StockService {
         })
     }
 
+    /// Soft delete a stock level
+    pub async fn delete_stock_level(
+        &self,
+        warehouse_id: i64,
+        product_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.stock_level_repo
+            .soft_delete(warehouse_id, product_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted stock level
+    pub async fn restore_stock_level(
+        &self,
+        warehouse_id: i64,
+        product_id: i64,
+    ) -> Result<StockLevel, ApiError> {
+        self.stock_level_repo
+            .restore(warehouse_id, product_id)
+            .await
+    }
+
+    /// List soft-deleted stock levels for a warehouse
+    pub async fn list_deleted_stock_levels(
+        &self,
+        warehouse_id: i64,
+    ) -> Result<Vec<StockLevel>, ApiError> {
+        self.stock_level_repo.find_deleted(warehouse_id).await
+    }
+
+    /// Permanently delete a stock level
+    pub async fn destroy_stock_level(
+        &self,
+        warehouse_id: i64,
+        product_id: i64,
+    ) -> Result<(), ApiError> {
+        self.stock_level_repo
+            .destroy(warehouse_id, product_id)
+            .await
+    }
+
     // Stock movement operations
     pub async fn create_stock_movement(
         &self,
         create: CreateStockMovement,
-    ) -> Result<StockMovement, ApiError> {
+        tenant_id: i64,
+    ) -> Result<StockMovementResponse, ApiError> {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        // Verify warehouse exists
+        // Verify warehouse exists (with tenant isolation)
         let _ = self
             .warehouse_repo
-            .find_by_id(create.warehouse_id)
+            .find_by_id(create.warehouse_id, tenant_id)
             .await?
             .ok_or_else(|| {
                 ApiError::NotFound(format!("Warehouse {} not found", create.warehouse_id))
@@ -188,23 +295,69 @@ impl StockService {
             .await?;
 
         // Create movement record
-        self.stock_movement_repo.create(create).await
+        let movement = self.stock_movement_repo.create(create).await?;
+        Ok(movement.into())
     }
 
     pub async fn get_stock_movements_by_product(
         &self,
         product_id: i64,
-    ) -> Result<Vec<StockMovement>, ApiError> {
-        self.stock_movement_repo.find_by_product(product_id).await
+    ) -> Result<Vec<StockMovementResponse>, ApiError> {
+        let movements = self.stock_movement_repo.find_by_product(product_id).await?;
+        Ok(movements.into_iter().map(|m| m.into()).collect())
     }
 
     pub async fn get_stock_movements_by_warehouse(
         &self,
         warehouse_id: i64,
-    ) -> Result<Vec<StockMovement>, ApiError> {
-        self.stock_movement_repo
+    ) -> Result<Vec<StockMovementResponse>, ApiError> {
+        let movements = self
+            .stock_movement_repo
             .find_by_warehouse(warehouse_id)
+            .await?;
+        Ok(movements.into_iter().map(|m| m.into()).collect())
+    }
+
+    pub async fn get_stock_movements_by_tenant(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<StockMovementResponse>, ApiError> {
+        let movements = self.stock_movement_repo.find_by_tenant(tenant_id).await?;
+        Ok(movements.into_iter().map(|m| m.into()).collect())
+    }
+
+    /// Soft delete a stock movement with tenant isolation
+    pub async fn delete_stock_movement(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.stock_movement_repo
+            .soft_delete(id, tenant_id, deleted_by)
             .await
+    }
+
+    /// Restore a soft-deleted stock movement with tenant isolation
+    pub async fn restore_stock_movement(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<StockMovement, ApiError> {
+        self.stock_movement_repo.restore(id, tenant_id).await
+    }
+
+    /// List soft-deleted stock movements for a warehouse
+    pub async fn list_deleted_stock_movements(
+        &self,
+        warehouse_id: i64,
+    ) -> Result<Vec<StockMovement>, ApiError> {
+        self.stock_movement_repo.find_deleted(warehouse_id).await
+    }
+
+    /// Permanently delete a stock movement with tenant isolation
+    pub async fn destroy_stock_movement(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.stock_movement_repo.destroy(id, tenant_id).await
     }
 
     // Reservation operations
@@ -213,10 +366,12 @@ impl StockService {
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
-    ) -> Result<StockLevel, ApiError> {
-        self.stock_level_repo
+    ) -> Result<StockLevelResponse, ApiError> {
+        let level = self
+            .stock_level_repo
             .reserve_quantity(warehouse_id, product_id, quantity)
-            .await
+            .await?;
+        Ok(level.into())
     }
 
     pub async fn release_stock(
@@ -224,10 +379,12 @@ impl StockService {
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
-    ) -> Result<StockLevel, ApiError> {
-        self.stock_level_repo
+    ) -> Result<StockLevelResponse, ApiError> {
+        let level = self
+            .stock_level_repo
             .release_quantity(warehouse_id, product_id, quantity)
-            .await
+            .await?;
+        Ok(level.into())
     }
 }
 
@@ -283,16 +440,19 @@ mod tests {
 
         // Stock in
         let movement = service
-            .create_stock_movement(CreateStockMovement {
-                warehouse_id: warehouse.id,
-                product_id: 1,
-                movement_type: MovementType::Purchase,
-                quantity: dec!(100),
-                reference_type: Some("PO".to_string()),
-                reference_id: Some(1),
-                notes: None,
-                created_by: 1,
-            })
+            .create_stock_movement(
+                CreateStockMovement {
+                    warehouse_id: warehouse.id,
+                    product_id: 1,
+                    movement_type: MovementType::Purchase,
+                    quantity: dec!(100),
+                    reference_type: Some("PO".to_string()),
+                    reference_id: Some(1),
+                    notes: None,
+                    created_by: 1,
+                },
+                1,
+            )
             .await
             .unwrap();
 
@@ -319,31 +479,37 @@ mod tests {
 
         // Stock in first
         service
-            .create_stock_movement(CreateStockMovement {
-                warehouse_id: warehouse.id,
-                product_id: 1,
-                movement_type: MovementType::Purchase,
-                quantity: dec!(100),
-                reference_type: None,
-                reference_id: None,
-                notes: None,
-                created_by: 1,
-            })
+            .create_stock_movement(
+                CreateStockMovement {
+                    warehouse_id: warehouse.id,
+                    product_id: 1,
+                    movement_type: MovementType::Purchase,
+                    quantity: dec!(100),
+                    reference_type: None,
+                    reference_id: None,
+                    notes: None,
+                    created_by: 1,
+                },
+                1,
+            )
             .await
             .unwrap();
 
         // Stock out
         let result = service
-            .create_stock_movement(CreateStockMovement {
-                warehouse_id: warehouse.id,
-                product_id: 1,
-                movement_type: MovementType::Sale,
-                quantity: dec!(30),
-                reference_type: Some("SO".to_string()),
-                reference_id: Some(1),
-                notes: None,
-                created_by: 1,
-            })
+            .create_stock_movement(
+                CreateStockMovement {
+                    warehouse_id: warehouse.id,
+                    product_id: 1,
+                    movement_type: MovementType::Sale,
+                    quantity: dec!(30),
+                    reference_type: Some("SO".to_string()),
+                    reference_id: Some(1),
+                    notes: None,
+                    created_by: 1,
+                },
+                1,
+            )
             .await;
 
         assert!(result.is_ok());
@@ -367,16 +533,19 @@ mod tests {
 
         // Try to stock out more than available
         let result = service
-            .create_stock_movement(CreateStockMovement {
-                warehouse_id: warehouse.id,
-                product_id: 1,
-                movement_type: MovementType::Sale,
-                quantity: dec!(100),
-                reference_type: None,
-                reference_id: None,
-                notes: None,
-                created_by: 1,
-            })
+            .create_stock_movement(
+                CreateStockMovement {
+                    warehouse_id: warehouse.id,
+                    product_id: 1,
+                    movement_type: MovementType::Sale,
+                    quantity: dec!(100),
+                    reference_type: None,
+                    reference_id: None,
+                    notes: None,
+                    created_by: 1,
+                },
+                1,
+            )
             .await;
 
         assert!(result.is_err());

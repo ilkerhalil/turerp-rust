@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::product::model::{
     Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
     ProductVariant, Unit, UpdateProduct, UpdateProductVariant,
@@ -15,7 +16,7 @@ use crate::error::ApiError;
 #[async_trait]
 pub trait ProductRepository: Send + Sync {
     async fn create(&self, product: CreateProduct) -> Result<Product, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Product>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Product>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -25,15 +26,28 @@ pub trait ProductRepository: Send + Sync {
     ) -> Result<PaginatedResult<Product>, ApiError>;
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Product>, ApiError>;
     async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Product>, ApiError>;
-    async fn update(&self, id: i64, product: UpdateProduct) -> Result<Product, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        product: UpdateProduct,
+    ) -> Result<Product, ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+    /// Soft delete a product
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted product
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Product, ApiError>;
+    /// Find soft-deleted products
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError>;
+    /// Hard delete a product (permanent destruction)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for Category operations
 #[async_trait]
 pub trait CategoryRepository: Send + Sync {
     async fn create(&self, category: CreateCategory) -> Result<Category, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Category>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Category>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -41,19 +55,37 @@ pub trait CategoryRepository: Send + Sync {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<Category>, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+    /// Soft delete a category
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted category
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Category, ApiError>;
+    /// Find soft-deleted categories
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError>;
+    /// Hard delete a category (permanent destruction)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for Unit operations
 #[async_trait]
 pub trait UnitRepository: Send + Sync {
     async fn create(&self, unit: CreateUnit) -> Result<Unit, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Unit>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Unit>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+    /// Soft delete a unit
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted unit
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Unit, ApiError>;
+    /// Find soft-deleted units
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError>;
+    /// Hard delete a unit (permanent destruction)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
-/// Repository trait for ProductVariant operations
+/// Repository trait for ProductVariant operations.
+/// Note: ProductVariant does not have a tenant_id field; it is a child entity of Product.
+/// Tenant isolation should be enforced by looking up the parent Product first.
 #[async_trait]
 pub trait ProductVariantRepository: Send + Sync {
     async fn create(&self, variant: CreateProductVariant) -> Result<ProductVariant, ApiError>;
@@ -65,6 +97,14 @@ pub trait ProductVariantRepository: Send + Sync {
         variant: UpdateProductVariant,
     ) -> Result<ProductVariant, ApiError>;
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    /// Soft delete a product variant
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted product variant
+    async fn restore(&self, id: i64) -> Result<ProductVariant, ApiError>;
+    /// Find soft-deleted product variants
+    async fn find_deleted(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError>;
+    /// Hard delete a product variant (permanent destruction)
+    async fn destroy(&self, id: i64) -> Result<(), ApiError>;
 }
 
 /// Type aliases
@@ -126,6 +166,8 @@ impl ProductRepository for InMemoryProductRepository {
             is_active: true,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.products.insert(id, product.clone());
@@ -138,9 +180,13 @@ impl ProductRepository for InMemoryProductRepository {
         Ok(product)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Product>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Product>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.products.get(&id).cloned())
+        Ok(inner
+            .products
+            .get(&id)
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
@@ -153,6 +199,7 @@ impl ProductRepository for InMemoryProductRepository {
         Ok(ids
             .iter()
             .filter_map(|id| inner.products.get(id).cloned())
+            .filter(|p| !p.is_deleted())
             .collect())
     }
 
@@ -166,7 +213,7 @@ impl ProductRepository for InMemoryProductRepository {
         let all: Vec<_> = inner
             .products
             .values()
-            .filter(|p| p.tenant_id == tenant_id)
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -183,7 +230,7 @@ impl ProductRepository for InMemoryProductRepository {
         Ok(inner
             .products
             .values()
-            .find(|p| p.tenant_id == tenant_id && p.code == code)
+            .find(|p| p.tenant_id == tenant_id && p.code == code && !p.is_deleted())
             .cloned())
     }
 
@@ -196,6 +243,7 @@ impl ProductRepository for InMemoryProductRepository {
             .values()
             .filter(|p| {
                 p.tenant_id == tenant_id
+                    && !p.is_deleted()
                     && (p.name.to_lowercase().contains(&query_lower)
                         || p.code.to_lowercase().contains(&query_lower))
             })
@@ -203,13 +251,22 @@ impl ProductRepository for InMemoryProductRepository {
             .collect())
     }
 
-    async fn update(&self, id: i64, update: UpdateProduct) -> Result<Product, ApiError> {
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateProduct,
+    ) -> Result<Product, ApiError> {
         let mut inner = self.inner.lock();
 
         let product = inner
             .products
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", id)))?;
+
+        if product.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Product {} not found", id)));
+        }
 
         if let Some(code) = update.code {
             product.code = code;
@@ -246,20 +303,85 @@ impl ProductRepository for InMemoryProductRepository {
         Ok(product.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
 
-        if !inner.products.contains_key(&id) {
+        let product = inner
+            .products
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", id)))?;
+
+        if product.tenant_id != tenant_id {
             return Err(ApiError::NotFound(format!("Product {} not found", id)));
         }
 
-        let tenant_id = inner.products.get(&id).map(|p| p.tenant_id);
         inner.products.remove(&id);
 
-        if let Some(tid) = tenant_id {
-            if let Some(ids) = inner.tenant_products.get_mut(&tid) {
-                ids.retain(|x| *x != id);
-            }
+        if let Some(ids) = inner.tenant_products.get_mut(&tenant_id) {
+            ids.retain(|x| *x != id);
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let product = inner
+            .products
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", id)))?;
+
+        if product.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Product {} not found", id)));
+        }
+
+        product.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Product, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let product = inner
+            .products
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", id)))?;
+
+        if product.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Product {} not found", id)));
+        }
+
+        product.restore();
+        Ok(product.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .products
+            .values()
+            .filter(|p| p.tenant_id == tenant_id && p.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let product = inner
+            .products
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", id)))?;
+
+        if product.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Product {} not found", id)));
+        }
+
+        inner.products.remove(&id);
+
+        if let Some(ids) = inner.tenant_products.get_mut(&tenant_id) {
+            ids.retain(|x| *x != id);
         }
 
         Ok(())
@@ -307,15 +429,21 @@ impl CategoryRepository for InMemoryCategoryRepository {
             name: create.name,
             parent_id: create.parent_id,
             created_at: chrono::Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.categories.insert(id, category.clone());
         Ok(category)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Category>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Category>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.categories.get(&id).cloned())
+        Ok(inner
+            .categories
+            .get(&id)
+            .filter(|c| c.tenant_id == tenant_id && !c.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
@@ -323,7 +451,7 @@ impl CategoryRepository for InMemoryCategoryRepository {
         Ok(inner
             .categories
             .values()
-            .filter(|c| c.tenant_id == tenant_id)
+            .filter(|c| c.tenant_id == tenant_id && !c.is_deleted())
             .cloned()
             .collect())
     }
@@ -338,7 +466,7 @@ impl CategoryRepository for InMemoryCategoryRepository {
         let all: Vec<_> = inner
             .categories
             .values()
-            .filter(|c| c.tenant_id == tenant_id)
+            .filter(|c| c.tenant_id == tenant_id && !c.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -350,8 +478,74 @@ impl CategoryRepository for InMemoryCategoryRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let category = inner
+            .categories
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", id)))?;
+
+        if category.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Category {} not found", id)));
+        }
+
+        inner.categories.remove(&id);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let category = inner
+            .categories
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", id)))?;
+
+        if category.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Category {} not found", id)));
+        }
+
+        category.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Category, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let category = inner
+            .categories
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", id)))?;
+
+        if category.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Category {} not found", id)));
+        }
+
+        category.restore();
+        Ok(category.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .categories
+            .values()
+            .filter(|c| c.tenant_id == tenant_id && c.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let category = inner
+            .categories
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", id)))?;
+
+        if category.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Category {} not found", id)));
+        }
+
         inner.categories.remove(&id);
         Ok(())
     }
@@ -399,6 +593,8 @@ impl InMemoryUnitRepository {
                     name: name.to_string(),
                     is_integer: is_int,
                     created_at: chrono::Utc::now(),
+                    deleted_at: None,
+                    deleted_by: None,
                 },
             );
         }
@@ -428,15 +624,21 @@ impl UnitRepository for InMemoryUnitRepository {
             name: create.name,
             is_integer: create.is_integer,
             created_at: chrono::Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.units.insert(id, unit.clone());
         Ok(unit)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Unit>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Unit>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.units.get(&id).cloned())
+        Ok(inner
+            .units
+            .get(&id)
+            .filter(|u| u.tenant_id == tenant_id && !u.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
@@ -444,13 +646,79 @@ impl UnitRepository for InMemoryUnitRepository {
         Ok(inner
             .units
             .values()
-            .filter(|u| u.tenant_id == tenant_id)
+            .filter(|u| u.tenant_id == tenant_id && !u.is_deleted())
             .cloned()
             .collect())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let unit = inner
+            .units
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", id)))?;
+
+        if unit.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Unit {} not found", id)));
+        }
+
+        inner.units.remove(&id);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let unit = inner
+            .units
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", id)))?;
+
+        if unit.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Unit {} not found", id)));
+        }
+
+        unit.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Unit, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let unit = inner
+            .units
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", id)))?;
+
+        if unit.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Unit {} not found", id)));
+        }
+
+        unit.restore();
+        Ok(unit.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .units
+            .values()
+            .filter(|u| u.tenant_id == tenant_id && u.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let unit = inner
+            .units
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", id)))?;
+
+        if unit.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Unit {} not found", id)));
+        }
+
         inner.units.remove(&id);
         Ok(())
     }
@@ -502,6 +770,8 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
             price_modifier: create.price_modifier,
             is_active: true,
             created_at: chrono::Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.variants.insert(id, variant.clone());
@@ -524,12 +794,13 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
         Ok(ids
             .iter()
             .filter_map(|id| inner.variants.get(id).cloned())
+            .filter(|v| !v.is_deleted())
             .collect())
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<ProductVariant>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.variants.get(&id).cloned())
+        Ok(inner.variants.get(&id).filter(|v| !v.is_deleted()).cloned())
     }
 
     async fn update(
@@ -580,6 +851,62 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
             if let Some(ids) = inner.product_variants.get_mut(&pid) {
                 ids.retain(|x| *x != id);
             }
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let variant = inner
+            .variants
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Product variant {} not found", id)))?;
+
+        variant.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64) -> Result<ProductVariant, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let variant = inner
+            .variants
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Product variant {} not found", id)))?;
+
+        variant.restore();
+        Ok(variant.clone())
+    }
+
+    async fn find_deleted(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError> {
+        let inner = self.inner.lock();
+        let ids = inner
+            .product_variants
+            .get(&product_id)
+            .cloned()
+            .unwrap_or_default();
+        Ok(ids
+            .iter()
+            .filter_map(|id| inner.variants.get(id).cloned())
+            .filter(|v| v.is_deleted())
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let variant = inner
+            .variants
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Product variant {} not found", id)))?;
+
+        let product_id = variant.product_id;
+        inner.variants.remove(&id);
+
+        if let Some(ids) = inner.product_variants.get_mut(&product_id) {
+            ids.retain(|x| *x != id);
         }
 
         Ok(())

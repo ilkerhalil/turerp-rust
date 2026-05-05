@@ -3,9 +3,10 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Employee entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Employee {
     pub id: i64,
     pub tenant_id: i64,
@@ -23,10 +24,32 @@ pub struct Employee {
     pub salary: Decimal,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Employee {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Employee status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum EmployeeStatus {
     Active,
     OnLeave,
@@ -60,7 +83,7 @@ impl std::str::FromStr for EmployeeStatus {
 }
 
 /// Attendance record
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Attendance {
     pub id: i64,
     pub employee_id: i64,
@@ -70,10 +93,32 @@ pub struct Attendance {
     pub hours_worked: Decimal,
     pub status: AttendanceStatus,
     pub notes: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Attendance {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Attendance status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum AttendanceStatus {
     Present,
     Absent,
@@ -110,7 +155,7 @@ impl std::str::FromStr for AttendanceStatus {
 }
 
 /// Leave type
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct LeaveType {
     pub id: i64,
     pub tenant_id: i64,
@@ -118,10 +163,32 @@ pub struct LeaveType {
     pub description: Option<String>,
     pub max_days_per_year: Decimal,
     pub requires_approval: bool,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for LeaveType {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Leave request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct LeaveRequest {
     pub id: i64,
     pub employee_id: i64,
@@ -134,10 +201,32 @@ pub struct LeaveRequest {
     pub approved_by: Option<i64>,
     pub approved_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for LeaveRequest {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Leave request status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum LeaveRequestStatus {
     Pending,
     Approved,
@@ -171,7 +260,7 @@ impl std::str::FromStr for LeaveRequestStatus {
 }
 
 /// Payroll record
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Payroll {
     pub id: i64,
     pub tenant_id: i64,
@@ -187,10 +276,32 @@ pub struct Payroll {
     pub status: PayrollStatus,
     pub paid_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Payroll {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Payroll status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum PayrollStatus {
     Draft,
     Calculated,
@@ -224,7 +335,7 @@ impl std::str::FromStr for PayrollStatus {
 }
 
 /// Create employee request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateEmployee {
     pub tenant_id: i64,
     pub user_id: Option<i64>,
@@ -266,7 +377,7 @@ impl CreateEmployee {
 }
 
 /// Create attendance request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateAttendance {
     pub employee_id: i64,
     pub date: DateTime<Utc>,
@@ -302,7 +413,7 @@ impl CreateAttendance {
 }
 
 /// Create leave request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateLeaveRequest {
     pub employee_id: i64,
     pub leave_type_id: i64,
@@ -330,8 +441,8 @@ impl CreateLeaveRequest {
     }
 }
 
-/// Employee response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Employee response (without soft-delete fields)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct EmployeeResponse {
     pub id: i64,
     pub employee_number: String,
@@ -345,6 +456,9 @@ pub struct EmployeeResponse {
     pub hire_date: DateTime<Utc>,
     pub status: EmployeeStatus,
     pub salary: Decimal,
+    pub tenant_id: i64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 impl From<Employee> for EmployeeResponse {
@@ -364,6 +478,9 @@ impl From<Employee> for EmployeeResponse {
             hire_date: e.hire_date,
             status: e.status,
             salary: e.salary,
+            tenant_id: e.tenant_id,
+            created_at: e.created_at,
+            updated_at: e.updated_at,
         }
     }
 }
@@ -371,6 +488,7 @@ impl From<Employee> for EmployeeResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::SoftDeletable;
 
     #[test]
     fn test_create_employee_validation() {

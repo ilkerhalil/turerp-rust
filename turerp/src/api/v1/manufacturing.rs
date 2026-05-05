@@ -79,14 +79,17 @@ pub async fn get_work_orders(
     security(("bearer_auth" = []))
 )]
 pub async fn get_work_order(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.get_work_order(*path).await {
+    match mfg_service
+        .get_work_order(*path, auth_user.0.tenant_id)
+        .await
+    {
         Ok(order) => Ok(HttpResponse::Ok().json(order)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -241,14 +244,14 @@ pub async fn create_bom(
     security(("bearer_auth" = []))
 )]
 pub async fn get_bom(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.get_bom(*path).await {
+    match mfg_service.get_bom(*path, auth_user.0.tenant_id).await {
         Ok(bom) => Ok(HttpResponse::Ok().json(bom)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -350,14 +353,14 @@ pub async fn create_routing(
     security(("bearer_auth" = []))
 )]
 pub async fn get_routing(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.get_routing(*path).await {
+    match mfg_service.get_routing(*path, auth_user.0.tenant_id).await {
         Ok(routing) => Ok(HttpResponse::Ok().json(routing)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -489,14 +492,17 @@ pub async fn get_inspections(
     security(("bearer_auth" = []))
 )]
 pub async fn get_inspection(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match qc_service.get_inspection(*path).await {
+    match qc_service
+        .get_inspection(*path, auth_user.0.tenant_id)
+        .await
+    {
         Ok(inspection) => Ok(HttpResponse::Ok().json(inspection)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -536,14 +542,21 @@ pub async fn update_inspection(
     security(("bearer_auth" = []))
 )]
 pub async fn delete_inspection(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match qc_service.delete_inspection(*path).await {
+    match qc_service
+        .delete_inspection(
+            *path,
+            admin_user.0.tenant_id,
+            admin_user.0.sub.parse().unwrap_or(0),
+        )
+        .await
+    {
         Ok(()) => {
             let msg = i18n.t(locale.as_str(), "manufacturing.inspection.deleted");
             Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
@@ -603,14 +616,14 @@ pub async fn get_ncrs(
     security(("bearer_auth" = []))
 )]
 pub async fn get_ncr(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match qc_service.get_ncr(*path).await {
+    match qc_service.get_ncr(*path, auth_user.0.tenant_id).await {
         Ok(ncr) => Ok(HttpResponse::Ok().json(ncr)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -647,20 +660,377 @@ pub async fn update_ncr(
     security(("bearer_auth" = []))
 )]
 pub async fn delete_ncr(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match qc_service.delete_ncr(*path).await {
+    match qc_service
+        .delete_ncr(
+            *path,
+            admin_user.0.tenant_id,
+            admin_user.0.sub.parse().unwrap_or(0),
+        )
+        .await
+    {
         Ok(()) => {
             let msg = i18n.t(locale.as_str(), "manufacturing.ncr.deleted");
             Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
+}
+
+// --- Soft-delete / Restore / Destroy endpoints ---
+
+/// Soft-delete a work order (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/manufacturing/work-orders/{id}", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Work order ID")),
+    responses((status = 200, description = "Work order soft-deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn soft_delete_work_order(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match mfg_service
+        .soft_delete_work_order(
+            *path,
+            admin_user.0.tenant_id,
+            admin_user.0.sub.parse().unwrap_or(0),
+        )
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::Ok().json(MessageResponse {
+            message: "Work order soft-deleted".to_string(),
+        })),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore a soft-deleted work order (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/manufacturing/work-orders/{id}/restore", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Work order ID")),
+    responses((status = 200, description = "Work order restored"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_work_order(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let work_order = mfg_service
+        .restore_work_order(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(work_order))
+}
+
+/// List soft-deleted work orders (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/manufacturing/work-orders/deleted", tag = "Manufacturing",
+    responses((status = 200, description = "List of deleted work orders")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_work_orders(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+) -> ApiResult<HttpResponse> {
+    let deleted = mfg_service
+        .list_deleted_work_orders(admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(deleted))
+}
+
+/// Permanently destroy a work order (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/manufacturing/work-orders/{id}/destroy", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Work order ID")),
+    responses((status = 204, description = "Work order permanently deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_work_order(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    mfg_service
+        .destroy_work_order(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Soft-delete a BOM (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/manufacturing/boms/{id}", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "BOM ID")),
+    responses((status = 200, description = "BOM soft-deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn soft_delete_bom(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match mfg_service
+        .soft_delete_bom(
+            *path,
+            admin_user.0.tenant_id,
+            admin_user.0.sub.parse().unwrap_or(0),
+        )
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::Ok().json(MessageResponse {
+            message: "BOM soft-deleted".to_string(),
+        })),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore a soft-deleted BOM (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/manufacturing/boms/{id}/restore", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "BOM ID")),
+    responses((status = 200, description = "BOM restored"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_bom(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let bom = mfg_service
+        .restore_bom(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(bom))
+}
+
+/// List soft-deleted BOMs (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/manufacturing/boms/deleted", tag = "Manufacturing",
+    responses((status = 200, description = "List of deleted BOMs")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_boms(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+) -> ApiResult<HttpResponse> {
+    let deleted = mfg_service
+        .list_deleted_boms(admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(deleted))
+}
+
+/// Permanently destroy a BOM (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/manufacturing/boms/{id}/destroy", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "BOM ID")),
+    responses((status = 204, description = "BOM permanently deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_bom(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    mfg_service
+        .destroy_bom(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Soft-delete a routing (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/manufacturing/routings/{id}", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Routing ID")),
+    responses((status = 200, description = "Routing soft-deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn soft_delete_routing(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match mfg_service
+        .soft_delete_routing(
+            *path,
+            admin_user.0.tenant_id,
+            admin_user.0.sub.parse().unwrap_or(0),
+        )
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::Ok().json(MessageResponse {
+            message: "Routing soft-deleted".to_string(),
+        })),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore a soft-deleted routing (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/manufacturing/routings/{id}/restore", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Routing ID")),
+    responses((status = 200, description = "Routing restored"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_routing(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let routing = mfg_service
+        .restore_routing(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(routing))
+}
+
+/// List soft-deleted routings (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/manufacturing/routings/deleted", tag = "Manufacturing",
+    responses((status = 200, description = "List of deleted routings")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_routings(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+) -> ApiResult<HttpResponse> {
+    let deleted = mfg_service
+        .list_deleted_routings(admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(deleted))
+}
+
+/// Permanently destroy a routing (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/manufacturing/routings/{id}/destroy", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Routing ID")),
+    responses((status = 204, description = "Routing permanently deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_routing(
+    admin_user: AdminUser,
+    mfg_service: web::Data<ManufacturingService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    mfg_service
+        .destroy_routing(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Restore a soft-deleted inspection (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/manufacturing/inspections/{id}/restore", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Inspection ID")),
+    responses((status = 200, description = "Inspection restored"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_inspection(
+    admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let inspection = qc_service
+        .restore_inspection(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(inspection))
+}
+
+/// List soft-deleted inspections (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/manufacturing/inspections/deleted", tag = "Manufacturing",
+    responses((status = 200, description = "List of deleted inspections")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_inspections(
+    admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+) -> ApiResult<HttpResponse> {
+    let deleted = qc_service
+        .list_deleted_inspections(admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(deleted))
+}
+
+/// Permanently destroy an inspection (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/manufacturing/inspections/{id}/destroy", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "Inspection ID")),
+    responses((status = 204, description = "Inspection permanently deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_inspection(
+    admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    qc_service
+        .destroy_inspection(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Restore a soft-deleted NCR (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/manufacturing/ncrs/{id}/restore", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "NCR ID")),
+    responses((status = 200, description = "NCR restored"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_ncr(
+    admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let ncr = qc_service
+        .restore_ncr(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(ncr))
+}
+
+/// List soft-deleted NCRs (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/manufacturing/ncrs/deleted", tag = "Manufacturing",
+    responses((status = 200, description = "List of deleted NCRs")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_ncrs(
+    admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+) -> ApiResult<HttpResponse> {
+    let deleted = qc_service.list_deleted_ncrs(admin_user.0.tenant_id).await?;
+    Ok(HttpResponse::Ok().json(deleted))
+}
+
+/// Permanently destroy an NCR (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/manufacturing/ncrs/{id}/destroy", tag = "Manufacturing",
+    params(("id" = i64, Path, description = "NCR ID")),
+    responses((status = 204, description = "NCR permanently deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_ncr(
+    admin_user: AdminUser,
+    qc_service: web::Data<QualityControlService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    qc_service
+        .destroy_ncr(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
@@ -681,11 +1051,25 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_work_order)),
     )
     .service(
-        web::resource("/v1/manufacturing/work-orders/{id}").route(web::get().to(get_work_order)),
+        web::resource("/v1/manufacturing/work-orders/deleted")
+            .route(web::get().to(list_deleted_work_orders)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/work-orders/{id}")
+            .route(web::get().to(get_work_order))
+            .route(web::delete().to(soft_delete_work_order)),
     )
     .service(
         web::resource("/v1/manufacturing/work-orders/{id}/status")
             .route(web::put().to(update_work_order_status)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/work-orders/{id}/restore")
+            .route(web::put().to(restore_work_order)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/work-orders/{id}/destroy")
+            .route(web::delete().to(destroy_work_order)),
     )
     .service(
         web::resource("/v1/manufacturing/work-orders/{work_order_id}/operations")
@@ -704,7 +1088,18 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(add_work_order_material)),
     )
     .service(web::resource("/v1/manufacturing/boms").route(web::post().to(create_bom)))
-    .service(web::resource("/v1/manufacturing/boms/{id}").route(web::get().to(get_bom)))
+    .service(
+        web::resource("/v1/manufacturing/boms/deleted").route(web::get().to(list_deleted_boms)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/boms/{id}")
+            .route(web::get().to(get_bom))
+            .route(web::delete().to(soft_delete_bom)),
+    )
+    .service(web::resource("/v1/manufacturing/boms/{id}/restore").route(web::put().to(restore_bom)))
+    .service(
+        web::resource("/v1/manufacturing/boms/{id}/destroy").route(web::delete().to(destroy_bom)),
+    )
     .service(
         web::resource("/v1/manufacturing/boms/{bom_id}/lines").route(web::get().to(get_bom_lines)),
     )
@@ -714,7 +1109,23 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_boms_by_product)),
     )
     .service(web::resource("/v1/manufacturing/routings").route(web::post().to(create_routing)))
-    .service(web::resource("/v1/manufacturing/routings/{id}").route(web::get().to(get_routing)))
+    .service(
+        web::resource("/v1/manufacturing/routings/deleted")
+            .route(web::get().to(list_deleted_routings)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/routings/{id}")
+            .route(web::get().to(get_routing))
+            .route(web::delete().to(soft_delete_routing)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/routings/{id}/restore")
+            .route(web::put().to(restore_routing)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/routings/{id}/destroy")
+            .route(web::delete().to(destroy_routing)),
+    )
     .service(
         web::resource("/v1/manufacturing/routings/product/{product_id}")
             .route(web::get().to(get_routings_by_product)),
@@ -734,10 +1145,22 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_inspection)),
     )
     .service(
+        web::resource("/v1/manufacturing/inspections/deleted")
+            .route(web::get().to(list_deleted_inspections)),
+    )
+    .service(
         web::resource("/v1/manufacturing/inspections/{id}")
             .route(web::get().to(get_inspection))
             .route(web::put().to(update_inspection))
             .route(web::delete().to(delete_inspection)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/inspections/{id}/restore")
+            .route(web::put().to(restore_inspection)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/inspections/{id}/destroy")
+            .route(web::delete().to(destroy_inspection)),
     )
     // Quality Control - NCRs
     .service(
@@ -746,9 +1169,16 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_ncr)),
     )
     .service(
+        web::resource("/v1/manufacturing/ncrs/deleted").route(web::get().to(list_deleted_ncrs)),
+    )
+    .service(
         web::resource("/v1/manufacturing/ncrs/{id}")
             .route(web::get().to(get_ncr))
             .route(web::put().to(update_ncr))
             .route(web::delete().to(delete_ncr)),
+    )
+    .service(web::resource("/v1/manufacturing/ncrs/{id}/restore").route(web::put().to(restore_ncr)))
+    .service(
+        web::resource("/v1/manufacturing/ncrs/{id}/destroy").route(web::delete().to(destroy_ncr)),
     );
 }

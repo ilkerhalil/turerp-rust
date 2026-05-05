@@ -7,6 +7,7 @@ use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::db::error::map_sqlx_error;
 use crate::domain::sales::model::{
     CreateQuotation, CreateQuotationLine, CreateSalesOrder, CreateSalesOrderLine, Quotation,
@@ -44,6 +45,8 @@ struct SalesOrderRow {
     billing_address: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<SalesOrderRow> for SalesOrder {
@@ -74,6 +77,8 @@ impl From<SalesOrderRow> for SalesOrder {
             billing_address: row.billing_address,
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -97,6 +102,8 @@ struct SalesOrderRowWithTotal {
     billing_address: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: i64,
 }
 
@@ -128,6 +135,8 @@ impl From<SalesOrderRowWithTotal> for (SalesOrder, i64) {
             billing_address: row.billing_address,
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         };
         (order, row.total_count)
     }
@@ -183,6 +192,8 @@ struct QuotationRow {
     sales_order_id: Option<i64>,
     created_at: DateTime<Utc>,
     updated_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<QuotationRow> for Quotation {
@@ -212,6 +223,8 @@ impl From<QuotationRow> for Quotation {
             sales_order_id: row.sales_order_id,
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -234,6 +247,8 @@ struct QuotationRowWithTotal {
     sales_order_id: Option<i64>,
     created_at: DateTime<Utc>,
     updated_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: i64,
 }
 
@@ -264,6 +279,8 @@ impl From<QuotationRowWithTotal> for (Quotation, i64) {
             sales_order_id: row.sales_order_id,
             created_at: row.created_at,
             updated_at: row.updated_at.unwrap_or(row.created_at),
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         };
         (quotation, row.total_count)
     }
@@ -384,7 +401,8 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
             RETURNING id, tenant_id, order_number, cari_id, status, order_date,
                       delivery_date, subtotal, tax_amount, discount_amount, total_amount,
-                      notes, shipping_address, billing_address, created_at, updated_at
+                      notes, shipping_address, billing_address, created_at, updated_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -407,17 +425,19 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<SalesOrder>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<SalesOrder>, ApiError> {
         let result: Option<SalesOrderRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
-                   notes, shipping_address, billing_address, created_at, updated_at
+                   notes, shipping_address, billing_address, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM sales_orders
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find sales order by id: {}", e)))?;
@@ -430,9 +450,10 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
             r#"
             SELECT id, tenant_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
-                   notes, shipping_address, billing_address, created_at, updated_at
+                   notes, shipping_address, billing_address, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM sales_orders
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -449,9 +470,10 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
             r#"
             SELECT id, tenant_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
-                   notes, shipping_address, billing_address, created_at, updated_at
+                   notes, shipping_address, billing_address, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM sales_orders
-            WHERE cari_id = $1
+            WHERE cari_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -474,9 +496,10 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
             r#"
             SELECT id, tenant_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
-                   notes, shipping_address, billing_address, created_at, updated_at
+                   notes, shipping_address, billing_address, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM sales_orders
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -502,9 +525,10 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
             SELECT id, tenant_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                    notes, shipping_address, billing_address, created_at, updated_at,
+                   deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM sales_orders
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -540,9 +564,10 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
             SELECT id, tenant_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                    notes, shipping_address, billing_address, created_at, updated_at,
+                   deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM sales_orders
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -575,10 +600,11 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
             r#"
             UPDATE sales_orders
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, order_number, cari_id, status, order_date,
                       delivery_date, subtotal, tax_amount, discount_amount, total_amount,
-                      notes, shipping_address, billing_address, created_at, updated_at
+                      notes, shipping_address, billing_address, created_at, updated_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
@@ -590,14 +616,102 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM sales_orders
-            WHERE id = $1
+            UPDATE sales_orders
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete sales order: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Sales order not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<SalesOrder, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE sales_orders
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore sales order: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Sales order not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Sales order not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
+        let rows: Vec<SalesOrderRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+                   delivery_date, subtotal, tax_amount, discount_amount, total_amount,
+                   notes, shipping_address, billing_address, created_at, updated_at,
+                   deleted_at, deleted_by
+            FROM sales_orders
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted sales orders: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM sales_orders
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy sales order: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Sales order not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM sales_orders
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete sales order: {}", e)))?;
@@ -750,7 +864,8 @@ impl QuotationRepository for PostgresQuotationRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, NOW())
             RETURNING id, tenant_id, quotation_number, cari_id, status, valid_until,
                       subtotal, tax_amount, discount_amount, total_amount,
-                      notes, terms, sales_order_id, created_at, updated_at
+                      notes, terms, sales_order_id, created_at, updated_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -771,17 +886,19 @@ impl QuotationRepository for PostgresQuotationRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Quotation>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Quotation>, ApiError> {
         let result: Option<QuotationRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
-                   notes, terms, sales_order_id, created_at, updated_at
+                   notes, terms, sales_order_id, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM quotations
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find quotation by id: {}", e)))?;
@@ -794,9 +911,10 @@ impl QuotationRepository for PostgresQuotationRepository {
             r#"
             SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
-                   notes, terms, sales_order_id, created_at, updated_at
+                   notes, terms, sales_order_id, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM quotations
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -813,9 +931,10 @@ impl QuotationRepository for PostgresQuotationRepository {
             r#"
             SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
-                   notes, terms, sales_order_id, created_at, updated_at
+                   notes, terms, sales_order_id, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM quotations
-            WHERE cari_id = $1
+            WHERE cari_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -838,9 +957,10 @@ impl QuotationRepository for PostgresQuotationRepository {
             r#"
             SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
-                   notes, terms, sales_order_id, created_at, updated_at
+                   notes, terms, sales_order_id, created_at, updated_at,
+                   deleted_at, deleted_by
             FROM quotations
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -866,9 +986,10 @@ impl QuotationRepository for PostgresQuotationRepository {
             SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
                    notes, terms, sales_order_id, created_at, updated_at,
+                   deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM quotations
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -904,9 +1025,10 @@ impl QuotationRepository for PostgresQuotationRepository {
             SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
                    notes, terms, sales_order_id, created_at, updated_at,
+                   deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM quotations
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -935,10 +1057,11 @@ impl QuotationRepository for PostgresQuotationRepository {
             r#"
             UPDATE quotations
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, quotation_number, cari_id, status, valid_until,
                       subtotal, tax_amount, discount_amount, total_amount,
-                      notes, terms, sales_order_id, created_at, updated_at
+                      notes, terms, sales_order_id, created_at, updated_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
@@ -957,10 +1080,11 @@ impl QuotationRepository for PostgresQuotationRepository {
             r#"
             UPDATE quotations
             SET sales_order_id = $1, status = $2, updated_at = NOW()
-            WHERE id = $3
+            WHERE id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, quotation_number, cari_id, status, valid_until,
                       subtotal, tax_amount, discount_amount, total_amount,
-                      notes, terms, sales_order_id, created_at, updated_at
+                      notes, terms, sales_order_id, created_at, updated_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(order_id)
@@ -973,14 +1097,102 @@ impl QuotationRepository for PostgresQuotationRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM quotations
-            WHERE id = $1
+            UPDATE quotations
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete quotation: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Quotation not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Quotation, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE quotations
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore quotation: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Quotation not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Quotation not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Quotation>, ApiError> {
+        let rows: Vec<QuotationRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
+                   subtotal, tax_amount, discount_amount, total_amount,
+                   notes, terms, sales_order_id, created_at, updated_at,
+                   deleted_at, deleted_by
+            FROM quotations
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted quotations: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM quotations
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy quotation: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Quotation not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM quotations
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete quotation: {}", e)))?;

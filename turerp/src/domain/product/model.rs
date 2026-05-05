@@ -3,9 +3,10 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Product entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Product {
     pub id: i64,
     pub tenant_id: i64,
@@ -21,20 +22,64 @@ pub struct Product {
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Product {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Product category
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Category {
     pub id: i64,
     pub tenant_id: i64,
     pub name: String,
     pub parent_id: Option<i64>,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Category {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Unit of measure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Unit {
     pub id: i64,
     pub tenant_id: i64,
@@ -42,10 +87,32 @@ pub struct Unit {
     pub name: String,
     pub is_integer: bool,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Unit {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Product variant
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ProductVariant {
     pub id: i64,
     pub product_id: i64,
@@ -55,10 +122,32 @@ pub struct ProductVariant {
     pub price_modifier: Decimal,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for ProductVariant {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Create product variant request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateProductVariant {
     pub product_id: i64,
     pub name: String,
@@ -84,7 +173,7 @@ impl CreateProductVariant {
 }
 
 /// Update product variant request
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 pub struct UpdateProductVariant {
     pub name: Option<String>,
     pub sku: Option<String>,
@@ -94,7 +183,7 @@ pub struct UpdateProductVariant {
 }
 
 /// Product variant response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ProductVariantResponse {
     pub id: i64,
     pub product_id: i64,
@@ -103,6 +192,7 @@ pub struct ProductVariantResponse {
     pub barcode: Option<String>,
     pub price_modifier: Decimal,
     pub is_active: bool,
+    pub created_at: DateTime<Utc>,
 }
 
 impl From<ProductVariant> for ProductVariantResponse {
@@ -115,12 +205,13 @@ impl From<ProductVariant> for ProductVariantResponse {
             barcode: v.barcode,
             price_modifier: v.price_modifier,
             is_active: v.is_active,
+            created_at: v.created_at,
         }
     }
 }
 
 /// Create product request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateProduct {
     pub tenant_id: i64,
     pub code: String,
@@ -163,7 +254,7 @@ impl CreateProduct {
 }
 
 /// Update product request
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 pub struct UpdateProduct {
     pub code: Option<String>,
     pub name: Option<String>,
@@ -178,7 +269,7 @@ pub struct UpdateProduct {
 }
 
 /// Create category request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateCategory {
     pub tenant_id: i64,
     pub name: String,
@@ -200,7 +291,7 @@ impl CreateCategory {
 }
 
 /// Create unit request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateUnit {
     pub tenant_id: i64,
     pub code: String,
@@ -225,8 +316,8 @@ impl CreateUnit {
     }
 }
 
-/// Product response (without tenant_id for external API)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Product response (without tenant_id/deleted fields for external API)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ProductResponse {
     pub id: i64,
     pub code: String,
@@ -239,6 +330,7 @@ pub struct ProductResponse {
     pub sale_price: Decimal,
     pub tax_rate: Decimal,
     pub is_active: bool,
+    pub created_at: DateTime<Utc>,
 }
 
 impl From<Product> for ProductResponse {
@@ -255,6 +347,49 @@ impl From<Product> for ProductResponse {
             sale_price: p.sale_price,
             tax_rate: p.tax_rate,
             is_active: p.is_active,
+            created_at: p.created_at,
+        }
+    }
+}
+
+/// Category response (without tenant_id/deleted fields for external API)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CategoryResponse {
+    pub id: i64,
+    pub name: String,
+    pub parent_id: Option<i64>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<Category> for CategoryResponse {
+    fn from(c: Category) -> Self {
+        Self {
+            id: c.id,
+            name: c.name,
+            parent_id: c.parent_id,
+            created_at: c.created_at,
+        }
+    }
+}
+
+/// Unit response (without tenant_id/deleted fields for external API)
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct UnitResponse {
+    pub id: i64,
+    pub code: String,
+    pub name: String,
+    pub is_integer: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<Unit> for UnitResponse {
+    fn from(u: Unit) -> Self {
+        Self {
+            id: u.id,
+            code: u.code,
+            name: u.name,
+            is_integer: u.is_integer,
+            created_at: u.created_at,
         }
     }
 }
@@ -262,6 +397,7 @@ impl From<Product> for ProductResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::SoftDeletable;
     use rust_decimal_macros::dec;
 
     #[test]

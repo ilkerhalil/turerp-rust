@@ -16,7 +16,8 @@ pub use model::{
 };
 #[cfg(feature = "postgres")]
 pub use postgres_repository::{
-    PostgresBillOfMaterialsRepository, PostgresRoutingRepository, PostgresWorkOrderRepository,
+    PostgresBillOfMaterialsRepository, PostgresInspectionRepository, PostgresNcrRepository,
+    PostgresRoutingRepository, PostgresWorkOrderRepository,
 };
 pub use repository::{
     BillOfMaterialsRepository, BoxBillOfMaterialsRepository, BoxInspectionRepository,

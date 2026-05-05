@@ -69,9 +69,9 @@ impl ProductService {
         self.product_repo.create(create).await
     }
 
-    pub async fn get_product(&self, id: i64) -> Result<Product, ApiError> {
+    pub async fn get_product(&self, id: i64, tenant_id: i64) -> Result<Product, ApiError> {
         self.product_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", id)))
     }
@@ -104,13 +104,41 @@ impl ProductService {
     pub async fn update_product(
         &self,
         id: i64,
+        tenant_id: i64,
         update: UpdateProduct,
     ) -> Result<Product, ApiError> {
-        self.product_repo.update(id, update).await
+        self.product_repo.update(id, tenant_id, update).await
     }
 
-    pub async fn delete_product(&self, id: i64) -> Result<(), ApiError> {
-        self.product_repo.delete(id).await
+    pub async fn delete_product(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.product_repo.delete(id, tenant_id).await
+    }
+
+    /// Soft delete a product (sets deleted_at)
+    pub async fn soft_delete_product(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.product_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted product
+    pub async fn restore_product(&self, id: i64, tenant_id: i64) -> Result<Product, ApiError> {
+        self.product_repo.restore(id, tenant_id).await
+    }
+
+    /// List soft-deleted products
+    pub async fn list_deleted_products(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
+        self.product_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete a product (hard delete)
+    pub async fn destroy_product(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.product_repo.destroy(id, tenant_id).await
     }
 
     // Category operations
@@ -121,9 +149,9 @@ impl ProductService {
         self.category_repo.create(create).await
     }
 
-    pub async fn get_category(&self, id: i64) -> Result<Category, ApiError> {
+    pub async fn get_category(&self, id: i64, tenant_id: i64) -> Result<Category, ApiError> {
         self.category_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", id)))
     }
@@ -148,8 +176,35 @@ impl ProductService {
             .await
     }
 
-    pub async fn delete_category(&self, id: i64) -> Result<(), ApiError> {
-        self.category_repo.delete(id).await
+    pub async fn delete_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.category_repo.delete(id, tenant_id).await
+    }
+
+    /// Soft delete a category (sets deleted_at)
+    pub async fn soft_delete_category(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.category_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted category
+    pub async fn restore_category(&self, id: i64, tenant_id: i64) -> Result<Category, ApiError> {
+        self.category_repo.restore(id, tenant_id).await
+    }
+
+    /// List soft-deleted categories
+    pub async fn list_deleted_categories(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
+        self.category_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete a category (hard delete)
+    pub async fn destroy_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.category_repo.destroy(id, tenant_id).await
     }
 
     // Unit operations
@@ -160,9 +215,9 @@ impl ProductService {
         self.unit_repo.create(create).await
     }
 
-    pub async fn get_unit(&self, id: i64) -> Result<Unit, ApiError> {
+    pub async fn get_unit(&self, id: i64, tenant_id: i64) -> Result<Unit, ApiError> {
         self.unit_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", id)))
     }
@@ -171,14 +226,40 @@ impl ProductService {
         self.unit_repo.find_by_tenant(tenant_id).await
     }
 
-    pub async fn delete_unit(&self, id: i64) -> Result<(), ApiError> {
-        self.unit_repo.delete(id).await
+    pub async fn delete_unit(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.unit_repo.delete(id, tenant_id).await
+    }
+
+    /// Soft delete a unit (sets deleted_at)
+    pub async fn soft_delete_unit(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.unit_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted unit
+    pub async fn restore_unit(&self, id: i64, tenant_id: i64) -> Result<Unit, ApiError> {
+        self.unit_repo.restore(id, tenant_id).await
+    }
+
+    /// List soft-deleted units
+    pub async fn list_deleted_units(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
+        self.unit_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete a unit (hard delete)
+    pub async fn destroy_unit(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.unit_repo.destroy(id, tenant_id).await
     }
 
     // Product variant operations
     pub async fn create_variant(
         &self,
         create: CreateProductVariant,
+        tenant_id: i64,
     ) -> Result<ProductVariantResponse, ApiError> {
         let variant_repo = self
             .variant_repo
@@ -189,9 +270,9 @@ impl ProductService {
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
-        // Verify product exists
+        // Verify product exists (with tenant isolation)
         self.product_repo
-            .find_by_id(create.product_id)
+            .find_by_id(create.product_id, tenant_id)
             .await?
             .ok_or_else(|| {
                 ApiError::NotFound(format!("Product {} not found", create.product_id))
@@ -204,15 +285,16 @@ impl ProductService {
     pub async fn get_variants_by_product(
         &self,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<ProductVariantResponse>, ApiError> {
         let variant_repo = self
             .variant_repo
             .as_ref()
             .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
 
-        // Verify product exists
+        // Verify product exists (with tenant isolation)
         self.product_repo
-            .find_by_id(product_id)
+            .find_by_id(product_id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", product_id)))?;
 
@@ -254,6 +336,51 @@ impl ProductService {
             .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
 
         variant_repo.delete(id).await
+    }
+
+    /// Soft delete a product variant (sets deleted_at)
+    pub async fn soft_delete_variant(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let variant_repo = self
+            .variant_repo
+            .as_ref()
+            .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
+
+        variant_repo.soft_delete(id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted product variant
+    pub async fn restore_variant(&self, id: i64) -> Result<ProductVariantResponse, ApiError> {
+        let variant_repo = self
+            .variant_repo
+            .as_ref()
+            .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
+
+        let variant = variant_repo.restore(id).await?;
+        Ok(variant.into())
+    }
+
+    /// List soft-deleted product variants for a product
+    pub async fn list_deleted_variants(
+        &self,
+        product_id: i64,
+    ) -> Result<Vec<ProductVariantResponse>, ApiError> {
+        let variant_repo = self
+            .variant_repo
+            .as_ref()
+            .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
+
+        let variants = variant_repo.find_deleted(product_id).await?;
+        Ok(variants.into_iter().map(|v| v.into()).collect())
+    }
+
+    /// Permanently delete a product variant (hard delete)
+    pub async fn destroy_variant(&self, id: i64) -> Result<(), ApiError> {
+        let variant_repo = self
+            .variant_repo
+            .as_ref()
+            .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
+
+        variant_repo.destroy(id).await
     }
 }
 
@@ -412,7 +539,7 @@ mod tests {
             price_modifier: dec!(10.0),
         };
 
-        let result = service.create_variant(variant_create).await;
+        let result = service.create_variant(variant_create, 1).await;
         assert!(result.is_ok());
         let variant = result.unwrap();
         assert_eq!(variant.name, "Red Large");
@@ -454,10 +581,13 @@ mod tests {
             price_modifier: dec!(-5.0),
         };
 
-        service.create_variant(variant_create1).await.unwrap();
-        service.create_variant(variant_create2).await.unwrap();
+        service.create_variant(variant_create1, 1).await.unwrap();
+        service.create_variant(variant_create2, 1).await.unwrap();
 
-        let variants = service.get_variants_by_product(product.id).await.unwrap();
+        let variants = service
+            .get_variants_by_product(product.id, 1)
+            .await
+            .unwrap();
         assert_eq!(variants.len(), 2);
     }
 
@@ -488,7 +618,7 @@ mod tests {
             barcode: None,
             price_modifier: dec!(0.0),
         };
-        let variant = service.create_variant(variant_create).await.unwrap();
+        let variant = service.create_variant(variant_create, 1).await.unwrap();
 
         // Update variant
         let update = UpdateProductVariant {
@@ -532,7 +662,7 @@ mod tests {
             barcode: None,
             price_modifier: dec!(0.0),
         };
-        let variant = service.create_variant(variant_create).await.unwrap();
+        let variant = service.create_variant(variant_create, 1).await.unwrap();
 
         // Delete variant
         service.delete_variant(variant.id).await.unwrap();
@@ -540,5 +670,92 @@ mod tests {
         // Verify deletion
         let result = service.get_variant(variant.id).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_soft_delete_and_restore_product() {
+        let service = create_service();
+
+        let create = CreateProduct {
+            tenant_id: 1,
+            code: "P-SOFT".to_string(),
+            name: "Soft Delete Test".to_string(),
+            description: None,
+            category_id: None,
+            unit_id: None,
+            barcode: None,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
+        };
+
+        let product = service.create_product(create).await.unwrap();
+        let id = product.id;
+
+        // Soft delete
+        service.soft_delete_product(id, 1, 1).await.unwrap();
+
+        // Should not be found via normal get
+        assert!(service.get_product(id, 1).await.is_err());
+
+        // Should appear in deleted list
+        let deleted = service.list_deleted_products(1).await.unwrap();
+        assert!(deleted.iter().any(|p| p.id == id));
+
+        // Restore
+        let restored = service.restore_product(id, 1).await.unwrap();
+        assert_eq!(restored.id, id);
+
+        // Should be found again
+        assert!(service.get_product(id, 1).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_soft_delete_and_restore_category() {
+        let service = create_service();
+
+        let create = CreateCategory {
+            tenant_id: 1,
+            name: "Test Category".to_string(),
+            parent_id: None,
+        };
+
+        let category = service.create_category(create).await.unwrap();
+        let id = category.id;
+
+        // Soft delete
+        service.soft_delete_category(id, 1, 1).await.unwrap();
+
+        // Should not be found via normal get
+        assert!(service.get_category(id, 1).await.is_err());
+
+        // Restore
+        let restored = service.restore_category(id, 1).await.unwrap();
+        assert_eq!(restored.id, id);
+    }
+
+    #[tokio::test]
+    async fn test_soft_delete_and_restore_unit() {
+        let service = create_service();
+
+        let create = CreateUnit {
+            tenant_id: 1,
+            code: "KG".to_string(),
+            name: "Kilogram".to_string(),
+            is_integer: false,
+        };
+
+        let unit = service.create_unit(create).await.unwrap();
+        let id = unit.id;
+
+        // Soft delete
+        service.soft_delete_unit(id, 1, 1).await.unwrap();
+
+        // Should not be found via normal get
+        assert!(service.get_unit(id, 1).await.is_err());
+
+        // Restore
+        let restored = service.restore_unit(id, 1).await.unwrap();
+        assert_eq!(restored.id, id);
     }
 }

@@ -3,9 +3,10 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 /// Sales order status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum SalesOrderStatus {
     Draft,
     PendingApproval,
@@ -51,7 +52,7 @@ impl std::str::FromStr for SalesOrderStatus {
 }
 
 /// Quotation status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum QuotationStatus {
     Draft,
     Sent,
@@ -94,7 +95,7 @@ impl std::str::FromStr for QuotationStatus {
 }
 
 /// Sales order entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SalesOrder {
     pub id: i64,
     pub tenant_id: i64,
@@ -112,10 +113,32 @@ pub struct SalesOrder {
     pub billing_address: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for SalesOrder {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Sales order line item
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SalesOrderLine {
     pub id: i64,
     pub order_id: i64,
@@ -130,7 +153,7 @@ pub struct SalesOrderLine {
 }
 
 /// Quotation entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Quotation {
     pub id: i64,
     pub tenant_id: i64,
@@ -147,10 +170,32 @@ pub struct Quotation {
     pub sales_order_id: Option<i64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
+}
+
+impl crate::common::SoftDeletable for Quotation {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
+    }
 }
 
 /// Quotation line item
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct QuotationLine {
     pub id: i64,
     pub quotation_id: i64,
@@ -165,7 +210,7 @@ pub struct QuotationLine {
 }
 
 /// Create sales order request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateSalesOrder {
     pub tenant_id: i64,
     pub cari_id: i64,
@@ -192,7 +237,7 @@ impl CreateSalesOrder {
 }
 
 /// Create sales order line
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateSalesOrderLine {
     pub product_id: Option<i64>,
     pub description: String,
@@ -231,7 +276,7 @@ impl CreateSalesOrderLine {
 }
 
 /// Create quotation request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateQuotation {
     pub tenant_id: i64,
     pub cari_id: i64,
@@ -259,7 +304,7 @@ impl CreateQuotation {
 }
 
 /// Create quotation line
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateQuotationLine {
     pub product_id: Option<i64>,
     pub description: String,
@@ -298,7 +343,7 @@ impl CreateQuotationLine {
 }
 
 /// Sales order response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SalesOrderResponse {
     pub id: i64,
     pub order_number: String,
@@ -338,7 +383,7 @@ impl From<(SalesOrder, Vec<SalesOrderLine>)> for SalesOrderResponse {
 }
 
 /// Quotation response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct QuotationResponse {
     pub id: i64,
     pub quotation_number: String,
@@ -378,6 +423,7 @@ impl From<(Quotation, Vec<QuotationLine>)> for QuotationResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::SoftDeletable;
     use chrono::Duration;
     use rust_decimal_macros::dec;
 

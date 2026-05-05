@@ -6,6 +6,7 @@ use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::sales::model::{
     CreateQuotation, CreateQuotationLine, CreateSalesOrder, CreateSalesOrderLine, Quotation,
     QuotationLine, QuotationStatus, SalesOrder, SalesOrderLine, SalesOrderStatus,
@@ -16,7 +17,7 @@ use crate::error::ApiError;
 #[async_trait]
 pub trait SalesOrderRepository: Send + Sync {
     async fn create(&self, order: CreateSalesOrder) -> Result<SalesOrder, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<SalesOrder>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<SalesOrder>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError>;
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<SalesOrder>, ApiError>;
     async fn find_by_status(
@@ -47,7 +48,20 @@ pub trait SalesOrderRepository: Send + Sync {
         id: i64,
         status: SalesOrderStatus,
     ) -> Result<SalesOrder, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a sales order
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted sales order
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<SalesOrder, ApiError>;
+
+    /// Find soft-deleted sales orders
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError>;
+
+    /// Hard delete a sales order (permanent destruction -- admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for SalesOrderLine operations
@@ -66,7 +80,7 @@ pub trait SalesOrderLineRepository: Send + Sync {
 #[async_trait]
 pub trait QuotationRepository: Send + Sync {
     async fn create(&self, quotation: CreateQuotation) -> Result<Quotation, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Quotation>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Quotation>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Quotation>, ApiError>;
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Quotation>, ApiError>;
     async fn find_by_status(
@@ -94,7 +108,20 @@ pub trait QuotationRepository: Send + Sync {
 
     async fn update_status(&self, id: i64, status: QuotationStatus) -> Result<Quotation, ApiError>;
     async fn link_to_order(&self, id: i64, order_id: i64) -> Result<Quotation, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a quotation
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted quotation
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Quotation, ApiError>;
+
+    /// Find soft-deleted quotations
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Quotation>, ApiError>;
+
+    /// Hard delete a quotation (permanent destruction -- admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for QuotationLine operations
@@ -199,15 +226,21 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
             billing_address: create.billing_address,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.orders.insert(id, order.clone());
         Ok(order)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<SalesOrder>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<SalesOrder>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.orders.get(&id).cloned())
+        Ok(inner
+            .orders
+            .get(&id)
+            .filter(|o| o.tenant_id == tenant_id && !o.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
@@ -215,7 +248,7 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
         Ok(inner
             .orders
             .values()
-            .filter(|o| o.tenant_id == tenant_id)
+            .filter(|o| o.tenant_id == tenant_id && !o.is_deleted())
             .cloned()
             .collect())
     }
@@ -225,7 +258,7 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
         Ok(inner
             .orders
             .values()
-            .filter(|o| o.cari_id == cari_id)
+            .filter(|o| o.cari_id == cari_id && !o.is_deleted())
             .cloned()
             .collect())
     }
@@ -239,7 +272,7 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
         Ok(inner
             .orders
             .values()
-            .filter(|o| o.tenant_id == tenant_id && o.status == status)
+            .filter(|o| o.tenant_id == tenant_id && o.status == status && !o.is_deleted())
             .cloned()
             .collect())
     }
@@ -254,7 +287,7 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
         let all: Vec<_> = inner
             .orders
             .values()
-            .filter(|o| o.tenant_id == tenant_id)
+            .filter(|o| o.tenant_id == tenant_id && !o.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -277,7 +310,7 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
         let all: Vec<_> = inner
             .orders
             .values()
-            .filter(|o| o.tenant_id == tenant_id && o.status == status)
+            .filter(|o| o.tenant_id == tenant_id && o.status == status && !o.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -304,8 +337,56 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
         Ok(order.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let order = inner
+            .orders
+            .get_mut(&id)
+            .filter(|o| o.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", id)))?;
+        order.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<SalesOrder, ApiError> {
+        let mut inner = self.inner.lock();
+        let order = inner
+            .orders
+            .get_mut(&id)
+            .filter(|o| o.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", id)))?;
+        order.restore();
+        Ok(order.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .orders
+            .values()
+            .filter(|o| o.tenant_id == tenant_id && o.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(order) = inner.orders.get(&id) {
+            if order.tenant_id != tenant_id {
+                return Err(ApiError::NotFound(format!("Sales order {} not found", id)));
+            }
+        }
+        inner.orders.remove(&id);
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(order) = inner.orders.get(&id) {
+            if order.tenant_id != tenant_id {
+                return Err(ApiError::NotFound(format!("Sales order {} not found", id)));
+            }
+        }
         inner.orders.remove(&id);
         Ok(())
     }
@@ -455,15 +536,21 @@ impl QuotationRepository for InMemoryQuotationRepository {
             sales_order_id: None,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.quotations.insert(id, quotation.clone());
         Ok(quotation)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Quotation>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Quotation>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.quotations.get(&id).cloned())
+        Ok(inner
+            .quotations
+            .get(&id)
+            .filter(|q| q.tenant_id == tenant_id && !q.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Quotation>, ApiError> {
@@ -471,7 +558,7 @@ impl QuotationRepository for InMemoryQuotationRepository {
         Ok(inner
             .quotations
             .values()
-            .filter(|q| q.tenant_id == tenant_id)
+            .filter(|q| q.tenant_id == tenant_id && !q.is_deleted())
             .cloned()
             .collect())
     }
@@ -481,7 +568,7 @@ impl QuotationRepository for InMemoryQuotationRepository {
         Ok(inner
             .quotations
             .values()
-            .filter(|q| q.cari_id == cari_id)
+            .filter(|q| q.cari_id == cari_id && !q.is_deleted())
             .cloned()
             .collect())
     }
@@ -495,7 +582,7 @@ impl QuotationRepository for InMemoryQuotationRepository {
         Ok(inner
             .quotations
             .values()
-            .filter(|q| q.tenant_id == tenant_id && q.status == status)
+            .filter(|q| q.tenant_id == tenant_id && q.status == status && !q.is_deleted())
             .cloned()
             .collect())
     }
@@ -510,7 +597,7 @@ impl QuotationRepository for InMemoryQuotationRepository {
         let all: Vec<_> = inner
             .quotations
             .values()
-            .filter(|q| q.tenant_id == tenant_id)
+            .filter(|q| q.tenant_id == tenant_id && !q.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -533,7 +620,7 @@ impl QuotationRepository for InMemoryQuotationRepository {
         let all: Vec<_> = inner
             .quotations
             .values()
-            .filter(|q| q.tenant_id == tenant_id && q.status == status)
+            .filter(|q| q.tenant_id == tenant_id && q.status == status && !q.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -568,8 +655,56 @@ impl QuotationRepository for InMemoryQuotationRepository {
         Ok(quotation.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let quotation = inner
+            .quotations
+            .get_mut(&id)
+            .filter(|q| q.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", id)))?;
+        quotation.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Quotation, ApiError> {
+        let mut inner = self.inner.lock();
+        let quotation = inner
+            .quotations
+            .get_mut(&id)
+            .filter(|q| q.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", id)))?;
+        quotation.restore();
+        Ok(quotation.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Quotation>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .quotations
+            .values()
+            .filter(|q| q.tenant_id == tenant_id && q.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(quotation) = inner.quotations.get(&id) {
+            if quotation.tenant_id != tenant_id {
+                return Err(ApiError::NotFound(format!("Quotation {} not found", id)));
+            }
+        }
+        inner.quotations.remove(&id);
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(quotation) = inner.quotations.get(&id) {
+            if quotation.tenant_id != tenant_id {
+                return Err(ApiError::NotFound(format!("Quotation {} not found", id)));
+            }
+        }
         inner.quotations.remove(&id);
         Ok(())
     }

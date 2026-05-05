@@ -4,7 +4,7 @@ use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
 use crate::common::MessageResponse;
-use crate::domain::invoice::model::{CreateInvoice, InvoiceStatus};
+use crate::domain::invoice::model::{CreateInvoice, InvoiceResponse, InvoiceStatus};
 use crate::domain::invoice::service::InvoiceService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
@@ -209,7 +209,11 @@ pub async fn delete_invoice(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match invoice_service
-        .delete_invoice(*path, admin_user.0.tenant_id)
+        .soft_delete_invoice(
+            *path,
+            admin_user.0.tenant_id,
+            admin_user.0.sub.parse().unwrap_or(0),
+        )
         .await
     {
         Ok(()) => {
@@ -218,6 +222,78 @@ pub async fn delete_invoice(
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
+}
+
+/// Restore a soft-deleted invoice (admin only)
+#[utoipa::path(
+    put, path = "/api/v1/invoices/{id}/restore", tag = "Invoice",
+    params(("id" = i64, Path, description = "Invoice ID")),
+    responses(
+        (status = 200, description = "Invoice restored", body = InvoiceResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Invoice not found or not deleted"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_invoice(
+    admin_user: AdminUser,
+    invoice_service: web::Data<InvoiceService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let invoice = invoice_service
+        .restore_invoice(*path, admin_user.0.tenant_id)
+        .await?;
+    let lines = invoice_service.get_invoice_lines(invoice.id).await?;
+    let response = InvoiceResponse::from((invoice, lines));
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/// List soft-deleted invoices (admin only)
+#[utoipa::path(
+    get, path = "/api/v1/invoices/deleted", tag = "Invoice",
+    responses(
+        (status = 200, description = "List of deleted invoices"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_invoices(
+    admin_user: AdminUser,
+    invoice_service: web::Data<InvoiceService>,
+) -> ApiResult<HttpResponse> {
+    let invoices = invoice_service
+        .list_deleted_invoices(admin_user.0.tenant_id)
+        .await?;
+    let responses: Vec<InvoiceResponse> = invoices
+        .into_iter()
+        .map(|inv| {
+            let lines = Vec::new(); // Deleted invoices don't need lines
+            InvoiceResponse::from((inv, lines))
+        })
+        .collect();
+    Ok(HttpResponse::Ok().json(responses))
+}
+
+/// Permanently delete an invoice (admin only)
+#[utoipa::path(
+    delete, path = "/api/v1/invoices/{id}/destroy", tag = "Invoice",
+    params(("id" = i64, Path, description = "Invoice ID")),
+    responses(
+        (status = 204, description = "Invoice permanently deleted"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Invoice not found"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_invoice(
+    admin_user: AdminUser,
+    invoice_service: web::Data<InvoiceService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    invoice_service
+        .destroy_invoice(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Add payment to invoice (requires admin role)
@@ -276,6 +352,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_invoices))
             .route(web::post().to(create_invoice)),
     )
+    .service(web::resource("/v1/invoices/deleted").route(web::get().to(list_deleted_invoices)))
     .service(
         web::resource("/v1/invoices/outstanding").route(web::get().to(get_outstanding_invoices)),
     )
@@ -293,5 +370,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(web::resource("/v1/invoices/{id}/status").route(web::put().to(update_invoice_status)))
     .service(
         web::resource("/v1/invoices/{id}/payments").route(web::get().to(get_payments_by_invoice)),
-    );
+    )
+    .service(web::resource("/v1/invoices/{id}/restore").route(web::put().to(restore_invoice)))
+    .service(web::resource("/v1/invoices/{id}/destroy").route(web::delete().to(destroy_invoice)));
 }

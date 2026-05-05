@@ -1,7 +1,7 @@
 # Turerp ERP
 
 [![CI](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-315%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-675%20passing-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **Modern, multi-tenant SaaS ERP system** - Built with Rust, Actix-web, and SQLx.
@@ -39,7 +39,19 @@
 | **BOM** | Bill of Materials management, material requirements planning |
 | **Quality Control** | Quality inspections, non-conformance reports (NCR) |
 | **CRM** | Leads, opportunities, campaigns, support tickets |
-| **Audit** | Request audit trail, batch persistence, admin query API |
+| **Custom Fields** | Dynamic field definitions per module (String/Number/Date/Boolean/Select), JSONB values |
+| **Webhook System** | Event-driven webhook subscriptions, delivery tracking, retry logic |
+| **Event Bus** | Domain events with outbox pattern, dead letter queue, batch processing |
+| **Notifications** | Email/SMS/InApp notifications with template engine and retry support |
+| **Job Scheduler** | Background jobs with priority, retry, exponential backoff, scheduled execution |
+| **Search** | Full-text search with fuzzy matching, reindexing, tenant-isolated |
+| **Reports** | PDF/Excel/XML/CSV/JSON report generation with tenant isolation |
+| **Idempotency** | Per-endpoint idempotency keys with 24h TTL cache |
+| **API Keys** | Scoped API key authentication with SHA-256 hashing |
+| **File Upload** | Document management with metadata, checksums, soft delete |
+| **Tracing** | OpenTelemetry-compatible distributed tracing with W3C propagation |
+| **DB Router** | Read replica routing with session tracking and health checks |
+| **Cache** | In-memory caching with TTL, eviction, namespace isolation |
 
 ### Infrastructure & Operations
 | Feature | Description |
@@ -50,6 +62,7 @@
 | **Centralized Error Handling** | `map_sqlx_error` with PG error code detection (23505, 23503) |
 | **Trusted Proxy** | Configurable trusted proxies for rate limiting behind load balancers |
 | **Composite DB Indexes** | `tenant_id + created_at DESC` on all multi-tenant tables |
+| **Custom Fields** | Dynamic field definitions per module, JSONB values, type validation |
 
 ## Tech Stack
 
@@ -187,9 +200,16 @@ turerp-rust/
 │   │   │   ├── audit/         # Audit log module
 │   │   │   ├── feature/       # Feature flags module
 │   │   │   ├── settings/      # Configuration management module
-│   │   │   └── crm/           # CRM module
+│   │   │   ├── custom_field/ # Custom field definitions module
+│   │   │   ├── crm/           # CRM module
+│   │   │   ├── webhook/       # Webhook subscriptions & deliveries
+│   │   │   ├── tax/           # Tax engine module
+│   │   │   ├── edefter/       # e-Defter (electronic ledger)
+│   │   │   └── efatura/       # e-Fatura (electronic invoice)
 │   │   ├── common/
-│   │   │   └── pagination.rs  # Pagination helpers
+│   │   │   ├── mod.rs          # Common exports
+│   │   │   ├── pagination.rs   # Pagination helpers
+│   │   │   └── soft_delete.rs # Soft delete trait and types
 │   │   ├── middleware/       # HTTP middleware
 │   │   │   ├── auth.rs        # JWT authentication + AdminUser/AuthUser extractors
 │   │   │   ├── rate_limit.rs  # Rate limiting (governor 0.8, trusted proxy)
@@ -210,7 +230,13 @@ turerp-rust/
 │   │   ├── 003_business_modules.sql  # Business module tables
 │   │   ├── 004_composite_indexes.sql # Pagination indexes
 │   │   ├── 005_audit_logs.sql        # Audit log table
-│   │   └── 006_settings.sql          # Settings / Config management table
+│   │   ├── 006_settings.sql          # Settings / Config management table
+│   │   ├── 007_soft_delete.sql       # Soft delete columns for all tables
+│   │   ├── 008_custom_fields.sql     # Custom field definitions table
+│   │   ├── 009_webhooks.sql          # Webhook subscriptions & deliveries
+│   │   ├── 010_edefter.sql           # e-Defter module tables
+│   │   ├── 011_tax_engine.sql        # Tax engine (KDV, OIV, etc.)
+│   │   └── 012_efatura.sql           # e-Fatura module tables
 │   ├── tests/                 # Integration tests
 │   └── Cargo.toml             # Dependencies
 ├── docs/                      # Project documentation
@@ -253,6 +279,15 @@ PUT    /api/v1/settings/{id}     - Update setting 🔒👑
 POST   /api/v1/settings/bulk      - Bulk update settings 🔒👑
 DELETE /api/v1/settings/{id}     - Delete setting 🔒👑
 POST   /api/v1/settings/seed      - Seed default settings 🔒👑
+```
+
+### Custom Fields (Admin only)
+```
+POST   /api/v1/custom-fields        - Create custom field definition 🔒👑
+GET    /api/v1/custom-fields        - List definitions (optional `?module=` filter) 🔒👑
+GET    /api/v1/custom-fields/{id}   - Get definition 🔒👑
+PUT    /api/v1/custom-fields/{id}   - Update definition 🔒👑
+DELETE /api/v1/custom-fields/{id}   - Soft delete definition 🔒👑
 ```
 
 ### Audit Logs (Admin only)

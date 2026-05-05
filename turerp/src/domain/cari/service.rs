@@ -3,7 +3,7 @@ use rust_decimal::Decimal;
 use validator::Validate;
 
 use crate::common::pagination::PaginatedResult;
-use crate::domain::cari::model::{CariResponse, CreateCari, UpdateCari};
+use crate::domain::cari::model::{Cari, CariResponse, CreateCari, UpdateCari};
 use crate::domain::cari::repository::BoxCariRepository;
 use crate::error::ApiError;
 
@@ -184,8 +184,28 @@ impl CariService {
     }
 
     /// Delete a cari account
-    pub async fn delete_cari(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.repo.delete(id, tenant_id).await
+    pub async fn delete_cari(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted cari (admin only)
+    pub async fn restore_cari(&self, id: i64, tenant_id: i64) -> Result<Cari, ApiError> {
+        self.repo.restore(id, tenant_id).await
+    }
+
+    /// List soft-deleted cari accounts (admin only)
+    pub async fn list_deleted_cari(&self, tenant_id: i64) -> Result<Vec<Cari>, ApiError> {
+        self.repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete a cari (admin only, after soft delete)
+    pub async fn destroy_cari(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.destroy(id, tenant_id).await
     }
 
     /// Update cari balance (for financial transactions)
@@ -435,7 +455,7 @@ mod tests {
 
         let created = service.create_cari(create).await.unwrap();
 
-        let result = service.delete_cari(created.id, 1).await;
+        let result = service.delete_cari(created.id, 1, 1).await;
         assert!(result.is_ok());
 
         // Verify deleted

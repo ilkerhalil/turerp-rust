@@ -34,9 +34,9 @@ impl ProjectService {
     pub async fn create_project(&self, create: CreateProject) -> Result<Project, ApiError> {
         self.project_repo.create(create).await
     }
-    pub async fn get_project(&self, id: i64) -> Result<Project, ApiError> {
+    pub async fn get_project(&self, id: i64, tenant_id: i64) -> Result<Project, ApiError> {
         self.project_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))
     }
@@ -58,9 +58,10 @@ impl ProjectService {
     pub async fn update_project_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: ProjectStatus,
     ) -> Result<Project, ApiError> {
-        self.project_repo.update_status(id, status).await
+        self.project_repo.update_status(id, tenant_id, status).await
     }
     pub async fn create_wbs_item(&self, create: CreateWbsItem) -> Result<WbsItem, ApiError> {
         self.wbs_repo.create(create).await
@@ -88,9 +89,10 @@ impl ProjectService {
     pub async fn get_profitability(
         &self,
         project_id: i64,
+        tenant_id: i64,
         revenue: Decimal,
     ) -> Result<ProjectProfitability, ApiError> {
-        let project = self.get_project(project_id).await?;
+        let project = self.get_project(project_id, tenant_id).await?;
         let actual_cost = self.cost_repo.find_total_by_project(project_id).await?;
         let profit = revenue - actual_cost;
         let margin = if revenue > Decimal::ZERO {
@@ -107,6 +109,30 @@ impl ProjectService {
             profit,
             profit_margin: margin,
         })
+    }
+
+    // Soft delete operations
+    pub async fn soft_delete_project(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.project_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    pub async fn restore_project(&self, id: i64, tenant_id: i64) -> Result<Project, ApiError> {
+        self.project_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_projects(&self, tenant_id: i64) -> Result<Vec<Project>, ApiError> {
+        self.project_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_project(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.project_repo.destroy(id, tenant_id).await
     }
 }
 

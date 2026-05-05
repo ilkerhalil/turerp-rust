@@ -39,9 +39,9 @@ impl ManufacturingService {
         self.work_order_repo.create(create).await
     }
 
-    pub async fn get_work_order(&self, id: i64) -> Result<WorkOrder, ApiError> {
+    pub async fn get_work_order(&self, id: i64, tenant_id: i64) -> Result<WorkOrder, ApiError> {
         self.work_order_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))
     }
@@ -116,9 +116,9 @@ impl ManufacturingService {
         self.bom_repo.create(create).await
     }
 
-    pub async fn get_bom(&self, id: i64) -> Result<BillOfMaterials, ApiError> {
+    pub async fn get_bom(&self, id: i64, tenant_id: i64) -> Result<BillOfMaterials, ApiError> {
         self.bom_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("BOM not found".to_string()))
     }
@@ -153,9 +153,9 @@ impl ManufacturingService {
         self.routing_repo.create(create).await
     }
 
-    pub async fn get_routing(&self, id: i64) -> Result<Routing, ApiError> {
+    pub async fn get_routing(&self, id: i64, tenant_id: i64) -> Result<Routing, ApiError> {
         self.routing_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Routing not found".to_string()))
     }
@@ -222,6 +222,82 @@ impl ManufacturingService {
             }
             None => Ok(Decimal::ZERO),
         }
+    }
+
+    // Work Order soft-delete methods
+    pub async fn soft_delete_work_order(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.work_order_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    pub async fn restore_work_order(&self, id: i64, tenant_id: i64) -> Result<WorkOrder, ApiError> {
+        self.work_order_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_work_orders(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<WorkOrder>, ApiError> {
+        self.work_order_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_work_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.work_order_repo.destroy(id, tenant_id).await
+    }
+
+    // BOM soft-delete methods
+    pub async fn soft_delete_bom(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.bom_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    pub async fn restore_bom(&self, id: i64, tenant_id: i64) -> Result<BillOfMaterials, ApiError> {
+        self.bom_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_boms(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<BillOfMaterials>, ApiError> {
+        self.bom_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_bom(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.bom_repo.destroy(id, tenant_id).await
+    }
+
+    // Routing soft-delete methods
+    pub async fn soft_delete_routing(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.routing_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    pub async fn restore_routing(&self, id: i64, tenant_id: i64) -> Result<Routing, ApiError> {
+        self.routing_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_routings(&self, tenant_id: i64) -> Result<Vec<Routing>, ApiError> {
+        self.routing_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_routing(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.routing_repo.destroy(id, tenant_id).await
     }
 }
 
@@ -444,9 +520,9 @@ impl QualityControlService {
         self.inspection_repo.create(create).await
     }
 
-    pub async fn get_inspection(&self, id: i64) -> Result<Inspection, ApiError> {
+    pub async fn get_inspection(&self, id: i64, tenant_id: i64) -> Result<Inspection, ApiError> {
         self.inspection_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Inspection not found".to_string()))
     }
@@ -473,8 +549,15 @@ impl QualityControlService {
         self.inspection_repo.update(id, update).await
     }
 
-    pub async fn delete_inspection(&self, id: i64) -> Result<(), ApiError> {
-        self.inspection_repo.delete(id).await
+    pub async fn delete_inspection(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.inspection_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
     }
 
     // NCR methods
@@ -485,9 +568,9 @@ impl QualityControlService {
         self.ncr_repo.create(create).await
     }
 
-    pub async fn get_ncr(&self, id: i64) -> Result<NonConformanceReport, ApiError> {
+    pub async fn get_ncr(&self, id: i64, tenant_id: i64) -> Result<NonConformanceReport, ApiError> {
         self.ncr_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("NCR not found".to_string()))
     }
@@ -514,8 +597,53 @@ impl QualityControlService {
         self.ncr_repo.update(id, update).await
     }
 
-    pub async fn delete_ncr(&self, id: i64) -> Result<(), ApiError> {
-        self.ncr_repo.delete(id).await
+    pub async fn delete_ncr(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.ncr_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    // Inspection soft-delete methods
+    pub async fn restore_inspection(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Inspection, ApiError> {
+        self.inspection_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_inspections(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Inspection>, ApiError> {
+        self.inspection_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_inspection(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.inspection_repo.destroy(id, tenant_id).await
+    }
+
+    // NCR soft-delete methods
+    pub async fn restore_ncr(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<NonConformanceReport, ApiError> {
+        self.ncr_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_ncrs(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<NonConformanceReport>, ApiError> {
+        self.ncr_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_ncr(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.ncr_repo.destroy(id, tenant_id).await
     }
 }
 

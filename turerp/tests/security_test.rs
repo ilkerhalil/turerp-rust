@@ -10,9 +10,9 @@ use serde_json::json;
 
 use turerp::api::{
     auth_configure, users_configure, v1_accounting_configure, v1_assets_configure,
-    v1_cari_configure, v1_crm_configure, v1_hr_configure, v1_invoice_configure,
-    v1_manufacturing_configure, v1_project_configure, v1_sales_configure, v1_stock_configure,
-    v1_tenant_configure,
+    v1_cari_configure, v1_chart_of_accounts_configure, v1_crm_configure, v1_hr_configure,
+    v1_invoice_configure, v1_manufacturing_configure, v1_project_configure, v1_sales_configure,
+    v1_stock_configure, v1_tax_configure, v1_tenant_configure, v1_webhooks_configure,
 };
 use turerp::app::create_app_state;
 use turerp::config::Config;
@@ -35,7 +35,10 @@ fn configure_all_routes(cfg: &mut web::ServiceConfig) {
             .configure(v1_manufacturing_configure)
             .configure(v1_crm_configure)
             .configure(v1_tenant_configure)
-            .configure(v1_assets_configure),
+            .configure(v1_assets_configure)
+            .configure(v1_chart_of_accounts_configure)
+            .configure(v1_tax_configure)
+            .configure(v1_webhooks_configure),
     );
 }
 
@@ -82,6 +85,9 @@ fn build_full_test_app(
         .app_data(state.feature_service.clone())
         .app_data(state.product_service.clone())
         .app_data(state.purchase_service.clone())
+        .app_data(state.chart_of_accounts_service.clone())
+        .app_data(state.tax_service.clone())
+        .app_data(state.webhook_service.clone())
         .configure(configure_all_routes)
 }
 
@@ -96,6 +102,9 @@ macro_rules! test_app {
             .app_data($state.feature_service.clone())
             .app_data($state.product_service.clone())
             .app_data($state.purchase_service.clone())
+            .app_data($state.chart_of_accounts_service.clone())
+            .app_data($state.tax_service.clone())
+            .app_data($state.webhook_service.clone())
             .configure(configure_all_routes)
     };
 }
@@ -1108,5 +1117,397 @@ async fn test_asset_validation_negative_useful_life() {
         resp.status(),
         StatusCode::BAD_REQUEST,
         "Negative useful life should be rejected"
+    );
+}
+
+// ============================================================================
+// SQL Injection Tests - Chart of Accounts
+// ============================================================================
+
+#[actix_web::test]
+async fn test_sql_injection_in_chart_of_accounts_endpoints() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_admin!(&state, 1);
+
+    // Try SQL injection in chart account code field
+    let req = test::TestRequest::post()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "code": "'; DROP TABLE chart_accounts;--",
+            "name": "Malicious Account",
+            "group": "DonenVarliklar",
+            "account_type": "Asset",
+            "allow_posting": true
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status() == StatusCode::CREATED || resp.status() == StatusCode::BAD_REQUEST,
+        "SQL injection in chart account code should be handled safely"
+    );
+}
+
+// ============================================================================
+// SQL Injection Tests - Tax Engine
+// ============================================================================
+
+#[actix_web::test]
+async fn test_sql_injection_in_tax_endpoints() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_admin!(&state, 1);
+
+    // Try SQL injection in tax rate description
+    let req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "rate": "0.20",
+            "effective_from": "2024-01-01",
+            "description": "'; DROP TABLE tax_rates;--",
+            "is_default": true
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status() == StatusCode::CREATED || resp.status() == StatusCode::BAD_REQUEST,
+        "SQL injection in tax description should be handled safely"
+    );
+}
+
+// ============================================================================
+// Tenant Isolation Tests - Chart of Accounts
+// ============================================================================
+
+#[actix_web::test]
+async fn test_tenant_isolation_chart_of_accounts() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    // Admin in tenant 1 creates account
+    let token1 = sec_register_admin!(&state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "code": "100",
+            "name": "Tenant 1 Account",
+            "group": "DonenVarliklar",
+            "account_type": "Asset",
+            "allow_posting": true
+        }))
+        .to_request();
+
+    let _ = test::call_service(&app, create_req).await;
+
+    // Admin in tenant 2 lists accounts - should not see tenant 1's data
+    let token2 = sec_register_admin!(&state, 2);
+
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let accounts = json["items"].as_array().unwrap();
+    assert!(
+        accounts.is_empty(),
+        "Tenant 2 should not see tenant 1's chart accounts (IDOR)"
+    );
+}
+
+// ============================================================================
+// Tenant Isolation Tests - Tax Engine
+// ============================================================================
+
+#[actix_web::test]
+async fn test_tenant_isolation_tax_rates() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    // Admin in tenant 1 creates tax rate
+    let token1 = sec_register_admin!(&state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "rate": "0.20",
+            "effective_from": "2024-01-01",
+            "description": "Tenant 1 KDV",
+            "is_default": true
+        }))
+        .to_request();
+
+    let _ = test::call_service(&app, create_req).await;
+
+    // Admin in tenant 2 lists tax rates - should not see tenant 1's data
+    let token2 = sec_register_admin!(&state, 2);
+
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let rates = json["items"].as_array().unwrap();
+    assert!(
+        rates.is_empty(),
+        "Tenant 2 should not see tenant 1's tax rates (IDOR)"
+    );
+}
+
+// ============================================================================
+// Authorization Tests - Normal User Restrictions
+// ============================================================================
+
+#[actix_web::test]
+async fn test_normal_user_cannot_create_chart_account() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/chart-of-accounts")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "code": "UNAUTH-ACC",
+            "name": "Unauthorized",
+            "group": "DonenVarliklar",
+            "account_type": "Asset",
+            "allow_posting": true
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to create chart accounts"
+    );
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_create_tax_rate() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "rate": "0.20",
+            "effective_from": "2024-01-01",
+            "description": "Should Fail",
+            "is_default": true
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to create tax rates"
+    );
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_calculate_tax_period() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    // Admin creates a period
+    let admin_token = sec_register_admin!(&state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/periods")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "period_year": 2024,
+            "period_month": 6
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let period_id = json["id"].as_i64().unwrap();
+
+    // Normal user cannot calculate period
+    let user_token = sec_register_user!(&app, 1);
+
+    let calc_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/tax/periods/{}/calculate", period_id))
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, calc_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to calculate tax periods"
+    );
+}
+
+// ============================================================================
+// SQL Injection Tests - Webhook System
+// ============================================================================
+
+#[actix_web::test]
+async fn test_sql_injection_in_webhook_endpoints() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_admin!(&state, 1);
+
+    // Try SQL injection in webhook URL and description
+    let malicious_url = "https://example.com'; DROP TABLE webhooks;--";
+    let req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "url": malicious_url,
+            "description": "'; DROP TABLE webhook_deliveries;--",
+            "event_types": ["' OR '1'='1"],
+            "secret": "valid-secret-123"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    // Should not crash; may be created (in-memory) or rejected for bad URL
+    assert!(
+        resp.status() == StatusCode::CREATED || resp.status() == StatusCode::BAD_REQUEST,
+        "SQL injection in webhook fields should be handled safely"
+    );
+}
+
+// ============================================================================
+// Tenant Isolation Tests - Webhook System
+// ============================================================================
+
+#[actix_web::test]
+async fn test_tenant_isolation_webhooks() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    // Admin in tenant 1 creates webhook
+    let token1 = sec_register_admin!(&state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "url": "https://tenant1.com/webhook",
+            "event_types": ["invoice_created"]
+        }))
+        .to_request();
+
+    let _ = test::call_service(&app, create_req).await;
+
+    // Admin in tenant 2 lists webhooks - should not see tenant 1's data
+    let token2 = sec_register_admin!(&state, 2);
+
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let webhooks = json.as_array().unwrap();
+    assert!(
+        webhooks.is_empty(),
+        "Tenant 2 should not see tenant 1's webhooks (IDOR)"
+    );
+}
+
+// ============================================================================
+// Authorization Tests - Webhook System
+// ============================================================================
+
+#[actix_web::test]
+async fn test_normal_user_cannot_create_webhook() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "url": "https://example.com/webhook",
+            "event_types": []
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to create webhooks"
+    );
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_test_webhook() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    // Admin creates a webhook
+    let admin_token = sec_register_admin!(&state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/webhooks")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "url": "https://example.com/webhook",
+            "event_types": ["*"]
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let webhook_id = json["id"].as_i64().unwrap();
+
+    // Normal user cannot trigger test
+    let user_token = sec_register_user!(&app, 1);
+
+    let test_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/webhooks/{}/test", webhook_id))
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, test_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to test webhooks"
     );
 }

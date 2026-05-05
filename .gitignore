@@ -1,0 +1,19 @@
+# Claude / MCP
+.claude/
+.claude-flow/
+.mcp.json
+.swarm/
+ruvector.db
+
+# Environment
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db

@@ -4,7 +4,7 @@ use actix_web::{web, HttpResponse};
 
 use crate::common::pagination::PaginationParams;
 use crate::common::MessageResponse;
-use crate::domain::cari::model::{CariType, CreateCari, UpdateCari};
+use crate::domain::cari::model::{CariResponse, CariType, CreateCari, UpdateCari};
 use crate::domain::cari::service::CariService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
@@ -228,7 +228,11 @@ pub async fn delete_cari(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match cari_service
-        .delete_cari(*path, admin_user.0.tenant_id)
+        .delete_cari(
+            *path,
+            admin_user.0.tenant_id,
+            admin_user.0.sub.parse().unwrap_or(0),
+        )
         .await
     {
         Ok(()) => {
@@ -237,6 +241,82 @@ pub async fn delete_cari(
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
+}
+
+/// Restore a soft-deleted cari (admin only)
+#[utoipa::path(
+    put,
+    path = "/api/v1/cari/{id}/restore",
+    tag = "Cari",
+    params(("id" = i64, Path, description = "Cari ID")),
+    responses(
+        (status = 200, description = "Cari restored", body = CariResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 404, description = "Cari not found or not deleted")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_cari(
+    admin_user: AdminUser,
+    cari_service: web::Data<CariService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let cari = cari_service
+        .restore_cari(*path, admin_user.0.tenant_id)
+        .await?;
+    let response: CariResponse = cari.into();
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/// List soft-deleted cari accounts (admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/cari/deleted",
+    tag = "Cari",
+    responses(
+        (status = 200, description = "List of deleted cari accounts"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_cari(
+    admin_user: AdminUser,
+    cari_service: web::Data<CariService>,
+) -> ApiResult<HttpResponse> {
+    let caris: Vec<_> = cari_service
+        .list_deleted_cari(admin_user.0.tenant_id)
+        .await?
+        .into_iter()
+        .map(CariResponse::from)
+        .collect();
+    Ok(HttpResponse::Ok().json(caris))
+}
+
+/// Permanently delete a cari (admin only)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/cari/{id}/destroy",
+    tag = "Cari",
+    params(("id" = i64, Path, description = "Cari ID")),
+    responses(
+        (status = 204, description = "Cari permanently deleted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 404, description = "Cari not found")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_cari(
+    admin_user: AdminUser,
+    cari_service: web::Data<CariService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    cari_service
+        .destroy_cari(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
@@ -268,6 +348,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_all_cari))
             .route(web::post().to(create_cari)),
     )
+    .service(web::resource("/v1/cari/deleted").route(web::get().to(list_deleted_cari)))
     .service(web::resource("/v1/cari/search").route(web::get().to(search_cari)))
     .service(web::resource("/v1/cari/type/{cari_type}").route(web::get().to(get_cari_by_type)))
     .service(
@@ -275,5 +356,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_cari))
             .route(web::put().to(update_cari))
             .route(web::delete().to(delete_cari)),
-    );
+    )
+    .service(web::resource("/v1/cari/{id}/restore").route(web::put().to(restore_cari)))
+    .service(web::resource("/v1/cari/{id}/destroy").route(web::delete().to(destroy_cari)));
 }

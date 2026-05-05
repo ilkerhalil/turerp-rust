@@ -1,8 +1,9 @@
 //! Chart of Accounts API endpoints (v1)
 
 use actix_web::{web, HttpResponse};
+use serde::Deserialize;
 
-use crate::common::pagination::PaginationParams;
+use crate::common::pagination::{default_page, default_per_page, PaginationParams};
 use crate::common::MessageResponse;
 use crate::domain::chart_of_accounts::model::{
     AccountGroup, CreateChartAccount, UpdateChartAccount,
@@ -11,6 +12,25 @@ use crate::domain::chart_of_accounts::service::ChartOfAccountsService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
+
+/// Query parameters for listing chart accounts
+#[derive(Debug, Deserialize)]
+pub struct ListChartAccountsQuery {
+    #[serde(default = "default_page")]
+    pub page: u32,
+    #[serde(default = "default_per_page")]
+    pub per_page: u32,
+    pub group: Option<AccountGroup>,
+}
+
+impl From<ListChartAccountsQuery> for PaginationParams {
+    fn from(q: ListChartAccountsQuery) -> Self {
+        Self {
+            page: q.page,
+            per_page: q.per_page,
+        }
+    }
+}
 
 /// Create chart account (requires admin role)
 #[utoipa::path(
@@ -50,18 +70,14 @@ pub async fn create_chart_account(
 pub async fn list_chart_accounts(
     auth_user: AuthUser,
     chart_of_accounts_service: web::Data<ChartOfAccountsService>,
-    pagination: web::Query<PaginationParams>,
-    group: web::Query<Option<AccountGroup>>,
+    query: web::Query<ListChartAccountsQuery>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    let q = query.into_inner();
     match chart_of_accounts_service
-        .list_accounts(
-            auth_user.0.tenant_id,
-            group.into_inner(),
-            pagination.into_inner(),
-        )
+        .list_accounts(auth_user.0.tenant_id, q.group, q.into())
         .await
     {
         Ok(result) => Ok(HttpResponse::Ok().json(result)),

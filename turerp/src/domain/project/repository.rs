@@ -7,6 +7,7 @@ use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::project::model::{
     CreateProject, CreateProjectCost, CreateWbsItem, Project, ProjectCost, ProjectStatus, WbsItem,
 };
@@ -15,7 +16,7 @@ use crate::error::ApiError;
 #[async_trait]
 pub trait ProjectRepository: Send + Sync {
     async fn create(&self, project: CreateProject) -> Result<Project, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Project>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Project>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Project>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -23,15 +24,29 @@ pub trait ProjectRepository: Send + Sync {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<Project>, ApiError>;
-    async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Project>, ApiError>;
+    async fn find_by_cari(&self, cari_id: i64, tenant_id: i64) -> Result<Vec<Project>, ApiError>;
     async fn find_by_status(
         &self,
         tenant_id: i64,
         status: ProjectStatus,
     ) -> Result<Vec<Project>, ApiError>;
-    async fn update_status(&self, id: i64, status: ProjectStatus) -> Result<Project, ApiError>;
-    async fn update_actual_cost(&self, id: i64, cost: Decimal) -> Result<Project, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: ProjectStatus,
+    ) -> Result<Project, ApiError>;
+    async fn update_actual_cost(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        cost: Decimal,
+    ) -> Result<Project, ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Project, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Project>, ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 #[async_trait]
@@ -109,20 +124,26 @@ impl ProjectRepository for InMemoryProjectRepository {
             actual_cost: Decimal::ZERO,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.projects.insert(id, project.clone());
         Ok(project)
     }
-    async fn find_by_id(&self, id: i64) -> Result<Option<Project>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Project>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.projects.get(&id).cloned())
+        Ok(inner
+            .projects
+            .get(&id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
+            .cloned())
     }
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Project>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .projects
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -136,7 +157,7 @@ impl ProjectRepository for InMemoryProjectRepository {
         let all: Vec<_> = inner
             .projects
             .values()
-            .filter(|x| x.tenant_id == tenant_id)
+            .filter(|x| x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -147,12 +168,12 @@ impl ProjectRepository for InMemoryProjectRepository {
             .collect();
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
-    async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Project>, ApiError> {
+    async fn find_by_cari(&self, cari_id: i64, tenant_id: i64) -> Result<Vec<Project>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .projects
             .values()
-            .filter(|x| x.cari_id == Some(cari_id))
+            .filter(|x| x.tenant_id == tenant_id && x.cari_id == Some(cari_id) && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -165,32 +186,116 @@ impl ProjectRepository for InMemoryProjectRepository {
         Ok(inner
             .projects
             .values()
-            .filter(|x| x.tenant_id == tenant_id && x.status == status)
+            .filter(|x| x.tenant_id == tenant_id && x.status == status && !x.is_deleted())
             .cloned()
             .collect())
     }
-    async fn update_status(&self, id: i64, status: ProjectStatus) -> Result<Project, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: ProjectStatus,
+    ) -> Result<Project, ApiError> {
         let mut inner = self.inner.lock();
         let proj = inner
             .projects
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))?;
+
+        if proj.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Project not found".to_string()));
+        }
+
         proj.status = status;
         proj.updated_at = Utc::now();
         Ok(proj.clone())
     }
-    async fn update_actual_cost(&self, id: i64, cost: Decimal) -> Result<Project, ApiError> {
+    async fn update_actual_cost(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        cost: Decimal,
+    ) -> Result<Project, ApiError> {
         let mut inner = self.inner.lock();
         let proj = inner
             .projects
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))?;
+
+        if proj.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Project not found".to_string()));
+        }
+
         proj.actual_cost = cost;
         proj.updated_at = Utc::now();
         Ok(proj.clone())
     }
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let proj = inner
+            .projects
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))?;
+
+        if proj.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Project not found".to_string()));
+        }
+
+        inner.projects.remove(&id);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let proj = inner
+            .projects
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))?;
+
+        if proj.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Project not found".to_string()));
+        }
+
+        proj.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Project, ApiError> {
+        let mut inner = self.inner.lock();
+        let proj = inner
+            .projects
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))?;
+
+        if proj.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Project not found".to_string()));
+        }
+
+        proj.restore();
+        Ok(proj.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Project>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .projects
+            .values()
+            .filter(|x| x.tenant_id == tenant_id && x.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let proj = inner
+            .projects
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))?;
+
+        if proj.tenant_id != tenant_id {
+            return Err(ApiError::NotFound("Project not found".to_string()));
+        }
+
         inner.projects.remove(&id);
         Ok(())
     }

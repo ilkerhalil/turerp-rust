@@ -7,8 +7,8 @@ use utoipa::ToSchema;
 use crate::common::pagination::PaginatedResult;
 use crate::common::MessageResponse;
 use crate::domain::purchase::{
-    CreatePurchaseRequest, PurchaseRequest, PurchaseRequestStatus, PurchaseService,
-    UpdatePurchaseRequest,
+    CreatePurchaseRequest, PurchaseRequest, PurchaseRequestResponse, PurchaseRequestStatus,
+    PurchaseService, UpdatePurchaseRequest,
 };
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
@@ -188,14 +188,17 @@ fn parse_status(status_str: &str) -> Result<PurchaseRequestStatus, crate::error:
     )
 )]
 pub async fn get_request(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     service: web::Data<PurchaseService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.get_purchase_request(*path).await {
+    match service
+        .get_purchase_request(*path, auth_user.0.tenant_id)
+        .await
+    {
         Ok(request) => Ok(HttpResponse::Ok().json(request)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -256,7 +259,7 @@ pub async fn update_request(
     )
 )]
 pub async fn submit_request(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     service: web::Data<PurchaseService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -264,7 +267,11 @@ pub async fn submit_request(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match service
-        .update_request_status(*path, PurchaseRequestStatus::PendingApproval)
+        .update_request_status(
+            *path,
+            PurchaseRequestStatus::PendingApproval,
+            auth_user.0.tenant_id,
+        )
         .await
     {
         Ok(request) => Ok(HttpResponse::Ok().json(request)),
@@ -291,7 +298,7 @@ pub async fn submit_request(
     )
 )]
 pub async fn approve_request(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     service: web::Data<PurchaseService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -299,7 +306,11 @@ pub async fn approve_request(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match service
-        .update_request_status(*path, PurchaseRequestStatus::Approved)
+        .update_request_status(
+            *path,
+            PurchaseRequestStatus::Approved,
+            admin_user.0.tenant_id,
+        )
         .await
     {
         Ok(request) => Ok(HttpResponse::Ok().json(request)),
@@ -326,7 +337,7 @@ pub async fn approve_request(
     )
 )]
 pub async fn reject_request(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     service: web::Data<PurchaseService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -334,7 +345,11 @@ pub async fn reject_request(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match service
-        .update_request_status(*path, PurchaseRequestStatus::Rejected)
+        .update_request_status(
+            *path,
+            PurchaseRequestStatus::Rejected,
+            admin_user.0.tenant_id,
+        )
         .await
     {
         Ok(request) => Ok(HttpResponse::Ok().json(request)),
@@ -342,7 +357,7 @@ pub async fn reject_request(
     }
 }
 
-/// Delete purchase request endpoint (requires authentication)
+/// Delete purchase request endpoint (requires admin role, soft delete)
 #[utoipa::path(
     delete,
     path = "/api/v1/purchase-requests/{id}",
@@ -352,7 +367,7 @@ pub async fn reject_request(
     ),
     responses(
         (status = 200, description = "Purchase request deleted", body = MessageResponse),
-        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden"),
         (status = 404, description = "Purchase request not found")
     ),
     security(
@@ -360,20 +375,107 @@ pub async fn reject_request(
     )
 )]
 pub async fn delete_request(
-    _auth_user: AuthUser,
+    admin_user: AdminUser,
     service: web::Data<PurchaseService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.delete_purchase_request(*path).await {
+    let deleted_by = admin_user.0.sub.parse().unwrap_or(0);
+    let tenant_id = admin_user.0.tenant_id;
+    match service
+        .soft_delete_request(*path, tenant_id, deleted_by)
+        .await
+    {
         Ok(()) => {
             let msg = i18n.t(locale.as_str(), "purchase.request.deleted");
             Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
+}
+
+/// Restore a soft-deleted purchase request (admin only)
+#[utoipa::path(
+    put,
+    path = "/api/v1/purchase-requests/{id}/restore",
+    tag = "Purchase Requests",
+    params(
+        ("id" = i64, Path, description = "Purchase request ID")
+    ),
+    responses(
+        (status = 200, description = "Purchase request restored", body = PurchaseRequestResponse),
+        (status = 404, description = "Not found or not deleted")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn restore_request(
+    admin_user: AdminUser,
+    service: web::Data<PurchaseService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let response = service
+        .restore_request_response(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(response))
+}
+
+/// List soft-deleted purchase requests (admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/purchase-requests/deleted",
+    tag = "Purchase Requests",
+    responses(
+        (status = 200, description = "List of deleted purchase requests")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn list_deleted_requests(
+    admin_user: AdminUser,
+    service: web::Data<PurchaseService>,
+) -> ApiResult<HttpResponse> {
+    let requests: Vec<_> = service
+        .list_deleted_requests(admin_user.0.tenant_id)
+        .await?
+        .into_iter()
+        .map(|r| {
+            let lines: Vec<_> = Vec::new();
+            PurchaseRequestResponse::from((r, lines))
+        })
+        .collect();
+    Ok(HttpResponse::Ok().json(requests))
+}
+
+/// Permanently delete a purchase request (admin only)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/purchase-requests/{id}/destroy",
+    tag = "Purchase Requests",
+    params(
+        ("id" = i64, Path, description = "Purchase request ID")
+    ),
+    responses(
+        (status = 204, description = "Purchase request permanently deleted"),
+        (status = 404, description = "Not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn destroy_request(
+    admin_user: AdminUser,
+    service: web::Data<PurchaseService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    service
+        .destroy_request(*path, admin_user.0.tenant_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Configure purchase request routes for v1 API
@@ -384,10 +486,20 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_request)),
     )
     .service(
+        web::resource("/v1/purchase-requests/deleted").route(web::get().to(list_deleted_requests)),
+    )
+    .service(
         web::resource("/v1/purchase-requests/{id}")
             .route(web::get().to(get_request))
             .route(web::put().to(update_request))
             .route(web::delete().to(delete_request)),
+    )
+    .service(
+        web::resource("/v1/purchase-requests/{id}/restore").route(web::put().to(restore_request)),
+    )
+    .service(
+        web::resource("/v1/purchase-requests/{id}/destroy")
+            .route(web::delete().to(destroy_request)),
     )
     .service(
         web::resource("/v1/purchase-requests/{id}/submit").route(web::post().to(submit_request)),

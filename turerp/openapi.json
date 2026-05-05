@@ -4097,6 +4097,735 @@
         ]
       }
     },
+    "/api/v1/edefter/periods": {
+      "get": {
+        "tags": [
+          "e-Defter"
+        ],
+        "summary": "List ledger periods (paginated, optional year/type filters)",
+        "operationId": "list_periods",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "description": "Filter by year",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "period_type",
+            "in": "query",
+            "description": "Filter by type (YevmiyeDefteri, BuyukDefter, KebirDefter)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of ledger periods"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "e-Defter"
+        ],
+        "summary": "Create a new ledger period (requires admin role)",
+        "operationId": "create_period",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLedgerPeriod"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Ledger period created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerPeriodResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}": {
+      "get": {
+        "tags": [
+          "e-Defter"
+        ],
+        "summary": "Get a ledger period by ID",
+        "operationId": "get_period",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ledger period found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerPeriodResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}/buyuk-defter-xml": {
+      "post": {
+        "tags": [
+          "e-Defter"
+        ],
+        "summary": "Generate Buyuk defter XML (requires admin role)",
+        "operationId": "generate_buyuk_defter",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Buyuk defter XML generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XmlResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}/populate": {
+      "post": {
+        "tags": [
+          "e-Defter"
+        ],
+        "summary": "Populate a ledger period from accounting entries (requires admin role)",
+        "operationId": "populate_period",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PopulatePeriodRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Period populated"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}/send": {
+      "post": {
+        "tags": [
+          "e-Defter"
+        ],
+        "summary": "Send a signed ledger period to saklayici (requires admin role)",
+        "operationId": "send_to_saklayici",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Period sent to saklayici",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerPeriodResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}/sign": {
+      "post": {
+        "tags": [
+          "e-Defter"
+        ],
+        "summary": "Sign a berat for a ledger period (requires admin role)",
+        "operationId": "sign_berat",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Berat signed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BeratInfo"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}/status": {
+      "get": {
+        "tags": [
+          "e-Defter"
+        ],
+        "summary": "Check the status of a ledger period",
+        "operationId": "check_status",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Period status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EDefterStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}/validate": {
+      "post": {
+        "tags": [
+          "e-Defter"
+        ],
+        "summary": "Validate balance for a ledger period (requires admin role)",
+        "operationId": "validate_period",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Balance check result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalanceCheckResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}/yevmiye-xml": {
+      "post": {
+        "tags": [
+          "e-Defter"
+        ],
+        "summary": "Generate Yevmiye defteri XML (requires admin role)",
+        "operationId": "generate_yevmiye",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Yevmiye XML generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XmlResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/efatura": {
+      "get": {
+        "tags": [
+          "e-Fatura"
+        ],
+        "summary": "List e-Fatura documents (paginated, optional status filter)",
+        "operationId": "list_efaturas",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status (Draft, Signed, Sent, Accepted, Rejected, Cancelled, Error)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of e-Fatura documents"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "e-Fatura"
+        ],
+        "summary": "Create an e-Fatura from an invoice (requires admin role)",
+        "operationId": "create_efatura",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEFatura"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "e-Fatura created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EFaturaResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/efatura/status/{uuid}": {
+      "get": {
+        "tags": [
+          "e-Fatura"
+        ],
+        "summary": "Check the GIB status of an e-Fatura by UUID",
+        "operationId": "check_efatura_status",
+        "parameters": [
+          {
+            "name": "uuid",
+            "in": "path",
+            "description": "e-Fatura UUID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "e-Fatura status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EFaturaResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/efatura/{id}": {
+      "get": {
+        "tags": [
+          "e-Fatura"
+        ],
+        "summary": "Get an e-Fatura by ID",
+        "operationId": "get_efatura",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "e-Fatura ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "e-Fatura found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EFaturaResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/efatura/{id}/cancel": {
+      "post": {
+        "tags": [
+          "e-Fatura"
+        ],
+        "summary": "Cancel an e-Fatura (requires admin role)",
+        "operationId": "cancel_efatura",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "e-Fatura ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelEFaturaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "e-Fatura cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EFaturaResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/efatura/{id}/send": {
+      "post": {
+        "tags": [
+          "e-Fatura"
+        ],
+        "summary": "Send an e-Fatura to GIB (requires admin role)",
+        "operationId": "send_efatura",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "e-Fatura ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "e-Fatura sent to GIB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EFaturaResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/efatura/{id}/xml": {
+      "get": {
+        "tags": [
+          "e-Fatura"
+        ],
+        "summary": "Get the XML content of an e-Fatura",
+        "operationId": "get_efatura_xml",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "e-Fatura ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "XML content"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/events/dead-letters": {
       "get": {
         "tags": [
@@ -12679,6 +13408,412 @@
           }
         ]
       }
+    },
+    "/api/v1/webhooks": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List webhooks endpoint (authenticated, paginated)",
+        "operationId": "list_webhooks",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of webhooks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WebhookResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Create a webhook endpoint (admin only)",
+        "operationId": "create_webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWebhook"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/webhooks/deliveries/{id}/retry": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Retry a failed webhook delivery (admin only)",
+        "operationId": "retry_delivery",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Delivery ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Delivery retry initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.webhook.model.WebhookDeliveryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Max retries exceeded"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Delivery not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/webhooks/{id}": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Get a webhook by ID (authenticated)",
+        "operationId": "get_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Webhook ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Webhook not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Update a webhook (admin only)",
+        "operationId": "update_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Webhook ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebhook"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Webhook not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Soft delete a webhook (admin only)",
+        "operationId": "delete_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Webhook ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Webhook not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/webhooks/{id}/deliveries": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List deliveries for a webhook (authenticated, paginated)",
+        "operationId": "list_deliveries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Webhook ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook deliveries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.common.PaginatedResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Webhook not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/webhooks/{id}/test": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Test a webhook by sending a synthetic event (admin only)",
+        "operationId": "test_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Webhook ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Test event sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Webhook not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -12745,6 +13880,70 @@
           "reportread"
         ]
       },
+      "BalanceCheckResult": {
+        "type": "object",
+        "description": "Balance check result",
+        "required": [
+          "is_balanced",
+          "total_debit",
+          "total_credit",
+          "difference",
+          "errors"
+        ],
+        "properties": {
+          "difference": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "is_balanced": {
+            "type": "boolean"
+          },
+          "total_credit": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_debit": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "BeratInfo": {
+        "type": "object",
+        "description": "Berat (certificate) information",
+        "required": [
+          "period_id",
+          "serial_number",
+          "sign_time",
+          "signer",
+          "digest_value",
+          "signature_value"
+        ],
+        "properties": {
+          "digest_value": {
+            "type": "string"
+          },
+          "period_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "serial_number": {
+            "type": "string"
+          },
+          "sign_time": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "signature_value": {
+            "type": "string"
+          },
+          "signer": {
+            "type": "string"
+          }
+        }
+      },
       "CalculateInvoiceTaxRequest": {
         "type": "object",
         "description": "Request body for calculating invoice taxes",
@@ -12778,6 +13977,18 @@
             "nullable": true
           },
           "tax_type": {
+            "type": "string"
+          }
+        }
+      },
+      "CancelEFaturaRequest": {
+        "type": "object",
+        "description": "Request body for cancelling an e-Fatura",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
             "type": "string"
           }
         }
@@ -13000,6 +14211,23 @@
           }
         }
       },
+      "CreateEFatura": {
+        "type": "object",
+        "description": "Create e-Fatura from an invoice",
+        "required": [
+          "invoice_id",
+          "profile_id"
+        ],
+        "properties": {
+          "invoice_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "profile_id": {
+            "$ref": "#/components/schemas/EFaturaProfile"
+          }
+        }
+      },
       "CreateFeatureFlag": {
         "type": "object",
         "description": "Create feature flag request",
@@ -13094,6 +14322,29 @@
           "tenant_id": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "CreateLedgerPeriod": {
+        "type": "object",
+        "description": "Create a new ledger period",
+        "required": [
+          "year",
+          "month",
+          "period_type"
+        ],
+        "properties": {
+          "month": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "period_type": {
+            "$ref": "#/components/schemas/LedgerType"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -13196,6 +14447,32 @@
           }
         }
       },
+      "CreateWebhook": {
+        "type": "object",
+        "description": "DTO for creating a webhook",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "event_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "secret": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
       "DeadLetterResponse": {
         "type": "object",
         "description": "Dead letter entry response",
@@ -13236,6 +14513,110 @@
             "format": "int64"
           }
         }
+      },
+      "DeliveryStatus": {
+        "type": "string",
+        "description": "Delivery status for a webhook payload",
+        "enum": [
+          "pending",
+          "delivered",
+          "failed",
+          "retrying"
+        ]
+      },
+      "EDefterStatus": {
+        "type": "string",
+        "description": "e-Defter document status",
+        "enum": [
+          "Draft",
+          "Signed",
+          "Sent",
+          "Accepted",
+          "Rejected",
+          "Cancelled"
+        ]
+      },
+      "EFaturaProfile": {
+        "type": "string",
+        "description": "e-Fatura profile type (UBL-TR profile)",
+        "enum": [
+          "TemelFatura",
+          "Ihracat",
+          "YolcuBeleni",
+          "OzelMatbuFatura"
+        ]
+      },
+      "EFaturaResponse": {
+        "type": "object",
+        "description": "e-Fatura response DTO",
+        "required": [
+          "id",
+          "tenant_id",
+          "uuid",
+          "document_number",
+          "issue_date",
+          "profile_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "document_number": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invoice_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "issue_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "profile_id": {
+            "$ref": "#/components/schemas/EFaturaProfile"
+          },
+          "response_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "response_desc": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/EFaturaStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        }
+      },
+      "EFaturaStatus": {
+        "type": "string",
+        "description": "e-Fatura document status",
+        "enum": [
+          "Draft",
+          "Signed",
+          "Sent",
+          "Accepted",
+          "Rejected",
+          "Cancelled",
+          "Error"
+        ]
       },
       "EffectiveRateQuery": {
         "type": "object",
@@ -13522,6 +14903,129 @@
             "format": "int64"
           }
         }
+      },
+      "LedgerPeriod": {
+        "type": "object",
+        "description": "Ledger period (monthly)",
+        "required": [
+          "id",
+          "tenant_id",
+          "year",
+          "month",
+          "period_type",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "berat_signed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "month": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "period_type": {
+            "$ref": "#/components/schemas/LedgerType"
+          },
+          "sent_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/EDefterStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "LedgerPeriodResponse": {
+        "type": "object",
+        "description": "Ledger period response",
+        "required": [
+          "id",
+          "tenant_id",
+          "year",
+          "month",
+          "period_type",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "berat_signed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "month": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "period_type": {
+            "$ref": "#/components/schemas/LedgerType"
+          },
+          "sent_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/EDefterStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "year": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "LedgerType": {
+        "type": "string",
+        "description": "Ledger type",
+        "enum": [
+          "YevmiyeDefteri",
+          "BuyukDefter",
+          "KebirDefter"
+        ]
       },
       "LoginRequest": {
         "type": "object",
@@ -14381,6 +15885,35 @@
           }
         }
       },
+      "UpdateWebhook": {
+        "type": "object",
+        "description": "DTO for updating a webhook",
+        "properties": {
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "event_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebhookStatus"
+              }
+            ],
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "UserResponse": {
         "type": "object",
         "description": "User response (without sensitive data)",
@@ -14419,6 +15952,211 @@
             "format": "int64"
           },
           "username": {
+            "type": "string"
+          }
+        }
+      },
+      "WebhookDeliveryResponse": {
+        "type": "object",
+        "description": "Response DTO for a webhook delivery",
+        "required": [
+          "id",
+          "webhook_id",
+          "tenant_id",
+          "event_type",
+          "status",
+          "attempt_count",
+          "created_at"
+        ],
+        "properties": {
+          "attempt_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "delivered_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "http_status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "scheduled_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "webhook_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "WebhookResponse": {
+        "type": "object",
+        "description": "Response DTO for a webhook",
+        "required": [
+          "id",
+          "tenant_id",
+          "url",
+          "event_types",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "event_types": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "WebhookStatus": {
+        "type": "string",
+        "description": "Status of a webhook endpoint",
+        "enum": [
+          "active",
+          "inactive",
+          "failed"
+        ]
+      },
+      "XmlResponse": {
+        "type": "object",
+        "description": "Response for XML generation endpoints",
+        "required": [
+          "xml"
+        ],
+        "properties": {
+          "xml": {
+            "type": "string"
+          }
+        }
+      },
+      "YevmiyeEntry": {
+        "type": "object",
+        "description": "Yevmiye (journal) entry",
+        "required": [
+          "id",
+          "period_id",
+          "entry_number",
+          "entry_date",
+          "explanation",
+          "debit_total",
+          "credit_total",
+          "lines"
+        ],
+        "properties": {
+          "credit_total": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "debit_total": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "entry_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "entry_number": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/YevmiyeLine"
+            }
+          },
+          "period_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "YevmiyeLine": {
+        "type": "object",
+        "description": "Yevmiye entry line",
+        "required": [
+          "account_code",
+          "account_name",
+          "debit",
+          "credit",
+          "explanation"
+        ],
+        "properties": {
+          "account_code": {
+            "type": "string"
+          },
+          "account_name": {
+            "type": "string"
+          },
+          "credit": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "debit": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "explanation": {
             "type": "string"
           }
         }
@@ -14542,8 +16280,20 @@
       "description": "Turkish tax rate management, calculation, and KVB period tracking"
     },
     {
+      "name": "e-Fatura",
+      "description": "Turkish e-Fatura (electronic invoicing) integration with GIB"
+    },
+    {
+      "name": "e-Defter",
+      "description": "Turkish e-Defter (electronic ledger) integration with GIB"
+    },
+    {
       "name": "Audit",
       "description": "Audit log retrieval"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Webhook endpoints and delivery management"
     }
   ]
 }

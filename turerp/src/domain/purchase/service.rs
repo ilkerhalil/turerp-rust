@@ -83,10 +83,14 @@ impl PurchaseService {
         Ok(PurchaseOrderResponse::from((order, lines)))
     }
 
-    pub async fn get_purchase_order(&self, id: i64) -> Result<PurchaseOrderResponse, ApiError> {
+    pub async fn get_purchase_order(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<PurchaseOrderResponse, ApiError> {
         let order = self
             .order_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Purchase order {} not found", id)))?;
 
@@ -125,15 +129,60 @@ impl PurchaseService {
         self.order_repo.update_status(id, status).await
     }
 
-    pub async fn delete_order(&self, id: i64) -> Result<(), ApiError> {
+    pub async fn delete_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.order_line_repo.delete_by_order(id).await?;
-        self.order_repo.delete(id).await
+        self.order_repo.delete(id, tenant_id).await
+    }
+
+    /// Soft delete a purchase order (sets deleted_at)
+    pub async fn soft_delete_order(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.order_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted purchase order
+    pub async fn restore_order(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<crate::domain::purchase::model::PurchaseOrder, ApiError> {
+        self.order_repo.restore(id, tenant_id).await
+    }
+
+    /// Restore a soft-deleted purchase order and return as response
+    pub async fn restore_order_response(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<PurchaseOrderResponse, ApiError> {
+        let order = self.order_repo.restore(id, tenant_id).await?;
+        let lines = self.order_line_repo.find_by_order(order.id).await?;
+        Ok(PurchaseOrderResponse::from((order, lines)))
+    }
+
+    /// List soft-deleted purchase orders
+    pub async fn list_deleted_orders(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<crate::domain::purchase::model::PurchaseOrder>, ApiError> {
+        self.order_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete a purchase order (admin only, after soft delete)
+    pub async fn destroy_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.order_line_repo.delete_by_order(id).await?;
+        self.order_repo.destroy(id, tenant_id).await
     }
 
     // Goods Receipt operations
     pub async fn create_goods_receipt(
         &self,
         create: CreateGoodsReceipt,
+        tenant_id: i64,
     ) -> Result<GoodsReceiptResponse, ApiError> {
         create
             .validate()
@@ -147,7 +196,7 @@ impl PurchaseService {
         // Verify purchase order exists
         let order = self
             .order_repo
-            .find_by_id(create.purchase_order_id)
+            .find_by_id(create.purchase_order_id, tenant_id)
             .await?
             .ok_or_else(|| {
                 ApiError::NotFound(format!(
@@ -209,10 +258,14 @@ impl PurchaseService {
         Ok(GoodsReceiptResponse::from((receipt, lines)))
     }
 
-    pub async fn get_goods_receipt(&self, id: i64) -> Result<GoodsReceiptResponse, ApiError> {
+    pub async fn get_goods_receipt(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<GoodsReceiptResponse, ApiError> {
         let receipt = self
             .receipt_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Goods receipt {} not found", id)))?;
 
@@ -236,9 +289,55 @@ impl PurchaseService {
         self.receipt_repo.update_status(id, status).await
     }
 
-    pub async fn delete_receipt(&self, id: i64) -> Result<(), ApiError> {
+    pub async fn delete_receipt(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.receipt_line_repo.delete_by_receipt(id).await?;
-        self.receipt_repo.delete(id).await
+        self.receipt_repo.delete(id, tenant_id).await
+    }
+
+    /// Soft delete a goods receipt (sets deleted_at)
+    pub async fn soft_delete_receipt(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.receipt_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted goods receipt
+    pub async fn restore_receipt(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<crate::domain::purchase::model::GoodsReceipt, ApiError> {
+        self.receipt_repo.restore(id, tenant_id).await
+    }
+
+    /// Restore a soft-deleted goods receipt and return as response
+    pub async fn restore_receipt_response(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<GoodsReceiptResponse, ApiError> {
+        let receipt = self.receipt_repo.restore(id, tenant_id).await?;
+        let lines = self.receipt_line_repo.find_by_receipt(receipt.id).await?;
+        Ok(GoodsReceiptResponse::from((receipt, lines)))
+    }
+
+    /// List soft-deleted goods receipts
+    pub async fn list_deleted_receipts(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<crate::domain::purchase::model::GoodsReceipt>, ApiError> {
+        self.receipt_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete a goods receipt (admin only, after soft delete)
+    pub async fn destroy_receipt(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.receipt_line_repo.delete_by_receipt(id).await?;
+        self.receipt_repo.destroy(id, tenant_id).await
     }
 
     // Purchase Request operations
@@ -271,7 +370,11 @@ impl PurchaseService {
         Ok(PurchaseRequestResponse::from((request, lines)))
     }
 
-    pub async fn get_purchase_request(&self, id: i64) -> Result<PurchaseRequestResponse, ApiError> {
+    pub async fn get_purchase_request(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<PurchaseRequestResponse, ApiError> {
         let request_repo = self.request_repo.as_ref().ok_or_else(|| {
             ApiError::Internal("Purchase request repository not configured".to_string())
         })?;
@@ -281,7 +384,7 @@ impl PurchaseService {
         })?;
 
         let request = request_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Purchase request {} not found", id)))?;
 
@@ -373,6 +476,7 @@ impl PurchaseService {
         &self,
         id: i64,
         status: PurchaseRequestStatus,
+        tenant_id: i64,
     ) -> Result<crate::domain::purchase::model::PurchaseRequest, ApiError> {
         let request_repo = self.request_repo.as_ref().ok_or_else(|| {
             ApiError::Internal("Purchase request repository not configured".to_string())
@@ -380,7 +484,7 @@ impl PurchaseService {
 
         // Get current request to validate status transition
         let current_request = request_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Purchase request {} not found", id)))?;
 
@@ -397,7 +501,7 @@ impl PurchaseService {
         request_repo.update_status(id, status).await
     }
 
-    pub async fn delete_purchase_request(&self, id: i64) -> Result<(), ApiError> {
+    pub async fn delete_purchase_request(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let request_repo = self.request_repo.as_ref().ok_or_else(|| {
             ApiError::Internal("Purchase request repository not configured".to_string())
         })?;
@@ -407,7 +511,79 @@ impl PurchaseService {
         })?;
 
         request_line_repo.delete_by_request(id).await?;
-        request_repo.delete(id).await
+        request_repo.delete(id, tenant_id).await
+    }
+
+    /// Soft delete a purchase request (sets deleted_at)
+    pub async fn soft_delete_request(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        let request_repo = self.request_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request repository not configured".to_string())
+        })?;
+
+        request_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted purchase request
+    pub async fn restore_request(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<crate::domain::purchase::model::PurchaseRequest, ApiError> {
+        let request_repo = self.request_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request repository not configured".to_string())
+        })?;
+
+        request_repo.restore(id, tenant_id).await
+    }
+
+    /// Restore a soft-deleted purchase request and return as response
+    pub async fn restore_request_response(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<PurchaseRequestResponse, ApiError> {
+        let request_repo = self.request_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request repository not configured".to_string())
+        })?;
+
+        let request_line_repo = self.request_line_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request line repository not configured".to_string())
+        })?;
+
+        let request = request_repo.restore(id, tenant_id).await?;
+        let lines = request_line_repo.find_by_request(request.id).await?;
+        Ok(PurchaseRequestResponse::from((request, lines)))
+    }
+
+    /// List soft-deleted purchase requests
+    pub async fn list_deleted_requests(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<crate::domain::purchase::model::PurchaseRequest>, ApiError> {
+        let request_repo = self.request_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request repository not configured".to_string())
+        })?;
+
+        request_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete a purchase request (admin only, after soft delete)
+    pub async fn destroy_request(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let request_repo = self.request_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request repository not configured".to_string())
+        })?;
+
+        let request_line_repo = self.request_line_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request line repository not configured".to_string())
+        })?;
+
+        request_line_repo.delete_by_request(id).await?;
+        request_repo.destroy(id, tenant_id).await
     }
 }
 
@@ -531,7 +707,7 @@ mod tests {
             }],
         };
 
-        let result = service.create_goods_receipt(receipt_create).await;
+        let result = service.create_goods_receipt(receipt_create, 1).await;
         assert!(result.is_ok());
     }
 
@@ -584,7 +760,7 @@ mod tests {
 
         // Update status
         let updated = service
-            .update_request_status(request.id, PurchaseRequestStatus::PendingApproval)
+            .update_request_status(request.id, PurchaseRequestStatus::PendingApproval, 1)
             .await;
         assert!(updated.is_ok());
         assert_eq!(
@@ -614,11 +790,11 @@ mod tests {
         let request = service.create_purchase_request(create).await.unwrap();
 
         // Delete
-        let result = service.delete_purchase_request(request.id).await;
+        let result = service.delete_purchase_request(request.id, 1).await;
         assert!(result.is_ok());
 
         // Verify deletion
-        let result = service.get_purchase_request(request.id).await;
+        let result = service.get_purchase_request(request.id, 1).await;
         assert!(result.is_err());
     }
 }

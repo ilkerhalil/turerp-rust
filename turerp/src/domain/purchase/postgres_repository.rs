@@ -6,6 +6,7 @@ use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::db::error::map_sqlx_error;
 use crate::domain::purchase::model::{
     CreateGoodsReceipt, CreateGoodsReceiptLine, CreatePurchaseOrder, CreatePurchaseOrderLine,
@@ -100,6 +101,8 @@ struct PurchaseOrderRow {
     notes: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<PurchaseOrderRow> for PurchaseOrder {
@@ -121,6 +124,8 @@ impl From<PurchaseOrderRow> for PurchaseOrder {
             notes: row.notes,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -170,11 +175,11 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             r#"
             INSERT INTO purchase_orders (tenant_id, order_number, cari_id, status, order_date,
                                           expected_delivery_date, subtotal, tax_amount, discount_amount,
-                                          total_amount, notes, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
+                                          total_amount, notes, created_at, updated_at, deleted_at, deleted_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW(), NULL, NULL)
             RETURNING id, tenant_id, order_number, cari_id, status, order_date,
                       expected_delivery_date, subtotal, tax_amount, discount_amount,
-                      total_amount, notes, created_at, updated_at
+                      total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -195,17 +200,18 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseOrder>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<PurchaseOrder>, ApiError> {
         let result: Option<PurchaseOrderRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, order_number, cari_id, status, order_date,
                    expected_delivery_date, subtotal, tax_amount, discount_amount,
-                   total_amount, notes, created_at, updated_at
+                   total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_orders
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find purchase order by id: {}", e)))?;
@@ -218,9 +224,9 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             r#"
             SELECT id, tenant_id, order_number, cari_id, status, order_date,
                    expected_delivery_date, subtotal, tax_amount, discount_amount,
-                   total_amount, notes, created_at, updated_at
+                   total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_orders
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -239,9 +245,9 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             r#"
             SELECT id, tenant_id, order_number, cari_id, status, order_date,
                    expected_delivery_date, subtotal, tax_amount, discount_amount,
-                   total_amount, notes, created_at, updated_at
+                   total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_orders
-            WHERE cari_id = $1
+            WHERE cari_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -266,9 +272,9 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             r#"
             SELECT id, tenant_id, order_number, cari_id, status, order_date,
                    expected_delivery_date, subtotal, tax_amount, discount_amount,
-                   total_amount, notes, created_at, updated_at
+                   total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_orders
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -294,10 +300,10 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             r#"
             UPDATE purchase_orders
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, order_number, cari_id, status, order_date,
                       expected_delivery_date, subtotal, tax_amount, discount_amount,
-                      total_amount, notes, created_at, updated_at
+                      total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
@@ -307,6 +313,103 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
         .map_err(|e| map_sqlx_error(e, "PurchaseOrder"))?;
 
         Ok(row.into())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE purchase_orders
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete purchase order: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "PurchaseOrder not found or already deleted".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<PurchaseOrder, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE purchase_orders
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore purchase order: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "PurchaseOrder not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("PurchaseOrder not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<PurchaseOrder>, ApiError> {
+        let rows: Vec<PurchaseOrderRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+                   expected_delivery_date, subtotal, tax_amount, discount_amount,
+                   total_amount, notes, created_at, updated_at, deleted_at, deleted_by
+            FROM purchase_orders
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to find deleted purchase orders: {}", e))
+        })?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM purchase_orders
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!(
+                "Failed to permanently delete purchase order: {}",
+                e
+            ))
+        })?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "PurchaseOrder not found or not soft-deleted".to_string(),
+            ));
+        }
+
+        Ok(())
     }
 
     async fn update_line_received_quantity(
@@ -332,14 +435,15 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM purchase_orders
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete purchase order: {}", e)))?;
@@ -523,6 +627,8 @@ struct GoodsReceiptRow {
     receipt_date: chrono::DateTime<chrono::Utc>,
     notes: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<GoodsReceiptRow> for GoodsReceipt {
@@ -538,6 +644,8 @@ impl From<GoodsReceiptRow> for GoodsReceipt {
             receipt_date: row.receipt_date,
             notes: row.notes,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -568,10 +676,10 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
         let row: GoodsReceiptRow = sqlx::query_as(
             r#"
             INSERT INTO goods_receipts (tenant_id, receipt_number, purchase_order_id, status,
-                                          receipt_date, notes, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                                          receipt_date, notes, created_at, deleted_at, deleted_by)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW(), NULL, NULL)
             RETURNING id, tenant_id, receipt_number, purchase_order_id, status,
-                      receipt_date, notes, created_at
+                      receipt_date, notes, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -587,16 +695,17 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<GoodsReceipt>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<GoodsReceipt>, ApiError> {
         let result: Option<GoodsReceiptRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, receipt_number, purchase_order_id, status,
-                   receipt_date, notes, created_at
+                   receipt_date, notes, created_at, deleted_at, deleted_by
             FROM goods_receipts
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find goods receipt by id: {}", e)))?;
@@ -608,9 +717,9 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
         let rows: Vec<GoodsReceiptRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, receipt_number, purchase_order_id, status,
-                   receipt_date, notes, created_at
+                   receipt_date, notes, created_at, deleted_at, deleted_by
             FROM goods_receipts
-            WHERE purchase_order_id = $1
+            WHERE purchase_order_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -640,9 +749,9 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
             r#"
             UPDATE goods_receipts
             SET status = $1
-            WHERE id = $2
+            WHERE id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, receipt_number, purchase_order_id, status,
-                      receipt_date, notes, created_at
+                      receipt_date, notes, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(status_str)
@@ -654,14 +763,106 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM goods_receipts
-            WHERE id = $1
+            UPDATE goods_receipts
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete goods receipt: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "GoodsReceipt not found or already deleted".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<GoodsReceipt, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE goods_receipts
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore goods receipt: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "GoodsReceipt not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("GoodsReceipt not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<GoodsReceipt>, ApiError> {
+        let rows: Vec<GoodsReceiptRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, receipt_number, purchase_order_id, status,
+                   receipt_date, notes, created_at, deleted_at, deleted_by
+            FROM goods_receipts
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted goods receipts: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM goods_receipts
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to permanently delete goods receipt: {}", e))
+        })?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "GoodsReceipt not found or not soft-deleted".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM goods_receipts
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete goods receipt: {}", e)))?;
@@ -809,6 +1010,8 @@ struct PurchaseRequestRow {
     reason: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<PurchaseRequestRow> for PurchaseRequest {
@@ -826,6 +1029,8 @@ impl From<PurchaseRequestRow> for PurchaseRequest {
             reason: row.reason,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -843,6 +1048,8 @@ struct PurchaseRequestRowWithCount {
     reason: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
     total_count: i64,
 }
 
@@ -872,10 +1079,11 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         let row: PurchaseRequestRow = sqlx::query_as(
             r#"
             INSERT INTO purchase_requests (tenant_id, request_number, status, requested_by,
-                                            department, priority, reason, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+                                            department, priority, reason, created_at, updated_at,
+                                            deleted_at, deleted_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), NULL, NULL)
             RETURNING id, tenant_id, request_number, status, requested_by,
-                      department, priority, reason, created_at, updated_at
+                      department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -892,16 +1100,21 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseRequest>, ApiError> {
+    async fn find_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<PurchaseRequest>, ApiError> {
         let result: Option<PurchaseRequestRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, request_number, status, requested_by,
-                   department, priority, reason, created_at, updated_at
+                   department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_requests
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find purchase request by id: {}", e)))?;
@@ -913,9 +1126,9 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         let rows: Vec<PurchaseRequestRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, request_number, status, requested_by,
-                   department, priority, reason, created_at, updated_at
+                   department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_requests
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -940,10 +1153,10 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         let rows: Vec<PurchaseRequestRowWithCount> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, request_number, status, requested_by,
-                   department, priority, reason, created_at, updated_at,
+                   department, priority, reason, created_at, updated_at, deleted_at, deleted_by,
                    COUNT(*) OVER() AS total_count
             FROM purchase_requests
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -975,6 +1188,8 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
                     reason: r.reason,
                     created_at: r.created_at,
                     updated_at: r.updated_at,
+                    deleted_at: r.deleted_at,
+                    deleted_by: r.deleted_by,
                 }
                 .into()
             })
@@ -993,9 +1208,9 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         let rows: Vec<PurchaseRequestRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, request_number, status, requested_by,
-                   department, priority, reason, created_at, updated_at
+                   department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_requests
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -1023,10 +1238,10 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         let rows: Vec<PurchaseRequestRowWithCount> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, request_number, status, requested_by,
-                   department, priority, reason, created_at, updated_at,
+                   department, priority, reason, created_at, updated_at, deleted_at, deleted_by,
                    COUNT(*) OVER() AS total_count
             FROM purchase_requests
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -1059,6 +1274,8 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
                     reason: r.reason,
                     created_at: r.created_at,
                     updated_at: r.updated_at,
+                    deleted_at: r.deleted_at,
+                    deleted_by: r.deleted_by,
                 }
                 .into()
             })
@@ -1071,9 +1288,9 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         let rows: Vec<PurchaseRequestRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, request_number, status, requested_by,
-                   department, priority, reason, created_at, updated_at
+                   department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_requests
-            WHERE requested_by = $1
+            WHERE requested_by = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -1095,7 +1312,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
             r#"
             SELECT COUNT(*) as count
             FROM purchase_requests
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(tenant_id)
@@ -1122,7 +1339,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
             r#"
             SELECT COUNT(*) as count
             FROM purchase_requests
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(tenant_id)
@@ -1154,9 +1371,9 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
                 reason = COALESCE($3, reason),
                 status = COALESCE($4, status),
                 updated_at = NOW()
-            WHERE id = $5
+            WHERE id = $5 AND deleted_at IS NULL
             RETURNING id, tenant_id, request_number, status, requested_by,
-                      department, priority, reason, created_at, updated_at
+                      department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.department)
@@ -1182,9 +1399,9 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
             r#"
             UPDATE purchase_requests
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, request_number, status, requested_by,
-                      department, priority, reason, created_at, updated_at
+                      department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
@@ -1196,14 +1413,113 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM purchase_requests
-            WHERE id = $1
+            UPDATE purchase_requests
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to soft delete purchase request: {}", e))
+        })?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "PurchaseRequest not found or already deleted".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<PurchaseRequest, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE purchase_requests
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore purchase request: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "PurchaseRequest not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("PurchaseRequest not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
+        let rows: Vec<PurchaseRequestRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, request_number, status, requested_by,
+                   department, priority, reason, created_at, updated_at, deleted_at, deleted_by
+            FROM purchase_requests
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to find deleted purchase requests: {}", e))
+        })?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM purchase_requests
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!(
+                "Failed to permanently delete purchase request: {}",
+                e
+            ))
+        })?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "PurchaseRequest not found or not soft-deleted".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM purchase_requests
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete purchase request: {}", e)))?;

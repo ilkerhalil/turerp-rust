@@ -6,6 +6,7 @@ use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::stock::model::{
     CreateStockMovement, CreateWarehouse, StockLevel, StockMovement, Warehouse,
 };
@@ -15,7 +16,7 @@ use crate::error::ApiError;
 #[async_trait]
 pub trait WarehouseRepository: Send + Sync {
     async fn create(&self, warehouse: CreateWarehouse) -> Result<Warehouse, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Warehouse>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Warehouse>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -26,15 +27,30 @@ pub trait WarehouseRepository: Send + Sync {
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         code: Option<String>,
         name: Option<String>,
         address: Option<String>,
         is_active: Option<bool>,
     ) -> Result<Warehouse, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a warehouse
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted warehouse
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Warehouse, ApiError>;
+
+    /// Find soft-deleted warehouses (admin use)
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError>;
+
+    /// Hard delete a warehouse (permanent destruction — admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
-/// Repository trait for StockLevel operations
+/// Repository trait for StockLevel operations.
+/// Note: StockLevel does not have a tenant_id field; it is a child entity of Warehouse.
+/// Tenant isolation is enforced via the warehouse_id relationship.
 #[async_trait]
 pub trait StockLevelRepository: Send + Sync {
     async fn find_by_warehouse_product(
@@ -62,20 +78,54 @@ pub trait StockLevelRepository: Send + Sync {
         product_id: i64,
         quantity: Decimal,
     ) -> Result<StockLevel, ApiError>;
+
+    /// Soft delete a stock level
+    async fn soft_delete(
+        &self,
+        warehouse_id: i64,
+        product_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted stock level
+    async fn restore(&self, warehouse_id: i64, product_id: i64) -> Result<StockLevel, ApiError>;
+
+    /// Find soft-deleted stock levels
+    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError>;
+
+    /// Hard delete a stock level (permanent destruction — admin only)
+    async fn destroy(&self, warehouse_id: i64, product_id: i64) -> Result<(), ApiError>;
 }
 
-/// Repository trait for StockMovement operations
+/// Repository trait for StockMovement operations.
+/// Note: StockMovement does not have a tenant_id field directly; tenant isolation
+/// is enforced via the warehouse relationship. The tenant_id parameter is used to
+/// join against warehouses and ensure tenant scoping.
 #[async_trait]
 pub trait StockMovementRepository: Send + Sync {
     async fn create(&self, movement: CreateStockMovement) -> Result<StockMovement, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<StockMovement>, ApiError>;
+    /// Find by ID with tenant isolation (joins warehouses to verify tenant ownership)
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<StockMovement>, ApiError>;
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockMovement>, ApiError>;
     async fn find_by_warehouse(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError>;
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<StockMovement>, ApiError>;
     async fn find_by_reference(
         &self,
         reference_type: &str,
         reference_id: i64,
     ) -> Result<Vec<StockMovement>, ApiError>;
+
+    /// Soft delete a stock movement with tenant isolation
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted stock movement with tenant isolation
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<StockMovement, ApiError>;
+
+    /// Find soft-deleted stock movements
+    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError>;
+
+    /// Hard delete a stock movement with tenant isolation (permanent destruction — admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type aliases
@@ -126,15 +176,21 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
             address: create.address,
             is_active: true,
             created_at: chrono::Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.warehouses.insert(id, warehouse.clone());
         Ok(warehouse)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Warehouse>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Warehouse>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.warehouses.get(&id).cloned())
+        Ok(inner
+            .warehouses
+            .get(&id)
+            .filter(|w| w.tenant_id == tenant_id && !w.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError> {
@@ -142,7 +198,7 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
         Ok(inner
             .warehouses
             .values()
-            .filter(|w| w.tenant_id == tenant_id)
+            .filter(|w| w.tenant_id == tenant_id && !w.is_deleted())
             .cloned()
             .collect())
     }
@@ -157,7 +213,7 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
         let all: Vec<_> = inner
             .warehouses
             .values()
-            .filter(|w| w.tenant_id == tenant_id)
+            .filter(|w| w.tenant_id == tenant_id && !w.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -172,6 +228,7 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         code: Option<String>,
         name: Option<String>,
         address: Option<String>,
@@ -182,6 +239,10 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
             .warehouses
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Warehouse {} not found", id)))?;
+
+        if warehouse.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Warehouse {} not found", id)));
+        }
 
         if let Some(c) = code {
             warehouse.code = c;
@@ -199,9 +260,57 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
         Ok(warehouse.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let warehouse = inner
+            .warehouses
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Warehouse {} not found", id)))?;
+
+        if warehouse.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Warehouse {} not found", id)));
+        }
+
         inner.warehouses.remove(&id);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, _tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let warehouse = inner
+            .warehouses
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Warehouse {} not found", id)))?;
+        warehouse.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, _tenant_id: i64) -> Result<Warehouse, ApiError> {
+        let mut inner = self.inner.lock();
+        let warehouse = inner
+            .warehouses
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Warehouse {} not found", id)))?;
+        warehouse.restore();
+        Ok(warehouse.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .warehouses
+            .values()
+            .filter(|w| w.tenant_id == tenant_id && w.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, _tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        inner
+            .warehouses
+            .remove(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Warehouse {} not found", id)))?;
         Ok(())
     }
 }
@@ -242,7 +351,11 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
         product_id: i64,
     ) -> Result<Option<StockLevel>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.levels.get(&(warehouse_id, product_id)).cloned())
+        Ok(inner
+            .levels
+            .get(&(warehouse_id, product_id))
+            .filter(|l| !l.is_deleted())
+            .cloned())
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockLevel>, ApiError> {
@@ -250,7 +363,7 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
         Ok(inner
             .levels
             .values()
-            .filter(|l| l.product_id == product_id)
+            .filter(|l| l.product_id == product_id && !l.is_deleted())
             .cloned()
             .collect())
     }
@@ -260,7 +373,7 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
         Ok(inner
             .levels
             .values()
-            .filter(|l| l.warehouse_id == warehouse_id)
+            .filter(|l| l.warehouse_id == warehouse_id && !l.is_deleted())
             .cloned()
             .collect())
     }
@@ -286,6 +399,8 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
                     quantity: Decimal::ZERO,
                     reserved_quantity: Decimal::ZERO,
                     updated_at: chrono::Utc::now(),
+                    deleted_at: None,
+                    deleted_by: None,
                 },
             );
         }
@@ -317,6 +432,8 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
                     quantity: Decimal::ZERO,
                     reserved_quantity: Decimal::ZERO,
                     updated_at: chrono::Utc::now(),
+                    deleted_at: None,
+                    deleted_by: None,
                 },
             );
         }
@@ -356,6 +473,8 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
                     quantity: Decimal::ZERO,
                     reserved_quantity: Decimal::ZERO,
                     updated_at: chrono::Utc::now(),
+                    deleted_at: None,
+                    deleted_by: None,
                 },
             );
         }
@@ -365,11 +484,60 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
         level.updated_at = chrono::Utc::now();
         Ok(level.clone())
     }
+
+    async fn soft_delete(
+        &self,
+        warehouse_id: i64,
+        product_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let key = (warehouse_id, product_id);
+        let level = inner
+            .levels
+            .get_mut(&key)
+            .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))?;
+        level.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, warehouse_id: i64, product_id: i64) -> Result<StockLevel, ApiError> {
+        let mut inner = self.inner.lock();
+        let key = (warehouse_id, product_id);
+        let level = inner
+            .levels
+            .get_mut(&key)
+            .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))?;
+        level.restore();
+        Ok(level.clone())
+    }
+
+    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .levels
+            .values()
+            .filter(|l| l.warehouse_id == warehouse_id && l.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, warehouse_id: i64, product_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let key = (warehouse_id, product_id);
+        inner
+            .levels
+            .remove(&key)
+            .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))?;
+        Ok(())
+    }
 }
 
 /// Inner state for InMemoryStockMovementRepository
 struct InMemoryStockMovementInner {
     movements: std::collections::HashMap<i64, StockMovement>,
+    /// Maps warehouse_id -> tenant_id for tenant isolation of movements
+    warehouse_tenants: std::collections::HashMap<i64, i64>,
     next_id: i64,
 }
 
@@ -383,9 +551,17 @@ impl InMemoryStockMovementRepository {
         Self {
             inner: Mutex::new(InMemoryStockMovementInner {
                 movements: std::collections::HashMap::new(),
+                warehouse_tenants: std::collections::HashMap::new(),
                 next_id: 1,
             }),
         }
+    }
+
+    /// Register a warehouse's tenant_id for tenant isolation of movements.
+    /// This must be called before creating movements for a warehouse.
+    pub fn register_warehouse_tenant(&self, warehouse_id: i64, tenant_id: i64) {
+        let mut inner = self.inner.lock();
+        inner.warehouse_tenants.insert(warehouse_id, tenant_id);
     }
 }
 
@@ -417,15 +593,30 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
             notes: create.notes,
             created_at: chrono::Utc::now(),
             created_by: create.created_by,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.movements.insert(id, movement.clone());
         Ok(movement)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<StockMovement>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<StockMovement>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.movements.get(&id).cloned())
+        // StockMovement does not have tenant_id directly; look up via warehouse
+        let movement = inner
+            .movements
+            .get(&id)
+            .filter(|m| !m.is_deleted())
+            .cloned();
+        if let Some(ref m) = movement {
+            // Verify the warehouse belongs to the tenant
+            match inner.warehouse_tenants.get(&m.warehouse_id) {
+                Some(&w_tenant_id) if w_tenant_id == tenant_id => {}
+                _ => return Ok(None),
+            }
+        }
+        Ok(movement)
     }
 
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockMovement>, ApiError> {
@@ -433,7 +624,7 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
         Ok(inner
             .movements
             .values()
-            .filter(|m| m.product_id == product_id)
+            .filter(|m| m.product_id == product_id && !m.is_deleted())
             .cloned()
             .collect())
     }
@@ -443,7 +634,23 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
         Ok(inner
             .movements
             .values()
-            .filter(|m| m.warehouse_id == warehouse_id)
+            .filter(|m| m.warehouse_id == warehouse_id && !m.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<StockMovement>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .movements
+            .values()
+            .filter(|m| {
+                !m.is_deleted()
+                    && inner
+                        .warehouse_tenants
+                        .get(&m.warehouse_id)
+                        .is_some_and(|&t| t == tenant_id)
+            })
             .cloned()
             .collect())
     }
@@ -458,10 +665,103 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
             .movements
             .values()
             .filter(|m| {
-                m.reference_type.as_deref() == Some(reference_type)
+                !m.is_deleted()
+                    && m.reference_type.as_deref() == Some(reference_type)
                     && m.reference_id == Some(reference_id)
             })
             .cloned()
             .collect())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        // First, look up the warehouse_id immutably
+        let warehouse_id = inner
+            .movements
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?
+            .warehouse_id;
+
+        // Verify tenant ownership via warehouse
+        match inner.warehouse_tenants.get(&warehouse_id) {
+            Some(&w_tenant_id) if w_tenant_id == tenant_id => {}
+            _ => {
+                return Err(ApiError::NotFound(format!(
+                    "Stock movement {} not found",
+                    id
+                )))
+            }
+        }
+
+        inner
+            .movements
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?
+            .mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<StockMovement, ApiError> {
+        let mut inner = self.inner.lock();
+        // First, look up the warehouse_id immutably
+        let warehouse_id = inner
+            .movements
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?
+            .warehouse_id;
+
+        // Verify tenant ownership via warehouse
+        match inner.warehouse_tenants.get(&warehouse_id) {
+            Some(&w_tenant_id) if w_tenant_id == tenant_id => {}
+            _ => {
+                return Err(ApiError::NotFound(format!(
+                    "Stock movement {} not found",
+                    id
+                )))
+            }
+        }
+
+        let movement = inner
+            .movements
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?;
+        movement.restore();
+        Ok(movement.clone())
+    }
+
+    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .movements
+            .values()
+            .filter(|m| m.warehouse_id == warehouse_id && m.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        // First, look up the warehouse_id and verify tenant
+        let warehouse_id = inner
+            .movements
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?
+            .warehouse_id;
+
+        match inner.warehouse_tenants.get(&warehouse_id) {
+            Some(&w_tenant_id) if w_tenant_id == tenant_id => {}
+            _ => {
+                return Err(ApiError::NotFound(format!(
+                    "Stock movement {} not found",
+                    id
+                )))
+            }
+        }
+
+        inner
+            .movements
+            .remove(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?;
+        Ok(())
     }
 }

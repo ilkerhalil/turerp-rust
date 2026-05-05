@@ -17,8 +17,6 @@ use crate::domain::product::repository::{
 };
 use crate::error::ApiError;
 
-/// Convert sqlx errors to ApiError with proper detection of error types
-
 // ---------------------------------------------------------------------------
 // Product
 // ---------------------------------------------------------------------------
@@ -40,6 +38,8 @@ struct ProductRow {
     is_active: bool,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -60,6 +60,8 @@ impl From<ProductRow> for Product {
             is_active: row.is_active,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -92,7 +94,7 @@ impl ProductRepository for PostgresProductRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, NOW(), NOW())
             RETURNING id, tenant_id, code, name, description, category_id, unit_id,
                       barcode, purchase_price, sale_price, tax_rate, is_active,
-                      created_at, updated_at
+                      created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -112,17 +114,18 @@ impl ProductRepository for PostgresProductRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Product>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Product>, ApiError> {
         let result: Option<ProductRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
-                   created_at, updated_at
+                   created_at, updated_at, deleted_at, deleted_by
             FROM products
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find product by id: {}", e)))?;
@@ -135,9 +138,9 @@ impl ProductRepository for PostgresProductRepository {
             r#"
             SELECT id, tenant_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
-                   created_at, updated_at
+                   created_at, updated_at, deleted_at, deleted_by
             FROM products
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -160,9 +163,9 @@ impl ProductRepository for PostgresProductRepository {
             r#"
             SELECT id, tenant_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
-                   created_at, updated_at, COUNT(*) OVER() as total_count
+                   created_at, updated_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
             FROM products
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -184,9 +187,9 @@ impl ProductRepository for PostgresProductRepository {
             r#"
             SELECT id, tenant_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
-                   created_at, updated_at
+                   created_at, updated_at, deleted_at, deleted_by
             FROM products
-            WHERE tenant_id = $1 AND code = $2
+            WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(tenant_id)
@@ -205,9 +208,9 @@ impl ProductRepository for PostgresProductRepository {
             r#"
             SELECT id, tenant_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
-                   created_at, updated_at
+                   created_at, updated_at, deleted_at, deleted_by
             FROM products
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
               AND (LOWER(code) LIKE LOWER($2) OR LOWER(name) LIKE LOWER($2))
             ORDER BY created_at DESC
             "#,
@@ -221,7 +224,12 @@ impl ProductRepository for PostgresProductRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn update(&self, id: i64, update: UpdateProduct) -> Result<Product, ApiError> {
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateProduct,
+    ) -> Result<Product, ApiError> {
         let row: ProductRow = sqlx::query_as(
             r#"
             UPDATE products
@@ -237,10 +245,10 @@ impl ProductRepository for PostgresProductRepository {
                 tax_rate = COALESCE($9, tax_rate),
                 is_active = COALESCE($10, is_active),
                 updated_at = NOW()
-            WHERE id = $11
+            WHERE id = $11 AND tenant_id = $12 AND deleted_at IS NULL
             RETURNING id, tenant_id, code, name, description, category_id, unit_id,
                       barcode, purchase_price, sale_price, tax_rate, is_active,
-                      created_at, updated_at
+                      created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.code)
@@ -254,6 +262,7 @@ impl ProductRepository for PostgresProductRepository {
         .bind(update.tax_rate)
         .bind(update.is_active)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Product"))?;
@@ -261,17 +270,104 @@ impl ProductRepository for PostgresProductRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM products
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete product: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Product not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE products
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete product: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Product not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Product, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE products
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore product: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Product not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Product not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
+        let rows: Vec<ProductRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, code, name, description, category_id, unit_id,
+                   barcode, purchase_price, sale_price, tax_rate, is_active,
+                   created_at, updated_at, deleted_at, deleted_by
+            FROM products
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted products: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM products
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy product: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Product not found".to_string()));
@@ -293,6 +389,8 @@ struct CategoryRow {
     name: String,
     parent_id: Option<i64>,
     created_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -304,6 +402,8 @@ impl From<CategoryRow> for Category {
             name: row.name,
             parent_id: row.parent_id,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -332,7 +432,7 @@ impl CategoryRepository for PostgresCategoryRepository {
             r#"
             INSERT INTO categories (tenant_id, name, parent_id, created_at)
             VALUES ($1, $2, $3, NOW())
-            RETURNING id, tenant_id, name, parent_id, created_at
+            RETURNING id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -345,15 +445,16 @@ impl CategoryRepository for PostgresCategoryRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Category>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Category>, ApiError> {
         let result: Option<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, parent_id, created_at
+            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
             FROM categories
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find category by id: {}", e)))?;
@@ -364,9 +465,9 @@ impl CategoryRepository for PostgresCategoryRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
         let rows: Vec<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, parent_id, created_at
+            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
             FROM categories
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -387,9 +488,9 @@ impl CategoryRepository for PostgresCategoryRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, parent_id, created_at, COUNT(*) OVER() as total_count
+            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
             FROM categories
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -406,17 +507,102 @@ impl CategoryRepository for PostgresCategoryRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM categories
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete category: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Category not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE categories
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete category: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Category not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Category, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE categories
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore category: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Category not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Category not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
+        let rows: Vec<CategoryRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
+            FROM categories
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted categories: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM categories
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy category: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Category not found".to_string()));
@@ -439,6 +625,8 @@ struct UnitRow {
     name: String,
     is_integer: bool,
     created_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<UnitRow> for Unit {
@@ -450,6 +638,8 @@ impl From<UnitRow> for Unit {
             name: row.name,
             is_integer: row.is_integer,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -478,7 +668,7 @@ impl UnitRepository for PostgresUnitRepository {
             r#"
             INSERT INTO units (tenant_id, code, name, is_integer, created_at)
             VALUES ($1, $2, $3, $4, NOW())
-            RETURNING id, tenant_id, code, name, is_integer, created_at
+            RETURNING id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -492,15 +682,16 @@ impl UnitRepository for PostgresUnitRepository {
         Ok(row.into())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Unit>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Unit>, ApiError> {
         let result: Option<UnitRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, is_integer, created_at
+            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
             FROM units
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find unit by id: {}", e)))?;
@@ -511,9 +702,9 @@ impl UnitRepository for PostgresUnitRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
         let rows: Vec<UnitRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, is_integer, created_at
+            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
             FROM units
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -525,17 +716,102 @@ impl UnitRepository for PostgresUnitRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM units
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete unit: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Unit not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE units
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete unit: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Unit not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Unit, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE units
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore unit: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Unit not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Unit not found".to_string()))
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
+        let rows: Vec<UnitRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            FROM units
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted units: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM units
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy unit: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Unit not found".to_string()));
@@ -560,6 +836,8 @@ struct ProductVariantRow {
     price_modifier: Decimal,
     is_active: bool,
     created_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<ProductVariantRow> for ProductVariant {
@@ -573,6 +851,8 @@ impl From<ProductVariantRow> for ProductVariant {
             price_modifier: row.price_modifier,
             is_active: row.is_active,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -602,7 +882,8 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
             INSERT INTO product_variants (product_id, name, sku, barcode, price_modifier,
                                           is_active, created_at)
             VALUES ($1, $2, $3, $4, $5, true, NOW())
-            RETURNING id, product_id, name, sku, barcode, price_modifier, is_active, created_at
+            RETURNING id, product_id, name, sku, barcode, price_modifier, is_active, created_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(create.product_id)
@@ -620,9 +901,10 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
     async fn find_by_product(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError> {
         let rows: Vec<ProductVariantRow> = sqlx::query_as(
             r#"
-            SELECT id, product_id, name, sku, barcode, price_modifier, is_active, created_at
+            SELECT id, product_id, name, sku, barcode, price_modifier, is_active, created_at,
+                   deleted_at, deleted_by
             FROM product_variants
-            WHERE product_id = $1
+            WHERE product_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -639,9 +921,10 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
     async fn find_by_id(&self, id: i64) -> Result<Option<ProductVariant>, ApiError> {
         let result: Option<ProductVariantRow> = sqlx::query_as(
             r#"
-            SELECT id, product_id, name, sku, barcode, price_modifier, is_active, created_at
+            SELECT id, product_id, name, sku, barcode, price_modifier, is_active, created_at,
+                   deleted_at, deleted_by
             FROM product_variants
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -666,8 +949,9 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
                 barcode = COALESCE($3, barcode),
                 price_modifier = COALESCE($4, price_modifier),
                 is_active = COALESCE($5, is_active)
-            WHERE id = $6
-            RETURNING id, product_id, name, sku, barcode, price_modifier, is_active, created_at
+            WHERE id = $6 AND deleted_at IS NULL
+            RETURNING id, product_id, name, sku, barcode, price_modifier, is_active, created_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(&update.name)
@@ -694,6 +978,90 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete product variant: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Product variant not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE product_variants
+            SET deleted_at = NOW(), deleted_by = $2
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete product variant: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Product variant not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64) -> Result<ProductVariant, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE product_variants
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore product variant: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Product variant not found or not deleted".to_string(),
+            ));
+        }
+
+        self.find_by_id(id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Product variant not found".to_string()))
+    }
+
+    async fn find_deleted(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError> {
+        let rows: Vec<ProductVariantRow> = sqlx::query_as(
+            r#"
+            SELECT id, product_id, name, sku, barcode, price_modifier, is_active, created_at,
+                   deleted_at, deleted_by
+            FROM product_variants
+            WHERE product_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(product_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to find deleted product variants: {}", e))
+        })?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM product_variants
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy product variant: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Product variant not found".to_string()));

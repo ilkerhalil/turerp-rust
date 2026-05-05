@@ -104,6 +104,8 @@ pub mod app {
     use crate::domain::tenant::service::{TenantConfigService, TenantService};
     use crate::domain::user::repository::BoxUserRepository;
     use crate::domain::user::service::UserService;
+    use crate::domain::webhook::repository::{BoxWebhookDeliveryRepository, BoxWebhookRepository};
+    use crate::domain::webhook::service::WebhookService;
     use crate::i18n::I18n;
     use crate::utils::jwt::JwtService;
 
@@ -153,6 +155,9 @@ pub mod app {
     use crate::domain::tax::repository::{InMemoryTaxPeriodRepository, InMemoryTaxRateRepository};
     use crate::domain::tenant::repository::InMemoryTenantRepository;
     use crate::domain::user::repository::InMemoryUserRepository;
+    use crate::domain::webhook::repository::{
+        InMemoryWebhookDeliveryRepository, InMemoryWebhookRepository,
+    };
 
     #[cfg(feature = "postgres")]
     use crate::db;
@@ -173,6 +178,12 @@ pub mod app {
         PostgresCampaignRepository, PostgresLeadRepository, PostgresOpportunityRepository,
         PostgresTicketRepository,
     };
+    #[cfg(feature = "postgres")]
+    use crate::domain::edefter::postgres_repository::PostgresEDefterRepository;
+    #[cfg(feature = "postgres")]
+    use crate::domain::edefter::repository::BoxEDefterRepository;
+    #[cfg(feature = "postgres")]
+    use crate::domain::efatura::postgres_repository::PostgresEFaturaRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::feature::postgres_repository::PostgresFeatureFlagRepository;
     #[cfg(feature = "postgres")]
@@ -213,9 +224,17 @@ pub mod app {
         PostgresStockLevelRepository, PostgresStockMovementRepository, PostgresWarehouseRepository,
     };
     #[cfg(feature = "postgres")]
+    use crate::domain::tax::postgres_repository::{
+        PostgresTaxPeriodRepository, PostgresTaxRateRepository,
+    };
+    #[cfg(feature = "postgres")]
     use crate::domain::tenant::postgres_repository::PostgresTenantRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::user::postgres_repository::PostgresUserRepository;
+    #[cfg(feature = "postgres")]
+    use crate::domain::webhook::postgres_repository::{
+        PostgresWebhookDeliveryRepository, PostgresWebhookRepository,
+    };
     #[cfg(feature = "postgres")]
     use sqlx::PgPool;
 
@@ -254,6 +273,9 @@ pub mod app {
         pub db_router: web::Data<dyn DbRouter>,
         pub i18n: web::Data<I18n>,
         pub tax_service: web::Data<TaxService>,
+        pub efatura_service: web::Data<crate::domain::efatura::EFaturaService>,
+        pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
+        pub webhook_service: web::Data<WebhookService>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
     }
@@ -473,6 +495,25 @@ pub mod app {
                 Arc::new(InMemoryTaxPeriodRepository::new()) as BoxTaxPeriodRepository;
             let tax_service = TaxService::new(tax_rate_repo, tax_period_repo);
 
+            // e-Fatura
+            let efatura_repo = Arc::new(crate::domain::efatura::InMemoryEFaturaRepository::new())
+                as crate::domain::efatura::BoxEFaturaRepository;
+            let gib_gateway =
+                Arc::new(crate::common::InMemoryGibGateway::new()) as crate::common::BoxGibGateway;
+            let efatura_service =
+                crate::domain::efatura::EFaturaService::new(efatura_repo, gib_gateway);
+
+            // e-Defter
+            let edefter_repo = Arc::new(crate::domain::edefter::InMemoryEDefterRepository::new())
+                as crate::domain::edefter::BoxEDefterRepository;
+            let edefter_service = crate::domain::edefter::EDefterService::new(edefter_repo);
+
+            // Webhooks
+            let webhook_repo = Arc::new(InMemoryWebhookRepository::new()) as BoxWebhookRepository;
+            let delivery_repo =
+                Arc::new(InMemoryWebhookDeliveryRepository::new()) as BoxWebhookDeliveryRepository;
+            let webhook_service = WebhookService::new(webhook_repo, delivery_repo);
+
             (
                 auth_service,
                 user_service,
@@ -505,6 +546,9 @@ pub mod app {
                 tracing_service,
                 db_router,
                 tax_service,
+                efatura_service,
+                edefter_service,
+                webhook_service,
             )
         }};
     }
@@ -544,6 +588,9 @@ pub mod app {
             tracing_service,
             db_router,
             tax_service,
+            efatura_service,
+            edefter_service,
+            webhook_service,
         ) = create_in_memory_services!(config);
 
         let i18n = I18n::init();
@@ -581,6 +628,9 @@ pub mod app {
             db_router: web::Data::from(db_router),
             i18n: web::Data::new(i18n),
             tax_service: web::Data::new(tax_service),
+            efatura_service: web::Data::new(efatura_service),
+            edefter_service: web::Data::new(edefter_service),
+            webhook_service: web::Data::new(webhook_service),
         }
     }
 
@@ -774,11 +824,37 @@ pub mod app {
             ReadAfterWriteMode::Eventual,
         )) as Arc<dyn DbRouter>;
 
-        // Tax - using in-memory repos (no postgres repo yet)
-        let tax_rate_repo = Arc::new(InMemoryTaxRateRepository::new()) as BoxTaxRateRepository;
-        let tax_period_repo =
-            Arc::new(InMemoryTaxPeriodRepository::new()) as BoxTaxPeriodRepository;
+        // Tax - PostgreSQL
+        let tax_rate_repo = PostgresTaxRateRepository::new(pool.clone()).into_boxed();
+        let tax_period_repo = PostgresTaxPeriodRepository::new(pool.clone()).into_boxed();
         let tax_service = TaxService::new(tax_rate_repo, tax_period_repo);
+
+        // e-Fatura - PostgreSQL
+        let efatura_repo = PostgresEFaturaRepository::new(pool.clone()).into_boxed();
+        let gib_gateway =
+            Arc::new(crate::common::InMemoryGibGateway::new()) as crate::common::BoxGibGateway;
+        let efatura_service =
+            crate::domain::efatura::EFaturaService::new(efatura_repo, gib_gateway);
+
+        // e-Defter - in-memory (no postgres repo yet)
+        let edefter_repo = Arc::new(crate::domain::edefter::InMemoryEDefterRepository::new())
+            as crate::domain::edefter::BoxEDefterRepository;
+        let edefter_service = crate::domain::edefter::EDefterService::new(edefter_repo);
+
+        // Webhooks - PostgreSQL
+        let webhook_repo = PostgresWebhookRepository::new(pool.clone()).into_boxed();
+        let delivery_repo = PostgresWebhookDeliveryRepository::new(pool.clone()).into_boxed();
+        let webhook_service = WebhookService::new(webhook_repo, delivery_repo);
+
+        // Register webhook subscriber on event bus
+        event_bus
+            .subscribe(Arc::new(
+                crate::domain::webhook::subscriber::WebhookSubscriber::new(Arc::new(
+                    webhook_service.clone(),
+                )),
+            ))
+            .await
+            .ok();
 
         let i18n = I18n::init();
 
@@ -814,6 +890,9 @@ pub mod app {
             tracing_service: web::Data::from(tracing_service),
             db_router: web::Data::from(db_router),
             tax_service: web::Data::new(tax_service),
+            efatura_service: web::Data::new(efatura_service),
+            edefter_service: web::Data::new(edefter_service),
+            webhook_service: web::Data::new(webhook_service),
             db_pool: web::Data::new(pool),
             i18n: web::Data::new(i18n),
         }
@@ -860,6 +939,9 @@ pub mod app {
             tracing_service,
             db_router,
             tax_service,
+            efatura_service,
+            edefter_service,
+            webhook_service,
         ) = create_in_memory_services!(config);
 
         // For in-memory testing with postgres feature, create a mock pool
@@ -871,6 +953,16 @@ pub mod app {
                 .expect("Failed to create lazy pool")
         });
         let db_pool = web::Data::new(Arc::new(pool));
+
+        // Register webhook subscriber on event bus
+        event_bus
+            .subscribe(Arc::new(
+                crate::domain::webhook::subscriber::WebhookSubscriber::new(Arc::new(
+                    webhook_service.clone(),
+                )),
+            ))
+            .await
+            .ok();
 
         let i18n = I18n::init();
 
@@ -906,6 +998,9 @@ pub mod app {
             tracing_service: web::Data::from(tracing_service),
             db_router: web::Data::from(db_router),
             tax_service: web::Data::new(tax_service),
+            efatura_service: web::Data::new(efatura_service),
+            edefter_service: web::Data::new(edefter_service),
+            webhook_service: web::Data::new(webhook_service),
             db_pool,
             i18n: web::Data::new(i18n),
         }

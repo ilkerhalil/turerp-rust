@@ -22,6 +22,14 @@ sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "postgres", "m
 jsonwebtoken = "9"
 bcrypt = "0.15"
 
+# Hashing (API key hashing + HMAC)
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+
+# HTTP client (webhook delivery)
+reqwest = { version = "0.12", features = ["json"] }
+
 # Encryption
 aes-gcm = "0.10"
 base64 = "0.22"

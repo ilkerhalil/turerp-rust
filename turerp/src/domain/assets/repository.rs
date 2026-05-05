@@ -10,6 +10,7 @@ use super::model::{
     UpdateAsset,
 };
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::error::ApiError;
 
 /// Repository trait for Assets operations
@@ -19,7 +20,7 @@ pub trait AssetsRepository: Send + Sync {
     async fn create(&self, asset: CreateAsset) -> Result<Asset, ApiError>;
 
     /// Find asset by ID
-    async fn find_by_id(&self, id: i64) -> Result<Option<Asset>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Asset>, ApiError>;
 
     /// Find all assets for a tenant
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError>;
@@ -47,16 +48,39 @@ pub trait AssetsRepository: Send + Sync {
     ) -> Result<Vec<Asset>, ApiError>;
 
     /// Update an asset
-    async fn update(&self, id: i64, update: UpdateAsset) -> Result<Asset, ApiError>;
+    async fn update(&self, id: i64, tenant_id: i64, update: UpdateAsset)
+        -> Result<Asset, ApiError>;
 
     /// Update asset status
-    async fn update_status(&self, id: i64, status: AssetStatus) -> Result<Asset, ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: AssetStatus,
+    ) -> Result<Asset, ApiError>;
 
     /// Record depreciation for an asset
-    async fn record_depreciation(&self, id: i64, amount: Decimal) -> Result<Asset, ApiError>;
+    async fn record_depreciation(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        amount: Decimal,
+    ) -> Result<Asset, ApiError>;
 
     /// Delete an asset
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete an asset
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted asset
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError>;
+
+    /// Find soft-deleted assets
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError>;
+
+    /// Hard delete (destroy) an asset
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Create maintenance record
     async fn create_maintenance_record(
@@ -80,14 +104,14 @@ pub trait AssetCategoryRepository: Send + Sync {
         category: super::model::AssetCategory,
     ) -> Result<AssetCategory, ApiError>;
 
-    /// Find category by ID
-    async fn find_by_id(&self, id: i64) -> Result<Option<AssetCategory>, ApiError>;
+    /// Find category by ID (scoped to tenant)
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<AssetCategory>, ApiError>;
 
     /// Find all categories for a tenant
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<AssetCategory>, ApiError>;
 
-    /// Delete a category
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    /// Delete a category (scoped to tenant)
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type aliases
@@ -169,14 +193,22 @@ impl AssetsRepository for InMemoryAssetsRepository {
             notes: create.notes,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.assets.insert(id, asset.clone());
         Ok(asset)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Asset>, ApiError> {
-        Ok(self.inner.lock().assets.get(&id).cloned())
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Asset>, ApiError> {
+        Ok(self
+            .inner
+            .lock()
+            .assets
+            .get(&id)
+            .filter(|a| a.tenant_id == tenant_id && !a.is_deleted())
+            .cloned())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError> {
@@ -184,7 +216,7 @@ impl AssetsRepository for InMemoryAssetsRepository {
         Ok(inner
             .assets
             .values()
-            .filter(|a| a.tenant_id == tenant_id)
+            .filter(|a| a.tenant_id == tenant_id && !a.is_deleted())
             .cloned()
             .collect())
     }
@@ -199,13 +231,13 @@ impl AssetsRepository for InMemoryAssetsRepository {
         let total = inner
             .assets
             .values()
-            .filter(|a| a.tenant_id == tenant_id)
+            .filter(|a| a.tenant_id == tenant_id && !a.is_deleted())
             .count() as u64;
 
         let items: Vec<Asset> = inner
             .assets
             .values()
-            .filter(|a| a.tenant_id == tenant_id)
+            .filter(|a| a.tenant_id == tenant_id && !a.is_deleted())
             .skip(((page.saturating_sub(1)) * per_page) as usize)
             .take(per_page as usize)
             .cloned()
@@ -223,7 +255,7 @@ impl AssetsRepository for InMemoryAssetsRepository {
         Ok(inner
             .assets
             .values()
-            .filter(|a| a.tenant_id == tenant_id && a.status == status)
+            .filter(|a| a.tenant_id == tenant_id && a.status == status && !a.is_deleted())
             .cloned()
             .collect())
     }
@@ -237,17 +269,28 @@ impl AssetsRepository for InMemoryAssetsRepository {
         Ok(inner
             .assets
             .values()
-            .filter(|a| a.tenant_id == tenant_id && a.category_id == Some(category_id))
+            .filter(|a| {
+                a.tenant_id == tenant_id && a.category_id == Some(category_id) && !a.is_deleted()
+            })
             .cloned()
             .collect())
     }
 
-    async fn update(&self, id: i64, update: UpdateAsset) -> Result<Asset, ApiError> {
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateAsset,
+    ) -> Result<Asset, ApiError> {
         let mut inner = self.inner.lock();
         let asset = inner
             .assets
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))?;
+
+        if asset.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Asset {} not found", id)));
+        }
 
         if let Some(name) = update.name {
             asset.name = name;
@@ -275,24 +318,42 @@ impl AssetsRepository for InMemoryAssetsRepository {
         Ok(asset.clone())
     }
 
-    async fn update_status(&self, id: i64, status: AssetStatus) -> Result<Asset, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: AssetStatus,
+    ) -> Result<Asset, ApiError> {
         let mut inner = self.inner.lock();
         let asset = inner
             .assets
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))?;
+
+        if asset.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Asset {} not found", id)));
+        }
 
         asset.status = status;
         asset.updated_at = chrono::Utc::now();
         Ok(asset.clone())
     }
 
-    async fn record_depreciation(&self, id: i64, amount: Decimal) -> Result<Asset, ApiError> {
+    async fn record_depreciation(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        amount: Decimal,
+    ) -> Result<Asset, ApiError> {
         let mut inner = self.inner.lock();
         let asset = inner
             .assets
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))?;
+
+        if asset.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Asset {} not found", id)));
+        }
 
         asset.accumulated_depreciation += amount;
         asset.book_value = asset.calculate_book_value();
@@ -306,8 +367,73 @@ impl AssetsRepository for InMemoryAssetsRepository {
         Ok(asset.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let asset = inner
+            .assets
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))?;
+
+        if asset.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Asset {} not found", id)));
+        }
+
+        inner.assets.remove(&id);
+        inner.maintenance_records.remove(&id);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let asset = inner
+            .assets
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))?;
+
+        if asset.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Asset {} not found", id)));
+        }
+
+        asset.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
+        let mut inner = self.inner.lock();
+        let asset = inner
+            .assets
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))?;
+
+        if asset.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Asset {} not found", id)));
+        }
+
+        asset.restore();
+        Ok(asset.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .assets
+            .values()
+            .filter(|a| a.tenant_id == tenant_id && a.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let asset = inner
+            .assets
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))?;
+
+        if asset.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Asset {} not found", id)));
+        }
+
         inner.assets.remove(&id);
         inner.maintenance_records.remove(&id);
         Ok(())
@@ -444,7 +570,7 @@ mod tests {
             .unwrap();
 
         let updated = repo
-            .record_depreciation(asset.id, Decimal::from(1800))
+            .record_depreciation(asset.id, 1, Decimal::from(1800))
             .await
             .unwrap();
         assert_eq!(updated.accumulated_depreciation, Decimal::from(1800));

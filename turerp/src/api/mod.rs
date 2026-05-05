@@ -20,6 +20,8 @@ pub use v1::cari_configure as v1_cari_configure;
 pub use v1::chart_of_accounts_configure as v1_chart_of_accounts_configure;
 pub use v1::crm_configure as v1_crm_configure;
 pub use v1::custom_fields_configure as v1_custom_fields_configure;
+pub use v1::edefter_configure as v1_edefter_configure;
+pub use v1::efatura_configure as v1_efatura_configure;
 pub use v1::events_configure as v1_events_configure;
 pub use v1::feature_flags_configure as v1_feature_flags_configure;
 pub use v1::hr_configure as v1_hr_configure;
@@ -38,6 +40,7 @@ pub use v1::stock_configure as v1_stock_configure;
 pub use v1::tax_configure as v1_tax_configure;
 pub use v1::tenant_configure as v1_tenant_configure;
 pub use v1::users_configure as v1_users_configure;
+pub use v1::webhooks_configure as v1_webhooks_configure;
 
 use crate::common::MessageResponse;
 use crate::domain::auth::{LoginRequest, LoginResponse, RefreshTokenRequest, RegisterRequest};
@@ -73,6 +76,15 @@ use utoipa::OpenApi;
         crate::api::v1::users::get_users,
         crate::api::v1::users::update_user,
         crate::api::v1::users::delete_user,
+        // Webhooks
+        crate::api::v1::webhooks::create_webhook,
+        crate::api::v1::webhooks::list_webhooks,
+        crate::api::v1::webhooks::get_webhook,
+        crate::api::v1::webhooks::update_webhook,
+        crate::api::v1::webhooks::delete_webhook,
+        crate::api::v1::webhooks::test_webhook,
+        crate::api::v1::webhooks::list_deliveries,
+        crate::api::v1::webhooks::retry_delivery,
         // Tenant
         crate::api::v1::tenant::create_tenant,
         crate::api::v1::tenant::get_tenants,
@@ -446,6 +458,25 @@ use utoipa::OpenApi;
         crate::api::v1::tax::get_tax_period,
         crate::api::v1::tax::calculate_tax_period,
         crate::api::v1::tax::file_tax_period,
+        // e-Fatura
+        crate::api::v1::efatura::create_efatura,
+        crate::api::v1::efatura::list_efaturas,
+        crate::api::v1::efatura::get_efatura,
+        crate::api::v1::efatura::get_efatura_xml,
+        crate::api::v1::efatura::send_efatura,
+        crate::api::v1::efatura::cancel_efatura,
+        crate::api::v1::efatura::check_efatura_status,
+        // e-Defter
+        crate::api::v1::edefter::create_period,
+        crate::api::v1::edefter::list_periods,
+        crate::api::v1::edefter::get_period,
+        crate::api::v1::edefter::populate_period,
+        crate::api::v1::edefter::validate_period,
+        crate::api::v1::edefter::generate_yevmiye,
+        crate::api::v1::edefter::generate_buyuk_defter,
+        crate::api::v1::edefter::sign_berat,
+        crate::api::v1::edefter::send_to_saklayici,
+        crate::api::v1::edefter::check_status,
     ),
     components(
         schemas(
@@ -514,6 +545,30 @@ use utoipa::OpenApi;
             crate::api::v1::tax::CalculateTaxRequest,
             crate::api::v1::tax::CalculateInvoiceTaxRequest,
             crate::api::v1::tax::EffectiveRateQuery,
+            // e-Fatura
+            crate::domain::efatura::model::EFaturaStatus,
+            crate::domain::efatura::model::EFaturaProfile,
+            crate::domain::efatura::model::EFaturaResponse,
+            crate::domain::efatura::model::CreateEFatura,
+            crate::api::v1::efatura::CancelEFaturaRequest,
+            // e-Defter
+            crate::domain::edefter::model::EDefterStatus,
+            crate::domain::edefter::model::LedgerType,
+            crate::domain::edefter::model::LedgerPeriod,
+            crate::domain::edefter::model::LedgerPeriodResponse,
+            crate::domain::edefter::model::CreateLedgerPeriod,
+            crate::domain::edefter::model::YevmiyeEntry,
+            crate::domain::edefter::model::YevmiyeLine,
+            crate::domain::edefter::model::BalanceCheckResult,
+            crate::domain::edefter::model::BeratInfo,
+            crate::api::v1::edefter::XmlResponse,
+            // Webhooks
+            crate::domain::webhook::model::WebhookStatus,
+            crate::domain::webhook::model::DeliveryStatus,
+            crate::domain::webhook::model::CreateWebhook,
+            crate::domain::webhook::model::UpdateWebhook,
+            crate::domain::webhook::model::WebhookResponse,
+            crate::domain::webhook::model::WebhookDeliveryResponse,
         )
     ),
     security(
@@ -547,7 +602,10 @@ use utoipa::OpenApi;
         (name = "Events", description = "Event bus, outbox pattern, and dead letter queue"),
         (name = "Search", description = "Full-text search across entities"),
         (name = "Tax", description = "Turkish tax rate management, calculation, and KVB period tracking"),
-        (name = "Audit", description = "Audit log retrieval")
+        (name = "e-Fatura", description = "Turkish e-Fatura (electronic invoicing) integration with GIB"),
+        (name = "e-Defter", description = "Turkish e-Defter (electronic ledger) integration with GIB"),
+        (name = "Audit", description = "Audit log retrieval"),
+        (name = "Webhooks", description = "Webhook endpoints and delivery management")
     )
 )]
 pub struct ApiDoc;

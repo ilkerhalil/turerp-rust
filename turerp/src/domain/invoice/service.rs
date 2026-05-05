@@ -68,6 +68,14 @@ impl InvoiceService {
         Ok(InvoiceResponse::from((invoice, lines)))
     }
 
+    /// Get invoice lines by invoice ID (used internally, e.g. for restore response)
+    pub async fn get_invoice_lines(
+        &self,
+        invoice_id: i64,
+    ) -> Result<Vec<crate::domain::invoice::model::InvoiceLine>, ApiError> {
+        self.line_repo.find_by_invoice(invoice_id).await
+    }
+
     pub async fn get_invoices_by_tenant(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
         self.invoice_repo.find_by_tenant(tenant_id).await
     }
@@ -130,6 +138,35 @@ impl InvoiceService {
         self.invoice_repo.delete(id, tenant_id).await
     }
 
+    /// Soft delete an invoice (admin only)
+    pub async fn soft_delete_invoice(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.invoice_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted invoice (admin only)
+    pub async fn restore_invoice(&self, id: i64, tenant_id: i64) -> Result<Invoice, ApiError> {
+        self.invoice_repo.restore(id, tenant_id).await
+    }
+
+    /// List soft-deleted invoices (admin only)
+    pub async fn list_deleted_invoices(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
+        self.invoice_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently delete an invoice (admin only, after soft delete)
+    pub async fn destroy_invoice(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        // Delete associated lines first
+        self.line_repo.delete_by_invoice(id).await?;
+        self.invoice_repo.destroy(id, tenant_id).await
+    }
+
     // Payment operations
     pub async fn create_payment(&self, create: CreatePayment) -> Result<Payment, ApiError> {
         create
@@ -174,7 +211,10 @@ impl InvoiceService {
             .update_paid_amount(invoice.id, invoice.tenant_id, new_paid)
             .await
         {
-            let _ = self.payment_repo.delete(payment.id).await;
+            let _ = self
+                .payment_repo
+                .delete(payment.id, payment.tenant_id)
+                .await;
             return Err(e);
         }
 

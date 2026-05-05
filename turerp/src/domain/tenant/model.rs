@@ -3,9 +3,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use utoipa::ToSchema;
 
 /// Tenant entity
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Tenant {
     pub id: i64,
     pub name: String,
@@ -16,7 +17,7 @@ pub struct Tenant {
 }
 
 /// Create tenant request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateTenant {
     pub name: String,
     pub subdomain: String,
@@ -52,7 +53,7 @@ impl CreateTenant {
 }
 
 /// Update tenant request
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 pub struct UpdateTenant {
     #[serde(default)]
     pub name: Option<String>,
@@ -80,7 +81,7 @@ pub fn generate_db_name(subdomain: &str) -> String {
 ///
 /// Stores per-tenant configuration as key-value pairs with JSON values.
 /// Supports hierarchical configuration with optional encryption for sensitive values.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TenantConfig {
     pub id: i64,
     pub tenant_id: i64,
@@ -92,7 +93,7 @@ pub struct TenantConfig {
 }
 
 /// Create tenant config request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateTenantConfig {
     pub tenant_id: i64,
     pub key: String,
@@ -132,7 +133,7 @@ impl CreateTenantConfig {
 }
 
 /// Update tenant config request
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 pub struct UpdateTenantConfig {
     #[serde(default)]
     pub value: Option<Value>,
@@ -142,7 +143,7 @@ pub struct UpdateTenantConfig {
 }
 
 /// Tenant config response
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TenantConfigResponse {
     pub id: i64,
     pub tenant_id: i64,

@@ -50,9 +50,9 @@ impl AccountingService {
         self.account_repo.create(create).await
     }
 
-    pub async fn get_account(&self, id: i64) -> Result<Account, ApiError> {
+    pub async fn get_account(&self, id: i64, tenant_id: i64) -> Result<Account, ApiError> {
         self.account_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Account {} not found", id)))
     }
@@ -94,9 +94,13 @@ impl AccountingService {
         Ok(entry)
     }
 
-    pub async fn get_journal_entry(&self, id: i64) -> Result<JournalEntry, ApiError> {
+    pub async fn get_journal_entry(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<JournalEntry, ApiError> {
         self.entry_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Journal entry {} not found", id)))
     }
@@ -132,12 +136,72 @@ impl AccountingService {
             .await
     }
 
-    pub async fn post_journal_entry(&self, id: i64) -> Result<JournalEntry, ApiError> {
-        self.entry_repo.post(id).await
+    pub async fn post_journal_entry(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<JournalEntry, ApiError> {
+        self.entry_repo.post(id, tenant_id).await
     }
 
-    pub async fn void_journal_entry(&self, id: i64) -> Result<JournalEntry, ApiError> {
-        self.entry_repo.void(id).await
+    pub async fn void_journal_entry(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<JournalEntry, ApiError> {
+        self.entry_repo.void(id, tenant_id).await
+    }
+
+    // Soft delete operations
+    pub async fn soft_delete_account(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.account_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    pub async fn restore_account(&self, id: i64, tenant_id: i64) -> Result<Account, ApiError> {
+        self.account_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_accounts(&self, tenant_id: i64) -> Result<Vec<Account>, ApiError> {
+        self.account_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_account(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.account_repo.destroy(id, tenant_id).await
+    }
+
+    pub async fn soft_delete_journal_entry(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.entry_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    pub async fn restore_journal_entry(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<JournalEntry, ApiError> {
+        self.entry_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_journal_entries(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<JournalEntry>, ApiError> {
+        self.entry_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_journal_entry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.entry_repo.destroy(id, tenant_id).await
     }
 
     // Reports
@@ -299,7 +363,7 @@ mod tests {
             ],
         };
         let entry = service.create_journal_entry(create).await.unwrap();
-        let posted = service.post_journal_entry(entry.id).await.unwrap();
+        let posted = service.post_journal_entry(entry.id, 1).await.unwrap();
         assert_eq!(posted.status, JournalEntryStatus::Posted);
     }
 }

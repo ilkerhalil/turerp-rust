@@ -6,6 +6,7 @@ use rust_decimal::Decimal;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::cari::model::{Cari, CreateCari, UpdateCari};
 use crate::error::ApiError;
 
@@ -63,8 +64,17 @@ pub trait CariRepository: Send + Sync {
     /// Update a cari
     async fn update(&self, id: i64, tenant_id: i64, cari: UpdateCari) -> Result<Cari, ApiError>;
 
-    /// Delete a cari
-    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+    /// Soft delete a cari
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted cari
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Cari, ApiError>;
+
+    /// Find soft-deleted cari accounts (admin use)
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Cari>, ApiError>;
+
+    /// Hard delete a cari (permanent destruction — admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Check if code exists
     async fn code_exists(&self, code: &str, tenant_id: i64) -> Result<bool, ApiError>;
@@ -139,6 +149,8 @@ impl CariRepository for InMemoryCariRepository {
             created_by: create.created_by,
             created_at: now,
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.cari.insert(id, new_cari.clone());
@@ -150,7 +162,7 @@ impl CariRepository for InMemoryCariRepository {
         Ok(inner
             .cari
             .get(&id)
-            .filter(|c| c.tenant_id == tenant_id)
+            .filter(|c| c.tenant_id == tenant_id && !c.is_deleted())
             .cloned())
     }
 
@@ -159,7 +171,7 @@ impl CariRepository for InMemoryCariRepository {
         Ok(inner
             .cari
             .values()
-            .find(|c| c.code == code && c.tenant_id == tenant_id)
+            .find(|c| c.code == code && c.tenant_id == tenant_id && !c.is_deleted())
             .cloned())
     }
 
@@ -168,7 +180,7 @@ impl CariRepository for InMemoryCariRepository {
         Ok(inner
             .cari
             .values()
-            .filter(|c| c.tenant_id == tenant_id)
+            .filter(|c| c.tenant_id == tenant_id && !c.is_deleted())
             .cloned()
             .collect())
     }
@@ -182,7 +194,7 @@ impl CariRepository for InMemoryCariRepository {
         Ok(inner
             .cari
             .values()
-            .filter(|c| c.tenant_id == tenant_id && c.cari_type == cari_type)
+            .filter(|c| c.tenant_id == tenant_id && c.cari_type == cari_type && !c.is_deleted())
             .cloned()
             .collect())
     }
@@ -195,6 +207,7 @@ impl CariRepository for InMemoryCariRepository {
             .values()
             .filter(|c| {
                 c.tenant_id == tenant_id
+                    && !c.is_deleted()
                     && (c.code.to_lowercase().contains(&query_lower)
                         || c.name.to_lowercase().contains(&query_lower))
             })
@@ -212,7 +225,7 @@ impl CariRepository for InMemoryCariRepository {
         let all: Vec<_> = inner
             .cari
             .values()
-            .filter(|c| c.tenant_id == tenant_id)
+            .filter(|c| c.tenant_id == tenant_id && !c.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -235,7 +248,7 @@ impl CariRepository for InMemoryCariRepository {
         let all: Vec<_> = inner
             .cari
             .values()
-            .filter(|c| c.tenant_id == tenant_id && c.cari_type == cari_type)
+            .filter(|c| c.tenant_id == tenant_id && c.cari_type == cari_type && !c.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -261,6 +274,7 @@ impl CariRepository for InMemoryCariRepository {
             .values()
             .filter(|c| {
                 c.tenant_id == tenant_id
+                    && !c.is_deleted()
                     && (c.code.to_lowercase().contains(&query_lower)
                         || c.name.to_lowercase().contains(&query_lower))
             })
@@ -335,7 +349,49 @@ impl CariRepository for InMemoryCariRepository {
         Ok(cari.clone())
     }
 
-    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let cari = inner
+            .cari
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", id)))?;
+
+        if cari.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Cari {} not found", id)));
+        }
+
+        cari.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Cari, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let cari = inner
+            .cari
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", id)))?;
+
+        if cari.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Cari {} not found", id)));
+        }
+
+        cari.restore();
+        Ok(cari.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Cari>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .cari
+            .values()
+            .filter(|c| c.tenant_id == tenant_id && c.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
 
         let cari = inner

@@ -3,9 +3,10 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use utoipa::ToSchema;
 
 /// Supported data types for settings values
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SettingDataType {
     #[default]
@@ -44,7 +45,7 @@ impl std::str::FromStr for SettingDataType {
 }
 
 /// Setting group / category
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SettingGroup {
     #[default]
@@ -89,7 +90,7 @@ impl std::str::FromStr for SettingGroup {
 }
 
 /// Setting entity stored per-tenant
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Setting {
     pub id: i64,
     pub tenant_id: i64,
@@ -106,7 +107,7 @@ pub struct Setting {
 }
 
 /// Create setting request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateSetting {
     pub tenant_id: i64,
     pub key: String,
@@ -160,7 +161,7 @@ impl CreateSetting {
 }
 
 /// Update setting request
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
 pub struct UpdateSetting {
     #[serde(default)]
     pub value: Option<Value>,
@@ -175,7 +176,7 @@ pub struct UpdateSetting {
 }
 
 /// Setting response (masks sensitive values)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SettingResponse {
     pub id: i64,
     pub tenant_id: i64,
@@ -261,12 +262,12 @@ pub fn validate_value_type(value: &Value, data_type: &SettingDataType) -> Result
 }
 
 /// Bulk update settings request
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct BulkUpdateSettings {
     pub updates: Vec<BulkUpdateSettingItem>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct BulkUpdateSettingItem {
     pub key: String,
     pub value: Value,

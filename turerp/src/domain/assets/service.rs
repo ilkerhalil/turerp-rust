@@ -44,9 +44,9 @@ impl AssetsService {
     }
 
     /// Get an asset by ID
-    pub async fn get_asset(&self, id: i64) -> Result<Asset, ApiError> {
+    pub async fn get_asset(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
         self.asset_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Asset {} not found", id)))
     }
@@ -89,51 +89,66 @@ impl AssetsService {
     }
 
     /// Update an asset
-    pub async fn update_asset(&self, id: i64, update: UpdateAsset) -> Result<Asset, ApiError> {
-        self.asset_repo.update(id, update).await
+    pub async fn update_asset(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateAsset,
+    ) -> Result<Asset, ApiError> {
+        self.asset_repo.update(id, tenant_id, update).await
     }
 
     /// Update asset status
     pub async fn update_asset_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: AssetStatus,
     ) -> Result<Asset, ApiError> {
-        self.asset_repo.update_status(id, status).await
+        self.asset_repo.update_status(id, tenant_id, status).await
     }
 
     /// Calculate and record depreciation for an asset
-    pub async fn calculate_depreciation(&self, id: i64) -> Result<Asset, ApiError> {
-        let asset = self.get_asset(id).await?;
+    pub async fn calculate_depreciation(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
+        let asset = self.get_asset(id, tenant_id).await?;
         let annual_depreciation = asset.calculate_annual_depreciation();
         self.asset_repo
-            .record_depreciation(id, annual_depreciation)
+            .record_depreciation(id, tenant_id, annual_depreciation)
             .await
     }
 
     /// Record manual depreciation for an asset
-    pub async fn record_depreciation(&self, id: i64, amount: Decimal) -> Result<Asset, ApiError> {
+    pub async fn record_depreciation(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        amount: Decimal,
+    ) -> Result<Asset, ApiError> {
         if amount < Decimal::ZERO {
             return Err(ApiError::Validation(
                 "Depreciation amount must be non-negative".to_string(),
             ));
         }
-        self.asset_repo.record_depreciation(id, amount).await
+        self.asset_repo
+            .record_depreciation(id, tenant_id, amount)
+            .await
     }
 
     /// Dispose an asset
-    pub async fn dispose_asset(&self, id: i64) -> Result<Asset, ApiError> {
-        self.update_asset_status(id, AssetStatus::Disposed).await
+    pub async fn dispose_asset(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
+        self.update_asset_status(id, tenant_id, AssetStatus::Disposed)
+            .await
     }
 
     /// Write off an asset
-    pub async fn write_off_asset(&self, id: i64) -> Result<Asset, ApiError> {
-        self.update_asset_status(id, AssetStatus::WrittenOff).await
+    pub async fn write_off_asset(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
+        self.update_asset_status(id, tenant_id, AssetStatus::WrittenOff)
+            .await
     }
 
     /// Put asset under maintenance
-    pub async fn start_maintenance(&self, id: i64) -> Result<Asset, ApiError> {
-        self.update_asset_status(id, AssetStatus::UnderMaintenance)
+    pub async fn start_maintenance(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
+        self.update_asset_status(id, tenant_id, AssetStatus::UnderMaintenance)
             .await
     }
 
@@ -141,6 +156,7 @@ impl AssetsService {
     pub async fn end_maintenance(
         &self,
         id: i64,
+        tenant_id: i64,
         new_status: AssetStatus,
     ) -> Result<Asset, ApiError> {
         if !matches!(new_status, AssetStatus::Active | AssetStatus::InUse) {
@@ -148,12 +164,37 @@ impl AssetsService {
                 "Status after maintenance must be Active or InUse".to_string(),
             ));
         }
-        self.update_asset_status(id, new_status).await
+        self.update_asset_status(id, tenant_id, new_status).await
     }
 
     /// Delete an asset
-    pub async fn delete_asset(&self, id: i64) -> Result<(), ApiError> {
-        self.asset_repo.delete(id).await
+    pub async fn delete_asset(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.asset_repo.delete(id, tenant_id).await
+    }
+
+    /// Soft delete an asset
+    pub async fn soft_delete_asset(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.asset_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted asset
+    pub async fn restore_asset(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
+        self.asset_repo.restore(id, tenant_id).await
+    }
+
+    /// List soft-deleted assets (admin only)
+    pub async fn list_deleted_assets(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError> {
+        self.asset_repo.find_deleted(tenant_id).await
+    }
+
+    /// Hard delete (destroy) an asset (admin only)
+    pub async fn destroy_asset(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.asset_repo.destroy(id, tenant_id).await
     }
 
     /// Create a maintenance record
@@ -194,12 +235,12 @@ impl AssetsService {
     }
 
     /// Delete a category
-    pub async fn delete_category(&self, id: i64) -> Result<(), ApiError> {
+    pub async fn delete_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let repo = self
             .category_repo
             .as_ref()
             .ok_or_else(|| ApiError::Internal("Category repository not configured".to_string()))?;
-        repo.delete(id).await
+        repo.delete(id, tenant_id).await
     }
 }
 
@@ -236,7 +277,7 @@ mod tests {
             .await
             .unwrap();
 
-        let retrieved = service.get_asset(asset.id).await.unwrap();
+        let retrieved = service.get_asset(asset.id, 1).await.unwrap();
         assert_eq!(retrieved.name, "Test Computer");
     }
 
@@ -267,7 +308,7 @@ mod tests {
             .await
             .unwrap();
 
-        let updated = service.calculate_depreciation(asset.id).await.unwrap();
+        let updated = service.calculate_depreciation(asset.id, 1).await.unwrap();
         // Annual depreciation: (10000 - 1000) / 5 = 1800
         assert_eq!(updated.accumulated_depreciation, Decimal::from(1800));
         assert_eq!(updated.book_value, Decimal::from(8200));
@@ -302,11 +343,11 @@ mod tests {
 
         assert_eq!(asset.status, AssetStatus::Active);
 
-        let under_maintenance = service.start_maintenance(asset.id).await.unwrap();
+        let under_maintenance = service.start_maintenance(asset.id, 1).await.unwrap();
         assert_eq!(under_maintenance.status, AssetStatus::UnderMaintenance);
 
         let back_active = service
-            .end_maintenance(asset.id, AssetStatus::Active)
+            .end_maintenance(asset.id, 1, AssetStatus::Active)
             .await
             .unwrap();
         assert_eq!(back_active.status, AssetStatus::Active);
