@@ -317,8 +317,6 @@ impl CariRepository for PostgresCariRepository {
     }
 
     async fn search(&self, query: &str, tenant_id: i64) -> Result<Vec<Cari>, ApiError> {
-        let pattern = format!("%{}%", query);
-
         let rows: Vec<CariRow> = sqlx::query_as(
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
@@ -327,12 +325,20 @@ impl CariRepository for PostgresCariRepository {
                    deleted_at, deleted_by
             FROM cari
             WHERE tenant_id = $1 AND deleted_at IS NULL
-              AND (LOWER(code) LIKE LOWER($2) OR LOWER(name) LIKE LOWER($2))
-            ORDER BY created_at DESC
+              AND (
+                  unaccent(name) % unaccent($2)
+                  OR unaccent(code) % unaccent($2)
+                  OR search_vector @@ plainto_tsquery('turkish', $2)
+              )
+            ORDER BY GREATEST(
+                similarity(unaccent(name), unaccent($2)),
+                similarity(unaccent(code), unaccent($2)),
+                COALESCE(ts_rank_cd(search_vector, plainto_tsquery('turkish', $2), 32), 0.0)
+            ) DESC
             "#,
         )
         .bind(tenant_id)
-        .bind(&pattern)
+        .bind(query)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to search cari: {}", e)))?;
@@ -425,7 +431,6 @@ impl CariRepository for PostgresCariRepository {
         per_page: u32,
     ) -> Result<PaginatedResult<Cari>, ApiError> {
         let offset = page.saturating_sub(1) * per_page;
-        let pattern = format!("%{}%", query);
 
         let rows: Vec<CariRowWithTotal> = sqlx::query_as(
             r#"
@@ -436,13 +441,21 @@ impl CariRepository for PostgresCariRepository {
                    COUNT(*) OVER() as total_count
             FROM cari
             WHERE tenant_id = $1 AND deleted_at IS NULL
-              AND (LOWER(code) LIKE LOWER($2) OR LOWER(name) LIKE LOWER($2))
-            ORDER BY id DESC
+              AND (
+                  unaccent(name) % unaccent($2)
+                  OR unaccent(code) % unaccent($2)
+                  OR search_vector @@ plainto_tsquery('turkish', $2)
+              )
+            ORDER BY GREATEST(
+                similarity(unaccent(name), unaccent($2)),
+                similarity(unaccent(code), unaccent($2)),
+                COALESCE(ts_rank_cd(search_vector, plainto_tsquery('turkish', $2), 32), 0.0)
+            ) DESC
             LIMIT $3 OFFSET $4
             "#,
         )
         .bind(tenant_id)
-        .bind(&pattern)
+        .bind(query)
         .bind(per_page as i64)
         .bind(offset as i64)
         .fetch_all(&*self.pool)

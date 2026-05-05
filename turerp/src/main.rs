@@ -274,6 +274,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.edefter_service.clone())
             .app_data(app_state.webhook_service.clone())
             .app_data(app_state.cache_service.clone())
+            .app_data(app_state.search_service.clone())
             .app_data(app_state.rate_limit_stats.clone())
             .app_data(app_state.db_pool.clone());
 
@@ -331,6 +332,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.edefter_service.clone())
             .app_data(app_state.webhook_service.clone())
             .app_data(app_state.cache_service.clone())
+            .app_data(app_state.search_service.clone())
             .app_data(app_state.rate_limit_stats.clone());
 
         app // Health check

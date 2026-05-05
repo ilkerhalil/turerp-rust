@@ -70,6 +70,18 @@ pub trait InvoiceRepository: Send + Sync {
     /// Find soft-deleted invoices (admin use)
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError>;
 
+    /// Search invoices by number or notes
+    async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Invoice>, ApiError>;
+
+    /// Search invoices with pagination
+    async fn search_paginated(
+        &self,
+        tenant_id: i64,
+        query: &str,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError>;
+
     /// Hard delete an invoice (permanent destruction — admin only)
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
@@ -435,6 +447,57 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
             .filter(|i| i.tenant_id == tenant_id && i.is_deleted())
             .cloned()
             .collect())
+    }
+
+    async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Invoice>, ApiError> {
+        let inner = self.inner.lock();
+        let query_lower = query.to_lowercase();
+        Ok(inner
+            .invoices
+            .values()
+            .filter(|i| {
+                i.tenant_id == tenant_id
+                    && !i.is_deleted()
+                    && (i.invoice_number.to_lowercase().contains(&query_lower)
+                        || i.notes
+                            .as_ref()
+                            .map(|n| n.to_lowercase().contains(&query_lower))
+                            .unwrap_or(false))
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn search_paginated(
+        &self,
+        tenant_id: i64,
+        query: &str,
+        page: u32,
+        per_page: u32,
+    ) -> Result<PaginatedResult<Invoice>, ApiError> {
+        let inner = self.inner.lock();
+        let query_lower = query.to_lowercase();
+        let all: Vec<_> = inner
+            .invoices
+            .values()
+            .filter(|i| {
+                i.tenant_id == tenant_id
+                    && !i.is_deleted()
+                    && (i.invoice_number.to_lowercase().contains(&query_lower)
+                        || i.notes
+                            .as_ref()
+                            .map(|n| n.to_lowercase().contains(&query_lower))
+                            .unwrap_or(false))
+            })
+            .cloned()
+            .collect();
+        let total = all.len() as u64;
+        let items: Vec<_> = all
+            .into_iter()
+            .skip(((page.saturating_sub(1)) * per_page) as usize)
+            .take(per_page as usize)
+            .collect();
+        Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {

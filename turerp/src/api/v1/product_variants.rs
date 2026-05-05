@@ -989,6 +989,65 @@ pub async fn destroy_variant(
     Ok(HttpResponse::NoContent().finish())
 }
 
+/// Search products (requires authentication)
+#[utoipa::path(
+    get,
+    path = "/api/v1/products/search",
+    tag = "Products",
+    params(("q" = String, Query, description = "Search query")),
+    responses(
+        (status = 200, description = "Search results", body = Vec<ProductResponse>),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn search_products(
+    auth_user: AuthUser,
+    service: web::Data<ProductService>,
+    query: web::Query<SearchQuery>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    if let Err(e) = query.validate() {
+        let err = crate::error::ApiError::Validation(e);
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
+    match service
+        .search_products(auth_user.0.tenant_id, &query.q)
+        .await
+    {
+        Ok(products) => {
+            let responses: Vec<ProductResponse> =
+                products.into_iter().map(ProductResponse::from).collect();
+            Ok(HttpResponse::Ok().json(responses))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct SearchQuery {
+    pub q: String,
+    #[serde(default = "crate::common::pagination::default_page")]
+    pub page: u32,
+    #[serde(default = "crate::common::pagination::default_per_page")]
+    pub per_page: u32,
+}
+
+impl SearchQuery {
+    /// Validate search query
+    pub fn validate(&self) -> Result<(), String> {
+        if self.q.trim().is_empty() {
+            return Err("Search query cannot be empty".to_string());
+        }
+        if self.q.len() > 200 {
+            return Err("Search query must be at most 200 characters".to_string());
+        }
+        Ok(())
+    }
+}
+
 /// Configure product variant routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -996,6 +1055,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_products))
             .route(web::post().to(create_product)),
     )
+    .service(web::resource("/v1/products/search").route(web::get().to(search_products)))
     .service(web::resource("/v1/products/deleted").route(web::get().to(list_deleted_products)))
     .service(
         web::resource("/v1/products/{id}")

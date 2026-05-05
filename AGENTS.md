@@ -94,6 +94,41 @@ git checkout -b fix/123-memory-leak         # Bug fix with issue #123
 git checkout -b docs/5-contributing-guide   # Docs with issue #5
 ```
 
+### Milestone & Issue Workflow Rules
+
+**Work sequentially by milestone — never skip ahead.**
+
+| Milestone | Phase | Priority |
+|-----------|-------|----------|
+| **v1.0 Production Readiness** | Core infrastructure | P0 |
+| **v1.1 Enterprise Foundation** | Enterprise features | P1 / P2 |
+| **v1.2 Scale & Observability** | Resilience & monitoring | P1 / P2 |
+| **v1.3 Advanced & AI** | Emerging tech & portals | P3 |
+
+#### Issue Picking Order
+
+1. **Milestone order first:** Finish v1.0 before touching v1.1, v1.1 before v1.2, etc.
+2. **Priority within milestone:** P0 → P1 → P2 → P3
+3. **Epics last:** Close all child issues of an epic before closing the epic itself
+4. **One issue at a time:** Pick ONE open issue, create a branch, implement, open PR
+
+#### Sequential Merge Rule
+
+```
+Issue A: branch → PR → CI pass → merge to main → Issue B: branch → PR → ...
+```
+
+- **Never start Issue B before Issue A's PR is merged to `main`.**
+- Wait for CI to pass and PR to merge before picking the next issue.
+- If a PR is blocked (review pending, CI failing), fix it — do not switch to another issue.
+
+#### Why Sequential?
+
+- Prevents branch drift and merge conflicts
+- Keeps `main` always deployable
+- Makes rollback trivial (one PR = one change)
+- Enforces focus: one feature, one branch, one merge
+
 ---
 
 ## Quick Start

@@ -341,6 +341,70 @@ pub struct UpdateStatusRequest {
     pub status: InvoiceStatus,
 }
 
+/// Search invoices (requires authentication)
+#[utoipa::path(
+    get,
+    path = "/api/v1/invoices/search",
+    tag = "Invoice",
+    params(("q" = String, Query, description = "Search query")),
+    responses(
+        (status = 200, description = "Search results", body = Vec<InvoiceResponse>),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn search_invoices(
+    auth_user: AuthUser,
+    invoice_service: web::Data<InvoiceService>,
+    query: web::Query<SearchQuery>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    if let Err(e) = query.validate() {
+        let err = ApiError::Validation(e);
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
+    match invoice_service
+        .search_invoices(auth_user.0.tenant_id, &query.q)
+        .await
+    {
+        Ok(invoices) => {
+            let responses: Vec<InvoiceResponse> = invoices
+                .into_iter()
+                .map(|inv| {
+                    let lines = Vec::new();
+                    InvoiceResponse::from((inv, lines))
+                })
+                .collect();
+            Ok(HttpResponse::Ok().json(responses))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct SearchQuery {
+    pub q: String,
+    #[serde(default = "crate::common::pagination::default_page")]
+    pub page: u32,
+    #[serde(default = "crate::common::pagination::default_per_page")]
+    pub per_page: u32,
+}
+
+impl SearchQuery {
+    /// Validate search query
+    pub fn validate(&self) -> Result<(), String> {
+        if self.q.trim().is_empty() {
+            return Err("Search query cannot be empty".to_string());
+        }
+        if self.q.len() > 200 {
+            return Err("Search query must be at most 200 characters".to_string());
+        }
+        Ok(())
+    }
+}
+
 /// Configure invoice routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -348,6 +412,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_invoices))
             .route(web::post().to(create_invoice)),
     )
+    .service(web::resource("/v1/invoices/search").route(web::get().to(search_invoices)))
     .service(web::resource("/v1/invoices/deleted").route(web::get().to(list_deleted_invoices)))
     .service(
         web::resource("/v1/invoices/outstanding").route(web::get().to(get_outstanding_invoices)),
