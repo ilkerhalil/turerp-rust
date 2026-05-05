@@ -80,6 +80,12 @@
 | **API Docs** | utoipa (OpenAPI/Swagger) | 4.x |
 | **Logging** | tracing | 0.1 |
 
+## Contributing
+
+All changes must go through a **pull request**. Direct pushes to `main` are prohibited.
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full workflow, commit conventions, and code quality guidelines.
+
 ## Quick Start
 
 ### Prerequisites
