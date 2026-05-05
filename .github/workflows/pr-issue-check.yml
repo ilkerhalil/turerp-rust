@@ -1,0 +1,86 @@
+name: PR Issue Reference Check
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches: [main]
+
+jobs:
+  check-issue-reference:
+    name: Verify PR references an open issue
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check PR title and body for issue reference
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title || '';
+            const body = pr.body || '';
+            const branch = pr.head.ref || '';
+            const combined = `${title}\n${body}\n${branch}`;
+
+            // Match patterns: fixes #123, closes #123, related to #123, resolves #123, refs #123, issue #123
+            // Also match branch names like feature/123-description or fix/123-bug
+            const issueRegex = /(?:fixes|closes|closed|close|resolves|resolved|resolve|related to|refs|references|issue|#)\s*(\d+)|\/(\d+)[-_]/gi;
+            const matches = [...combined.matchAll(issueRegex)];
+            const issueNumbers = matches
+              .map(m => m[1] || m[2])
+              .filter(Boolean)
+              .map(n => parseInt(n, 10));
+
+            if (issueNumbers.length === 0) {
+              core.setFailed(
+                '❌ PR does not reference an open issue.\n\n' +
+                'Please link this PR to an existing issue by including one of the following in the PR title, description, or branch name:\n' +
+                '  - Issue number: #123, fixes #123, closes #123, resolves #123\n' +
+                '  - Branch name: feature/123-description, fix/123-bug-name\n\n' +
+                'If there is no existing issue, please create one first.'
+              );
+              return;
+            }
+
+            // Verify the referenced issue(s) actually exist and are open
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const invalidIssues = [];
+            const validIssues = [];
+
+            for (const issueNum of [...new Set(issueNumbers)]) {
+              try {
+                const { data: issue } = await github.rest.issues.get({
+                  owner,
+                  repo,
+                  issue_number: issueNum,
+                });
+
+                if (issue.state !== 'open') {
+                  invalidIssues.push(`#${issueNum} (${issue.state})`);
+                } else {
+                  validIssues.push(`#${issueNum}`);
+                }
+              } catch (error) {
+                if (error.status === 404) {
+                  invalidIssues.push(`#${issueNum} (not found)`);
+                } else {
+                  throw error;
+                }
+              }
+            }
+
+            if (invalidIssues.length > 0 && validIssues.length === 0) {
+              core.setFailed(
+                `❌ Referenced issue(s) are not valid/open: ${invalidIssues.join(', ')}\n\n` +
+                'Please ensure you reference an existing, open issue.'
+              );
+              return;
+            }
+
+            if (invalidIssues.length > 0) {
+              core.warning(
+                `⚠️ Some referenced issues are invalid: ${invalidIssues.join(', ')}`
+              );
+            }
+
+            console.log(`✅ PR references valid open issue(s): ${validIssues.join(', ')}`);
