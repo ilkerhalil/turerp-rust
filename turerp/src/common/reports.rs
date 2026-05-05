@@ -459,4 +459,325 @@ mod tests {
         let result = engine.get_report(1, 1).await.unwrap();
         assert!(result.is_none());
     }
+
+    #[tokio::test]
+    async fn test_pdf_content_structure() {
+        let engine = InMemoryReportEngine::new();
+        let request = ReportRequest {
+            report_type: ReportType::Invoice,
+            format: ReportFormat::Pdf,
+            tenant_id: 42,
+            title: "Invoice #1".to_string(),
+            parameters: serde_json::json!({
+                "invoice_no": "INV-TEST-001",
+                "total": 9999.99
+            }),
+            requested_by: Some(1),
+            locale: Some("tr".to_string()),
+        };
+
+        let report = engine.generate(request).await.unwrap();
+        let pdf_text = String::from_utf8_lossy(&report.data);
+        assert!(pdf_text.contains("%PDF-1.4"));
+        assert!(pdf_text.contains("Invoice Report"));
+        assert!(pdf_text.contains("INV-TEST-001"));
+        assert!(pdf_text.contains("9999.99"));
+        assert!(pdf_text.contains("42")); // tenant_id appears in PDF
+        assert!(pdf_text.contains("%%EOF"));
+    }
+
+    #[tokio::test]
+    async fn test_excel_content_structure() {
+        let engine = InMemoryReportEngine::new();
+        let request = ReportRequest {
+            report_type: ReportType::PayrollSummary,
+            format: ReportFormat::Excel,
+            tenant_id: 7,
+            title: "Payroll Q1".to_string(),
+            parameters: serde_json::json!({
+                "rows": [{"name": "Alice"}, {"name": "Bob"}, {"name": "Charlie"}]
+            }),
+            requested_by: None,
+            locale: None,
+        };
+
+        let report = engine.generate(request).await.unwrap();
+        let excel_text = String::from_utf8_lossy(&report.data);
+        assert!(excel_text.contains("PK..EXCEL"));
+        assert!(excel_text.contains("Payroll Q1"));
+        assert!(excel_text.contains("Tenant: 7"));
+        assert!(excel_text.contains("Rows: 3"));
+    }
+
+    #[tokio::test]
+    async fn test_csv_format_correctness() {
+        let engine = InMemoryReportEngine::new();
+        let request = ReportRequest {
+            report_type: ReportType::SalesReport,
+            format: ReportFormat::Csv,
+            tenant_id: 1,
+            title: "Monthly Sales".to_string(),
+            parameters: serde_json::json!({
+                "columns": ["Date", "Customer", "Amount", "Currency"]
+            }),
+            requested_by: None,
+            locale: None,
+        };
+
+        let report = engine.generate(request).await.unwrap();
+        let csv_text = String::from_utf8_lossy(&report.data);
+        let lines: Vec<&str> = csv_text.lines().collect();
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0], "Date,Customer,Amount,Currency");
+        assert_eq!(lines[1], "Monthly Sales");
+    }
+
+    #[tokio::test]
+    async fn test_csv_empty_columns() {
+        let engine = InMemoryReportEngine::new();
+        let request = ReportRequest {
+            report_type: ReportType::PurchaseReport,
+            format: ReportFormat::Csv,
+            tenant_id: 1,
+            title: "Empty CSV".to_string(),
+            parameters: serde_json::json!({}),
+            requested_by: None,
+            locale: None,
+        };
+
+        let report = engine.generate(request).await.unwrap();
+        let csv_text = String::from_utf8_lossy(&report.data);
+        assert_eq!(csv_text, "\nEmpty CSV");
+    }
+
+    #[tokio::test]
+    async fn test_json_generation() {
+        let engine = InMemoryReportEngine::new();
+        let request = ReportRequest {
+            report_type: ReportType::StockSummary,
+            format: ReportFormat::Json,
+            tenant_id: 1,
+            title: "Stock".to_string(),
+            parameters: serde_json::json!({
+                "warehouse_id": 5,
+                "include_zero": false
+            }),
+            requested_by: None,
+            locale: None,
+        };
+
+        let report = engine.generate(request).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&report.data).unwrap();
+        assert_eq!(json["warehouse_id"], 5);
+        assert_eq!(json["include_zero"], false);
+    }
+
+    #[tokio::test]
+    async fn test_custom_report_type() {
+        let engine = InMemoryReportEngine::new();
+        let request = ReportRequest {
+            report_type: ReportType::Custom("audit_trail".to_string()),
+            format: ReportFormat::Pdf,
+            tenant_id: 1,
+            title: "Custom Report".to_string(),
+            parameters: serde_json::json!({}),
+            requested_by: None,
+            locale: None,
+        };
+
+        let report = engine.generate(request).await.unwrap();
+        assert!(report.filename.contains("custom_audit_trail"));
+        assert!(report.filename.ends_with(".pdf"));
+    }
+
+    #[tokio::test]
+    async fn test_list_reports_pagination() {
+        let engine = InMemoryReportEngine::new();
+
+        for i in 0..5 {
+            engine
+                .generate(ReportRequest {
+                    report_type: ReportType::Invoice,
+                    format: ReportFormat::Pdf,
+                    tenant_id: 1,
+                    title: format!("Report {}", i),
+                    parameters: serde_json::json!({}),
+                    requested_by: None,
+                    locale: None,
+                })
+                .await
+                .unwrap();
+        }
+
+        let all = engine.list_reports(1, 10, 0).await.unwrap();
+        assert_eq!(all.len(), 5);
+
+        let page1 = engine.list_reports(1, 2, 0).await.unwrap();
+        assert_eq!(page1.len(), 2);
+
+        let page2 = engine.list_reports(1, 2, 2).await.unwrap();
+        assert_eq!(page2.len(), 2);
+
+        let page3 = engine.list_reports(1, 2, 4).await.unwrap();
+        assert_eq!(page3.len(), 1);
+
+        let empty = engine.list_reports(1, 10, 10).await.unwrap();
+        assert!(empty.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_delete_report_not_found() {
+        let engine = InMemoryReportEngine::new();
+        let result = engine.delete_report(1, 999).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[test]
+    fn test_report_format_content_types() {
+        assert_eq!(ReportFormat::Pdf.content_type(), "application/pdf");
+        assert_eq!(
+            ReportFormat::Excel.content_type(),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        assert_eq!(ReportFormat::Xml.content_type(), "application/xml");
+        assert_eq!(ReportFormat::Csv.content_type(), "text/csv");
+        assert_eq!(ReportFormat::Json.content_type(), "application/json");
+    }
+
+    #[test]
+    fn test_report_format_extensions() {
+        assert_eq!(ReportFormat::Pdf.extension(), "pdf");
+        assert_eq!(ReportFormat::Excel.extension(), "xlsx");
+        assert_eq!(ReportFormat::Xml.extension(), "xml");
+        assert_eq!(ReportFormat::Csv.extension(), "csv");
+        assert_eq!(ReportFormat::Json.extension(), "json");
+    }
+
+    #[test]
+    fn test_report_type_display() {
+        assert_eq!(format!("{}", ReportType::Invoice), "invoice");
+        assert_eq!(format!("{}", ReportType::TrialBalance), "trial_balance");
+        assert_eq!(format!("{}", ReportType::BalanceSheet), "balance_sheet");
+        assert_eq!(
+            format!("{}", ReportType::IncomeStatement),
+            "income_statement"
+        );
+        assert_eq!(format!("{}", ReportType::PayrollSummary), "payroll_summary");
+        assert_eq!(format!("{}", ReportType::StockSummary), "stock_summary");
+        assert_eq!(format!("{}", ReportType::SalesReport), "sales_report");
+        assert_eq!(format!("{}", ReportType::PurchaseReport), "purchase_report");
+        assert_eq!(format!("{}", ReportType::AgingReport), "aging_report");
+        assert_eq!(format!("{}", ReportType::EDefter), "edefter");
+        assert_eq!(
+            format!("{}", ReportType::Custom("special".to_string())),
+            "custom_special"
+        );
+    }
+
+    #[test]
+    fn test_report_meta_from_generated() {
+        let report = GeneratedReport {
+            id: 42,
+            report_type: ReportType::Invoice,
+            format: ReportFormat::Pdf,
+            tenant_id: 1,
+            title: "Test".to_string(),
+            data: vec![1, 2, 3, 4, 5],
+            filename: "invoice_1_42.pdf".to_string(),
+            content_type: "application/pdf".to_string(),
+            generated_at: Utc::now(),
+            generated_by: Some(7),
+        };
+
+        let meta = ReportMeta::from(&report);
+        assert_eq!(meta.id, 42);
+        assert_eq!(meta.size_bytes, 5);
+        assert_eq!(meta.report_type, ReportType::Invoice);
+        assert_eq!(meta.format, ReportFormat::Pdf);
+        assert_eq!(meta.generated_by, Some(7));
+    }
+
+    #[tokio::test]
+    async fn test_filename_format() {
+        let engine = InMemoryReportEngine::new();
+        let request = ReportRequest {
+            report_type: ReportType::BalanceSheet,
+            format: ReportFormat::Excel,
+            tenant_id: 99,
+            title: "Q1".to_string(),
+            parameters: serde_json::json!({}),
+            requested_by: None,
+            locale: None,
+        };
+
+        let report = engine.generate(request).await.unwrap();
+        // Expected: balance_sheet_99_1.xlsx
+        assert!(report.filename.starts_with("balance_sheet_"));
+        assert!(report.filename.ends_with(".xlsx"));
+        assert!(report.filename.contains("_99_"));
+    }
+
+    #[tokio::test]
+    async fn test_generate_all_report_types() {
+        let engine = InMemoryReportEngine::new();
+        let types = vec![
+            ReportType::Invoice,
+            ReportType::TrialBalance,
+            ReportType::BalanceSheet,
+            ReportType::IncomeStatement,
+            ReportType::PayrollSummary,
+            ReportType::StockSummary,
+            ReportType::SalesReport,
+            ReportType::PurchaseReport,
+            ReportType::AgingReport,
+            ReportType::EDefter,
+        ];
+
+        for (i, rt) in types.iter().enumerate() {
+            let request = ReportRequest {
+                report_type: rt.clone(),
+                format: ReportFormat::Json,
+                tenant_id: 1,
+                title: format!("Report {}", i),
+                parameters: serde_json::json!({}),
+                requested_by: None,
+                locale: None,
+            };
+            let report = engine.generate(request).await.unwrap();
+            assert!(!report.data.is_empty());
+            assert_eq!(report.id, (i + 1) as i64);
+        }
+
+        let meta = engine.list_reports(1, 100, 0).await.unwrap();
+        assert_eq!(meta.len(), types.len());
+    }
+
+    #[tokio::test]
+    async fn test_tenant_isolation_multiple_tenants() {
+        let engine = InMemoryReportEngine::new();
+
+        for tenant in [1i64, 2, 3] {
+            for _ in 0..3 {
+                engine
+                    .generate(ReportRequest {
+                        report_type: ReportType::Invoice,
+                        format: ReportFormat::Pdf,
+                        tenant_id: tenant,
+                        title: format!("Tenant {} Report", tenant),
+                        parameters: serde_json::json!({}),
+                        requested_by: None,
+                        locale: None,
+                    })
+                    .await
+                    .unwrap();
+            }
+        }
+
+        for tenant in [1i64, 2, 3] {
+            let meta = engine.list_reports(tenant, 10, 0).await.unwrap();
+            assert_eq!(meta.len(), 3);
+            assert!(meta.iter().all(|m| m.tenant_id == tenant));
+        }
+    }
 }
