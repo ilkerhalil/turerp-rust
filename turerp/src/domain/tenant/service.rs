@@ -310,6 +310,8 @@ mod tests {
         let create = CreateTenant {
             name: "Test Company".to_string(),
             subdomain: "testco".to_string(),
+            base_currency: "TRY".to_string(),
+            supported_currencies: vec![],
         };
 
         let result = service.create_tenant(create).await;
@@ -326,6 +328,8 @@ mod tests {
         let create = CreateTenant {
             name: "Test Company".to_string(),
             subdomain: "testco".to_string(),
+            base_currency: "TRY".to_string(),
+            supported_currencies: vec![],
         };
 
         service.create_tenant(create.clone()).await.unwrap();
@@ -342,6 +346,8 @@ mod tests {
         let create = CreateTenant {
             name: "Test Company".to_string(),
             subdomain: "testco".to_string(),
+            base_currency: "TRY".to_string(),
+            supported_currencies: vec![],
         };
 
         let created = service.create_tenant(create).await.unwrap();
@@ -358,6 +364,8 @@ mod tests {
         let create = CreateTenant {
             name: "Test Company".to_string(),
             subdomain: "testco".to_string(),
+            base_currency: "TRY".to_string(),
+            supported_currencies: vec![],
         };
 
         service.create_tenant(create).await.unwrap();
@@ -383,6 +391,8 @@ mod tests {
         let create = CreateTenant {
             name: "Test Company".to_string(),
             subdomain: "testco".to_string(),
+            base_currency: "TRY".to_string(),
+            supported_currencies: vec![],
         };
 
         let created = service.create_tenant(create).await.unwrap();
@@ -404,6 +414,8 @@ mod tests {
         let create = CreateTenant {
             name: "Test Company".to_string(),
             subdomain: "testco".to_string(),
+            base_currency: "TRY".to_string(),
+            supported_currencies: vec![],
         };
 
         let created = service.create_tenant(create).await.unwrap();

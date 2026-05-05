@@ -95,6 +95,8 @@ impl InMemoryTenantRepository {
             subdomain: "default".to_string(),
             db_name: "turerp_default".to_string(),
             is_active: true,
+            base_currency: "TRY".to_string(),
+            supported_currencies: vec!["TRY".to_string()],
             created_at: chrono::Utc::now(),
         };
         repo.inner.lock().tenants.insert(1, default_tenant);
@@ -124,6 +126,8 @@ impl TenantRepository for InMemoryTenantRepository {
             subdomain: create.subdomain,
             db_name,
             is_active: true,
+            base_currency: create.base_currency,
+            supported_currencies: create.supported_currencies,
             created_at: chrono::Utc::now(),
         };
 

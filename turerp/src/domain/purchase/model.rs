@@ -104,6 +104,8 @@ pub struct PurchaseOrder {
     pub tax_amount: Decimal,
     pub discount_amount: Decimal,
     pub total_amount: Decimal,
+    pub currency: String,
+    pub exchange_rate: Decimal,
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -355,7 +357,19 @@ pub struct CreatePurchaseOrder {
     pub order_date: DateTime<Utc>,
     pub expected_delivery_date: Option<DateTime<Utc>>,
     pub notes: Option<String>,
+    #[serde(default = "default_purchase_currency")]
+    pub currency: String,
+    #[serde(default = "default_purchase_exchange_rate")]
+    pub exchange_rate: Decimal,
     pub lines: Vec<CreatePurchaseOrderLine>,
+}
+
+fn default_purchase_currency() -> String {
+    "TRY".to_string()
+}
+
+fn default_purchase_exchange_rate() -> Decimal {
+    Decimal::ONE
 }
 
 impl CreatePurchaseOrder {
@@ -539,6 +553,8 @@ mod tests {
             order_date: Utc::now(),
             expected_delivery_date: Some(Utc::now() + chrono::Duration::days(7)),
             notes: None,
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
             lines: vec![CreatePurchaseOrderLine {
                 product_id: Some(1),
                 description: "Test".to_string(),
@@ -556,6 +572,8 @@ mod tests {
             order_date: Utc::now(),
             expected_delivery_date: None,
             notes: None,
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
             lines: vec![],
         };
         assert!(invalid.validate().is_err());

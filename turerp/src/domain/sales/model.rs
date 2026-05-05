@@ -108,6 +108,8 @@ pub struct SalesOrder {
     pub tax_amount: Decimal,
     pub discount_amount: Decimal,
     pub total_amount: Decimal,
+    pub currency: String,
+    pub exchange_rate: Decimal,
     pub notes: Option<String>,
     pub shipping_address: Option<String>,
     pub billing_address: Option<String>,
@@ -219,7 +221,19 @@ pub struct CreateSalesOrder {
     pub notes: Option<String>,
     pub shipping_address: Option<String>,
     pub billing_address: Option<String>,
+    #[serde(default = "default_sales_currency")]
+    pub currency: String,
+    #[serde(default = "default_exchange_rate")]
+    pub exchange_rate: Decimal,
     pub lines: Vec<CreateSalesOrderLine>,
+}
+
+fn default_sales_currency() -> String {
+    "TRY".to_string()
+}
+
+fn default_exchange_rate() -> Decimal {
+    Decimal::ONE
 }
 
 impl CreateSalesOrder {
@@ -437,6 +451,8 @@ mod tests {
             notes: None,
             shipping_address: None,
             billing_address: None,
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
             lines: vec![CreateSalesOrderLine {
                 product_id: Some(1),
                 description: "Test".to_string(),
@@ -456,6 +472,8 @@ mod tests {
             notes: None,
             shipping_address: None,
             billing_address: None,
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
             lines: vec![],
         };
         assert!(invalid.validate().is_err());

@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use crate::domain::auth::{AuthService, LoginRequest, RefreshTokenRequest, RegisterRequest};
 use crate::domain::user::service::UserService;
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::AuthUser;
 
@@ -65,6 +65,12 @@ pub async fn login(
     let tenant_id = params.tenant_id.unwrap_or(1);
     match auth_service.login(payload.into_inner(), tenant_id).await {
         Ok(response) => Ok(HttpResponse::Ok().json(response)),
+        Err(ApiError::MfaRequired(token)) => Ok(HttpResponse::Forbidden().json(
+            crate::domain::mfa::MfaRequiredResponse {
+                mfa_token: token,
+                message: "Multi-factor authentication required".to_string(),
+            },
+        )),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
 }

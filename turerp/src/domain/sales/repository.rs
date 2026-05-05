@@ -224,6 +224,8 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
             notes: create.notes,
             shipping_address: create.shipping_address,
             billing_address: create.billing_address,
+            currency: create.currency,
+            exchange_rate: create.exchange_rate,
             created_at: now,
             updated_at: now,
             deleted_at: None,

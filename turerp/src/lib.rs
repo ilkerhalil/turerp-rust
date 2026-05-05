@@ -122,6 +122,11 @@ pub mod app {
         InMemoryCampaignRepository, InMemoryLeadRepository, InMemoryOpportunityRepository,
         InMemoryTicketRepository,
     };
+    use crate::domain::currency::repository::{
+        BoxCurrencyRepository, BoxExchangeRateRepository, InMemoryCurrencyRepository,
+        InMemoryExchangeRateRepository,
+    };
+    use crate::domain::currency::service::CurrencyService;
     use crate::domain::custom_field::repository::InMemoryCustomFieldRepository;
     use crate::domain::feature::repository::InMemoryFeatureFlagRepository;
     use crate::domain::hr::repository::{
@@ -134,6 +139,8 @@ pub mod app {
     use crate::domain::manufacturing::repository::{
         InMemoryBillOfMaterialsRepository, InMemoryRoutingRepository, InMemoryWorkOrderRepository,
     };
+    use crate::domain::mfa::repository::InMemoryMfaRepository;
+    use crate::domain::mfa::service::MfaService;
     use crate::domain::product::repository::{
         InMemoryCategoryRepository, InMemoryProductRepository, InMemoryProductVariantRepository,
         InMemoryUnitRepository,
@@ -182,6 +189,10 @@ pub mod app {
         PostgresTicketRepository,
     };
     #[cfg(feature = "postgres")]
+    use crate::domain::currency::postgres_repository::{
+        PostgresCurrencyRepository, PostgresExchangeRateRepository,
+    };
+    #[cfg(feature = "postgres")]
     use crate::domain::efatura::postgres_repository::PostgresEFaturaRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::feature::postgres_repository::PostgresFeatureFlagRepository;
@@ -198,6 +209,8 @@ pub mod app {
     use crate::domain::manufacturing::postgres_repository::{
         PostgresBillOfMaterialsRepository, PostgresRoutingRepository, PostgresWorkOrderRepository,
     };
+    #[cfg(feature = "postgres")]
+    use crate::domain::mfa::postgres_repository::PostgresMfaRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::product::postgres_repository::{
         PostgresCategoryRepository, PostgresProductRepository, PostgresProductVariantRepository,
@@ -274,6 +287,7 @@ pub mod app {
         pub db_router: web::Data<dyn DbRouter>,
         pub i18n: web::Data<I18n>,
         pub tax_service: web::Data<TaxService>,
+        pub currency_service: web::Data<crate::domain::currency::service::CurrencyService>,
         pub efatura_service: web::Data<crate::domain::efatura::EFaturaService>,
         pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
         pub webhook_service: web::Data<WebhookService>,
@@ -295,7 +309,14 @@ pub mod app {
                 config.jwt.access_token_expiration,
                 config.jwt.refresh_token_expiration,
             );
-            let auth_service = AuthService::new(user_service.clone(), jwt_service.clone());
+            let mfa_repo = Arc::new(InMemoryMfaRepository::new())
+                as crate::domain::mfa::repository::BoxMfaRepository;
+            let mfa_service = MfaService::new(mfa_repo, jwt_service.clone());
+            let auth_service = AuthService::new(
+                user_service.clone(),
+                jwt_service.clone(),
+                mfa_service.clone(),
+            );
 
             // Cari
             let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
@@ -521,6 +542,13 @@ pub mod app {
             let cache_service: Arc<dyn crate::cache::CacheService> =
                 Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>;
 
+            // Currency
+            let currency_repo =
+                Arc::new(InMemoryCurrencyRepository::new()) as BoxCurrencyRepository;
+            let exchange_rate_repo =
+                Arc::new(InMemoryExchangeRateRepository::new()) as BoxExchangeRateRepository;
+            let currency_service = CurrencyService::new(currency_repo, exchange_rate_repo);
+
             // Rate limit stats
             let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
 
@@ -556,6 +584,7 @@ pub mod app {
                 tracing_service,
                 db_router,
                 tax_service,
+                currency_service,
                 efatura_service,
                 edefter_service,
                 webhook_service,
@@ -600,6 +629,7 @@ pub mod app {
             tracing_service,
             db_router,
             tax_service,
+            currency_service,
             efatura_service,
             edefter_service,
             webhook_service,
@@ -642,6 +672,7 @@ pub mod app {
             db_router: web::Data::from(db_router),
             i18n: web::Data::new(i18n),
             tax_service: web::Data::new(tax_service),
+            currency_service: web::Data::new(currency_service),
             efatura_service: web::Data::new(efatura_service),
             edefter_service: web::Data::new(edefter_service),
             webhook_service: web::Data::new(webhook_service),
@@ -673,7 +704,13 @@ pub mod app {
             config.jwt.access_token_expiration,
             config.jwt.refresh_token_expiration,
         );
-        let auth_service = AuthService::new(user_service.clone(), jwt_service.clone());
+        let mfa_repo = PostgresMfaRepository::new(pool.clone()).into_boxed();
+        let mfa_service = MfaService::new(mfa_repo, jwt_service.clone());
+        let auth_service = AuthService::new(
+            user_service.clone(),
+            jwt_service.clone(),
+            mfa_service.clone(),
+        );
 
         // Cari - PostgreSQL
         let cari_repo = PostgresCariRepository::new(pool.clone()).into_boxed();
@@ -844,6 +881,11 @@ pub mod app {
         let tax_period_repo = PostgresTaxPeriodRepository::new(pool.clone()).into_boxed();
         let tax_service = TaxService::new(tax_rate_repo, tax_period_repo);
 
+        // Currency - PostgreSQL
+        let currency_repo = PostgresCurrencyRepository::new(pool.clone()).into_boxed();
+        let exchange_rate_repo = PostgresExchangeRateRepository::new(pool.clone()).into_boxed();
+        let currency_service = CurrencyService::new(currency_repo, exchange_rate_repo);
+
         // e-Fatura - PostgreSQL
         let efatura_repo = PostgresEFaturaRepository::new(pool.clone()).into_boxed();
         let gib_gateway =
@@ -925,6 +967,7 @@ pub mod app {
             tracing_service: web::Data::from(tracing_service),
             db_router: web::Data::from(db_router),
             tax_service: web::Data::new(tax_service),
+            currency_service: web::Data::new(currency_service),
             efatura_service: web::Data::new(efatura_service),
             edefter_service: web::Data::new(edefter_service),
             webhook_service: web::Data::new(webhook_service),
@@ -976,6 +1019,7 @@ pub mod app {
             tracing_service,
             db_router,
             tax_service,
+            currency_service,
             efatura_service,
             edefter_service,
             webhook_service,
@@ -1036,6 +1080,7 @@ pub mod app {
             tracing_service: web::Data::from(tracing_service),
             db_router: web::Data::from(db_router),
             tax_service: web::Data::new(tax_service),
+            currency_service: web::Data::new(currency_service),
             efatura_service: web::Data::new(efatura_service),
             edefter_service: web::Data::new(edefter_service),
             webhook_service: web::Data::new(webhook_service),

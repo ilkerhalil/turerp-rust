@@ -1393,9 +1393,9 @@ turerp/
 ### P0 — Critical (Next Sprint)
 | Feature | Description | Status |
 |---------|-------------|--------|
-| Multi-Currency | Base currency, transaction currencies, daily exchange rates, forex gain/loss posting | Planned |
+| Multi-Currency | Base currency, transaction currencies, daily exchange rates, forex gain/loss posting | Done |
 | Multi-Company / Inter-Company | Multiple legal entities per tenant, inter-company transactions, consolidated reporting | Planned |
-| 2FA / MFA | TOTP (Google Authenticator), backup codes, SMS fallback, admin-enforced policy | Planned |
+| 2FA / MFA | TOTP (Google Authenticator), backup codes, SMS fallback, admin-enforced policy | Done |
 | Bulk Import / Export | CSV/Excel/XLSX template uploads for Cari, Products, Stock, Invoices; async processing with progress tracking | Planned |
 
 ### P1 — High Priority

@@ -5,6 +5,7 @@ use utoipa::ToSchema;
 use validator::Validate;
 
 use crate::config::JwtConfig;
+use crate::domain::mfa::service::MfaService;
 use crate::domain::user::model::{CreateUser, Role, UserResponse};
 use crate::domain::user::service::UserService;
 use crate::error::ApiError;
@@ -18,6 +19,9 @@ pub struct LoginRequest {
 
     #[validate(length(min = 1))]
     pub password: String,
+
+    #[serde(default)]
+    pub mfa_code: Option<String>,
 }
 
 /// Register request
@@ -68,14 +72,20 @@ pub struct LoginResponse {
 #[derive(Clone)]
 pub struct AuthService {
     user_service: UserService,
-    jwt_service: JwtService,
+    pub jwt_service: JwtService,
+    mfa_service: MfaService,
 }
 
 impl AuthService {
-    pub fn new(user_service: UserService, jwt_service: JwtService) -> Self {
+    pub fn new(
+        user_service: UserService,
+        jwt_service: JwtService,
+        mfa_service: MfaService,
+    ) -> Self {
         Self {
             user_service,
             jwt_service,
+            mfa_service,
         }
     }
 
@@ -151,6 +161,31 @@ impl AuthService {
             .verify_credentials(&request.username, &request.password, tenant_id)
             .await?;
 
+        // Check if MFA is enabled for this user
+        let mfa_enabled = self.mfa_service.is_mfa_enabled(user.id, tenant_id).await?;
+
+        if mfa_enabled {
+            // If MFA code provided, verify it
+            if let Some(mfa_code) = request.mfa_code {
+                let valid = self
+                    .mfa_service
+                    .validate_mfa_challenge(user.id, tenant_id, &mfa_code)
+                    .await?;
+                if !valid {
+                    return Err(ApiError::Unauthorized("Invalid MFA code".to_string()));
+                }
+            } else {
+                // MFA required but no code provided — return temporary MFA token
+                let mfa_token = self.mfa_service.generate_mfa_token(
+                    user.id,
+                    tenant_id,
+                    user.username.clone(),
+                )?;
+
+                return Err(ApiError::MfaRequired(mfa_token));
+            }
+        }
+
         // Generate tokens
         let (user_id, tenant_id, username, role) =
             (user.id, user.tenant_id, user.username.clone(), user.role);
@@ -176,19 +211,23 @@ impl AuthService {
 }
 
 /// Create auth service with JWT configuration
-pub fn create_auth_service(user_service: UserService, jwt_config: &JwtConfig) -> AuthService {
+pub fn create_auth_service(
+    user_service: UserService,
+    mfa_service: MfaService,
+    jwt_config: &JwtConfig,
+) -> AuthService {
     let jwt_service = JwtService::new(
         jwt_config.secret.clone(),
         jwt_config.access_token_expiration,
         jwt_config.refresh_token_expiration,
     );
 
-    AuthService::new(user_service, jwt_service)
+    AuthService::new(user_service, jwt_service, mfa_service)
 }
 
 /// Create auth service with default configuration (dev/testing only)
 #[cfg(any(test, debug_assertions))]
-pub fn create_auth_service_dev(user_service: UserService) -> AuthService {
+pub fn create_auth_service_dev(user_service: UserService, mfa_service: MfaService) -> AuthService {
     let jwt_config = JwtConfig::dev();
-    create_auth_service(user_service, &jwt_config)
+    create_auth_service(user_service, mfa_service, &jwt_config)
 }

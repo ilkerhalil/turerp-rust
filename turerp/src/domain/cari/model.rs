@@ -92,6 +92,7 @@ pub struct Cari {
     pub postal_code: Option<String>,
     pub credit_limit: Decimal,
     pub current_balance: Decimal,
+    pub default_currency: String,
     pub status: CariStatus,
     pub tenant_id: i64,
     pub created_by: i64,
@@ -147,6 +148,7 @@ impl Cari {
             postal_code: None,
             credit_limit: Decimal::ZERO,
             current_balance: Decimal::ZERO,
+            default_currency: "TRY".to_string(),
             status: CariStatus::Active,
             tenant_id,
             created_by,
@@ -209,9 +211,16 @@ pub struct CreateCari {
     #[serde(default = "default_credit_limit")]
     pub credit_limit: Decimal,
 
+    #[serde(default = "default_cari_currency")]
+    pub default_currency: String,
+
     pub tenant_id: i64,
 
     pub created_by: i64,
+}
+
+fn default_cari_currency() -> String {
+    "TRY".to_string()
 }
 
 fn default_credit_limit() -> Decimal {
@@ -273,6 +282,9 @@ pub struct UpdateCari {
 
     #[serde(default)]
     pub status: Option<CariStatus>,
+
+    #[serde(default)]
+    pub default_currency: Option<String>,
 }
 
 /// Cari response (without sensitive internal data)
@@ -293,6 +305,7 @@ pub struct CariResponse {
     pub postal_code: Option<String>,
     pub credit_limit: Decimal,
     pub current_balance: Decimal,
+    pub default_currency: String,
     pub status: CariStatus,
     pub tenant_id: i64,
     pub created_at: DateTime<Utc>,
@@ -317,6 +330,7 @@ impl From<Cari> for CariResponse {
             postal_code: cari.postal_code,
             credit_limit: cari.credit_limit,
             current_balance: cari.current_balance,
+            default_currency: cari.default_currency,
             status: cari.status,
             tenant_id: cari.tenant_id,
             created_at: cari.created_at,
@@ -379,6 +393,7 @@ mod tests {
             country: None,
             postal_code: None,
             credit_limit: dec!(1000),
+            default_currency: "TRY".to_string(),
             tenant_id: 1,
             created_by: 1,
         };
@@ -402,6 +417,7 @@ mod tests {
             country: None,
             postal_code: None,
             credit_limit: Decimal::ZERO,
+            default_currency: "TRY".to_string(),
             tenant_id: 1,
             created_by: 1,
         };

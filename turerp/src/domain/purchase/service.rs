@@ -645,6 +645,8 @@ mod tests {
             tenant_id: 1,
             cari_id: 1,
             order_date: chrono::Utc::now(),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
             expected_delivery_date: Some(chrono::Utc::now() + Duration::days(7)),
             notes: None,
             lines: vec![CreatePurchaseOrderLine {
@@ -672,6 +674,8 @@ mod tests {
             tenant_id: 1,
             cari_id: 1,
             order_date: chrono::Utc::now(),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
             expected_delivery_date: Some(chrono::Utc::now() + Duration::days(7)),
             notes: None,
             lines: vec![CreatePurchaseOrderLine {

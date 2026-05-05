@@ -1724,6 +1724,214 @@
         ]
       }
     },
+    "/api/v1/auth/mfa/disable": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Disable MFA endpoint (requires authentication)",
+        "operationId": "mfa_disable",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisableMfaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "MFA disabled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Invalid password"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/mfa/regenerate-backup-codes": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Regenerate backup codes endpoint (requires authentication)",
+        "operationId": "mfa_regenerate_backup_codes",
+        "responses": {
+          "200": {
+            "description": "New backup codes generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupCodesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "MFA not enabled"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/mfa/setup": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Start MFA setup endpoint (requires authentication)",
+        "operationId": "mfa_setup",
+        "responses": {
+          "200": {
+            "description": "MFA setup initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaSetupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/mfa/status": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Get MFA status endpoint (requires authentication)",
+        "operationId": "mfa_status",
+        "responses": {
+          "200": {
+            "description": "MFA status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/mfa/verify": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Verify MFA code during login (public, requires mfa_token)",
+        "operationId": "mfa_verify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyMfaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "MFA verified, login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid MFA token or code"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/verify-setup": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Verify MFA setup code endpoint (requires authentication)",
+        "operationId": "mfa_verify_setup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyTotpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "MFA enabled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid setup code"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/auth/refresh": {
       "post": {
         "tags": [
@@ -4111,6 +4319,188 @@
         ]
       }
     },
+    "/api/v1/currencies": {
+      "get": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "List currencies (requires authentication)",
+        "operationId": "list_currencies",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "active_only",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "boolean",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of currencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Create currency (requires admin role)",
+        "operationId": "create_currency",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCurrency"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Currency created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrencyResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/currencies/{code}": {
+      "get": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Get currency by code (requires authentication)",
+        "operationId": "get_currency",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Currency code (e.g. USD)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Currency found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrencyResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Update currency (requires admin role)",
+        "operationId": "update_currency",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Currency code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCurrency"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Currency updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrencyResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/custom-fields": {
       "get": {
         "tags": [
@@ -5158,6 +5548,238 @@
         "responses": {
           "201": {
             "description": "Event published"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/exchange-rates": {
+      "get": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "List exchange rates (requires authentication)",
+        "operationId": "list_exchange_rates",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "currency",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/NaiveDate"
+                }
+              ],
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of exchange rates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Create exchange rate (requires admin role)",
+        "operationId": "create_exchange_rate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateExchangeRate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Exchange rate created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExchangeRateResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/exchange-rates/convert": {
+      "get": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Convert amount between currencies (requires authentication)",
+        "operationId": "convert_amount",
+        "parameters": [
+          {
+            "name": "amount",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Decimal"
+            }
+          },
+          {
+            "name": "from",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/NaiveDate"
+                }
+              ],
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversionResult"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/exchange-rates/effective": {
+      "get": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Get effective exchange rate (requires authentication)",
+        "operationId": "get_effective_rate",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/NaiveDate"
+                }
+              ],
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Effective rate found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExchangeRateResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -15295,6 +15917,21 @@
           "reportread"
         ]
       },
+      "BackupCodesResponse": {
+        "type": "object",
+        "description": "Response after backup codes are generated",
+        "required": [
+          "backup_codes"
+        ],
+        "properties": {
+          "backup_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "BalanceCheckResult": {
         "type": "object",
         "description": "Balance check result",
@@ -15557,6 +16194,38 @@
           }
         }
       },
+      "ConversionResult": {
+        "type": "object",
+        "description": "Result of a currency conversion",
+        "required": [
+          "amount",
+          "from_currency",
+          "to_currency",
+          "rate",
+          "converted_amount",
+          "effective_date"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "converted_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "effective_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "from_currency": {
+            "type": "string"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "to_currency": {
+            "type": "string"
+          }
+        }
+      },
       "CreateApiKey": {
         "type": "object",
         "description": "Create API Key request",
@@ -15626,6 +16295,36 @@
           }
         }
       },
+      "CreateCurrency": {
+        "type": "object",
+        "description": "Create a new currency",
+        "required": [
+          "code",
+          "name",
+          "symbol"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "decimal_places": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "is_base": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          }
+        }
+      },
       "CreateEFatura": {
         "type": "object",
         "description": "Create e-Fatura from an invoice",
@@ -15640,6 +16339,30 @@
           },
           "profile_id": {
             "$ref": "#/components/schemas/EFaturaProfile"
+          }
+        }
+      },
+      "CreateExchangeRate": {
+        "type": "object",
+        "description": "Create a new exchange rate",
+        "required": [
+          "from_currency",
+          "to_currency",
+          "rate",
+          "effective_date"
+        ],
+        "properties": {
+          "effective_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "from_currency": {
+            "type": "string"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "to_currency": {
+            "type": "string"
           }
         }
       },
@@ -15921,6 +16644,116 @@
           }
         }
       },
+      "Currency": {
+        "type": "object",
+        "description": "Currency entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "code",
+          "name",
+          "symbol",
+          "decimal_places",
+          "is_active",
+          "is_base",
+          "created_at"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "decimal_places": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "is_base": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "CurrencyResponse": {
+        "type": "object",
+        "description": "Currency response for API",
+        "required": [
+          "id",
+          "tenant_id",
+          "code",
+          "name",
+          "symbol",
+          "decimal_places",
+          "is_active",
+          "is_base",
+          "created_at"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "decimal_places": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "is_base": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
       "DeadLetterResponse": {
         "type": "object",
         "description": "Dead letter entry response",
@@ -15971,6 +16804,18 @@
           "failed",
           "retrying"
         ]
+      },
+      "DisableMfaRequest": {
+        "type": "object",
+        "description": "Request to disable MFA",
+        "required": [
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string"
+          }
+        }
       },
       "EDefterStatus": {
         "type": "string",
@@ -16090,6 +16935,82 @@
         ],
         "properties": {
           "error": {
+            "type": "string"
+          }
+        }
+      },
+      "ExchangeRate": {
+        "type": "object",
+        "description": "Exchange rate entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "from_currency",
+          "to_currency",
+          "rate",
+          "effective_date",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "effective_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "from_currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "to_currency": {
+            "type": "string"
+          }
+        }
+      },
+      "ExchangeRateResponse": {
+        "type": "object",
+        "description": "Exchange rate response for API",
+        "required": [
+          "id",
+          "tenant_id",
+          "from_currency",
+          "to_currency",
+          "rate",
+          "effective_date",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "effective_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "from_currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "to_currency": {
             "type": "string"
           }
         }
@@ -16590,6 +17511,10 @@
           "password"
         ],
         "properties": {
+          "mfa_code": {
+            "type": "string",
+            "nullable": true
+          },
           "password": {
             "type": "string"
           },
@@ -16637,6 +17562,52 @@
         "properties": {
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "MfaMethod": {
+        "type": "string",
+        "description": "MFA method enumeration",
+        "enum": [
+          "totp",
+          "sms",
+          "none"
+        ]
+      },
+      "MfaSetupResponse": {
+        "type": "object",
+        "description": "Response when MFA setup is initiated",
+        "required": [
+          "qr_code_uri",
+          "secret"
+        ],
+        "properties": {
+          "qr_code_uri": {
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          }
+        }
+      },
+      "MfaStatusResponse": {
+        "type": "object",
+        "description": "Response with MFA status",
+        "required": [
+          "user_id",
+          "mfa_enabled",
+          "method"
+        ],
+        "properties": {
+          "method": {
+            "$ref": "#/components/schemas/MfaMethod"
+          },
+          "mfa_enabled": {
+            "type": "boolean"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -17429,6 +18400,55 @@
           }
         }
       },
+      "UpdateCurrency": {
+        "type": "object",
+        "description": "Update an existing currency",
+        "properties": {
+          "decimal_places": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "is_base": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "symbol": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateExchangeRate": {
+        "type": "object",
+        "description": "Update an existing exchange rate",
+        "properties": {
+          "effective_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "rate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
       "UpdateFeatureFlag": {
         "type": "object",
         "description": "Update feature flag request",
@@ -17591,6 +18611,34 @@
             "format": "int64"
           },
           "username": {
+            "type": "string"
+          }
+        }
+      },
+      "VerifyMfaRequest": {
+        "type": "object",
+        "description": "Request to verify MFA code during login",
+        "required": [
+          "mfa_token",
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "mfa_token": {
+            "type": "string"
+          }
+        }
+      },
+      "VerifyTotpRequest": {
+        "type": "object",
+        "description": "Request to verify TOTP during setup",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
             "type": "string"
           }
         }
@@ -17929,6 +18977,10 @@
     {
       "name": "Tax",
       "description": "Turkish tax rate management, calculation, and KVB period tracking"
+    },
+    {
+      "name": "Currency",
+      "description": "Multi-currency support, exchange rates and conversion"
     },
     {
       "name": "e-Fatura",

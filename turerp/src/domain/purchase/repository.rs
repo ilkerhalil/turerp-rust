@@ -262,6 +262,8 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
             tax_amount,
             discount_amount,
             total_amount,
+            currency: create.currency,
+            exchange_rate: create.exchange_rate,
             notes: create.notes,
             created_at: now,
             updated_at: now,

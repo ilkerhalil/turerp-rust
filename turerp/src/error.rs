@@ -41,6 +41,9 @@ pub enum ApiError {
 
     #[error("Validation error: {0}")]
     Validation(String),
+
+    #[error("Multi-factor authentication required")]
+    MfaRequired(String),
 }
 
 /// Error response structure for JSON API responses
@@ -85,6 +88,10 @@ impl ResponseError for ApiError {
             ApiError::Validation(msg) => {
                 HttpResponse::BadRequest().json(ErrorResponse { error: msg.clone() })
             }
+            ApiError::MfaRequired(token) => HttpResponse::Forbidden().json(serde_json::json!({
+                "error": "Multi-factor authentication required",
+                "mfa_token": token,
+            })),
             ApiError::Database(msg) => {
                 tracing::error!("Database error: {}", msg);
                 HttpResponse::InternalServerError().json(ErrorResponse {
@@ -131,6 +138,7 @@ impl ApiError {
             ApiError::InvalidToken(msg) => {
                 i18n.t_args(locale, "errors.invalid_token", &[("detail", msg)])
             }
+            ApiError::MfaRequired(_) => i18n.t(locale, "errors.mfa_required"),
         }
     }
 
@@ -151,7 +159,7 @@ impl ApiError {
             | ApiError::InvalidCredentials
             | ApiError::TokenExpired
             | ApiError::InvalidToken(_) => HttpResponse::Unauthorized(),
-            ApiError::Forbidden(_) => HttpResponse::Forbidden(),
+            ApiError::Forbidden(_) | ApiError::MfaRequired(_) => HttpResponse::Forbidden(),
             ApiError::BadRequest(_) | ApiError::Validation(_) => HttpResponse::BadRequest(),
             ApiError::Conflict(_) => HttpResponse::Conflict(),
             ApiError::Database(_) | ApiError::Internal(_) => HttpResponse::InternalServerError(),

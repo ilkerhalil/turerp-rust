@@ -19,6 +19,8 @@ struct TenantRow {
     name: String,
     subdomain: String,
     is_active: bool,
+    base_currency: String,
+    supported_currencies: Vec<String>,
     created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -30,6 +32,8 @@ impl From<TenantRow> for Tenant {
             subdomain: row.subdomain.clone(),
             db_name: crate::domain::tenant::model::generate_db_name(&row.subdomain),
             is_active: row.is_active,
+            base_currency: row.base_currency,
+            supported_currencies: row.supported_currencies,
             created_at: row.created_at,
         }
     }
@@ -42,6 +46,8 @@ struct TenantRowWithTotal {
     name: String,
     subdomain: String,
     is_active: bool,
+    base_currency: String,
+    supported_currencies: Vec<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     total_count: i64,
 }
@@ -54,6 +60,8 @@ impl From<TenantRowWithTotal> for (Tenant, i64) {
             subdomain: row.subdomain.clone(),
             db_name: crate::domain::tenant::model::generate_db_name(&row.subdomain),
             is_active: row.is_active,
+            base_currency: row.base_currency,
+            supported_currencies: row.supported_currencies,
             created_at: row.created_at,
         };
         (tenant, row.total_count)

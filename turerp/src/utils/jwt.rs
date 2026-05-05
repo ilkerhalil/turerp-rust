@@ -122,7 +122,7 @@ impl JwtService {
     }
 
     /// Generate a single token
-    fn encode_token(&self, claims: &AuthClaims) -> Result<String, ApiError> {
+    pub fn encode_token(&self, claims: &AuthClaims) -> Result<String, ApiError> {
         encode(
             &Header::new(self.algorithm),
             claims,

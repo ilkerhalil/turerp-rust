@@ -259,6 +259,7 @@ mod tests {
         InMemoryInvoiceLineRepository, InMemoryInvoiceRepository, InMemoryPaymentRepository,
     };
     use chrono::Utc;
+    use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
@@ -281,6 +282,7 @@ mod tests {
             issue_date: now,
             due_date: now + chrono::Duration::days(30),
             currency: "USD".to_string(),
+            exchange_rate: Decimal::ONE,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
@@ -313,6 +315,7 @@ mod tests {
             issue_date: now,
             due_date: now + chrono::Duration::days(30),
             currency: "USD".to_string(),
+            exchange_rate: Decimal::ONE,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
@@ -332,6 +335,7 @@ mod tests {
             invoice_id: invoice.id,
             amount: dec!(50),
             payment_date: now,
+            currency: "TRY".to_string(),
             payment_method: "Bank Transfer".to_string(),
             reference_number: Some("TRF001".to_string()),
             notes: None,
@@ -357,6 +361,7 @@ mod tests {
             issue_date: now,
             due_date: now + chrono::Duration::days(30),
             currency: "USD".to_string(),
+            exchange_rate: Decimal::ONE,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
@@ -376,6 +381,7 @@ mod tests {
             invoice_id: invoice.id,
             amount: total,
             payment_date: now,
+            currency: "TRY".to_string(),
             payment_method: "Cash".to_string(),
             reference_number: None,
             notes: None,

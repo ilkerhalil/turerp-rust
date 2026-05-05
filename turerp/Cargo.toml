@@ -29,6 +29,10 @@ sha2 = "0.10"
 hmac = "0.12"
 hex = "0.4"
 
+# TOTP / MFA
+totp-rs = { version = "5", features = ["qr"] }
+base32 = "0.5"
+
 # HTTP client (webhook delivery)
 reqwest = { version = "0.12", features = ["json"] }
 

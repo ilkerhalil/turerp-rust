@@ -270,6 +270,7 @@ mod tests {
             credit_limit: dec!(1000),
             tenant_id: 1,
             created_by: 1,
+            default_currency: "TRY".to_string(),
         };
 
         let result = service.create_cari(create).await;
@@ -299,6 +300,7 @@ mod tests {
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
+            default_currency: "TRY".to_string(),
         };
 
         service.create_cari(create.clone()).await.unwrap();
@@ -328,6 +330,7 @@ mod tests {
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
+            default_currency: "TRY".to_string(),
         };
 
         let created = service.create_cari(create).await.unwrap();
@@ -367,6 +370,7 @@ mod tests {
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
+            default_currency: "TRY".to_string(),
         };
 
         let create2 = CreateCari {
@@ -385,6 +389,7 @@ mod tests {
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
+            default_currency: "TRY".to_string(),
         };
 
         service.create_cari(create1).await.unwrap();
@@ -416,6 +421,7 @@ mod tests {
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
+            default_currency: "TRY".to_string(),
         };
 
         let created = service.create_cari(create).await.unwrap();
@@ -451,6 +457,7 @@ mod tests {
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
             created_by: 1,
+            default_currency: "TRY".to_string(),
         };
 
         let created = service.create_cari(create).await.unwrap();

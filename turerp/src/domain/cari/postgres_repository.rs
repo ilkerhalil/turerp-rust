@@ -31,6 +31,7 @@ struct CariRow {
     postal_code: Option<String>,
     credit_limit: Decimal,
     current_balance: Decimal,
+    default_currency: String,
     status: String,
     tenant_id: i64,
     created_by: i64,
@@ -78,6 +79,7 @@ impl From<CariRow> for Cari {
             postal_code: row.postal_code,
             credit_limit: row.credit_limit,
             current_balance: row.current_balance,
+            default_currency: row.default_currency,
             status,
             tenant_id: row.tenant_id,
             created_by: row.created_by,
@@ -107,6 +109,7 @@ struct CariRowWithTotal {
     postal_code: Option<String>,
     credit_limit: Decimal,
     current_balance: Decimal,
+    default_currency: String,
     status: String,
     tenant_id: i64,
     created_by: i64,
@@ -153,6 +156,7 @@ impl From<CariRowWithTotal> for (Cari, i64) {
             postal_code: row.postal_code,
             credit_limit: row.credit_limit,
             current_balance: row.current_balance,
+            default_currency: row.default_currency,
             status,
             tenant_id: row.tenant_id,
             created_by: row.created_by,
@@ -192,11 +196,11 @@ impl CariRepository for PostgresCariRepository {
             r#"
             INSERT INTO cari (code, name, cari_type, tax_number, tax_office, identity_number,
                               email, phone, address, city, country, postal_code,
-                              credit_limit, current_balance, status, tenant_id, created_by, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
+                              credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
             RETURNING id, code, name, cari_type, tax_number, tax_office, identity_number,
                       email, phone, address, city, country, postal_code,
-                      credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                      credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
                       deleted_at, deleted_by
             "#,
         )
@@ -214,6 +218,7 @@ impl CariRepository for PostgresCariRepository {
         .bind(&create.postal_code)
         .bind(create.credit_limit)
         .bind(Decimal::ZERO)
+        .bind("TRY")
         .bind(&status)
         .bind(create.tenant_id)
         .bind(create.created_by)
@@ -229,7 +234,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -249,7 +254,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE code = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -269,7 +274,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -295,7 +300,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE tenant_id = $1 AND cari_type = $2 AND deleted_at IS NULL
@@ -318,7 +323,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -347,7 +352,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM cari
@@ -386,7 +391,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM cari
@@ -426,7 +431,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM cari
@@ -474,9 +479,10 @@ impl CariRepository for PostgresCariRepository {
                 country = COALESCE($11, country),
                 postal_code = COALESCE($12, postal_code),
                 credit_limit = COALESCE($13, credit_limit),
-                status = COALESCE($14, status),
+                default_currency = COALESCE($14, default_currency),
+                status = COALESCE($15, status),
                 updated_at = NOW()
-            WHERE id = $15 AND tenant_id = $16 AND deleted_at IS NULL
+            WHERE id = $16 AND tenant_id = $17 AND deleted_at IS NULL
             RETURNING id, code, name, cari_type, tax_number, tax_office, identity_number,
                       email, phone, address, city, country, postal_code,
                       credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
@@ -496,6 +502,7 @@ impl CariRepository for PostgresCariRepository {
         .bind(&update.country)
         .bind(&update.postal_code)
         .bind(update.credit_limit)
+        .bind(&update.default_currency)
         .bind(&status_str)
         .bind(id)
         .bind(tenant_id)
@@ -559,7 +566,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL

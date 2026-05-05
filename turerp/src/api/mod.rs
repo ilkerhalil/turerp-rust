@@ -19,6 +19,7 @@ pub use v1::auth_configure as v1_auth_configure;
 pub use v1::cari_configure as v1_cari_configure;
 pub use v1::chart_of_accounts_configure as v1_chart_of_accounts_configure;
 pub use v1::crm_configure as v1_crm_configure;
+pub use v1::currency_configure as v1_currency_configure;
 pub use v1::custom_fields_configure as v1_custom_fields_configure;
 pub use v1::edefter_configure as v1_edefter_configure;
 pub use v1::efatura_configure as v1_efatura_configure;
@@ -29,6 +30,7 @@ pub use v1::hr_configure as v1_hr_configure;
 pub use v1::invoice_configure as v1_invoice_configure;
 pub use v1::jobs_configure as v1_jobs_configure;
 pub use v1::manufacturing_configure as v1_manufacturing_configure;
+pub use v1::mfa_configure as v1_mfa_configure;
 pub use v1::notifications_configure as v1_notifications_configure;
 pub use v1::product_variants_configure as v1_product_variants_configure;
 pub use v1::project_configure as v1_project_configure;
@@ -73,6 +75,13 @@ use utoipa::OpenApi;
         crate::api::v1::auth::login,
         crate::api::v1::auth::refresh_token,
         crate::api::v1::auth::me,
+        // MFA
+        crate::api::v1::mfa::mfa_setup,
+        crate::api::v1::mfa::mfa_verify_setup,
+        crate::api::v1::mfa::mfa_disable,
+        crate::api::v1::mfa::mfa_status,
+        crate::api::v1::mfa::mfa_verify,
+        crate::api::v1::mfa::mfa_regenerate_backup_codes,
         // Users
         crate::api::v1::users::create_user,
         crate::api::v1::users::get_user,
@@ -497,6 +506,15 @@ use utoipa::OpenApi;
         crate::api::v1::tax::get_tax_period,
         crate::api::v1::tax::calculate_tax_period,
         crate::api::v1::tax::file_tax_period,
+        // Currency
+        crate::api::v1::currency::list_currencies,
+        crate::api::v1::currency::create_currency,
+        crate::api::v1::currency::get_currency,
+        crate::api::v1::currency::update_currency,
+        crate::api::v1::currency::list_exchange_rates,
+        crate::api::v1::currency::create_exchange_rate,
+        crate::api::v1::currency::convert_amount,
+        crate::api::v1::currency::get_effective_rate,
         // e-Fatura
         crate::api::v1::efatura::create_efatura,
         crate::api::v1::efatura::list_efaturas,
@@ -527,6 +545,14 @@ use utoipa::OpenApi;
             CreateUser,
             UpdateUser,
             UserResponse,
+            // MFA
+            crate::domain::mfa::model::MfaSetupResponse,
+            crate::domain::mfa::model::MfaStatusResponse,
+            crate::domain::mfa::model::VerifyTotpRequest,
+            crate::domain::mfa::model::DisableMfaRequest,
+            crate::domain::mfa::model::VerifyMfaRequest,
+            crate::domain::mfa::model::BackupCodesResponse,
+            crate::domain::mfa::model::MfaMethod,
             MessageResponse,
             crate::error::ErrorResponse,
             crate::common::PaginationParams,
@@ -587,6 +613,16 @@ use utoipa::OpenApi;
             crate::api::v1::tax::CalculateTaxRequest,
             crate::api::v1::tax::CalculateInvoiceTaxRequest,
             crate::api::v1::tax::EffectiveRateQuery,
+            // Currency
+            crate::domain::currency::model::Currency,
+            crate::domain::currency::model::CreateCurrency,
+            crate::domain::currency::model::UpdateCurrency,
+            crate::domain::currency::model::CurrencyResponse,
+            crate::domain::currency::model::ExchangeRate,
+            crate::domain::currency::model::CreateExchangeRate,
+            crate::domain::currency::model::UpdateExchangeRate,
+            crate::domain::currency::model::ExchangeRateResponse,
+            crate::domain::currency::model::ConversionResult,
             // Goods Receipts
             crate::domain::purchase::model::GoodsReceipt,
             crate::domain::purchase::model::GoodsReceiptResponse,
@@ -653,6 +689,7 @@ use utoipa::OpenApi;
         (name = "Events", description = "Event bus, outbox pattern, and dead letter queue"),
         (name = "Search", description = "Full-text search across entities"),
         (name = "Tax", description = "Turkish tax rate management, calculation, and KVB period tracking"),
+        (name = "Currency", description = "Multi-currency support, exchange rates and conversion"),
         (name = "e-Fatura", description = "Turkish e-Fatura (electronic invoicing) integration with GIB"),
         (name = "e-Defter", description = "Turkish e-Defter (electronic ledger) integration with GIB"),
         (name = "Audit", description = "Audit log retrieval"),

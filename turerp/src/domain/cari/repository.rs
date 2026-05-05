@@ -144,6 +144,7 @@ impl CariRepository for InMemoryCariRepository {
             postal_code: create.postal_code,
             credit_limit: create.credit_limit,
             current_balance: Decimal::ZERO,
+            default_currency: "TRY".to_string(),
             status: crate::domain::cari::model::CariStatus::Active,
             tenant_id: create.tenant_id,
             created_by: create.created_by,

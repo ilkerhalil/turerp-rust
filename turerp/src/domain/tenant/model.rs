@@ -12,6 +12,8 @@ pub struct Tenant {
     pub name: String,
     pub subdomain: String,
     pub db_name: String,
+    pub base_currency: String,
+    pub supported_currencies: Vec<String>,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
 }
@@ -21,6 +23,14 @@ pub struct Tenant {
 pub struct CreateTenant {
     pub name: String,
     pub subdomain: String,
+    #[serde(default = "default_base_currency")]
+    pub base_currency: String,
+    #[serde(default)]
+    pub supported_currencies: Vec<String>,
+}
+
+fn default_base_currency() -> String {
+    "TRY".to_string()
 }
 
 impl CreateTenant {
@@ -42,6 +52,14 @@ impl CreateTenant {
         }
         if !valid_subdomain(&self.subdomain) {
             errors.push("Subdomain must be lowercase alphanumeric with hyphens".to_string());
+        }
+        if self.base_currency.trim().is_empty() {
+            errors.push("Base currency is required".to_string());
+        }
+        if self.base_currency.len() != 3
+            || !self.base_currency.chars().all(|c| c.is_ascii_alphabetic())
+        {
+            errors.push("Base currency must be a valid 3-letter code".to_string());
         }
 
         if errors.is_empty() {
@@ -191,18 +209,24 @@ mod tests {
         let valid = CreateTenant {
             name: "Test Company".to_string(),
             subdomain: "testco".to_string(),
+            base_currency: "TRY".to_string(),
+            supported_currencies: vec![],
         };
         assert!(valid.validate().is_ok());
 
         let invalid_name = CreateTenant {
             name: "".to_string(),
             subdomain: "testco".to_string(),
+            base_currency: "TRY".to_string(),
+            supported_currencies: vec![],
         };
         assert!(invalid_name.validate().is_err());
 
         let invalid_subdomain = CreateTenant {
             name: "Test".to_string(),
             subdomain: "TestCo".to_string(),
+            base_currency: "TRY".to_string(),
+            supported_currencies: vec![],
         };
         assert!(invalid_subdomain.validate().is_err());
     }

@@ -321,6 +321,8 @@ impl SalesService {
             notes: quotation.notes.clone(),
             shipping_address: None,
             billing_address: None,
+            currency: "TRY".to_string(),
+            exchange_rate: rust_decimal::Decimal::ONE,
             lines: order_lines,
         };
 
@@ -412,6 +414,7 @@ mod tests {
         InMemorySalesOrderLineRepository, InMemorySalesOrderRepository,
     };
     use chrono::Duration;
+    use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
@@ -442,6 +445,8 @@ mod tests {
             notes: None,
             shipping_address: Some("Shipping address".to_string()),
             billing_address: Some("Billing address".to_string()),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
             lines: vec![CreateSalesOrderLine {
                 product_id: Some(1),
                 description: "Test Product".to_string(),

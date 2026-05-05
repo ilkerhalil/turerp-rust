@@ -45,6 +45,50 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "005_audit_logs",
             sql: include_str!("../../migrations/005_audit_logs.sql"),
         },
+        Migration {
+            version: "006_settings",
+            sql: include_str!("../../migrations/006_settings.sql"),
+        },
+        Migration {
+            version: "007_soft_delete",
+            sql: include_str!("../../migrations/007_soft_delete.sql"),
+        },
+        Migration {
+            version: "008_custom_fields",
+            sql: include_str!("../../migrations/008_custom_fields.sql"),
+        },
+        Migration {
+            version: "009_chart_of_accounts",
+            sql: include_str!("../../migrations/009_chart_of_accounts.sql"),
+        },
+        Migration {
+            version: "010_webhooks",
+            sql: include_str!("../../migrations/010_webhooks.sql"),
+        },
+        Migration {
+            version: "011_edefter",
+            sql: include_str!("../../migrations/011_edefter.sql"),
+        },
+        Migration {
+            version: "012_tax_engine",
+            sql: include_str!("../../migrations/012_tax_engine.sql"),
+        },
+        Migration {
+            version: "013_efatura",
+            sql: include_str!("../../migrations/013_efatura.sql"),
+        },
+        Migration {
+            version: "014_api_keys",
+            sql: include_str!("../../migrations/014_api_keys.sql"),
+        },
+        Migration {
+            version: "015_currency",
+            sql: include_str!("../../migrations/015_currency.sql"),
+        },
+        Migration {
+            version: "015_mfa",
+            sql: include_str!("../../migrations/015_mfa.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).

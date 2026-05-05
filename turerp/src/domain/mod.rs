@@ -8,6 +8,7 @@ pub mod auth;
 pub mod cari;
 pub mod chart_of_accounts;
 pub mod crm;
+pub mod currency;
 pub mod custom_field;
 pub mod edefter;
 pub mod efatura;
@@ -15,6 +16,7 @@ pub mod feature;
 pub mod hr;
 pub mod invoice;
 pub mod manufacturing;
+pub mod mfa;
 pub mod product;
 pub mod project;
 pub mod purchase;
@@ -157,6 +159,17 @@ pub use crm::repository::{
 };
 pub use crm::service::CrmService;
 
+// Currency module re-exports
+pub use currency::model::{
+    ConversionResult, CreateCurrency, CreateExchangeRate, Currency, CurrencyResponse, ExchangeRate,
+    ExchangeRateResponse, UpdateCurrency, UpdateExchangeRate,
+};
+pub use currency::repository::{
+    BoxCurrencyRepository, BoxExchangeRateRepository, CurrencyRepository, ExchangeRateRepository,
+    InMemoryCurrencyRepository, InMemoryExchangeRateRepository,
+};
+pub use currency::service::CurrencyService;
+
 // Stock module re-exports
 pub use stock::model::{
     CreateStockMovement, CreateWarehouse, MovementType, StockLevel, StockMovement, StockSummary,
@@ -261,3 +274,12 @@ pub use webhook::repository::{
 };
 pub use webhook::service::WebhookService;
 pub use webhook::subscriber::WebhookSubscriber;
+
+// MFA module re-exports
+pub use mfa::model::{
+    BackupCodesResponse, DisableMfaRequest, EnableMfaRequest, MfaChallenge, MfaMethod,
+    MfaRequiredResponse, MfaSettings, MfaSetupResponse, MfaStatusResponse, VerifyMfaRequest,
+    VerifyTotpRequest,
+};
+pub use mfa::repository::{BoxMfaRepository, InMemoryMfaRepository, MfaRepository};
+pub use mfa::service::MfaService;

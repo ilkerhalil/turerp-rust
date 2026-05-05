@@ -106,6 +106,7 @@ pub struct Invoice {
     pub total_amount: Decimal,
     pub paid_amount: Decimal,
     pub currency: String,
+    pub exchange_rate: Decimal,
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -155,6 +156,7 @@ pub struct Payment {
     pub tenant_id: i64,
     pub invoice_id: i64,
     pub amount: Decimal,
+    pub currency: String,
     pub payment_date: DateTime<Utc>,
     pub payment_method: String,
     pub reference_number: Option<String>,
@@ -171,8 +173,14 @@ pub struct CreateInvoice {
     pub issue_date: DateTime<Utc>,
     pub due_date: DateTime<Utc>,
     pub currency: String,
+    #[serde(default = "default_exchange_rate")]
+    pub exchange_rate: Decimal,
     pub notes: Option<String>,
     pub lines: Vec<CreateInvoiceLine>,
+}
+
+fn default_exchange_rate() -> Decimal {
+    Decimal::ONE
 }
 
 impl CreateInvoice {
@@ -250,10 +258,16 @@ pub struct CreatePayment {
     pub tenant_id: i64,
     pub invoice_id: i64,
     pub amount: Decimal,
+    #[serde(default = "default_currency")]
+    pub currency: String,
     pub payment_date: DateTime<Utc>,
     pub payment_method: String,
     pub reference_number: Option<String>,
     pub notes: Option<String>,
+}
+
+fn default_currency() -> String {
+    "TRY".to_string()
 }
 
 impl CreatePayment {
@@ -291,6 +305,7 @@ pub struct InvoiceResponse {
     pub total_amount: Decimal,
     pub paid_amount: Decimal,
     pub currency: String,
+    pub exchange_rate: Decimal,
     pub notes: Option<String>,
     pub lines: Vec<InvoiceLine>,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -313,6 +328,7 @@ impl From<(Invoice, Vec<InvoiceLine>)> for InvoiceResponse {
             total_amount: invoice.total_amount,
             paid_amount: invoice.paid_amount,
             currency: invoice.currency,
+            exchange_rate: invoice.exchange_rate,
             notes: invoice.notes,
             lines,
             deleted_at: invoice.deleted_at,
@@ -338,6 +354,7 @@ mod tests {
             issue_date: now,
             due_date: now + chrono::Duration::days(30),
             currency: "USD".to_string(),
+            exchange_rate: Decimal::ONE,
             notes: None,
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
@@ -357,6 +374,7 @@ mod tests {
             issue_date: now,
             due_date: now - chrono::Duration::days(1),
             currency: "USD".to_string(),
+            exchange_rate: Decimal::ONE,
             notes: None,
             lines: vec![],
         };
