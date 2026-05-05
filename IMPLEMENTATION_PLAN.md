@@ -940,7 +940,7 @@ utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 - `GET /api/v1/invoices/overdue` - Overdue invoices (requires auth)
 - `PUT /api/v1/invoices/{id}/status` - Update invoice status (admin only)
 - `GET /api/v1/invoices/{id}/payments` - Get payments by invoice (requires auth)
-- `POST /api/v1/invoices/payments` - Add payment (admin only) **⚠️ Routing conflict: shadowed by `/v1/invoices/{id}` when `id="payments"`. Currently unreachable; must be registered before `{id}`.**
+- `POST /api/v1/invoices/payments` - Add payment (admin only)
 
 ### Sales (v1)
 - `GET /api/v1/sales/orders` - List sales orders (requires auth, paginated)
@@ -1001,7 +1001,7 @@ utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 - `POST /api/v1/assets/{id}/maintenance/start` - Start maintenance (admin only)
 - `POST /api/v1/assets/{id}/maintenance/end` - End maintenance (admin only)
 - `GET /api/v1/assets/{id}/maintenance-records` - Get maintenance records (requires auth)
-- `POST /api/v1/assets/maintenance-records` - Create maintenance record (admin only) **⚠️ Routing conflict: shadowed by `/v1/assets/{id}` when `id="maintenance-records"`. Currently unreachable; must be registered before `{id}`.**
+- `POST /api/v1/assets/maintenance-records` - Create maintenance record (admin only)
 
 ### Project (v1)
 - `GET /api/v1/projects` - List projects (requires auth, paginated)
