@@ -51,6 +51,11 @@ jobs:
       - name: Build
         run: cargo build --verbose
 
+      - name: Verify OpenAPI is up-to-date
+        run: |
+          cargo run --bin gen_openapi
+          git diff --exit-code openapi.json
+
       - name: Run clippy
         run: cargo clippy -- -D warnings
 
