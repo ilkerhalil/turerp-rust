@@ -178,7 +178,7 @@ impl EFaturaRepository for InMemoryEFaturaRepository {
             .cloned()
             .collect();
 
-        items.sort_by(|a, b| a.id.cmp(&b.id));
+        items.sort_by_key(|a| a.id);
         let total = items.len() as u64;
         let start = (params.page.saturating_sub(1)) * params.per_page;
         let paginated: Vec<EFatura> = items
