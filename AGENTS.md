@@ -62,15 +62,37 @@ Multi-tenant SaaS ERP system built with Rust, Actix-web, and SQLx.
 |------|-------------|
 | **No direct pushes to `main`** | All changes must be made on a feature branch and merged via pull request. |
 | **Branch from `main`** | Always create your feature branch from the latest `main`. |
-| **Branch naming** | Use `feature/<short-description>` or `fix/<short-description>`. |
+| **Branch naming** | Use `feature/<issue-number>-<short-description>` or `fix/<issue-number>-<short-description>`. Include the issue number so PR validation passes. |
 
 ### Creating a Pull Request
 
-1. Create a branch: `git checkout -b feature/my-feature`
-2. Make changes and commit with [Conventional Commits](https://www.conventionalcommits.org/)
-3. Push the branch: `git push -u origin feature/my-feature`
-4. Open a pull request on GitHub
-5. Merge only after CI passes and approval
+**Every PR must reference an existing, open issue.** The CI will fail if no valid issue is linked.
+
+1. Create an issue (or pick an existing open one) for the work
+2. Create a branch: `git checkout -b feature/<issue-number>-<short-description>`
+3. Make changes and commit with [Conventional Commits](https://www.conventionalcommits.org/)
+4. Push the branch: `git push -u origin feature/<issue-number>-<short-description>`
+5. Open a pull request on GitHub — **include the issue number** in the PR title or body
+6. Merge only after CI passes and approval
+
+### PR Issue Reference Rules
+
+| Rule | Description | Example |
+|------|-------------|---------|
+| **Reference required** | Every PR must link to at least one open issue | `fixes #42`, `closes #42`, `related to #42` |
+| **Branch naming** | Include issue number in branch name | `feature/42-auth`, `fix/42-login-bug` |
+| **PR title** | Optionally include issue number | `feat: add user auth (#42)` |
+| **PR body** | Use GitHub keywords for auto-close on merge | `Fixes #42` |
+| **Validation** | CI checks that referenced issues exist and are open | Fails if issue is missing or closed |
+
+**Supported keywords:** `fixes`, `closes`, `closed`, `close`, `resolves`, `resolved`, `resolve`, `related to`, `refs`, `references`, `issue`, `#<number>`
+
+**Branch naming convention:**
+```bash
+git checkout -b feature/42-user-auth        # Feature with issue #42
+git checkout -b fix/123-memory-leak         # Bug fix with issue #123
+git checkout -b docs/5-contributing-guide   # Docs with issue #5
+```
 
 ---
 
