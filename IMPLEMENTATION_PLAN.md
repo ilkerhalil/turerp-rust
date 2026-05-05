@@ -1385,3 +1385,47 @@ turerp/
 - [x] Add `GET /api/v1/audit-logs` endpoint with filtering and pagination (admin-only)
 - [x] Rewrite `AuditLoggingMiddleware` with mpsc channel for non-blocking batch persistence
 - [x] Spawn background audit writer with 5s flush interval and 100-event buffer
+
+---
+
+## Phase 21: Enterprise Features — Future Roadmap
+
+### P0 — Critical (Next Sprint)
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Multi-Currency | Base currency, transaction currencies, daily exchange rates, forex gain/loss posting | Planned |
+| Multi-Company / Inter-Company | Multiple legal entities per tenant, inter-company transactions, consolidated reporting | Planned |
+| 2FA / MFA | TOTP (Google Authenticator), backup codes, SMS fallback, admin-enforced policy | Planned |
+| Bulk Import / Export | CSV/Excel/XLSX template uploads for Cari, Products, Stock, Invoices; async processing with progress tracking | Planned |
+
+### P1 — High Priority
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Advanced BI Dashboard | KPI widgets (revenue, gross margin, AR turnover), configurable dashboards per role, real-time charts | Planned |
+| Workflow Engine | Generic state-machine workflow builder for any module (approvals, rejections, escalations), visual workflow designer API | Planned |
+| Bank Integration | Bank statement import (ISO 20022 camt.053), automatic reconciliation, EFT/havale outbound file generation | Planned |
+| Cost Center / Profit Center | Departmental cost allocation, profit center P&L, responsibility accounting | Planned |
+| Subscription / SaaS Billing | Plan tiers, seat-based billing, usage metering, invoice auto-generation, payment gateway integration | Planned |
+
+### P2 — Medium Priority
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Advanced Payroll (SGK/e-Bildirge) | SGK premium calculations, e-Bildirge XML export, parametric salary components (brüt→net) | Planned |
+| Shift Planning & Time Tracking | Employee shifts, overtime rules, time-clock integration, attendance reconciliation | Planned |
+| Inventory Forecasting | Demand forecasting (moving average, exponential smoothing), safety stock, reorder point alerts | Planned |
+| Document Management (DMS) | Document upload (PDF, image), version control, approval workflows, OCR metadata extraction | Planned |
+| Data Archiving | Cold storage for old records (invoices, movements), archive retrieval API, GDPR-compliant deletion | Planned |
+
+### P3 — Low Priority / Nice to Have
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Barcode / QR Code | Barcode generation for products, warehouse operations via scanner, mobile API | Planned |
+| E-Archive / E-Serbest Meslek Makbuzu | Turkish e-Archive integration, freelance receipt generation | Planned |
+| POS Integration | Retail point-of-sale sync, end-of-day Z reports, cash drawer management | Planned |
+| Customer Portal | Self-service portal for customers (invoice viewing, payment, ticket submission) | Planned |
+| Vendor Portal | Supplier portal for PO viewing, delivery scheduling, invoice submission | Planned |
+| Mobile Push Notifications | Firebase/APNs integration for mobile app alerts | Planned |
+| LDAP / Active Directory Sync | User provisioning from AD, group-based role mapping | Planned |
+| IP Whitelisting | Tenant-level IP allowlist for API access | Planned |
+
+---
