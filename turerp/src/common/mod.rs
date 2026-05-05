@@ -39,8 +39,8 @@ pub use read_replicas::{
     ReplicaNode, RouterStats,
 };
 pub use reports::{
-    BoxReportEngine, GeneratedReport, InMemoryReportEngine, ReportEngine, ReportFormat, ReportMeta,
-    ReportRequest, ReportType,
+    BoxReportEngine, GeneratedReport, InMemoryReportEngine, ReportEngine, ReportError,
+    ReportFormat, ReportMeta, ReportRequest, ReportTemplate, ReportType,
 };
 pub use search::{
     BoxSearchService, InMemorySearchService, SearchDocument, SearchQuery, SearchResult,

@@ -17,6 +17,12 @@ pub enum ReportError {
     Io(String),
 }
 
+impl From<rust_xlsxwriter::XlsxError> for ReportError {
+    fn from(err: rust_xlsxwriter::XlsxError) -> Self {
+        ReportError::GenerationFailed(format!("Excel error: {}", err))
+    }
+}
+
 impl From<ReportError> for crate::error::ApiError {
     fn from(err: ReportError) -> Self {
         match err {

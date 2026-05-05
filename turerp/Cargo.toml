@@ -97,7 +97,7 @@ rust_decimal_macros = "1.36"
 
 # Report generation
 rust_xlsxwriter = "0.94"
-genpdf = "0.2"
+printpdf = "0.3"
 csv = "1.4"
 
 # Mocking for tests

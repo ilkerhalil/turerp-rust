@@ -9,9 +9,10 @@ pub fn generate_csv(request: &ReportRequest) -> Result<Vec<u8>, ReportError> {
     // Write BOM for Excel compatibility
     let mut data: Vec<u8> = vec![0xEF, 0xBB, 0xBF];
 
-    // Headers
+    // Headers (support both "headers" and "columns" keys)
     let headers = params
         .get("headers")
+        .or_else(|| params.get("columns"))
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
@@ -53,7 +54,10 @@ pub fn generate_csv(request: &ReportRequest) -> Result<Vec<u8>, ReportError> {
         }
     }
 
-    data.extend(wtr.into_inner().map_err(|e| ReportError::Io(e.to_string()))?);
+    data.extend(
+        wtr.into_inner()
+            .map_err(|e| ReportError::Io(e.to_string()))?,
+    );
     Ok(data)
 }
 
@@ -63,11 +67,15 @@ pub struct StreamingCsvWriter {
     writer: csv::Writer<Vec<u8>>,
 }
 
+impl Default for StreamingCsvWriter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StreamingCsvWriter {
     pub fn new() -> Self {
-        let mut writer = csv::Writer::from_writer(vec![]);
-        // Write BOM
-        let _ = writer.write("\u{FEFF}".as_bytes());
+        let writer = csv::Writer::from_writer(vec![]);
         Self { writer }
     }
 
@@ -78,18 +86,20 @@ impl StreamingCsvWriter {
         Ok(())
     }
 
-    pub fn write_row(&mut self,
-        cells: &[&str],
-    ) -> Result<(), ReportError> {
+    pub fn write_row(&mut self, cells: &[&str]) -> Result<(), ReportError> {
         self.writer
             .write_record(cells)
             .map_err(|e| ReportError::Io(e.to_string()))?;
         Ok(())
     }
 
-    pub fn finish(mut self) -> Result<Vec<u8>, ReportError> {
-        self.writer
-            .into_inner()
-            .map_err(|e| ReportError::Io(e.to_string()))
+    pub fn finish(self) -> Result<Vec<u8>, ReportError> {
+        let mut data = vec![0xEF, 0xBB, 0xBF];
+        data.extend(
+            self.writer
+                .into_inner()
+                .map_err(|e| ReportError::Io(e.to_string()))?,
+        );
+        Ok(data)
     }
 }

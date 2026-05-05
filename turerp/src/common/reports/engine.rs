@@ -4,10 +4,8 @@ use chrono::Utc;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 
-use super::{
-    GeneratedReport, ReportEngine, ReportError, ReportFormat, ReportMeta, ReportRequest, ReportType,
-};
 use super::{csv, excel, pdf, xml};
+use super::{GeneratedReport, ReportEngine, ReportError, ReportFormat, ReportMeta, ReportRequest};
 
 /// In-memory report engine with real format generation
 pub struct InMemoryReportEngine {
@@ -32,27 +30,15 @@ impl InMemoryReportEngine {
         report_id
     }
 
-    /// Store mapping between a background job and its generated report
-    pub fn store_job_mapping(&self, job_id: i64, report_id: i64) {
-        self.job_reports.write().insert(job_id, report_id);
-    }
-
-    /// Get report ID for a background job
-    pub fn get_report_for_job(&self, job_id: i64) -> Option<i64> {
-        self.job_reports.read().get(&job_id).copied()
-    }
-
     fn generate_data(request: &ReportRequest) -> Result<Vec<u8>, ReportError> {
         match request.format {
             ReportFormat::Pdf => pdf::generate_invoice_pdf(request),
             ReportFormat::Excel => excel::generate_excel(request),
             ReportFormat::Xml => xml::generate_edefter_xml(request),
             ReportFormat::Csv => csv::generate_csv(request),
-            ReportFormat::Json => Ok(
-                serde_json::to_string_pretty(&request.parameters)
-                    .unwrap_or_else(|_| "{}".to_string())
-                    .into_bytes(),
-            ),
+            ReportFormat::Json => Ok(serde_json::to_string_pretty(&request.parameters)
+                .unwrap_or_else(|_| "{}".to_string())
+                .into_bytes()),
         }
     }
 }
@@ -132,11 +118,7 @@ impl ReportEngine for InMemoryReportEngine {
         Ok(())
     }
 
-    async fn store_job_mapping(
-        &self,
-        job_id: i64,
-        report_id: i64,
-    ) -> Result<(), ReportError> {
+    async fn store_job_mapping(&self, job_id: i64, report_id: i64) -> Result<(), ReportError> {
         self.job_reports.write().insert(job_id, report_id);
         Ok(())
     }
@@ -149,6 +131,7 @@ impl ReportEngine for InMemoryReportEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::ReportType;
 
     #[tokio::test]
     async fn test_generate_invoice_pdf() {

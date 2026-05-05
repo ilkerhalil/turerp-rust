@@ -15,25 +15,20 @@ pub fn generate_edefter_xml(request: &ReportRequest) -> Result<Vec<u8>, ReportEr
         .unwrap_or_default();
 
     let mut xml = String::new();
-    xml.push_str("\u{feff}");
+    xml.push('\u{feff}');
     xml.push_str(r#"<?xml version="1.0" encoding="UTF-8"?>"#);
     xml.push('\n');
-    xml.push_str(
-        r#"<GenericAccountingPacket xmlns="urn:gi:eFatura:ubl:GenericAccountingPacket">"#,
-    );
+    xml.push_str(r#"<GenericAccountingPacket xmlns="urn:gi:eFatura:ubl:GenericAccountingPacket">"#);
     xml.push('\n');
     xml.push_str("  <PacketInfo>\n");
     xml.push_str("    <PacketVersId>1</PacketVersId>\n");
     xml.push_str("    <PacketType>GENELMUHASEBE</PacketType>\n");
     xml.push_str(&format!("    <Period>{}</Period>\n", period));
-    xml.push_str(&format!(
-        "    <TenantId>{}</TenantId>\n",
-        request.tenant_id
-    ));
-    xml.push_str("    <GenerationDate>{}</GenerationDate>\n".replace(
-        "{}",
-        &chrono::Utc::now().to_rfc3339(),
-    ));
+    xml.push_str(&format!("    <TenantId>{}</TenantId>\n", request.tenant_id));
+    xml.push_str(
+        &"    <GenerationDate>{}</GenerationDate>\n"
+            .replace("{}", &chrono::Utc::now().to_rfc3339()),
+    );
     xml.push_str("  </PacketInfo>\n");
 
     if !entries.is_empty() {
@@ -65,14 +60,8 @@ pub fn generate_edefter_xml(request: &ReportRequest) -> Result<Vec<u8>, ReportEr
                 "      <Description>{}</Description>\n",
                 escape_xml(desc)
             ));
-            xml.push_str(&format!(
-                "      <Debit>{:.2}</Debit>\n",
-                debit
-            ));
-            xml.push_str(&format!(
-                "      <Credit>{:.2}</Credit>\n",
-                credit
-            ));
+            xml.push_str(&format!("      <Debit>{:.2}</Debit>\n", debit));
+            xml.push_str(&format!("      <Credit>{:.2}</Credit>\n", credit));
             xml.push_str(&format!(
                 "      <Reference>{}</Reference>\n",
                 escape_xml(reference)

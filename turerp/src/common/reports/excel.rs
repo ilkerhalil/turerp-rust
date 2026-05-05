@@ -1,6 +1,7 @@
 //! Excel report generation using rust_xlsxwriter
 
 use super::{ReportError, ReportRequest};
+use rust_xlsxwriter::{Format, FormatBorder};
 
 pub fn generate_excel(request: &ReportRequest) -> Result<Vec<u8>, ReportError> {
     let params = &request.parameters;
@@ -9,11 +10,10 @@ pub fn generate_excel(request: &ReportRequest) -> Result<Vec<u8>, ReportError> {
     let worksheet = workbook.add_worksheet();
 
     // Title row
-    let title_format = workbook
-        .add_format()
+    let title_format = Format::new()
         .set_bold()
         .set_font_size(14)
-        .set_font_color(0x1F4E79);
+        .set_font_color(0x1F4E79u32);
     worksheet.write_with_format(0, 0, &request.title, &title_format)?;
 
     // Headers
@@ -22,11 +22,10 @@ pub fn generate_excel(request: &ReportRequest) -> Result<Vec<u8>, ReportError> {
         .and_then(|v| v.as_array())
         .cloned()
         .unwrap_or_default();
-    let header_format = workbook
-        .add_format()
+    let header_format = Format::new()
         .set_bold()
-        .set_background_color(0xD9E1F2)
-        .set_border_bottom(rust_xlsxwriter::FormatBorder::Thin);
+        .set_background_color(0xD9E1F2u32)
+        .set_border_bottom(FormatBorder::Thin);
 
     let mut max_col = 0u16;
     for (col, header) in headers.iter().enumerate() {
@@ -66,7 +65,7 @@ pub fn generate_excel(request: &ReportRequest) -> Result<Vec<u8>, ReportError> {
         let last_row = (rows.len() + 2) as u32;
         worksheet.autofilter(2, 0, last_row, max_col)?;
     }
-    worksheet.freeze_panes(3, 0)?;
+    worksheet.set_freeze_panes(3, 0)?;
 
     workbook
         .save_to_buffer()
