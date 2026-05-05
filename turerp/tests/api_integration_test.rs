@@ -9,10 +9,10 @@ use serde_json::json;
 use turerp::api::{
     auth_configure, users_configure, v1_accounting_configure, v1_assets_configure,
     v1_cari_configure, v1_chart_of_accounts_configure, v1_crm_configure,
-    v1_feature_flags_configure, v1_hr_configure, v1_invoice_configure, v1_manufacturing_configure,
-    v1_product_variants_configure, v1_project_configure, v1_purchase_requests_configure,
-    v1_sales_configure, v1_search_configure, v1_stock_configure, v1_tax_configure,
-    v1_tenant_configure, v1_webhooks_configure,
+    v1_feature_flags_configure, v1_hr_configure, v1_invoice_configure, v1_jobs_configure,
+    v1_manufacturing_configure, v1_product_variants_configure, v1_project_configure,
+    v1_purchase_requests_configure, v1_reports_configure, v1_sales_configure, v1_search_configure,
+    v1_stock_configure, v1_tax_configure, v1_tenant_configure, v1_webhooks_configure,
 };
 use turerp::app::create_app_state_in_memory;
 use turerp::config::Config;
@@ -44,7 +44,9 @@ fn configure_v1_routes(cfg: &mut web::ServiceConfig) {
         .configure(v1_chart_of_accounts_configure)
         .configure(v1_tax_configure)
         .configure(v1_webhooks_configure)
-        .configure(v1_search_configure);
+        .configure(v1_search_configure)
+        .configure(v1_reports_configure)
+        .configure(v1_jobs_configure);
 }
 
 /// Create app state with default config for testing
@@ -107,6 +109,8 @@ fn build_full_test_app(
         .app_data(state.tax_service.clone())
         .app_data(state.webhook_service.clone())
         .app_data(state.search_service.clone())
+        .app_data(state.report_engine.clone())
+        .app_data(state.job_scheduler.clone())
         .service(
             web::scope("/api")
                 .configure(configure_all_routes)
@@ -3536,4 +3540,690 @@ async fn test_search_cari_tenant_isolation() {
         items.is_empty(),
         "Tenant 2 should not see tenant 1's cari search results"
     );
+}
+
+#[actix_web::test]
+async fn test_search_invoice_endpoint() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, user_id) = register_admin!(&app_state, 1);
+
+    // Create a cari first (invoices need cari_id)
+    let cari_req = test::TestRequest::post()
+        .uri("/api/v1/cari")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "code": "INV-SEARCH",
+            "name": "Invoice Search Customer",
+            "cari_type": "customer",
+            "tenant_id": 1,
+            "created_by": user_id
+        }))
+        .to_request();
+
+    let cari_resp = test::call_service(&app, cari_req).await;
+    let cari_body = to_bytes(cari_resp.into_body()).await.unwrap();
+    let cari_json: serde_json::Value = serde_json::from_slice(&cari_body).unwrap();
+    let cari_id = cari_json["id"].as_i64().unwrap();
+
+    // Create invoice with notes
+    let now = chrono::Utc::now();
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/invoices")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "invoice_type": "SalesInvoice",
+            "cari_id": cari_id,
+            "issue_date": now.to_rfc3339(),
+            "due_date": (now + chrono::Duration::days(30)).to_rfc3339(),
+            "currency": "TRY",
+            "tenant_id": 1,
+            "notes": "Special delivery order",
+            "lines": [{
+                "description": "Test item",
+                "quantity": "1.00",
+                "unit_price": "100.00",
+                "tax_rate": "18.00",
+                "discount_rate": "0.00"
+            }]
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // Search invoice by notes
+    let search_req = test::TestRequest::get()
+        .uri("/api/v1/invoices/search?q=delivery")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, search_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let results = json.as_array().unwrap();
+    assert!(
+        !results.is_empty(),
+        "Invoice search should find matching invoices by notes"
+    );
+}
+
+#[actix_web::test]
+async fn test_search_invoice_tenant_isolation() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token1, user_id1) = register_admin!(&app_state, 1);
+    let (token2, _) = register_admin!(&app_state, 2);
+
+    // Create cari for tenant 1
+    let cari_req = test::TestRequest::post()
+        .uri("/api/v1/cari")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "code": "T1-INV",
+            "name": "Tenant1 Invoice Cari",
+            "cari_type": "customer",
+            "tenant_id": 1,
+            "created_by": user_id1
+        }))
+        .to_request();
+
+    let cari_resp = test::call_service(&app, cari_req).await;
+    let cari_body = to_bytes(cari_resp.into_body()).await.unwrap();
+    let cari_json: serde_json::Value = serde_json::from_slice(&cari_body).unwrap();
+    let cari_id = cari_json["id"].as_i64().unwrap();
+
+    // Create invoice for tenant 1
+    let now = chrono::Utc::now();
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/invoices")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "invoice_type": "SalesInvoice",
+            "cari_id": cari_id,
+            "issue_date": now.to_rfc3339(),
+            "due_date": (now + chrono::Duration::days(30)).to_rfc3339(),
+            "currency": "TRY",
+            "tenant_id": 1,
+            "notes": "Confidential invoice",
+            "lines": [{
+                "description": "Test item",
+                "quantity": "1.00",
+                "unit_price": "100.00",
+                "tax_rate": "18.00",
+                "discount_rate": "0.00"
+            }]
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // Tenant 2 searches for it - should get empty results
+    let search_req = test::TestRequest::get()
+        .uri("/api/v1/invoices/search?q=Confidential")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, search_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let results = json.as_array().unwrap();
+    assert!(
+        results.is_empty(),
+        "Tenant 2 should not see tenant 1's invoices via search"
+    );
+}
+
+// ============================================================================
+// Report Engine Tests
+// ============================================================================
+
+#[actix_web::test]
+async fn test_report_generate_invoice_pdf() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/reports/generate")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "report_type": "invoice",
+            "format": "pdf",
+            "title": "Invoice Report",
+            "parameters": {
+                "invoice_no": "INV-001",
+                "total": 1500.50
+            }
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(content_type, "application/pdf");
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    assert!(!body.is_empty());
+    let pdf_text = String::from_utf8_lossy(&body);
+    assert!(pdf_text.contains("%PDF"));
+    assert!(pdf_text.contains("Invoice Report"));
+    assert!(body.len() > 500, "PDF body should contain actual content");
+}
+
+#[actix_web::test]
+async fn test_report_generate_trial_balance_excel() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/reports/generate")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "report_type": "trial_balance",
+            "format": "excel",
+            "title": "Trial Balance Q1",
+            "parameters": {
+                "rows": [{"account": "100", "debit": 1000}, {"account": "200", "credit": 1000}]
+            }
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(
+        content_type,
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    assert!(!body.is_empty());
+}
+
+#[actix_web::test]
+async fn test_report_generate_csv() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/reports/generate")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "report_type": "sales_report",
+            "format": "csv",
+            "title": "Monthly Sales",
+            "parameters": {
+                "columns": ["Date", "Customer", "Amount", "Currency"]
+            }
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(content_type, "text/csv");
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let csv_text = String::from_utf8_lossy(&body);
+    assert!(csv_text.contains("Date,Customer,Amount,Currency"));
+}
+
+#[actix_web::test]
+async fn test_report_generate_edefter_xml() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/reports/generate")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "report_type": "edefter",
+            "format": "xml",
+            "title": "e-Defter 2026-01",
+            "parameters": {
+                "period": "2026-01"
+            }
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(content_type, "application/xml");
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let xml_text = String::from_utf8_lossy(&body);
+    assert!(xml_text.contains("GenericAccountingPacket"));
+    assert!(xml_text.contains("2026-01"));
+    assert!(xml_text.contains("GENELMUHASEBE"));
+}
+
+#[actix_web::test]
+async fn test_report_generate_json() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/reports/generate")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "report_type": "stock_summary",
+            "format": "json",
+            "title": "Stock Summary",
+            "parameters": {
+                "warehouse_id": 1,
+                "include_zero": false
+            }
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(content_type, "application/json");
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json_text = String::from_utf8_lossy(&body);
+    assert!(json_text.contains("warehouse_id"));
+}
+
+#[actix_web::test]
+async fn test_report_generate_invalid_format() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/reports/generate")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "report_type": "invoice",
+            "format": "bmp",
+            "title": "Bad Format",
+            "parameters": {}
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_report_list_and_download() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Generate a report first
+    let generate_req = test::TestRequest::post()
+        .uri("/api/v1/reports/generate")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "report_type": "invoice",
+            "format": "pdf",
+            "title": "Downloadable Invoice",
+            "parameters": {}
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, generate_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // List reports
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/reports")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let reports = json.as_array().unwrap();
+    assert_eq!(reports.len(), 1);
+    let report_id = reports[0]["id"].as_i64().unwrap();
+
+    // Download the report
+    let download_req = test::TestRequest::get()
+        .uri(&format!("/api/v1/reports/{}/download", report_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, download_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let content_type = resp
+        .headers()
+        .get("content-type")
+        .unwrap()
+        .to_str()
+        .unwrap();
+    assert_eq!(content_type, "application/pdf");
+}
+
+#[actix_web::test]
+async fn test_report_download_not_found() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/reports/99999/download")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_report_delete() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Generate a report
+    let generate_req = test::TestRequest::post()
+        .uri("/api/v1/reports/generate")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "report_type": "invoice",
+            "format": "pdf",
+            "title": "To Delete",
+            "parameters": {}
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, generate_req).await;
+    let _body = to_bytes(resp.into_body()).await.unwrap();
+    // Generated report is returned as binary, so we need to list to get ID
+
+    // List to get ID
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/reports")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let reports = json.as_array().unwrap();
+    let report_id = reports[0]["id"].as_i64().unwrap();
+
+    // Delete
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/reports/{}", report_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Verify deletion
+    let download_req = test::TestRequest::get()
+        .uri(&format!("/api/v1/reports/{}/download", report_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, download_req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_report_tenant_isolation() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token1, _) = register_admin!(&app_state, 1);
+    let (token2, _) = register_admin!(&app_state, 2);
+
+    // Generate report for tenant 1
+    let req = test::TestRequest::post()
+        .uri("/api/v1/reports/generate")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "report_type": "invoice",
+            "format": "pdf",
+            "title": "Tenant1 Report",
+            "parameters": {}
+        }))
+        .to_request();
+
+    let _ = test::call_service(&app, req).await;
+
+    // Tenant 1 should see the report
+    let list_req1 = test::TestRequest::get()
+        .uri("/api/v1/reports")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req1).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let reports = json.as_array().unwrap();
+    assert_eq!(reports.len(), 1);
+
+    // Tenant 2 should not see tenant 1's report
+    let list_req2 = test::TestRequest::get()
+        .uri("/api/v1/reports")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req2).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let reports = json.as_array().unwrap();
+    assert!(
+        reports.is_empty(),
+        "Tenant 2 should not see tenant 1's reports"
+    );
+}
+
+// ============================================================================
+// Background Job (Report Generation) Tests
+// ============================================================================
+
+#[actix_web::test]
+async fn test_job_schedule_generate_report() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "job_type": "generate_report",
+            "tenant_id": 1,
+            "report_type": "balance_sheet",
+            "params": "{\"year\":2026}",
+            "priority": "high"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["job_type"], "generate_report");
+    assert_eq!(json["priority"], "high");
+    assert_eq!(json["status"], "pending");
+}
+
+#[actix_web::test]
+async fn test_job_generate_report_lifecycle() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Schedule a generate_report job
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "job_type": "generate_report",
+            "tenant_id": 1,
+            "report_type": "income_statement",
+            "params": "{\"quarter\":1}",
+            "priority": "normal"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let job_id = json["id"].as_i64().unwrap();
+
+    // Get next pending job
+    let next_req = test::TestRequest::get()
+        .uri("/api/v1/jobs/next")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, next_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Start the job
+    let start_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/start", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, start_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Complete the job
+    let complete_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/complete", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, complete_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Verify job is completed
+    let get_req = test::TestRequest::get()
+        .uri(&format!("/api/v1/jobs/{}", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, get_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "completed");
+}
+
+#[actix_web::test]
+async fn test_job_generate_report_retry_on_failure() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Schedule with max_attempts=1 so it fails immediately
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "job_type": "generate_report",
+            "tenant_id": 1,
+            "report_type": "aging_report",
+            "params": "{}",
+            "max_attempts": 1
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let job_id = json["id"].as_i64().unwrap();
+
+    // Start
+    let start_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/start", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let _ = test::call_service(&app, start_req).await;
+
+    // Fail
+    let fail_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/fail", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"error": "Report generation failed"}))
+        .to_request();
+
+    let resp = test::call_service(&app, fail_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Verify failed
+    let get_req = test::TestRequest::get()
+        .uri(&format!("/api/v1/jobs/{}", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, get_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "failed");
+    assert_eq!(json["last_error"], "Report generation failed");
 }

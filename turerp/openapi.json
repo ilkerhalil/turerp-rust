@@ -11886,7 +11886,7 @@
         "tags": [
           "Reports"
         ],
-        "summary": "Generate a report",
+        "summary": "Generate a report synchronously",
         "operationId": "generate_report",
         "requestBody": {
           "content": {

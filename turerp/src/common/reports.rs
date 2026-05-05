@@ -6,6 +6,18 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+pub mod csv;
+pub mod engine;
+pub mod error;
+pub mod excel;
+pub mod pdf;
+pub mod template;
+pub mod xml;
+
+pub use engine::InMemoryReportEngine;
+pub use error::ReportError;
+pub use template::ReportTemplate;
+
 /// Report format
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ReportFormat {
@@ -135,14 +147,14 @@ impl std::fmt::Display for ReportType {
 #[async_trait::async_trait]
 pub trait ReportEngine: Send + Sync {
     /// Generate a report
-    async fn generate(&self, request: ReportRequest) -> Result<GeneratedReport, String>;
+    async fn generate(&self, request: ReportRequest) -> Result<GeneratedReport, ReportError>;
 
     /// Get a previously generated report
     async fn get_report(
         &self,
         tenant_id: i64,
         report_id: i64,
-    ) -> Result<Option<GeneratedReport>, String>;
+    ) -> Result<Option<GeneratedReport>, ReportError>;
 
     /// List report metadata for a tenant
     async fn list_reports(
@@ -150,313 +162,21 @@ pub trait ReportEngine: Send + Sync {
         tenant_id: i64,
         limit: u32,
         offset: u32,
-    ) -> Result<Vec<ReportMeta>, String>;
+    ) -> Result<Vec<ReportMeta>, ReportError>;
 
     /// Delete a report
-    async fn delete_report(&self, tenant_id: i64, report_id: i64) -> Result<(), String>;
+    async fn delete_report(&self, tenant_id: i64, report_id: i64) -> Result<(), ReportError>;
+
+    /// Store mapping between a background job and generated report
+    async fn store_job_mapping(&self, _job_id: i64, _report_id: i64) -> Result<(), ReportError> {
+        Ok(())
+    }
+
+    /// Get report ID for a background job
+    async fn get_report_for_job(&self, _job_id: i64) -> Result<Option<i64>, ReportError> {
+        Ok(None)
+    }
 }
 
 /// Type alias for boxed report engine
 pub type BoxReportEngine = std::sync::Arc<dyn ReportEngine>;
-
-/// In-memory report engine (generates placeholder content)
-pub struct InMemoryReportEngine {
-    reports: parking_lot::RwLock<Vec<GeneratedReport>>,
-    next_id: parking_lot::RwLock<i64>,
-}
-
-impl InMemoryReportEngine {
-    pub fn new() -> Self {
-        Self {
-            reports: parking_lot::RwLock::new(Vec::new()),
-            next_id: parking_lot::RwLock::new(1),
-        }
-    }
-
-    fn allocate_id(&self) -> i64 {
-        let mut id = self.next_id.write();
-        let report_id = *id;
-        *id += 1;
-        report_id
-    }
-
-    fn generate_placeholder_data(request: &ReportRequest) -> Vec<u8> {
-        match request.format {
-            ReportFormat::Pdf => Self::generate_invoice_pdf(request),
-            ReportFormat::Excel => Self::generate_excel(request),
-            ReportFormat::Xml => Self::generate_edefter_xml(request),
-            ReportFormat::Csv => Self::generate_csv(request),
-            ReportFormat::Json => Self::generate_json(request),
-        }
-    }
-
-    fn generate_invoice_pdf(request: &ReportRequest) -> Vec<u8> {
-        let params = &request.parameters;
-        let invoice_no = params
-            .get("invoice_no")
-            .and_then(|v| v.as_str())
-            .unwrap_or("N/A");
-        let total = params.get("total").and_then(|v| v.as_f64()).unwrap_or(0.0);
-
-        format!(
-            "%PDF-1.4\nInvoice Report\n\tenant: {}\n\tinvoice: {}\n\ttotal: {:.2}\n\tdate: {}\n%%EOF",
-            request.tenant_id, invoice_no, total, Utc::now().to_rfc3339()
-        ).into_bytes()
-    }
-
-    fn generate_excel(request: &ReportRequest) -> Vec<u8> {
-        let params = &request.parameters;
-        let rows = params
-            .get("rows")
-            .and_then(|v| v.as_array())
-            .map(|a| a.len())
-            .unwrap_or(0);
-
-        format!(
-            "PK..EXCEL\nReport: {}\nTenant: {}\nRows: {}\nDate: {}",
-            request.title,
-            request.tenant_id,
-            rows,
-            Utc::now().to_rfc3339()
-        )
-        .into_bytes()
-    }
-
-    fn generate_edefter_xml(request: &ReportRequest) -> Vec<u8> {
-        let params = &request.parameters;
-        let period = params
-            .get("period")
-            .and_then(|v| v.as_str())
-            .unwrap_or("2026-01");
-
-        format!(
-            r#"<?xml version="1.0" encoding="UTF-8"?>
-<GenericAccountingPacket xmlns="urn:gi:eFatura:ubl:GenericAccountingPacket">
-  <PacketInfo>
-    <PacketVersId>1</PacketVersId>
-    <PacketType>GENELMUHASEBE</PacketType>
-    <Period>{period}</Period>
-    <TenantId>{tenant}</TenantId>
-  </PacketInfo>
-</GenericAccountingPacket>"#,
-            period = period,
-            tenant = request.tenant_id
-        )
-        .into_bytes()
-    }
-
-    fn generate_csv(request: &ReportRequest) -> Vec<u8> {
-        let params = &request.parameters;
-        let columns = params
-            .get("columns")
-            .and_then(|v| v.as_array())
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str())
-                    .collect::<Vec<_>>()
-                    .join(",")
-            })
-            .unwrap_or_default();
-
-        format!("{}\n{}", columns, request.title).into_bytes()
-    }
-
-    fn generate_json(request: &ReportRequest) -> Vec<u8> {
-        serde_json::to_string_pretty(&request.parameters)
-            .unwrap_or_else(|_| "{}".to_string())
-            .into_bytes()
-    }
-}
-
-impl Default for InMemoryReportEngine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait::async_trait]
-impl ReportEngine for InMemoryReportEngine {
-    async fn generate(&self, request: ReportRequest) -> Result<GeneratedReport, String> {
-        let id = self.allocate_id();
-        let data = Self::generate_placeholder_data(&request);
-        let filename = format!(
-            "{}_{}_{}.{}",
-            request.report_type,
-            request.tenant_id,
-            id,
-            request.format.extension()
-        );
-
-        let report = GeneratedReport {
-            id,
-            report_type: request.report_type.clone(),
-            format: request.format,
-            tenant_id: request.tenant_id,
-            title: request.title,
-            data,
-            filename,
-            content_type: request.format.content_type().to_string(),
-            generated_at: Utc::now(),
-            generated_by: request.requested_by,
-        };
-
-        self.reports.write().push(report.clone());
-        Ok(report)
-    }
-
-    async fn get_report(
-        &self,
-        tenant_id: i64,
-        report_id: i64,
-    ) -> Result<Option<GeneratedReport>, String> {
-        Ok(self
-            .reports
-            .read()
-            .iter()
-            .find(|r| r.id == report_id && r.tenant_id == tenant_id)
-            .cloned())
-    }
-
-    async fn list_reports(
-        &self,
-        tenant_id: i64,
-        limit: u32,
-        offset: u32,
-    ) -> Result<Vec<ReportMeta>, String> {
-        let reports = self.reports.read();
-        Ok(reports
-            .iter()
-            .filter(|r| r.tenant_id == tenant_id)
-            .skip(offset as usize)
-            .take(limit as usize)
-            .map(ReportMeta::from)
-            .collect())
-    }
-
-    async fn delete_report(&self, tenant_id: i64, report_id: i64) -> Result<(), String> {
-        let mut reports = self.reports.write();
-        let idx = reports
-            .iter()
-            .position(|r| r.id == report_id && r.tenant_id == tenant_id)
-            .ok_or_else(|| format!("Report {} not found", report_id))?;
-        reports.remove(idx);
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_generate_invoice_pdf() {
-        let engine = InMemoryReportEngine::new();
-        let request = ReportRequest {
-            report_type: ReportType::Invoice,
-            format: ReportFormat::Pdf,
-            tenant_id: 1,
-            title: "Invoice #1".to_string(),
-            parameters: serde_json::json!({
-                "invoice_no": "INV-001",
-                "total": 1500.50
-            }),
-            requested_by: Some(1),
-            locale: Some("tr".to_string()),
-        };
-
-        let report = engine.generate(request).await.unwrap();
-        assert_eq!(report.tenant_id, 1);
-        assert_eq!(report.format, ReportFormat::Pdf);
-        assert!(report.filename.ends_with(".pdf"));
-        assert_eq!(report.content_type, "application/pdf");
-        assert!(!report.data.is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_generate_edefter_xml() {
-        let engine = InMemoryReportEngine::new();
-        let request = ReportRequest {
-            report_type: ReportType::EDefter,
-            format: ReportFormat::Xml,
-            tenant_id: 1,
-            title: "e-Defter 2026-01".to_string(),
-            parameters: serde_json::json!({ "period": "2026-01" }),
-            requested_by: Some(1),
-            locale: Some("tr".to_string()),
-        };
-
-        let report = engine.generate(request).await.unwrap();
-        assert_eq!(report.format, ReportFormat::Xml);
-        assert!(report.filename.ends_with(".xml"));
-        let xml = String::from_utf8(report.data).unwrap();
-        assert!(xml.contains("GenericAccountingPacket"));
-    }
-
-    #[tokio::test]
-    async fn test_generate_excel() {
-        let engine = InMemoryReportEngine::new();
-        let request = ReportRequest {
-            report_type: ReportType::TrialBalance,
-            format: ReportFormat::Excel,
-            tenant_id: 1,
-            title: "Trial Balance".to_string(),
-            parameters: serde_json::json!({ "rows": [{}] }),
-            requested_by: None,
-            locale: None,
-        };
-
-        let report = engine.generate(request).await.unwrap();
-        assert_eq!(report.format, ReportFormat::Excel);
-        assert!(report.filename.ends_with(".xlsx"));
-    }
-
-    #[tokio::test]
-    async fn test_get_and_list_reports() {
-        let engine = InMemoryReportEngine::new();
-
-        for i in 0..3 {
-            engine
-                .generate(ReportRequest {
-                    report_type: ReportType::Invoice,
-                    format: ReportFormat::Pdf,
-                    tenant_id: 1,
-                    title: format!("Report {}", i),
-                    parameters: serde_json::json!({}),
-                    requested_by: None,
-                    locale: None,
-                })
-                .await
-                .unwrap();
-        }
-
-        let meta = engine.list_reports(1, 10, 0).await.unwrap();
-        assert_eq!(meta.len(), 3);
-
-        let report = engine.get_report(1, 1).await.unwrap();
-        assert!(report.is_some());
-
-        let cross_tenant = engine.get_report(2, 1).await.unwrap();
-        assert!(cross_tenant.is_none());
-    }
-
-    #[tokio::test]
-    async fn test_delete_report() {
-        let engine = InMemoryReportEngine::new();
-        engine
-            .generate(ReportRequest {
-                report_type: ReportType::Invoice,
-                format: ReportFormat::Pdf,
-                tenant_id: 1,
-                title: "Delete me".to_string(),
-                parameters: serde_json::json!({}),
-                requested_by: None,
-                locale: None,
-            })
-            .await
-            .unwrap();
-
-        engine.delete_report(1, 1).await.unwrap();
-        let result = engine.get_report(1, 1).await.unwrap();
-        assert!(result.is_none());
-    }
-}
