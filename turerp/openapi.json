@@ -17882,7 +17882,7 @@
         "type": "object",
         "description": "Search request",
         "required": [
-          "query"
+          "q"
         ],
         "properties": {
           "entity_type": {
@@ -17900,7 +17900,7 @@
             "format": "double",
             "nullable": true
           },
-          "query": {
+          "q": {
             "type": "string"
           }
         }
