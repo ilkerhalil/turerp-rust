@@ -166,6 +166,8 @@ pub mod app {
         PostgresAccountRepository, PostgresJournalEntryRepository, PostgresJournalLineRepository,
     };
     #[cfg(feature = "postgres")]
+    use crate::domain::api_key::PostgresApiKeyRepository;
+    #[cfg(feature = "postgres")]
     use crate::domain::assets::postgres_repository::{
         PostgresAssetCategoryRepository, PostgresAssetsRepository,
     };
@@ -796,9 +798,8 @@ pub mod app {
         let audit_repo = PostgresAuditLogRepository::new(pool.clone()).into_boxed();
         let audit_service = AuditService::new(audit_repo);
 
-        // API Keys - in-memory (no postgres repo yet)
-        let api_key_repo = Arc::new(crate::domain::api_key::InMemoryApiKeyRepository::new())
-            as crate::domain::api_key::BoxApiKeyRepository;
+        // API Keys - PostgreSQL
+        let api_key_repo = PostgresApiKeyRepository::new(pool.clone()).into_boxed();
         let api_key_service = crate::domain::api_key::ApiKeyService::new(api_key_repo);
 
         // Job Scheduler - in-memory
