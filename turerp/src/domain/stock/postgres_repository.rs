@@ -249,7 +249,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
             ));
         }
 
-        self.find_by_id(id)
+        self.find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Warehouse not found".to_string()))
     }
@@ -748,6 +748,30 @@ impl StockMovementRepository for PostgresStockMovementRepository {
         .map_err(|e| {
             ApiError::Database(format!(
                 "Failed to find stock movements by warehouse: {}",
+                e
+            ))
+        })?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<StockMovement>, ApiError> {
+        let rows: Vec<StockMovementRow> = sqlx::query_as(
+            r#"
+            SELECT sm.id, sm.warehouse_id, sm.product_id, sm.movement_type, sm.quantity,
+                   sm.reference_type, sm.reference_id, sm.notes, sm.created_at, sm.created_by, sm.deleted_at, sm.deleted_by
+            FROM stock_movements sm
+            JOIN warehouses w ON w.id = sm.warehouse_id
+            WHERE w.tenant_id = $1 AND sm.deleted_at IS NULL
+            ORDER BY sm.created_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!(
+                "Failed to find stock movements by tenant: {}",
                 e
             ))
         })?;

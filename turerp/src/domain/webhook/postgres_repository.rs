@@ -277,14 +277,12 @@ impl WebhookRepository for PostgresWebhookRepository {
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        let result = sqlx::query!(
-            "DELETE FROM webhooks WHERE id = $1 AND tenant_id = $2",
-            id,
-            tenant_id
-        )
-        .execute(&*self.pool)
-        .await
-        .map_err(|e| map_sqlx_error(e, "Webhook"))?;
+        let result = sqlx::query("DELETE FROM webhooks WHERE id = $1 AND tenant_id = $2")
+            .bind(id)
+            .bind(tenant_id)
+            .execute(&*self.pool)
+            .await
+            .map_err(|e| map_sqlx_error(e, "Webhook"))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound(format!("Webhook {} not found", id)));
@@ -293,12 +291,12 @@ impl WebhookRepository for PostgresWebhookRepository {
     }
 
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             "UPDATE webhooks SET deleted_at = NOW(), deleted_by = $3 WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
-            id,
-            tenant_id,
-            deleted_by,
         )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
         .execute(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Webhook"))?;

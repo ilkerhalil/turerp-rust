@@ -18,7 +18,7 @@ const PG_FOREIGN_KEY_VIOLATION: &str = "23503";
 pub fn map_sqlx_error(e: sqlx::Error, entity: &str) -> ApiError {
     match &e {
         sqlx::Error::RowNotFound => ApiError::NotFound(format!("{} not found", entity)),
-        sqlx::Error::Database(db_err) => match db_err.code().map(|c| c.as_ref()) {
+        sqlx::Error::Database(db_err) => match db_err.code().as_deref() {
             Some(PG_UNIQUE_VIOLATION) => ApiError::Conflict(format!("{} already exists", entity)),
             Some(PG_FOREIGN_KEY_VIOLATION) => {
                 ApiError::BadRequest(format!("Referenced {} record does not exist", entity))

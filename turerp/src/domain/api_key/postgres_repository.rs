@@ -36,6 +36,7 @@ struct ApiKeyRow {
     last_used_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
     updated_at: Option<DateTime<Utc>>,
+    total_count: Option<i64>,
 }
 
 impl From<ApiKeyRow> for ApiKey {

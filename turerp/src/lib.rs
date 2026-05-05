@@ -222,6 +222,8 @@ pub mod app {
         PostgresSalesOrderLineRepository, PostgresSalesOrderRepository,
     };
     #[cfg(feature = "postgres")]
+    use crate::domain::settings::postgres_repository::PostgresSettingsRepository;
+    #[cfg(feature = "postgres")]
     use crate::domain::stock::postgres_repository::{
         PostgresStockLevelRepository, PostgresStockMovementRepository, PostgresWarehouseRepository,
     };
@@ -956,14 +958,16 @@ pub mod app {
         let db_pool = web::Data::new(Arc::new(pool));
 
         // Register webhook subscriber on event bus
-        event_bus
-            .subscribe(Arc::new(
-                crate::domain::webhook::subscriber::WebhookSubscriber::new(Arc::new(
-                    webhook_service.clone(),
-                )),
-            ))
-            .await
-            .ok();
+        rt.block_on(async {
+            event_bus
+                .subscribe(Arc::new(
+                    crate::domain::webhook::subscriber::WebhookSubscriber::new(Arc::new(
+                        webhook_service.clone(),
+                    )),
+                ))
+                .await
+                .ok();
+        });
 
         let i18n = I18n::init();
 

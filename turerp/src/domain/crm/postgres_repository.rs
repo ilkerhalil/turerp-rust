@@ -65,6 +65,8 @@ impl From<LeadRow> for Lead {
             notes: row.notes,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: None,
+            deleted_by: None,
         }
     }
 }
@@ -412,6 +414,8 @@ impl From<OpportunityRow> for Opportunity {
             notes: row.notes,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: None,
+            deleted_by: None,
         }
     }
 }
@@ -763,6 +767,8 @@ impl From<CampaignRow> for Campaign {
             end_date: row.end_date,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: None,
+            deleted_by: None,
         }
     }
 }
@@ -1100,6 +1106,8 @@ impl From<TicketRow> for Ticket {
             resolved_at: row.resolved_at,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: None,
+            deleted_by: None,
         }
     }
 }

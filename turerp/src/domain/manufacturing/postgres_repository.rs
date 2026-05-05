@@ -128,6 +128,8 @@ impl From<WorkOrderRow> for WorkOrder {
             actual_end: row.actual_end,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: None,
+            deleted_by: None,
         }
     }
 }
@@ -579,6 +581,8 @@ impl From<BillOfMaterialsRow> for BillOfMaterials {
             valid_to: row.valid_to,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: None,
+            deleted_by: None,
         }
     }
 }
@@ -882,6 +886,8 @@ impl From<RoutingRow> for Routing {
             is_primary: row.is_primary,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: None,
+            deleted_by: None,
         }
     }
 }

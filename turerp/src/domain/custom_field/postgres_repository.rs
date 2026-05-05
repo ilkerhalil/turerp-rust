@@ -8,8 +8,6 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 #[cfg(feature = "postgres")]
-use crate::common::SoftDeletable;
-#[cfg(feature = "postgres")]
 use crate::domain::custom_field::model::{
     CustomFieldDefinition, CustomFieldModule, CustomFieldType,
 };
@@ -42,24 +40,23 @@ impl CustomFieldRepository for PostgresCustomFieldRepository {
         let options_json =
             serde_json::to_value(&def.options).map_err(|e| ApiError::Internal(e.to_string()))?;
 
-        let row = sqlx::query_as!(
-            CustomFieldDefinitionRow,
+        let row: CustomFieldDefinitionRow = sqlx::query_as(
             r#"INSERT INTO custom_field_definitions
                 (tenant_id, module, field_name, field_label, field_type, required, options, sort_order, is_active)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING id, tenant_id, module, field_name, field_label, field_type, required,
-                    options as "options: Vec<String>", sort_order, is_active,
+                    options, sort_order, is_active,
                     created_at, updated_at, deleted_at, deleted_by"#,
-            def.tenant_id,
-            def.module.to_string(),
-            def.field_name,
-            def.field_label,
-            def.field_type.to_string(),
-            def.required,
-            options_json,
-            def.sort_order,
-            def.is_active,
         )
+        .bind(def.tenant_id)
+        .bind(def.module.to_string())
+        .bind(&def.field_name)
+        .bind(&def.field_label)
+        .bind(def.field_type.to_string())
+        .bind(def.required)
+        .bind(options_json)
+        .bind(def.sort_order)
+        .bind(def.is_active)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -72,16 +69,15 @@ impl CustomFieldRepository for PostgresCustomFieldRepository {
         id: i64,
         tenant_id: i64,
     ) -> Result<Option<CustomFieldDefinition>, ApiError> {
-        let result = sqlx::query_as!(
-            CustomFieldDefinitionRow,
+        let result: Option<CustomFieldDefinitionRow> = sqlx::query_as(
             r#"SELECT id, tenant_id, module, field_name, field_label, field_type, required,
-                options as "options: Vec<String>", sort_order, is_active,
+                options, sort_order, is_active,
                 created_at, updated_at, deleted_at, deleted_by
                 FROM custom_field_definitions
                 WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#,
-            id,
-            tenant_id,
         )
+        .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -94,17 +90,16 @@ impl CustomFieldRepository for PostgresCustomFieldRepository {
         tenant_id: i64,
         module: CustomFieldModule,
     ) -> Result<Vec<CustomFieldDefinition>, ApiError> {
-        let rows = sqlx::query_as!(
-            CustomFieldDefinitionRow,
+        let rows: Vec<CustomFieldDefinitionRow> = sqlx::query_as(
             r#"SELECT id, tenant_id, module, field_name, field_label, field_type, required,
-                options as "options: Vec<String>", sort_order, is_active,
+                options, sort_order, is_active,
                 created_at, updated_at, deleted_at, deleted_by
                 FROM custom_field_definitions
                 WHERE tenant_id = $1 AND module = $2 AND deleted_at IS NULL AND is_active = true
                 ORDER BY sort_order"#,
-            tenant_id,
-            module.to_string(),
         )
+        .bind(tenant_id)
+        .bind(module.to_string())
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -113,16 +108,15 @@ impl CustomFieldRepository for PostgresCustomFieldRepository {
     }
 
     async fn find_all(&self, tenant_id: i64) -> Result<Vec<CustomFieldDefinition>, ApiError> {
-        let rows = sqlx::query_as!(
-            CustomFieldDefinitionRow,
+        let rows: Vec<CustomFieldDefinitionRow> = sqlx::query_as(
             r#"SELECT id, tenant_id, module, field_name, field_label, field_type, required,
-                options as "options: Vec<String>", sort_order, is_active,
+                options, sort_order, is_active,
                 created_at, updated_at, deleted_at, deleted_by
                 FROM custom_field_definitions
                 WHERE tenant_id = $1 AND deleted_at IS NULL
                 ORDER BY module, sort_order"#,
-            tenant_id,
         )
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -136,20 +130,20 @@ impl CustomFieldRepository for PostgresCustomFieldRepository {
         module: CustomFieldModule,
         field_name: &str,
     ) -> Result<bool, ApiError> {
-        let result = sqlx::query_scalar!(
+        let result: (bool,) = sqlx::query_as(
             r#"SELECT EXISTS(
                 SELECT 1 FROM custom_field_definitions
                 WHERE tenant_id = $1 AND module = $2 AND field_name = $3 AND deleted_at IS NULL
             )"#,
-            tenant_id,
-            module.to_string(),
-            field_name,
         )
+        .bind(tenant_id)
+        .bind(module.to_string())
+        .bind(field_name)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-        Ok(result.unwrap_or(false))
+        Ok(result.0)
     }
 
     async fn update(
@@ -167,8 +161,7 @@ impl CustomFieldRepository for PostgresCustomFieldRepository {
             .transpose()
             .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-        let row = sqlx::query_as!(
-            CustomFieldDefinitionRow,
+        let result: Option<CustomFieldDefinitionRow> = sqlx::query_as(
             r#"UPDATE custom_field_definitions
                 SET field_label = COALESCE($3, field_label),
                     required = COALESCE($4, required),
@@ -178,33 +171,34 @@ impl CustomFieldRepository for PostgresCustomFieldRepository {
                     updated_at = NOW()
                 WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
                 RETURNING id, tenant_id, module, field_name, field_label, field_type, required,
-                    options as "options: Vec<String>", sort_order, is_active,
+                    options, sort_order, is_active,
                     created_at, updated_at, deleted_at, deleted_by"#,
-            id,
-            tenant_id,
-            label,
-            required,
-            options_json,
-            sort_order,
-            is_active,
         )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(&label)
+        .bind(required)
+        .bind(options_json)
+        .bind(sort_order)
+        .bind(is_active)
         .fetch_optional(&*self.pool)
         .await
-        .map_err(|e| ApiError::Internal(e.to_string()))?
-        .ok_or_else(|| ApiError::NotFound(format!("Custom field {} not found", id)))?;
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-        Ok(row.into_definition())
+        result
+            .map(|r| r.into_definition())
+            .ok_or_else(|| ApiError::NotFound(format!("Custom field {} not found", id)))
     }
 
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
-        let result = sqlx::query!(
+        let result = sqlx::query(
             r#"UPDATE custom_field_definitions
                 SET deleted_at = NOW(), deleted_by = $3
                 WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL"#,
-            id,
-            tenant_id,
-            deleted_by,
         )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
@@ -219,6 +213,7 @@ impl CustomFieldRepository for PostgresCustomFieldRepository {
 
 /// Helper struct for sqlx mapping
 #[cfg(feature = "postgres")]
+#[derive(sqlx::FromRow)]
 struct CustomFieldDefinitionRow {
     id: i64,
     tenant_id: i64,
@@ -227,7 +222,7 @@ struct CustomFieldDefinitionRow {
     field_label: String,
     field_type: String,
     required: bool,
-    options: Vec<String>,
+    options: serde_json::Value,
     sort_order: i32,
     is_active: bool,
     created_at: chrono::DateTime<chrono::Utc>,
@@ -247,7 +242,7 @@ impl CustomFieldDefinitionRow {
             field_label: self.field_label,
             field_type: self.field_type.parse().unwrap_or(CustomFieldType::String),
             required: self.required,
-            options: self.options,
+            options: serde_json::from_value(self.options).unwrap_or_default(),
             sort_order: self.sort_order,
             is_active: self.is_active,
             created_at: self.created_at,
