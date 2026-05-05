@@ -73,7 +73,7 @@ pub async fn get_rate_limit_stats(
     }
 
     // Sort by total requests descending
-    entries.sort_by(|a, b| b.total_requests.cmp(&a.total_requests));
+    entries.sort_by_key(|b| std::cmp::Reverse(b.total_requests));
 
     Ok(HttpResponse::Ok().json(RateLimitDashboardResponse {
         total_clients: entries.len(),
@@ -112,7 +112,7 @@ mod tests {
                 last_request_at: None,
             },
         ];
-        entries.sort_by(|a, b| b.total_requests.cmp(&a.total_requests));
+        entries.sort_by_key(|b| std::cmp::Reverse(b.total_requests));
         assert_eq!(entries[0].client_key, "b");
         assert_eq!(entries[1].client_key, "a");
     }
