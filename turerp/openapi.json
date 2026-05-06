@@ -10747,7 +10747,17 @@
         "operationId": "list_deleted_notifications",
         "responses": {
           "200": {
-            "description": "List of deleted notifications"
+            "description": "List of deleted notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationResponse"
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -10778,7 +10788,17 @@
         ],
         "responses": {
           "200": {
-            "description": "List of in-app notifications"
+            "description": "List of in-app notifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/InAppNotificationResponse"
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -10833,7 +10853,14 @@
         },
         "responses": {
           "201": {
-            "description": "Notification sent"
+            "description": "Notification sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationResponse"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid request"
@@ -10961,7 +10988,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Notification marked as read"
+            "description": "Notification marked as read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -10992,7 +11026,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Notification restored"
+            "description": "Notification restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
           },
           "404": {
             "description": "Deleted notification not found"
@@ -11026,7 +11067,14 @@
         ],
         "responses": {
           "200": {
-            "description": "Notification retried"
+            "description": "Notification retried",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -19350,6 +19398,113 @@
           "user_id": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "NotificationPreferenceResponse": {
+        "type": "object",
+        "description": "Preference response DTO",
+        "required": [
+          "id",
+          "channel",
+          "notification_type",
+          "enabled",
+          "updated_at"
+        ],
+        "properties": {
+          "channel": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notification_type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
+      "NotificationResponse": {
+        "type": "object",
+        "description": "Notification response DTO for API",
+        "required": [
+          "id",
+          "tenant_id",
+          "channel",
+          "priority",
+          "status",
+          "notification_type",
+          "subject",
+          "body",
+          "recipient",
+          "created_at",
+          "attempts"
+        ],
+        "properties": {
+          "attempts": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "body": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "job_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "notification_type": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "string"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "sent_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "template_key": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           }
         }
       },

@@ -148,6 +148,8 @@ pub struct Notification {
     pub created_at: DateTime<Utc>,
     pub sent_at: Option<DateTime<Utc>>,
     pub read_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
     pub last_error: Option<String>,
     pub attempts: u32,
 }
@@ -324,7 +326,6 @@ fn default_templates() -> Vec<EmailTemplate> {
 /// In-memory notification service for development
 pub struct InMemoryNotificationService {
     notifications: parking_lot::RwLock<Vec<Notification>>,
-    deleted_notifications: parking_lot::RwLock<Vec<Notification>>,
     in_app: parking_lot::RwLock<Vec<InAppNotification>>,
     templates: parking_lot::RwLock<Vec<EmailTemplate>>,
     preferences: parking_lot::RwLock<Vec<NotificationPreference>>,
@@ -337,7 +338,6 @@ impl InMemoryNotificationService {
     pub fn new() -> Self {
         Self {
             notifications: parking_lot::RwLock::new(Vec::new()),
-            deleted_notifications: parking_lot::RwLock::new(Vec::new()),
             in_app: parking_lot::RwLock::new(Vec::new()),
             templates: parking_lot::RwLock::new(default_templates()),
             preferences: parking_lot::RwLock::new(Vec::new()),
@@ -415,6 +415,8 @@ impl NotificationService for InMemoryNotificationService {
             sent_at: Some(Utc::now()),
             read_at: None,
             last_error: None,
+            deleted_at: None,
+            deleted_by: None,
             attempts: 1,
         };
 
@@ -448,7 +450,7 @@ impl NotificationService for InMemoryNotificationService {
         let inner = self.notifications.read();
         Ok(inner
             .iter()
-            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .find(|n| n.id == id && n.tenant_id == tenant_id && n.deleted_at.is_none())
             .cloned())
     }
 
@@ -460,10 +462,17 @@ impl NotificationService for InMemoryNotificationService {
         limit: i64,
         offset: i64,
     ) -> Result<PaginatedResult<Notification>, ApiError> {
+        if limit <= 0 {
+            return Err(ApiError::BadRequest(
+                "Limit must be greater than 0".to_string(),
+            ));
+        }
+
         let inner = self.notifications.read();
         let mut filtered: Vec<_> = inner
             .iter()
             .filter(|n| n.tenant_id == tenant_id)
+            .filter(|n| n.deleted_at.is_none())
             .filter(|n| user_id.is_none() || n.user_id == user_id)
             .filter(|n| channel.is_none() || n.channel == channel.unwrap())
             .cloned()
@@ -477,12 +486,6 @@ impl NotificationService for InMemoryNotificationService {
             .skip(offset as usize)
             .take(limit as usize)
             .collect();
-
-        if limit <= 0 {
-            return Err(ApiError::BadRequest(
-                "Limit must be greater than 0".to_string(),
-            ));
-        }
 
         Ok(PaginatedResult::new(
             items,
@@ -628,42 +631,49 @@ impl NotificationService for InMemoryNotificationService {
         Ok(())
     }
 
-    async fn soft_delete(&self, id: i64, tenant_id: i64, _deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut notifications = self.notifications.write();
-        let pos = notifications
-            .iter()
-            .position(|n| n.id == id && n.tenant_id == tenant_id)
+        let notification = notifications
+            .iter_mut()
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Notification {} not found", id)))?;
-        let removed = notifications.remove(pos);
-        self.deleted_notifications.write().push(removed);
+        notification.deleted_at = Some(Utc::now());
+        notification.deleted_by = Some(deleted_by);
         Ok(())
     }
 
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        let mut deleted = self.deleted_notifications.write();
-        let pos = deleted
-            .iter()
-            .position(|n| n.id == id && n.tenant_id == tenant_id)
-            .ok_or_else(|| ApiError::NotFound(format!("Deleted notification {} not found", id)))?;
-        let restored = deleted.remove(pos);
-        self.notifications.write().push(restored);
+        let mut notifications = self.notifications.write();
+        let notification = notifications
+            .iter_mut()
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Notification {} not found", id)))?;
+        if notification.deleted_at.is_none() {
+            return Err(ApiError::BadRequest(format!(
+                "Notification {} is not deleted",
+                id
+            )));
+        }
+        notification.deleted_at = None;
+        notification.deleted_by = None;
         Ok(())
     }
 
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Notification>, ApiError> {
-        let deleted = self.deleted_notifications.read();
-        Ok(deleted
+        let notifications = self.notifications.read();
+        Ok(notifications
             .iter()
-            .filter(|n| n.tenant_id == tenant_id)
+            .filter(|n| n.tenant_id == tenant_id && n.deleted_at.is_some())
             .cloned()
             .collect())
     }
 
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        let mut deleted = self.deleted_notifications.write();
-        let before = deleted.len();
-        deleted.retain(|n| !(n.id == id && n.tenant_id == tenant_id));
-        if deleted.len() == before {
+        let mut notifications = self.notifications.write();
+        let before = notifications.len();
+        notifications
+            .retain(|n| !(n.id == id && n.tenant_id == tenant_id && n.deleted_at.is_some()));
+        if notifications.len() == before {
             return Err(ApiError::NotFound(format!(
                 "Deleted notification {} not found",
                 id
@@ -760,6 +770,8 @@ impl NotificationService for crate::domain::notification::service::NotificationS
             sent_at: response.sent_at,
             read_at: None,
             last_error: None,
+            deleted_at: None,
+            deleted_by: None,
             attempts: response.attempts,
         })
     }
@@ -788,6 +800,8 @@ impl NotificationService for crate::domain::notification::service::NotificationS
             sent_at: r.sent_at,
             read_at: None,
             last_error: None,
+            deleted_at: None,
+            deleted_by: None,
             attempts: r.attempts,
         }))
     }
@@ -825,6 +839,8 @@ impl NotificationService for crate::domain::notification::service::NotificationS
             sent_at: r.sent_at,
             read_at: None,
             last_error: None,
+            deleted_at: None,
+            deleted_by: None,
             attempts: r.attempts,
         }))
     }
@@ -984,6 +1000,8 @@ impl NotificationService for crate::domain::notification::service::NotificationS
                 created_at: r.created_at,
                 sent_at: r.sent_at,
                 read_at: None,
+                deleted_at: None,
+                deleted_by: None,
                 last_error: None,
                 attempts: r.attempts,
             })

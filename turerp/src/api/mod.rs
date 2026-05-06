@@ -622,6 +622,8 @@ use utoipa::OpenApi;
             crate::api::v1::notifications::InAppNotificationResponse,
             crate::api::v1::notifications::UnreadCountResponse,
             crate::api::v1::notifications::MarkReadResponse,
+            crate::domain::notification::model::NotificationResponse,
+            crate::domain::notification::model::NotificationPreferenceResponse,
             // Reports
             crate::api::v1::reports::GenerateReportRequest,
             crate::api::v1::reports::ReportMetaResponse,
