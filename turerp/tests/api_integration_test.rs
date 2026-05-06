@@ -2123,6 +2123,353 @@ async fn test_tax_write_requires_admin() {
 }
 
 // ============================================================================
+// Bulk Restore Tests
+// ============================================================================
+
+#[actix_web::test]
+async fn test_bulk_restore_tax_rates_all_success() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create two tax rates
+    let mut ids = Vec::new();
+    for i in 0..2 {
+        let create_req = test::TestRequest::post()
+            .uri("/api/v1/tax/rates")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .set_json(json!({
+                "tax_type": "KDV",
+                "rate": format!("0.{}", 20 + i),
+                "effective_from": "2024-01-01",
+                "description": format!("Rate {}", i),
+                "is_default": false
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, create_req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        let body = to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        ids.push(json["id"].as_i64().unwrap());
+    }
+
+    // Soft delete both
+    for id in &ids {
+        let delete_req = test::TestRequest::delete()
+            .uri(&format!("/api/v1/tax/rates/{}", id))
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .to_request();
+
+        let resp = test::call_service(&app, delete_req).await;
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    }
+
+    // Verify both are in deleted list
+    let deleted_req = test::TestRequest::get()
+        .uri("/api/v1/tax/rates/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, deleted_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let deleted_items: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert_eq!(deleted_items.len(), 2);
+
+    // Bulk restore both
+    let bulk_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"ids": ids}))
+        .to_request();
+
+    let resp = test::call_service(&app, bulk_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["restored"].as_u64().unwrap(), 2);
+    assert_eq!(json["items"].as_array().unwrap().len(), 2);
+
+    // Verify both are back in normal list
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = json["items"].as_array().unwrap();
+    assert!(items.iter().any(|r| r["id"].as_i64() == Some(ids[0])));
+    assert!(items.iter().any(|r| r["id"].as_i64() == Some(ids[1])));
+}
+
+#[actix_web::test]
+async fn test_bulk_restore_tax_rates_partial_failure() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create one tax rate
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "rate": "0.20",
+            "effective_from": "2024-01-01",
+            "description": "Partial",
+            "is_default": false
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let rate_id = json["id"].as_i64().unwrap();
+
+    // Soft delete it
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/tax/rates/{}", rate_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // Bulk restore with one valid and one non-existent ID
+    let bulk_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"ids": [rate_id, 999999]}))
+        .to_request();
+
+    let resp = test::call_service(&app, bulk_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    // Only one should be restored
+    assert_eq!(json["restored"].as_u64().unwrap(), 1);
+    assert_eq!(json["items"].as_array().unwrap().len(), 1);
+    assert_eq!(json["failed"].as_array().unwrap().len(), 1);
+}
+
+#[actix_web::test]
+async fn test_bulk_restore_tax_rates_empty_list() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Bulk restore with empty list returns 400 BadRequest
+    let bulk_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"ids": []}))
+        .to_request();
+
+    let resp = test::call_service(&app, bulk_req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_bulk_restore_tax_periods_all_success() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create two tax periods
+    let mut ids = Vec::new();
+    for i in 0..2 {
+        let create_req = test::TestRequest::post()
+            .uri("/api/v1/tax/periods")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .set_json(json!({
+                "tax_type": "KDV",
+                "period_year": 2024,
+                "period_month": i + 1
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, create_req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        let body = to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        ids.push(json["id"].as_i64().unwrap());
+    }
+
+    // Soft delete both
+    for id in &ids {
+        let delete_req = test::TestRequest::delete()
+            .uri(&format!("/api/v1/tax/periods/{}", id))
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .to_request();
+
+        let resp = test::call_service(&app, delete_req).await;
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+    }
+
+    // Bulk restore both
+    let bulk_req = test::TestRequest::post()
+        .uri("/api/v1/tax/periods/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"ids": ids}))
+        .to_request();
+
+    let resp = test::call_service(&app, bulk_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["restored"].as_u64().unwrap(), 2);
+}
+
+#[actix_web::test]
+async fn test_bulk_restore_tax_periods_partial_failure() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Create one tax period
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/periods")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "period_year": 2024,
+            "period_month": 1
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let period_id = json["id"].as_i64().unwrap();
+
+    // Soft delete it
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/tax/periods/{}", period_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // Bulk restore with one valid and one non-existent ID
+    let bulk_req = test::TestRequest::post()
+        .uri("/api/v1/tax/periods/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"ids": [period_id, 999999]}))
+        .to_request();
+
+    let resp = test::call_service(&app, bulk_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["restored"].as_u64().unwrap(), 1);
+    assert_eq!(json["items"].as_array().unwrap().len(), 1);
+    assert_eq!(json["failed"].as_array().unwrap().len(), 1);
+}
+
+#[actix_web::test]
+async fn test_bulk_restore_tax_periods_empty_list() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Bulk restore with empty list returns 400 BadRequest
+    let bulk_req = test::TestRequest::post()
+        .uri("/api/v1/tax/periods/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"ids": []}))
+        .to_request();
+
+    let resp = test::call_service(&app, bulk_req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_bulk_restore_tax_rates_oversized_list() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Bulk restore with more than 100 IDs returns 400 BadRequest
+    let ids: Vec<i64> = (1..=101).collect();
+    let bulk_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"ids": ids}))
+        .to_request();
+
+    let resp = test::call_service(&app, bulk_req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_bulk_restore_tax_rates_tenant_isolation() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    // Admin in tenant 1 creates and deletes a tax rate
+    let (token1, _) = register_admin!(&app_state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "rate": "0.20",
+            "effective_from": "2024-01-01",
+            "description": "Tenant 1 KDV",
+            "is_default": false
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let rate_id = json["id"].as_i64().unwrap();
+
+    // Soft delete it
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/tax/rates/{}", rate_id))
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .to_request();
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // Admin in tenant 2 tries to bulk restore tenant 1's deleted rate
+    let (token2, _) = register_admin!(&app_state, 2);
+
+    let bulk_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .set_json(json!({"ids": [rate_id]}))
+        .to_request();
+
+    let resp = test::call_service(&app, bulk_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["restored"].as_u64().unwrap(), 0);
+    assert_eq!(json["items"].as_array().unwrap().len(), 0);
+    assert_eq!(json["failed"].as_array().unwrap().len(), 1);
+}
+
+// ============================================================================
 // Unauthenticated Access Tests
 // ============================================================================
 

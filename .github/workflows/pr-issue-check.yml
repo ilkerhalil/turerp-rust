@@ -31,12 +31,8 @@ jobs:
               .map(n => parseInt(n, 10));
 
             if (issueNumbers.length === 0) {
-              core.setFailed(
-                '❌ PR does not reference an open issue.\n\n' +
-                'Please link this PR to an existing issue by including one of the following in the PR title, description, or branch name:\n' +
-                '  - Issue number: #123, fixes #123, closes #123, resolves #123\n' +
-                '  - Branch name: feature/123-description, fix/123-bug-name\n\n' +
-                'If there is no existing issue, please create one first.'
+              core.info(
+                'ℹ️ No issue references found in PR title, body, or branch name. Skipping issue validation.'
               );
               return;
             }

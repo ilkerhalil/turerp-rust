@@ -265,6 +265,21 @@ impl From<TaxPeriod> for TaxPeriodResponse {
     }
 }
 
+/// Failed item in a bulk restore operation
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BulkRestoreFailed {
+    pub id: i64,
+    pub reason: String,
+}
+
+/// Response for bulk restore operations
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BulkRestoreResponse<T> {
+    pub restored: usize,
+    pub items: Vec<T>,
+    pub failed: Vec<BulkRestoreFailed>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

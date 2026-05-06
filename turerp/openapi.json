@@ -15082,6 +15082,48 @@
         ]
       }
     },
+    "/api/v1/tax/periods/bulk-restore": {
+      "post": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Bulk restore soft-deleted tax periods (requires admin role)",
+        "operationId": "bulk_restore_tax_periods",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tax periods restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkRestoreResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — empty or oversized IDs list"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/tax/periods/deleted": {
       "get": {
         "tags": [
@@ -15431,6 +15473,48 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/rates/bulk-restore": {
+      "post": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Bulk restore soft-deleted tax rates (requires admin role)",
+        "operationId": "bulk_restore_tax_rates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tax rates restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkRestoreResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — empty or oversized IDs list"
           },
           "403": {
             "description": "Forbidden"
@@ -17756,6 +17840,23 @@
             "type": "string"
           },
           "signer": {
+            "type": "string"
+          }
+        }
+      },
+      "BulkRestoreFailed": {
+        "type": "object",
+        "description": "Failed item in a bulk restore operation",
+        "required": [
+          "id",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reason": {
             "type": "string"
           }
         }

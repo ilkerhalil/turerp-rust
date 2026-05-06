@@ -1378,6 +1378,77 @@ async fn test_normal_user_cannot_calculate_tax_period() {
     );
 }
 
+#[actix_web::test]
+async fn test_normal_user_cannot_bulk_restore_tax_rates() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let user_token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .set_json(json!({"ids": [1, 2]}))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to bulk restore tax rates"
+    );
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_bulk_restore_tax_periods() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let user_token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/tax/periods/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .set_json(json!({"ids": [1, 2]}))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to bulk restore tax periods"
+    );
+}
+
+#[actix_web::test]
+async fn test_unauthenticated_bulk_restore_rejected() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let endpoints = vec![
+        ("POST", "/api/v1/tax/rates/bulk-restore"),
+        ("POST", "/api/v1/tax/periods/bulk-restore"),
+    ];
+
+    for (method, path) in endpoints {
+        let req = match method {
+            "POST" => test::TestRequest::post().uri(path),
+            _ => continue,
+        }
+        .set_json(json!({"ids": [1]}))
+        .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNAUTHORIZED,
+            "Unauthenticated {} {} should return 401",
+            method,
+            path
+        );
+    }
+}
+
 // ============================================================================
 // SQL Injection Tests - Webhook System
 // ============================================================================
