@@ -21,9 +21,9 @@ jobs:
             const branch = pr.head.ref || '';
             const combined = `${title}\n${body}\n${branch}`;
 
-            // Match patterns: fixes #123, closes #123, related to #123, resolves #123, refs #123, issue #123
-            // Also match branch names like feature/123-description or fix/123-bug
-            const issueRegex = /(?:fixes|closes|closed|close|resolves|resolved|resolve|related to|refs|references|issue|#)\s*(\d+)|\/(\d+)[-_]/gi;
+            // Match patterns: fixes #123, closes #123, related to #123, resolves #123, refs #123, issue #123, ref #123
+            // Also match branch names like feature/123-description, fix/123-bug, or feature/123
+            const issueRegex = /(?:fixes|fix|closes|closed|close|resolves|resolved|resolve|related to|refs|references|ref|issue|#)\s*(\d+)|\/(\d+)(?:[-_]|$|\b)/gi;
             const matches = [...combined.matchAll(issueRegex)];
             const issueNumbers = matches
               .map(m => m[1] || m[2])
