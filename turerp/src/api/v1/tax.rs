@@ -69,6 +69,12 @@ pub struct CalculateInvoiceTaxRequest {
     pub invoice_id: i64,
 }
 
+/// Request body for bulk restore operations
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct BulkRestoreRequest {
+    pub ids: Vec<i64>,
+}
+
 /// Query params for getting the effective tax rate
 #[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct EffectiveRateQuery {
@@ -606,6 +612,70 @@ pub async fn destroy_tax_period(
     }
 }
 
+/// Bulk restore soft-deleted tax rates (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/tax/rates/bulk-restore", tag = "Tax",
+    request_body = BulkRestoreRequest,
+    responses((status = 200, description = "Tax rates restored", body = Vec<TaxRateResponse>), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn bulk_restore_tax_rates(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    payload: web::Json<BulkRestoreRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let req = payload.into_inner();
+    match tax_service
+        .bulk_restore_tax_rates(req.ids, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(rates) => {
+            let responses: Vec<TaxRateResponse> =
+                rates.into_iter().map(TaxRateResponse::from).collect();
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "restored": responses.len(),
+                "items": responses,
+            })))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Bulk restore soft-deleted tax periods (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/tax/periods/bulk-restore", tag = "Tax",
+    request_body = BulkRestoreRequest,
+    responses((status = 200, description = "Tax periods restored", body = Vec<TaxPeriodResponse>), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn bulk_restore_tax_periods(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    payload: web::Json<BulkRestoreRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let req = payload.into_inner();
+    match tax_service
+        .bulk_restore_tax_periods(req.ids, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(periods) => {
+            let responses: Vec<TaxPeriodResponse> =
+                periods.into_iter().map(TaxPeriodResponse::from).collect();
+            Ok(HttpResponse::Ok().json(serde_json::json!({
+                "restored": responses.len(),
+                "items": responses,
+            })))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
 /// Configure tax engine routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -622,6 +692,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::delete().to(delete_tax_rate)),
     )
     .service(web::resource("/v1/tax/rates/{id}/restore").route(web::put().to(restore_tax_rate)))
+    .service(
+        web::resource("/v1/tax/rates/bulk-restore").route(web::post().to(bulk_restore_tax_rates)),
+    )
     .service(web::resource("/v1/tax/rates/{id}/destroy").route(web::delete().to(destroy_tax_rate)))
     .service(web::resource("/v1/tax/calculate").route(web::post().to(calculate_tax)))
     .service(
@@ -642,6 +715,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     )
     .service(web::resource("/v1/tax/periods/{id}/file").route(web::post().to(file_tax_period)))
     .service(web::resource("/v1/tax/periods/{id}/restore").route(web::put().to(restore_tax_period)))
+    .service(
+        web::resource("/v1/tax/periods/bulk-restore")
+            .route(web::post().to(bulk_restore_tax_periods)),
+    )
     .service(
         web::resource("/v1/tax/periods/deleted").route(web::get().to(list_deleted_tax_periods)),
     )

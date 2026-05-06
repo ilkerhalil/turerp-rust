@@ -14913,6 +14913,48 @@
         ]
       }
     },
+    "/api/v1/tax/periods/bulk-restore": {
+      "post": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Bulk restore soft-deleted tax periods (requires admin role)",
+        "operationId": "bulk_restore_tax_periods",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tax periods restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaxPeriodResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/tax/periods/deleted": {
       "get": {
         "tags": [
@@ -15259,6 +15301,48 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaxRateResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/rates/bulk-restore": {
+      "post": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Bulk restore soft-deleted tax rates (requires admin role)",
+        "operationId": "bulk_restore_tax_rates",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Tax rates restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaxRateResponse"
+                  }
                 }
               }
             }
