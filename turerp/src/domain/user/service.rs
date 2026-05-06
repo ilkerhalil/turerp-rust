@@ -145,6 +145,33 @@ impl UserService {
         self.repo.delete(id, tenant_id).await
     }
 
+    /// Soft delete a user
+    pub async fn soft_delete_user(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted user
+    pub async fn restore_user(&self, id: i64, tenant_id: i64) -> Result<UserResponse, ApiError> {
+        let user = self.repo.restore(id, tenant_id).await?;
+        Ok(user.into())
+    }
+
+    /// List all deleted users for a tenant
+    pub async fn list_deleted_users(&self, tenant_id: i64) -> Result<Vec<UserResponse>, ApiError> {
+        let users = self.repo.find_deleted(tenant_id).await?;
+        Ok(users.into_iter().map(|u| u.into()).collect())
+    }
+
+    /// Permanently destroy a user
+    pub async fn destroy_user(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.destroy(id, tenant_id).await
+    }
+
     /// Verify user credentials
     pub async fn verify_credentials(
         &self,

@@ -5,6 +5,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::impl_soft_deletable;
+
 /// Product entity
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Product {
@@ -26,25 +28,7 @@ pub struct Product {
     pub deleted_by: Option<i64>,
 }
 
-impl crate::common::SoftDeletable for Product {
-    fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
-    }
-    fn deleted_at(&self) -> Option<DateTime<Utc>> {
-        self.deleted_at
-    }
-    fn deleted_by(&self) -> Option<i64> {
-        self.deleted_by
-    }
-    fn mark_deleted(&mut self, by_user_id: i64) {
-        self.deleted_at = Some(Utc::now());
-        self.deleted_by = Some(by_user_id);
-    }
-    fn restore(&mut self) {
-        self.deleted_at = None;
-        self.deleted_by = None;
-    }
-}
+impl_soft_deletable!(Product);
 
 /// Product category
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -58,25 +42,7 @@ pub struct Category {
     pub deleted_by: Option<i64>,
 }
 
-impl crate::common::SoftDeletable for Category {
-    fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
-    }
-    fn deleted_at(&self) -> Option<DateTime<Utc>> {
-        self.deleted_at
-    }
-    fn deleted_by(&self) -> Option<i64> {
-        self.deleted_by
-    }
-    fn mark_deleted(&mut self, by_user_id: i64) {
-        self.deleted_at = Some(Utc::now());
-        self.deleted_by = Some(by_user_id);
-    }
-    fn restore(&mut self) {
-        self.deleted_at = None;
-        self.deleted_by = None;
-    }
-}
+impl_soft_deletable!(Category);
 
 /// Unit of measure
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -91,25 +57,7 @@ pub struct Unit {
     pub deleted_by: Option<i64>,
 }
 
-impl crate::common::SoftDeletable for Unit {
-    fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
-    }
-    fn deleted_at(&self) -> Option<DateTime<Utc>> {
-        self.deleted_at
-    }
-    fn deleted_by(&self) -> Option<i64> {
-        self.deleted_by
-    }
-    fn mark_deleted(&mut self, by_user_id: i64) {
-        self.deleted_at = Some(Utc::now());
-        self.deleted_by = Some(by_user_id);
-    }
-    fn restore(&mut self) {
-        self.deleted_at = None;
-        self.deleted_by = None;
-    }
-}
+impl_soft_deletable!(Unit);
 
 /// Product variant
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -126,25 +74,7 @@ pub struct ProductVariant {
     pub deleted_by: Option<i64>,
 }
 
-impl crate::common::SoftDeletable for ProductVariant {
-    fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
-    }
-    fn deleted_at(&self) -> Option<DateTime<Utc>> {
-        self.deleted_at
-    }
-    fn deleted_by(&self) -> Option<i64> {
-        self.deleted_by
-    }
-    fn mark_deleted(&mut self, by_user_id: i64) {
-        self.deleted_at = Some(Utc::now());
-        self.deleted_by = Some(by_user_id);
-    }
-    fn restore(&mut self) {
-        self.deleted_at = None;
-        self.deleted_by = None;
-    }
-}
+impl_soft_deletable!(ProductVariant);
 
 /// Create product variant request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

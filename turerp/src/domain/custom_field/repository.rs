@@ -48,6 +48,12 @@ pub trait CustomFieldRepository: Send + Sync {
     ) -> Result<CustomFieldDefinition, ApiError>;
 
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<CustomFieldDefinition>, ApiError>;
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed repository
@@ -201,6 +207,60 @@ impl CustomFieldRepository for InMemoryCustomFieldRepository {
         }
 
         def.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let def = inner
+            .definitions
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Custom field {} not found", id)))?;
+
+        if def.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Custom field {} not found", id)));
+        }
+
+        if !def.is_deleted() {
+            return Err(ApiError::BadRequest(
+                "Custom field is not deleted".to_string(),
+            ));
+        }
+
+        def.restore();
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<CustomFieldDefinition>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .definitions
+            .values()
+            .filter(|d| d.tenant_id == tenant_id && d.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let def = inner
+            .definitions
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Custom field {} not found", id)))?;
+
+        if def.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Custom field {} not found", id)));
+        }
+
+        if !def.is_deleted() {
+            return Err(ApiError::BadRequest(
+                "Custom field must be soft deleted before destroy".to_string(),
+            ));
+        }
+
+        inner.definitions.remove(&id);
         Ok(())
     }
 }

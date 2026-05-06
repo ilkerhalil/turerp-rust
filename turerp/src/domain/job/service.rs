@@ -336,7 +336,65 @@ impl From<CommonJob> for Job {
             last_error: job.last_error,
             created_at: job.created_at,
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         }
+    }
+}
+
+impl JobService {
+    /// Soft delete a job
+    pub async fn soft_delete_job(
+        &self,
+        id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.repo.soft_delete(id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted job
+    pub async fn restore_job(&self, id: i64) -> Result<(), ApiError> {
+        self.repo.restore(id).await
+    }
+
+    /// List deleted jobs for a tenant
+    pub async fn deleted_jobs(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Job>, ApiError> {
+        self.repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently destroy a soft-deleted job
+    pub async fn destroy_job(&self, id: i64) -> Result<(), ApiError> {
+        self.repo.destroy(id).await
+    }
+
+    /// Soft delete a job schedule
+    pub async fn soft_delete_schedule(
+        &self,
+        id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.repo.soft_delete_schedule(id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted schedule
+    pub async fn restore_schedule(&self, id: i64) -> Result<(), ApiError> {
+        self.repo.restore_schedule(id).await
+    }
+
+    /// List deleted schedules for a tenant
+    pub async fn deleted_schedules(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<JobSchedule>, ApiError> {
+        self.repo.find_deleted_schedules(tenant_id).await
+    }
+
+    /// Permanently destroy a soft-deleted schedule
+    pub async fn destroy_schedule(&self, id: i64) -> Result<(), ApiError> {
+        self.repo.destroy_schedule(id).await
     }
 }
 

@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::tenant::model::{
     CreateTenant, CreateTenantConfig, Tenant, TenantConfig, UpdateTenant, UpdateTenantConfig,
 };
@@ -37,6 +38,18 @@ pub trait TenantRepository: Send + Sync {
 
     /// Delete a tenant
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a tenant
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted tenant
+    async fn restore(&self, id: i64) -> Result<Tenant, ApiError>;
+
+    /// Find all deleted tenants
+    async fn find_deleted(&self) -> Result<Vec<Tenant>, ApiError>;
+
+    /// Permanently destroy a tenant
+    async fn destroy(&self, id: i64) -> Result<(), ApiError>;
 
     /// Check if subdomain exists
     async fn subdomain_exists(&self, subdomain: &str) -> Result<bool, ApiError>;
@@ -98,6 +111,9 @@ impl InMemoryTenantRepository {
             base_currency: "TRY".to_string(),
             supported_currencies: vec!["TRY".to_string()],
             created_at: chrono::Utc::now(),
+            updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
         repo.inner.lock().tenants.insert(1, default_tenant);
 
@@ -129,6 +145,9 @@ impl TenantRepository for InMemoryTenantRepository {
             base_currency: create.base_currency,
             supported_currencies: create.supported_currencies,
             created_at: chrono::Utc::now(),
+            updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.tenants.insert(id, new_tenant.clone());
@@ -137,7 +156,7 @@ impl TenantRepository for InMemoryTenantRepository {
 
     async fn find_by_id(&self, id: i64) -> Result<Option<Tenant>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.tenants.get(&id).cloned())
+        Ok(inner.tenants.get(&id).filter(|t| !t.is_deleted()).cloned())
     }
 
     async fn find_by_subdomain(&self, subdomain: &str) -> Result<Option<Tenant>, ApiError> {
@@ -145,13 +164,18 @@ impl TenantRepository for InMemoryTenantRepository {
         Ok(inner
             .tenants
             .values()
-            .find(|t| t.subdomain == subdomain)
+            .find(|t| t.subdomain == subdomain && !t.is_deleted())
             .cloned())
     }
 
     async fn find_all(&self) -> Result<Vec<Tenant>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.tenants.values().cloned().collect())
+        Ok(inner
+            .tenants
+            .values()
+            .filter(|t| !t.is_deleted())
+            .cloned()
+            .collect())
     }
 
     async fn find_all_paginated(
@@ -160,7 +184,12 @@ impl TenantRepository for InMemoryTenantRepository {
         per_page: u32,
     ) -> Result<PaginatedResult<Tenant>, ApiError> {
         let inner = self.inner.lock();
-        let all: Vec<_> = inner.tenants.values().cloned().collect();
+        let all: Vec<_> = inner
+            .tenants
+            .values()
+            .filter(|t| !t.is_deleted())
+            .cloned()
+            .collect();
         let total = all.len() as u64;
         let items: Vec<_> = all
             .into_iter()
@@ -203,9 +232,65 @@ impl TenantRepository for InMemoryTenantRepository {
         Ok(())
     }
 
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let tenant = inner
+            .tenants
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Tenant {} not found", id)))?;
+
+        if tenant.is_deleted() {
+            return Err(ApiError::Conflict("Tenant is already deleted".to_string()));
+        }
+
+        tenant.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64) -> Result<Tenant, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let tenant = inner
+            .tenants
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Tenant {} not found", id)))?;
+
+        if !tenant.is_deleted() {
+            return Err(ApiError::Conflict("Tenant is not deleted".to_string()));
+        }
+
+        tenant.restore();
+        Ok(tenant.clone())
+    }
+
+    async fn find_deleted(&self) -> Result<Vec<Tenant>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .tenants
+            .values()
+            .filter(|t| t.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        if !inner.tenants.contains_key(&id) {
+            return Err(ApiError::NotFound(format!("Tenant {} not found", id)));
+        }
+
+        inner.tenants.remove(&id);
+        Ok(())
+    }
+
     async fn subdomain_exists(&self, subdomain: &str) -> Result<bool, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.tenants.values().any(|t| t.subdomain == subdomain))
+        Ok(inner
+            .tenants
+            .values()
+            .any(|t| t.subdomain == subdomain && !t.is_deleted()))
     }
 }
 

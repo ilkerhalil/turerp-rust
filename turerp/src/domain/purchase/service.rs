@@ -141,6 +141,9 @@ impl PurchaseService {
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
+        self.order_line_repo
+            .soft_delete_by_order(id, deleted_by)
+            .await?;
         self.order_repo.soft_delete(id, tenant_id, deleted_by).await
     }
 
@@ -150,7 +153,9 @@ impl PurchaseService {
         id: i64,
         tenant_id: i64,
     ) -> Result<crate::domain::purchase::model::PurchaseOrder, ApiError> {
-        self.order_repo.restore(id, tenant_id).await
+        let order = self.order_repo.restore(id, tenant_id).await?;
+        self.order_line_repo.restore_by_order(id).await?;
+        Ok(order)
     }
 
     /// Restore a soft-deleted purchase order and return as response
@@ -159,7 +164,7 @@ impl PurchaseService {
         id: i64,
         tenant_id: i64,
     ) -> Result<PurchaseOrderResponse, ApiError> {
-        let order = self.order_repo.restore(id, tenant_id).await?;
+        let order = self.restore_order(id, tenant_id).await?;
         let lines = self.order_line_repo.find_by_order(order.id).await?;
         Ok(PurchaseOrderResponse::from((order, lines)))
     }
@@ -301,6 +306,9 @@ impl PurchaseService {
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
+        self.receipt_line_repo
+            .soft_delete_by_receipt(id, deleted_by)
+            .await?;
         self.receipt_repo
             .soft_delete(id, tenant_id, deleted_by)
             .await
@@ -312,7 +320,9 @@ impl PurchaseService {
         id: i64,
         tenant_id: i64,
     ) -> Result<crate::domain::purchase::model::GoodsReceipt, ApiError> {
-        self.receipt_repo.restore(id, tenant_id).await
+        let receipt = self.receipt_repo.restore(id, tenant_id).await?;
+        self.receipt_line_repo.restore_by_receipt(id).await?;
+        Ok(receipt)
     }
 
     /// Restore a soft-deleted goods receipt and return as response
@@ -321,7 +331,7 @@ impl PurchaseService {
         id: i64,
         tenant_id: i64,
     ) -> Result<GoodsReceiptResponse, ApiError> {
-        let receipt = self.receipt_repo.restore(id, tenant_id).await?;
+        let receipt = self.restore_receipt(id, tenant_id).await?;
         let lines = self.receipt_line_repo.find_by_receipt(receipt.id).await?;
         Ok(GoodsReceiptResponse::from((receipt, lines)))
     }
@@ -525,6 +535,13 @@ impl PurchaseService {
             ApiError::Internal("Purchase request repository not configured".to_string())
         })?;
 
+        let request_line_repo = self.request_line_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request line repository not configured".to_string())
+        })?;
+
+        request_line_repo
+            .soft_delete_by_request(id, deleted_by)
+            .await?;
         request_repo.soft_delete(id, tenant_id, deleted_by).await
     }
 
@@ -538,7 +555,13 @@ impl PurchaseService {
             ApiError::Internal("Purchase request repository not configured".to_string())
         })?;
 
-        request_repo.restore(id, tenant_id).await
+        let request_line_repo = self.request_line_repo.as_ref().ok_or_else(|| {
+            ApiError::Internal("Purchase request line repository not configured".to_string())
+        })?;
+
+        let request = request_repo.restore(id, tenant_id).await?;
+        request_line_repo.restore_by_request(id).await?;
+        Ok(request)
     }
 
     /// Restore a soft-deleted purchase request and return as response
@@ -547,15 +570,12 @@ impl PurchaseService {
         id: i64,
         tenant_id: i64,
     ) -> Result<PurchaseRequestResponse, ApiError> {
-        let request_repo = self.request_repo.as_ref().ok_or_else(|| {
-            ApiError::Internal("Purchase request repository not configured".to_string())
-        })?;
+        let request = self.restore_request(id, tenant_id).await?;
 
         let request_line_repo = self.request_line_repo.as_ref().ok_or_else(|| {
             ApiError::Internal("Purchase request line repository not configured".to_string())
         })?;
 
-        let request = request_repo.restore(id, tenant_id).await?;
         let lines = request_line_repo.find_by_request(request.id).await?;
         Ok(PurchaseRequestResponse::from((request, lines)))
     }

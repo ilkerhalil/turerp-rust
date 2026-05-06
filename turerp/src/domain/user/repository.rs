@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::SoftDeletable;
 use crate::domain::user::model::{CreateUser, UpdateUser, User};
 use crate::error::ApiError;
 
@@ -55,6 +56,18 @@ pub trait UserRepository: Send + Sync {
 
     /// Delete a user
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a user
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted user
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<User, ApiError>;
+
+    /// Find all deleted users for a tenant
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<User>, ApiError>;
+
+    /// Permanently destroy a user
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Check if username exists
     async fn username_exists(&self, username: &str, tenant_id: i64) -> Result<bool, ApiError>;
@@ -119,6 +132,8 @@ impl UserRepository for InMemoryUserRepository {
             is_active: true,
             created_at: chrono::Utc::now(),
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.users.push(user.clone());
@@ -130,7 +145,7 @@ impl UserRepository for InMemoryUserRepository {
         Ok(inner
             .users
             .iter()
-            .find(|u| u.id == id && u.tenant_id == tenant_id)
+            .find(|u| u.id == id && u.tenant_id == tenant_id && !u.is_deleted())
             .cloned())
     }
 
@@ -143,7 +158,7 @@ impl UserRepository for InMemoryUserRepository {
         Ok(inner
             .users
             .iter()
-            .find(|u| u.username == username && u.tenant_id == tenant_id)
+            .find(|u| u.username == username && u.tenant_id == tenant_id && !u.is_deleted())
             .cloned())
     }
 
@@ -152,7 +167,7 @@ impl UserRepository for InMemoryUserRepository {
         Ok(inner
             .users
             .iter()
-            .find(|u| u.email == email && u.tenant_id == tenant_id)
+            .find(|u| u.email == email && u.tenant_id == tenant_id && !u.is_deleted())
             .cloned())
     }
 
@@ -161,7 +176,7 @@ impl UserRepository for InMemoryUserRepository {
         Ok(inner
             .users
             .iter()
-            .filter(|u| u.tenant_id == tenant_id)
+            .filter(|u| u.tenant_id == tenant_id && !u.is_deleted())
             .cloned()
             .collect())
     }
@@ -176,7 +191,7 @@ impl UserRepository for InMemoryUserRepository {
         let all: Vec<_> = inner
             .users
             .iter()
-            .filter(|u| u.tenant_id == tenant_id)
+            .filter(|u| u.tenant_id == tenant_id && !u.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -229,12 +244,67 @@ impl UserRepository for InMemoryUserRepository {
         Ok(())
     }
 
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let user = inner
+            .users
+            .iter_mut()
+            .find(|u| u.id == id && u.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("User {} not found", id)))?;
+
+        if user.is_deleted() {
+            return Err(ApiError::Conflict("User is already deleted".to_string()));
+        }
+
+        user.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<User, ApiError> {
+        let mut inner = self.inner.lock();
+        let user = inner
+            .users
+            .iter_mut()
+            .find(|u| u.id == id && u.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("User {} not found", id)))?;
+
+        if !user.is_deleted() {
+            return Err(ApiError::Conflict("User is not deleted".to_string()));
+        }
+
+        user.restore();
+        Ok(user.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<User>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .users
+            .iter()
+            .filter(|u| u.tenant_id == tenant_id && u.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let len_before = inner.users.len();
+        inner
+            .users
+            .retain(|u| !(u.id == id && u.tenant_id == tenant_id));
+
+        if inner.users.len() == len_before {
+            return Err(ApiError::NotFound(format!("User {} not found", id)));
+        }
+        Ok(())
+    }
+
     async fn username_exists(&self, username: &str, tenant_id: i64) -> Result<bool, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .users
             .iter()
-            .any(|u| u.username == username && u.tenant_id == tenant_id))
+            .any(|u| u.username == username && u.tenant_id == tenant_id && !u.is_deleted()))
     }
 
     async fn email_exists(&self, email: &str, tenant_id: i64) -> Result<bool, ApiError> {
@@ -242,7 +312,7 @@ impl UserRepository for InMemoryUserRepository {
         Ok(inner
             .users
             .iter()
-            .any(|u| u.email == email && u.tenant_id == tenant_id))
+            .any(|u| u.email == email && u.tenant_id == tenant_id && !u.is_deleted()))
     }
 }
 

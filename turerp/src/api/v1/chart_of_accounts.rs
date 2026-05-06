@@ -168,6 +168,87 @@ pub async fn soft_delete_chart_account(
     }
 }
 
+/// Restore a soft-deleted chart account (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/chart-of-accounts/{code}/restore", tag = "Chart of Accounts",
+    params(("code" = String, Path, description = "Account code")),
+    responses((status = 200, description = "Chart account restored", body = MessageResponse), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_chart_account(
+    admin_user: AdminUser,
+    chart_of_accounts_service: web::Data<ChartOfAccountsService>,
+    path: web::Path<String>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let code = path.into_inner();
+    let account = chart_of_accounts_service
+        .get_account_by_code(&code, admin_user.0.tenant_id)
+        .await?;
+    match chart_of_accounts_service
+        .restore_account(account.id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "chart_account.restored");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List deleted chart accounts (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/chart-of-accounts/deleted", tag = "Chart of Accounts",
+    responses((status = 200, description = "List of deleted chart accounts")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_chart_accounts(
+    admin_user: AdminUser,
+    chart_of_accounts_service: web::Data<ChartOfAccountsService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match chart_of_accounts_service
+        .list_deleted_accounts(admin_user.0.tenant_id)
+        .await
+    {
+        Ok(accounts) => Ok(HttpResponse::Ok().json(accounts)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Permanently destroy a soft-deleted chart account (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/chart-of-accounts/{code}/destroy", tag = "Chart of Accounts",
+    params(("code" = String, Path, description = "Account code")),
+    responses((status = 204, description = "Chart account permanently destroyed"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_chart_account(
+    admin_user: AdminUser,
+    chart_of_accounts_service: web::Data<ChartOfAccountsService>,
+    path: web::Path<String>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let code = path.into_inner();
+    let account = chart_of_accounts_service
+        .get_account_by_code(&code, admin_user.0.tenant_id)
+        .await?;
+    match chart_of_accounts_service
+        .destroy_account(account.id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
 /// Get account tree (hierarchical)
 #[utoipa::path(
     get, path = "/api/v1/chart-of-accounts/tree", tag = "Chart of Accounts",
@@ -279,6 +360,18 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_chart_account_by_code))
             .route(web::put().to(update_chart_account))
             .route(web::delete().to(soft_delete_chart_account)),
+    )
+    .service(
+        web::resource("/v1/chart-of-accounts/{code}/restore")
+            .route(web::post().to(restore_chart_account)),
+    )
+    .service(
+        web::resource("/v1/chart-of-accounts/deleted")
+            .route(web::get().to(list_deleted_chart_accounts)),
+    )
+    .service(
+        web::resource("/v1/chart-of-accounts/{code}/destroy")
+            .route(web::delete().to(destroy_chart_account)),
     )
     .service(
         web::resource("/v1/chart-of-accounts/{code}/children")

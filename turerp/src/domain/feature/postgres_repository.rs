@@ -1,7 +1,7 @@
 //! PostgreSQL feature flag repository implementation
 
 use async_trait::async_trait;
-use chrono::NaiveDateTime;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
@@ -39,6 +39,8 @@ struct FeatureFlagRow {
     tenant_id: Option<i64>,
     created_at: NaiveDateTime,
     updated_at: NaiveDateTime,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -54,6 +56,8 @@ impl From<FeatureFlagRow> for FeatureFlag {
             tenant_id: row.tenant_id,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -85,9 +89,9 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
 
         let row: FeatureFlagRow = sqlx::query_as(
             r#"
-            INSERT INTO feature_flags (name, description, status, tenant_id, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, NOW(), NOW())
-            RETURNING id, name, description, status, tenant_id, created_at, updated_at
+            INSERT INTO feature_flags (name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by)
+            VALUES ($1, $2, $3, $4, NOW(), NOW(), NULL, NULL)
+            RETURNING id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&flag.name)
@@ -104,9 +108,9 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
     async fn get_by_id(&self, id: i64) -> Result<Option<FeatureFlag>, ApiError> {
         let result: Option<FeatureFlagRow> = sqlx::query_as(
             r#"
-            SELECT id, name, description, status, tenant_id, created_at, updated_at
+            SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
             FROM feature_flags
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -126,9 +130,9 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
             Some(tid) => {
                 let row: Option<FeatureFlagRow> = sqlx::query_as(
                     r#"
-                    SELECT id, name, description, status, tenant_id, created_at, updated_at
+                    SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
                     FROM feature_flags
-                    WHERE name = $1 AND tenant_id = $2
+                    WHERE name = $1 AND tenant_id = $2 AND deleted_at IS NULL
                     "#,
                 )
                 .bind(name)
@@ -144,9 +148,9 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
             None => {
                 let row: Option<FeatureFlagRow> = sqlx::query_as(
                     r#"
-                    SELECT id, name, description, status, tenant_id, created_at, updated_at
+                    SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
                     FROM feature_flags
-                    WHERE name = $1 AND tenant_id IS NULL
+                    WHERE name = $1 AND tenant_id IS NULL AND deleted_at IS NULL
                     "#,
                 )
                 .bind(name)
@@ -168,9 +172,9 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
             Some(tid) => {
                 let rows: Vec<FeatureFlagRow> = sqlx::query_as(
                     r#"
-                    SELECT id, name, description, status, tenant_id, created_at, updated_at
+                    SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
                     FROM feature_flags
-                    WHERE tenant_id = $1 OR tenant_id IS NULL
+                    WHERE (tenant_id = $1 OR tenant_id IS NULL) AND deleted_at IS NULL
                     ORDER BY created_at DESC
                     "#,
                 )
@@ -186,9 +190,9 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
             None => {
                 let rows: Vec<FeatureFlagRow> = sqlx::query_as(
                     r#"
-                    SELECT id, name, description, status, tenant_id, created_at, updated_at
+                    SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
                     FROM feature_flags
-                    WHERE tenant_id IS NULL
+                    WHERE tenant_id IS NULL AND deleted_at IS NULL
                     ORDER BY created_at DESC
                     "#,
                 )
@@ -217,10 +221,10 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
             Some(tid) => {
                 let rows: Vec<FeatureFlagRow> = sqlx::query_as(
                     r#"
-                    SELECT id, name, description, status, tenant_id, created_at, updated_at,
+                    SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by,
                            COUNT(*) OVER() as total_count
                     FROM feature_flags
-                    WHERE tenant_id = $1 OR tenant_id IS NULL
+                    WHERE (tenant_id = $1 OR tenant_id IS NULL) AND deleted_at IS NULL
                     ORDER BY id DESC
                     LIMIT $2 OFFSET $3
                     "#,
@@ -241,10 +245,10 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
             None => {
                 let rows: Vec<FeatureFlagRow> = sqlx::query_as(
                     r#"
-                    SELECT id, name, description, status, tenant_id, created_at, updated_at,
+                    SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by,
                            COUNT(*) OVER() as total_count
                     FROM feature_flags
-                    WHERE tenant_id IS NULL
+                    WHERE tenant_id IS NULL AND deleted_at IS NULL
                     ORDER BY id DESC
                     LIMIT $1 OFFSET $2
                     "#,
@@ -278,8 +282,8 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
                 description = COALESCE($1, description),
                 status = COALESCE($2, status),
                 updated_at = NOW()
-            WHERE id = $3
-            RETURNING id, name, description, status, tenant_id, created_at, updated_at
+            WHERE id = $3 AND deleted_at IS NULL
+            RETURNING id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&flag.description)
@@ -307,14 +311,78 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         Ok(result.rows_affected() > 0)
     }
 
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<bool, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE feature_flags
+            SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete feature flag: {}", e)))?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn restore(&self, id: i64) -> Result<bool, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE feature_flags
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore feature flag: {}", e)))?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
+    async fn find_deleted(&self) -> Result<Vec<FeatureFlag>, ApiError> {
+        let rows: Vec<FeatureFlagRow> = sqlx::query_as(
+            r#"
+            SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
+            FROM feature_flags
+            WHERE deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to get deleted feature flags: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64) -> Result<bool, ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM feature_flags
+            WHERE id = $1 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy feature flag: {}", e)))?;
+
+        Ok(result.rows_affected() > 0)
+    }
+
     async fn is_enabled(&self, name: &str, tenant_id: Option<i64>) -> Result<bool, ApiError> {
         // First check for tenant-specific flag
         if let Some(tid) = tenant_id {
             let row: Option<FeatureFlagRow> = sqlx::query_as(
                 r#"
-                SELECT id, name, description, status, tenant_id, created_at, updated_at
+                SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
                 FROM feature_flags
-                WHERE name = $1 AND tenant_id = $2
+                WHERE name = $1 AND tenant_id = $2 AND deleted_at IS NULL
                 "#,
             )
             .bind(name)
@@ -333,9 +401,9 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         // Fall back to global flag
         let row: Option<FeatureFlagRow> = sqlx::query_as(
             r#"
-            SELECT id, name, description, status, tenant_id, created_at, updated_at
+            SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
             FROM feature_flags
-            WHERE name = $1 AND tenant_id IS NULL
+            WHERE name = $1 AND tenant_id IS NULL AND deleted_at IS NULL
             "#,
         )
         .bind(name)
@@ -380,6 +448,8 @@ mod tests {
             tenant_id: None,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
             total_count: None,
         };
 
@@ -401,6 +471,8 @@ mod tests {
             tenant_id: Some(42),
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
             total_count: None,
         };
 

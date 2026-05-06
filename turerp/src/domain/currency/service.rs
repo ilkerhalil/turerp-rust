@@ -132,6 +132,33 @@ impl CurrencyService {
         self.currency_repo.delete(id, tenant_id).await
     }
 
+    /// Soft delete a currency
+    pub async fn soft_delete_currency(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.currency_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted currency
+    pub async fn restore_currency(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.currency_repo.restore(id, tenant_id).await
+    }
+
+    /// List deleted currencies for a tenant
+    pub async fn list_deleted_currencies(&self, tenant_id: i64) -> Result<Vec<Currency>, ApiError> {
+        self.currency_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently destroy a soft-deleted currency
+    pub async fn destroy_currency(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.currency_repo.destroy(id, tenant_id).await
+    }
+
     // ---- Exchange Rate Operations ----
 
     /// Create a new exchange rate
@@ -207,6 +234,8 @@ impl CurrencyService {
                 rate: Decimal::ONE,
                 effective_date: date,
                 created_at: now,
+                deleted_at: None,
+                deleted_by: None,
             });
         }
 
@@ -224,6 +253,8 @@ impl CurrencyService {
                 rate: Decimal::ONE / rate.rate,
                 effective_date: date,
                 created_at: rate.created_at,
+                deleted_at: None,
+                deleted_by: None,
             });
         }
 
@@ -245,6 +276,8 @@ impl CurrencyService {
                     rate: from_to_base.rate * base_to_target.rate,
                     effective_date: date,
                     created_at: chrono::Utc::now(),
+                    deleted_at: None,
+                    deleted_by: None,
                 });
             }
         }
@@ -304,6 +337,34 @@ impl CurrencyService {
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Exchange rate {} not found", id)))?;
         self.rate_repo.delete(id, tenant_id).await
+    }
+
+    /// Soft delete an exchange rate
+    pub async fn soft_delete_exchange_rate(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.rate_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted exchange rate
+    pub async fn restore_exchange_rate(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.rate_repo.restore(id, tenant_id).await
+    }
+
+    /// List deleted exchange rates for a tenant
+    pub async fn list_deleted_exchange_rates(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<ExchangeRate>, ApiError> {
+        self.rate_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently destroy a soft-deleted exchange rate
+    pub async fn destroy_exchange_rate(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.rate_repo.destroy(id, tenant_id).await
     }
 
     // ---- Conversion Operations ----

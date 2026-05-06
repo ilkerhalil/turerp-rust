@@ -4,6 +4,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::impl_soft_deletable;
+
 /// API Key permission scope
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -90,7 +92,11 @@ pub struct ApiKey {
     pub last_used_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(ApiKey);
 
 /// API Key response (never exposes the full key)
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

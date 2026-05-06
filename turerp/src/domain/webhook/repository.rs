@@ -36,6 +36,12 @@ pub trait WebhookRepository: Send + Sync {
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Webhook>, ApiError>;
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for webhook delivery operations
@@ -223,6 +229,43 @@ impl WebhookRepository for InMemoryWebhookRepository {
             .find(|w| w.id == id && w.tenant_id == tenant_id && w.deleted_at.is_none())
             .ok_or_else(|| ApiError::NotFound(format!("Webhook {} not found", id)))?;
         wh.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.write();
+        let wh = inner
+            .webhooks
+            .iter_mut()
+            .find(|w| w.id == id && w.tenant_id == tenant_id && w.is_deleted())
+            .ok_or_else(|| ApiError::NotFound(format!("Deleted webhook {} not found", id)))?;
+        wh.restore();
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Webhook>, ApiError> {
+        let inner = self.inner.read();
+        Ok(inner
+            .webhooks
+            .iter()
+            .filter(|w| w.tenant_id == tenant_id && w.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.write();
+        let len_before = inner.webhooks.len();
+        inner
+            .webhooks
+            .retain(|w| !(w.id == id && w.tenant_id == tenant_id && w.is_deleted()));
+
+        if inner.webhooks.len() == len_before {
+            return Err(ApiError::NotFound(format!(
+                "Deleted webhook {} not found",
+                id
+            )));
+        }
         Ok(())
     }
 }

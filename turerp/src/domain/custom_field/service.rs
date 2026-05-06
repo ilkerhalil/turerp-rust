@@ -157,6 +157,25 @@ impl CustomFieldService {
         self.repo.soft_delete(id, tenant_id, deleted_by).await
     }
 
+    /// Restore a soft-deleted custom field definition
+    pub async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.restore(id, tenant_id).await
+    }
+
+    /// List deleted custom field definitions for a tenant
+    pub async fn list_deleted(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<CustomFieldDefinitionResponse>, ApiError> {
+        let defs = self.repo.find_deleted(tenant_id).await?;
+        Ok(defs.into_iter().map(|d| d.into()).collect())
+    }
+
+    /// Permanently destroy a soft-deleted custom field definition
+    pub async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.destroy(id, tenant_id).await
+    }
+
     /// Validate custom field values against their definitions
     pub async fn validate_entity_custom_fields(
         &self,

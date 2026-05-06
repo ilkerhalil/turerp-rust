@@ -172,6 +172,90 @@ pub async fn delete_custom_field(
     }
 }
 
+/// Restore a soft-deleted custom field definition (admin only)
+#[utoipa::path(
+    post,
+    path = "/api/v1/custom-fields/{id}/restore",
+    tag = "Custom Fields",
+    params(("id" = i64, Path, description = "Custom field ID")),
+    responses(
+        (status = 200, description = "Custom field restored", body = MessageResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 404, description = "Custom field not found")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_custom_field(
+    admin_user: AdminUser,
+    service: web::Data<CustomFieldService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service.restore(*path, admin_user.0.tenant_id).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "custom_field.restored");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List deleted custom field definitions (admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/custom-fields/deleted",
+    tag = "Custom Fields",
+    responses(
+        (status = 200, description = "List of deleted custom fields"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_custom_fields(
+    admin_user: AdminUser,
+    service: web::Data<CustomFieldService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service.list_deleted(admin_user.0.tenant_id).await {
+        Ok(defs) => Ok(HttpResponse::Ok().json(defs)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Permanently destroy a soft-deleted custom field definition (admin only)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/custom-fields/{id}/destroy",
+    tag = "Custom Fields",
+    params(("id" = i64, Path, description = "Custom field ID")),
+    responses(
+        (status = 204, description = "Custom field permanently destroyed"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 404, description = "Custom field not found")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_custom_field(
+    admin_user: AdminUser,
+    service: web::Data<CustomFieldService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service.destroy(*path, admin_user.0.tenant_id).await {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct ListQuery {
     pub module: Option<String>,
@@ -189,5 +273,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_custom_field))
             .route(web::put().to(update_custom_field))
             .route(web::delete().to(delete_custom_field)),
+    )
+    .service(
+        web::resource("/v1/custom-fields/{id}/restore").route(web::post().to(restore_custom_field)),
+    )
+    .service(
+        web::resource("/v1/custom-fields/deleted").route(web::get().to(list_deleted_custom_fields)),
+    )
+    .service(
+        web::resource("/v1/custom-fields/{id}/destroy")
+            .route(web::delete().to(destroy_custom_field)),
     );
 }

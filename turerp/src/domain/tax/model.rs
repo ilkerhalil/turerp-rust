@@ -8,6 +8,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::impl_soft_deletable;
+
 /// Turkish tax types
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, ToSchema)]
 pub enum TaxType {
@@ -71,7 +73,11 @@ pub struct TaxRate {
     pub description: String,
     pub is_default: bool,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(TaxRate);
 
 /// Result of a tax calculation
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -133,7 +139,11 @@ pub struct TaxPeriod {
     pub status: TaxPeriodStatus,
     pub filed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(TaxPeriod);
 
 /// Individual transaction detail within a tax period
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -324,6 +334,8 @@ mod tests {
             description: "Standard KDV rate".to_string(),
             is_default: true,
             created_at: Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         let resp = TaxRateResponse::from(rate);
@@ -347,6 +359,8 @@ mod tests {
             status: TaxPeriodStatus::Open,
             filed_at: None,
             created_at: Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         let resp = TaxPeriodResponse::from(period);

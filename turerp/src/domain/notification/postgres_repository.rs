@@ -51,6 +51,8 @@ struct NotificationRow {
     last_error: Option<String>,
     attempts: i32,
     job_id: Option<i64>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
 }
 
 #[cfg(feature = "postgres")]
@@ -76,6 +78,8 @@ impl From<NotificationRow> for Notification {
             last_error: row.last_error,
             attempts: row.attempts as u32,
             job_id: row.job_id,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -102,6 +106,8 @@ struct NotificationRowWithTotal {
     last_error: Option<String>,
     attempts: i32,
     job_id: Option<i64>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: i64,
 }
 
@@ -137,7 +143,7 @@ impl NotificationRepository for PostgresNotificationRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             RETURNING id, tenant_id, user_id, channel, priority, status, notification_type,
                 subject, body, recipient, template_key, template_vars, provider_message_id,
-                created_at, sent_at, read_at, last_error, attempts, job_id
+                created_at, sent_at, read_at, last_error, attempts, job_id, deleted_at, deleted_by
             "#,
         )
         .bind(notification.tenant_id)
@@ -166,9 +172,9 @@ impl NotificationRepository for PostgresNotificationRepository {
             r#"
             SELECT id, tenant_id, user_id, channel, priority, status, notification_type,
                 subject, body, recipient, template_key, template_vars, provider_message_id,
-                created_at, sent_at, read_at, last_error, attempts, job_id
+                created_at, sent_at, read_at, last_error, attempts, job_id, deleted_at, deleted_by
             FROM notifications
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -192,10 +198,11 @@ impl NotificationRepository for PostgresNotificationRepository {
             r#"
             SELECT id, tenant_id, user_id, channel, priority, status, notification_type,
                 subject, body, recipient, template_key, template_vars, provider_message_id,
-                created_at, sent_at, read_at, last_error, attempts, job_id,
+                created_at, sent_at, read_at, last_error, attempts, job_id, deleted_at, deleted_by,
                 COUNT(*) OVER() as total_count
             FROM notifications
             WHERE tenant_id = $1
+                AND deleted_at IS NULL
                 AND ($2::BIGINT IS NULL OR user_id = $2)
                 AND ($3::VARCHAR IS NULL OR channel = $3)
             ORDER BY created_at DESC
@@ -244,7 +251,7 @@ impl NotificationRepository for PostgresNotificationRepository {
                 provider_message_id = COALESCE($4, provider_message_id),
                 last_error = COALESCE($5, last_error),
                 sent_at = COALESCE($6, sent_at)
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -262,13 +269,101 @@ impl NotificationRepository for PostgresNotificationRepository {
 
     async fn increment_attempt(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
-            "UPDATE notifications SET attempts = attempts + 1 WHERE id = $1 AND tenant_id = $2",
+            "UPDATE notifications SET attempts = attempts + 1 WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
         )
         .bind(id)
         .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Notification"))?;
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE notifications
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Notification"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!("Notification {} not found", id)));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE notifications
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Notification"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted notification {} not found",
+                id
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Notification>, ApiError> {
+        let rows = sqlx::query_as::<_, NotificationRow>(
+            r#"
+            SELECT id, tenant_id, user_id, channel, priority, status, notification_type,
+                subject, body, recipient, template_key, template_vars, provider_message_id,
+                created_at, sent_at, read_at, last_error, attempts, job_id, deleted_at, deleted_by
+            FROM notifications
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Notification"))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM notifications
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Notification"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted notification {} not found",
+                id
+            )));
+        }
 
         Ok(())
     }
@@ -292,6 +387,8 @@ struct InAppNotificationRow {
     related_notification_id: Option<i64>,
     created_at: DateTime<Utc>,
     read_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
 }
 
 #[cfg(feature = "postgres")]
@@ -309,6 +406,8 @@ impl From<InAppNotificationRow> for InAppNotification {
             read_at: row.read_at,
             link: row.link,
             related_notification_id: row.related_notification_id,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -344,7 +443,7 @@ impl InAppNotificationRepository for PostgresInAppNotificationRepository {
                  related_notification_id, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING id, tenant_id, user_id, title, message, notification_type, read,
-                link, related_notification_id, created_at, read_at
+                link, related_notification_id, created_at, read_at, deleted_at, deleted_by
             "#,
         )
         .bind(notification.tenant_id)
@@ -372,9 +471,9 @@ impl InAppNotificationRepository for PostgresInAppNotificationRepository {
         let rows = sqlx::query_as::<_, InAppNotificationRow>(
             r#"
             SELECT id, tenant_id, user_id, title, message, notification_type, read,
-                link, related_notification_id, created_at, read_at
+                link, related_notification_id, created_at, read_at, deleted_at, deleted_by
             FROM in_app_notifications
-            WHERE tenant_id = $1 AND user_id = $2
+            WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL
                 AND ($3::BOOLEAN = false OR read = false)
             ORDER BY created_at DESC
             "#,
@@ -391,7 +490,7 @@ impl InAppNotificationRepository for PostgresInAppNotificationRepository {
 
     async fn mark_as_read(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
-            "UPDATE in_app_notifications SET read = true, read_at = NOW() WHERE id = $1 AND tenant_id = $2",
+            "UPDATE in_app_notifications SET read = true, read_at = NOW() WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
         )
         .bind(id)
         .bind(tenant_id)
@@ -410,7 +509,7 @@ impl InAppNotificationRepository for PostgresInAppNotificationRepository {
 
     async fn mark_all_as_read(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError> {
         let result = sqlx::query(
-            "UPDATE in_app_notifications SET read = true, read_at = NOW() WHERE tenant_id = $1 AND user_id = $2 AND read = false",
+            "UPDATE in_app_notifications SET read = true, read_at = NOW() WHERE tenant_id = $1 AND user_id = $2 AND read = false AND deleted_at IS NULL",
         )
         .bind(tenant_id)
         .bind(user_id)
@@ -423,7 +522,7 @@ impl InAppNotificationRepository for PostgresInAppNotificationRepository {
 
     async fn unread_count(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError> {
         let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM in_app_notifications WHERE tenant_id = $1 AND user_id = $2 AND read = false",
+            "SELECT COUNT(*) FROM in_app_notifications WHERE tenant_id = $1 AND user_id = $2 AND read = false AND deleted_at IS NULL",
         )
         .bind(tenant_id)
         .bind(user_id)
@@ -432,6 +531,93 @@ impl InAppNotificationRepository for PostgresInAppNotificationRepository {
         .map_err(|e| map_sqlx_error(e, "InAppNotification"))?;
 
         Ok(count as u64)
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE in_app_notifications
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "InAppNotification"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "In-app notification {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE in_app_notifications
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "InAppNotification"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted in-app notification {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<InAppNotification>, ApiError> {
+        let rows = sqlx::query_as::<_, InAppNotificationRow>(
+            r#"
+            SELECT id, tenant_id, user_id, title, message, notification_type, read,
+                link, related_notification_id, created_at, read_at, deleted_at, deleted_by
+            FROM in_app_notifications
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "InAppNotification"))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM in_app_notifications
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "InAppNotification"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted in-app notification {} not found",
+                id
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -450,6 +636,8 @@ struct NotificationPreferenceRow {
     enabled: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
 }
 
 #[cfg(feature = "postgres")]
@@ -464,6 +652,8 @@ impl From<NotificationPreferenceRow> for NotificationPreference {
             enabled: row.enabled,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -498,9 +688,9 @@ impl NotificationPreferenceRepository for PostgresNotificationPreferenceReposito
     ) -> Result<Vec<NotificationPreference>, ApiError> {
         let rows = sqlx::query_as::<_, NotificationPreferenceRow>(
             r#"
-            SELECT id, tenant_id, user_id, channel, notification_type, enabled, created_at, updated_at
+            SELECT id, tenant_id, user_id, channel, notification_type, enabled, created_at, updated_at, deleted_at, deleted_by
             FROM notification_preferences
-            WHERE tenant_id = $1 AND user_id = $2
+            WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(tenant_id)
@@ -522,7 +712,7 @@ impl NotificationPreferenceRepository for PostgresNotificationPreferenceReposito
         let enabled: Option<bool> = sqlx::query_scalar(
             r#"
             SELECT enabled FROM notification_preferences
-            WHERE tenant_id = $1 AND user_id = $2 AND channel = $3 AND notification_type = $4
+            WHERE tenant_id = $1 AND user_id = $2 AND channel = $3 AND notification_type = $4 AND deleted_at IS NULL
             "#,
         )
         .bind(tenant_id)
@@ -557,7 +747,7 @@ impl NotificationPreferenceRepository for PostgresNotificationPreferenceReposito
                 VALUES ($1, $2, $3, $4, $5, NOW())
                 ON CONFLICT (tenant_id, user_id, channel, notification_type)
                 DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()
-                RETURNING id, tenant_id, user_id, channel, notification_type, enabled, created_at, updated_at
+                RETURNING id, tenant_id, user_id, channel, notification_type, enabled, created_at, updated_at, deleted_at, deleted_by
                 "#,
             )
             .bind(tenant_id)

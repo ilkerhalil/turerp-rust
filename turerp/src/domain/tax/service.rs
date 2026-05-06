@@ -87,14 +87,29 @@ impl TaxService {
         self.rate_repo.update(id, tenant_id, update).await
     }
 
-    /// Delete a tax rate
-    pub async fn delete_tax_rate(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        // Verify existence first
-        self.rate_repo
-            .find_by_id(id, tenant_id)
-            .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Tax rate {} not found", id)))?;
-        self.rate_repo.delete(id, tenant_id).await
+    /// Soft delete a tax rate
+    pub async fn delete_tax_rate(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.rate_repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted tax rate
+    pub async fn restore_tax_rate(&self, id: i64, tenant_id: i64) -> Result<TaxRate, ApiError> {
+        self.rate_repo.restore(id, tenant_id).await
+    }
+
+    /// List soft-deleted tax rates
+    pub async fn list_deleted_tax_rates(&self, tenant_id: i64) -> Result<Vec<TaxRate>, ApiError> {
+        self.rate_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently destroy a soft-deleted tax rate
+    pub async fn destroy_tax_rate(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.rate_repo.destroy(id, tenant_id).await
     }
 
     /// Find the effective tax rate for a given type and date
@@ -235,6 +250,36 @@ impl TaxService {
         period.filed_at = Some(chrono::Utc::now());
 
         self.period_repo.update(id, tenant_id, period).await
+    }
+
+    /// Soft delete a tax period
+    pub async fn delete_tax_period(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.period_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted tax period
+    pub async fn restore_tax_period(&self, id: i64, tenant_id: i64) -> Result<TaxPeriod, ApiError> {
+        self.period_repo.restore(id, tenant_id).await
+    }
+
+    /// List soft-deleted tax periods
+    pub async fn list_deleted_tax_periods(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<TaxPeriod>, ApiError> {
+        self.period_repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently destroy a soft-deleted tax period
+    pub async fn destroy_tax_period(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.period_repo.destroy(id, tenant_id).await
     }
 }
 
@@ -478,7 +523,7 @@ mod tests {
         };
         let rate = svc.create_tax_rate(create, 1).await.unwrap();
 
-        svc.delete_tax_rate(rate.id, 1).await.unwrap();
+        svc.delete_tax_rate(rate.id, 1, 1).await.unwrap();
         let result = svc.get_tax_rate(rate.id, 1).await;
         assert!(result.is_err());
     }

@@ -33,6 +33,8 @@ struct CurrencyRow {
     is_base: bool,
     created_at: DateTime<Utc>,
     updated_at: Option<DateTime<Utc>>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -49,6 +51,8 @@ impl From<CurrencyRow> for Currency {
             is_base: row.is_base,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -67,6 +71,8 @@ struct ExchangeRateRow {
     rate: Decimal,
     effective_date: NaiveDate,
     created_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -80,6 +86,8 @@ impl From<ExchangeRateRow> for ExchangeRate {
             rate: row.rate,
             effective_date: row.effective_date,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -113,7 +121,7 @@ impl CurrencyRepository for PostgresCurrencyRepository {
             INSERT INTO currencies (tenant_id, code, name, symbol, decimal_places, is_active, is_base)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id, tenant_id, code, name, symbol, decimal_places, is_active, is_base,
-                      created_at, updated_at, NULL::bigint as total_count
+                      created_at, updated_at, deleted_at, deleted_by, NULL::bigint as total_count
             "#,
         )
         .bind(tenant_id)
@@ -134,9 +142,9 @@ impl CurrencyRepository for PostgresCurrencyRepository {
         let row = sqlx::query_as::<_, CurrencyRow>(
             r#"
             SELECT id, tenant_id, code, name, symbol, decimal_places, is_active, is_base,
-                   created_at, updated_at, NULL::bigint as total_count
+                   created_at, updated_at, deleted_at, deleted_by, NULL::bigint as total_count
             FROM currencies
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -152,9 +160,9 @@ impl CurrencyRepository for PostgresCurrencyRepository {
         let row = sqlx::query_as::<_, CurrencyRow>(
             r#"
             SELECT id, tenant_id, code, name, symbol, decimal_places, is_active, is_base,
-                   created_at, updated_at, NULL::bigint as total_count
+                   created_at, updated_at, deleted_at, deleted_by, NULL::bigint as total_count
             FROM currencies
-            WHERE code = UPPER($1) AND tenant_id = $2
+            WHERE code = UPPER($1) AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(code)
@@ -170,9 +178,9 @@ impl CurrencyRepository for PostgresCurrencyRepository {
         let row = sqlx::query_as::<_, CurrencyRow>(
             r#"
             SELECT id, tenant_id, code, name, symbol, decimal_places, is_active, is_base,
-                   created_at, updated_at, NULL::bigint as total_count
+                   created_at, updated_at, deleted_at, deleted_by, NULL::bigint as total_count
             FROM currencies
-            WHERE tenant_id = $1 AND is_base = TRUE
+            WHERE tenant_id = $1 AND is_base = TRUE AND deleted_at IS NULL
             "#,
         )
         .bind(tenant_id)
@@ -194,10 +202,11 @@ impl CurrencyRepository for PostgresCurrencyRepository {
         let rows = sqlx::query_as::<_, CurrencyRow>(
             r#"
             SELECT id, tenant_id, code, name, symbol, decimal_places, is_active, is_base,
-                   created_at, updated_at,
+                   created_at, updated_at, deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM currencies
             WHERE tenant_id = $1
+              AND deleted_at IS NULL
               AND ($2::bool IS NULL OR is_active = $2)
             ORDER BY code
             LIMIT $3 OFFSET $4
@@ -237,9 +246,9 @@ impl CurrencyRepository for PostgresCurrencyRepository {
                 is_active = COALESCE($4, is_active),
                 is_base = COALESCE($5, is_base),
                 updated_at = NOW()
-            WHERE id = $6 AND tenant_id = $7
+            WHERE id = $6 AND tenant_id = $7 AND deleted_at IS NULL
             RETURNING id, tenant_id, code, name, symbol, decimal_places, is_active, is_base,
-                      created_at, updated_at, NULL::bigint as total_count
+                      created_at, updated_at, deleted_at, deleted_by, NULL::bigint as total_count
             "#,
         )
         .bind(update.name)
@@ -266,6 +275,90 @@ impl CurrencyRepository for PostgresCurrencyRepository {
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound(format!("Currency {} not found", id)));
+        }
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE currencies
+            SET deleted_at = NOW(), deleted_by = $3, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(self.pool.as_ref())
+        .await
+        .map_err(|e| map_sqlx_error(e, "currency"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!("Currency {} not found", id)));
+        }
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE currencies
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(self.pool.as_ref())
+        .await
+        .map_err(|e| map_sqlx_error(e, "currency"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted currency {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Currency>, ApiError> {
+        let rows = sqlx::query_as::<_, CurrencyRow>(
+            r#"
+            SELECT id, tenant_id, code, name, symbol, decimal_places, is_active, is_base,
+                   created_at, updated_at, deleted_at, deleted_by, NULL::bigint as total_count
+            FROM currencies
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(self.pool.as_ref())
+        .await
+        .map_err(|e| map_sqlx_error(e, "currency"))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM currencies
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(self.pool.as_ref())
+        .await
+        .map_err(|e| map_sqlx_error(e, "currency"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted currency {} not found",
+                id
+            )));
         }
         Ok(())
     }
@@ -306,7 +399,7 @@ impl ExchangeRateRepository for PostgresExchangeRateRepository {
             INSERT INTO exchange_rates (tenant_id, from_currency, to_currency, rate, effective_date)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id, tenant_id, from_currency, to_currency, rate, effective_date,
-                      created_at, NULL::bigint as total_count
+                      created_at, deleted_at, deleted_by, NULL::bigint as total_count
             "#,
         )
         .bind(tenant_id)
@@ -325,9 +418,9 @@ impl ExchangeRateRepository for PostgresExchangeRateRepository {
         let row = sqlx::query_as::<_, ExchangeRateRow>(
             r#"
             SELECT id, tenant_id, from_currency, to_currency, rate, effective_date,
-                   created_at, NULL::bigint as total_count
+                   created_at, deleted_at, deleted_by, NULL::bigint as total_count
             FROM exchange_rates
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -349,12 +442,13 @@ impl ExchangeRateRepository for PostgresExchangeRateRepository {
         let row = sqlx::query_as::<_, ExchangeRateRow>(
             r#"
             SELECT id, tenant_id, from_currency, to_currency, rate, effective_date,
-                   created_at, NULL::bigint as total_count
+                   created_at, deleted_at, deleted_by, NULL::bigint as total_count
             FROM exchange_rates
             WHERE tenant_id = $1
               AND from_currency = UPPER($2)
               AND to_currency = UPPER($3)
               AND effective_date <= $4
+              AND deleted_at IS NULL
             ORDER BY effective_date DESC
             LIMIT 1
             "#,
@@ -382,10 +476,11 @@ impl ExchangeRateRepository for PostgresExchangeRateRepository {
         let rows = sqlx::query_as::<_, ExchangeRateRow>(
             r#"
             SELECT id, tenant_id, from_currency, to_currency, rate, effective_date,
-                   created_at,
+                   created_at, deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM exchange_rates
             WHERE tenant_id = $1
+              AND deleted_at IS NULL
               AND ($2::text IS NULL OR from_currency = UPPER($2) OR to_currency = UPPER($2))
               AND ($3::date IS NULL OR effective_date = $3)
             ORDER BY from_currency, to_currency, effective_date DESC
@@ -424,11 +519,12 @@ impl ExchangeRateRepository for PostgresExchangeRateRepository {
             r#"
             SELECT DISTINCT ON (from_currency, to_currency)
                    id, tenant_id, from_currency, to_currency, rate, effective_date,
-                   created_at,
+                   created_at, deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM exchange_rates
             WHERE tenant_id = $1
               AND effective_date <= $2
+              AND deleted_at IS NULL
             ORDER BY from_currency, to_currency, effective_date DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -463,9 +559,9 @@ impl ExchangeRateRepository for PostgresExchangeRateRepository {
             UPDATE exchange_rates
             SET rate = COALESCE($1, rate),
                 effective_date = COALESCE($2, effective_date)
-            WHERE id = $3 AND tenant_id = $4
+            WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL
             RETURNING id, tenant_id, from_currency, to_currency, rate, effective_date,
-                      created_at, NULL::bigint as total_count
+                      created_at, deleted_at, deleted_by, NULL::bigint as total_count
             "#,
         )
         .bind(update.rate)
@@ -490,6 +586,93 @@ impl ExchangeRateRepository for PostgresExchangeRateRepository {
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound(format!(
                 "Exchange rate {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE exchange_rates
+            SET deleted_at = NOW(), deleted_by = $3, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(self.pool.as_ref())
+        .await
+        .map_err(|e| map_sqlx_error(e, "currency"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Exchange rate {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE exchange_rates
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(self.pool.as_ref())
+        .await
+        .map_err(|e| map_sqlx_error(e, "currency"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted exchange rate {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<ExchangeRate>, ApiError> {
+        let rows = sqlx::query_as::<_, ExchangeRateRow>(
+            r#"
+            SELECT id, tenant_id, from_currency, to_currency, rate, effective_date,
+                   created_at, deleted_at, deleted_by, NULL::bigint as total_count
+            FROM exchange_rates
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(self.pool.as_ref())
+        .await
+        .map_err(|e| map_sqlx_error(e, "currency"))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM exchange_rates
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(self.pool.as_ref())
+        .await
+        .map_err(|e| map_sqlx_error(e, "currency"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted exchange rate {} not found",
                 id
             )));
         }

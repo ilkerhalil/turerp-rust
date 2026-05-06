@@ -402,6 +402,210 @@ pub async fn file_tax_period(
     }
 }
 
+/// Soft delete a tax rate (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/tax/rates/{id}", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax rate ID")),
+    responses((status = 204, description = "Tax rate soft deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn delete_tax_rate(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    match tax_service
+        .delete_tax_rate(id, admin_user.0.tenant_id, deleted_by)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore a soft-deleted tax rate (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/tax/rates/{id}/restore", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax rate ID")),
+    responses((status = 200, description = "Tax rate restored", body = TaxRateResponse), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_tax_rate(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    match tax_service
+        .restore_tax_rate(id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(rate) => Ok(HttpResponse::Ok().json(TaxRateResponse::from(rate))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List soft-deleted tax rates (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/tax/rates/deleted", tag = "Tax",
+    responses((status = 200, description = "List of deleted tax rates", body = Vec<TaxRateResponse>), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_tax_rates(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match tax_service
+        .list_deleted_tax_rates(admin_user.0.tenant_id)
+        .await
+    {
+        Ok(rates) => {
+            let responses: Vec<TaxRateResponse> =
+                rates.into_iter().map(TaxRateResponse::from).collect();
+            Ok(HttpResponse::Ok().json(responses))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Permanently destroy a soft-deleted tax rate (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/tax/rates/{id}/destroy", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax rate ID")),
+    responses((status = 204, description = "Tax rate permanently deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_tax_rate(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    match tax_service
+        .destroy_tax_rate(id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Soft delete a tax period (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/tax/periods/{id}", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax period ID")),
+    responses((status = 204, description = "Tax period soft deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn delete_tax_period(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    match tax_service
+        .delete_tax_period(id, admin_user.0.tenant_id, deleted_by)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore a soft-deleted tax period (requires admin role)
+#[utoipa::path(
+    put, path = "/api/v1/tax/periods/{id}/restore", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax period ID")),
+    responses((status = 200, description = "Tax period restored", body = TaxPeriodResponse), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_tax_period(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    match tax_service
+        .restore_tax_period(id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(period) => Ok(HttpResponse::Ok().json(TaxPeriodResponse::from(period))),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List soft-deleted tax periods (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/tax/periods/deleted", tag = "Tax",
+    responses((status = 200, description = "List of deleted tax periods", body = Vec<TaxPeriodResponse>), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_tax_periods(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match tax_service
+        .list_deleted_tax_periods(admin_user.0.tenant_id)
+        .await
+    {
+        Ok(periods) => {
+            let responses: Vec<TaxPeriodResponse> =
+                periods.into_iter().map(TaxPeriodResponse::from).collect();
+            Ok(HttpResponse::Ok().json(responses))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Permanently destroy a soft-deleted tax period (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/tax/periods/{id}/destroy", tag = "Tax",
+    params(("id" = i64, Path, description = "Tax period ID")),
+    responses((status = 204, description = "Tax period permanently deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_tax_period(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    match tax_service
+        .destroy_tax_period(id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
 /// Configure tax engine routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -410,11 +614,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_tax_rate)),
     )
     .service(web::resource("/v1/tax/rates/effective").route(web::get().to(get_effective_rate)))
+    .service(web::resource("/v1/tax/rates/deleted").route(web::get().to(list_deleted_tax_rates)))
     .service(
         web::resource("/v1/tax/rates/{id}")
             .route(web::get().to(get_tax_rate))
-            .route(web::put().to(update_tax_rate)),
+            .route(web::put().to(update_tax_rate))
+            .route(web::delete().to(delete_tax_rate)),
     )
+    .service(web::resource("/v1/tax/rates/{id}/restore").route(web::put().to(restore_tax_rate)))
+    .service(web::resource("/v1/tax/rates/{id}/destroy").route(web::delete().to(destroy_tax_rate)))
     .service(web::resource("/v1/tax/calculate").route(web::post().to(calculate_tax)))
     .service(
         web::resource("/v1/tax/calculate-invoice").route(web::post().to(calculate_invoice_tax)),
@@ -424,9 +632,20 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(list_tax_periods))
             .route(web::post().to(create_tax_period)),
     )
-    .service(web::resource("/v1/tax/periods/{id}").route(web::get().to(get_tax_period)))
+    .service(
+        web::resource("/v1/tax/periods/{id}")
+            .route(web::get().to(get_tax_period))
+            .route(web::delete().to(delete_tax_period)),
+    )
     .service(
         web::resource("/v1/tax/periods/{id}/calculate").route(web::post().to(calculate_tax_period)),
     )
-    .service(web::resource("/v1/tax/periods/{id}/file").route(web::post().to(file_tax_period)));
+    .service(web::resource("/v1/tax/periods/{id}/file").route(web::post().to(file_tax_period)))
+    .service(web::resource("/v1/tax/periods/{id}/restore").route(web::put().to(restore_tax_period)))
+    .service(
+        web::resource("/v1/tax/periods/deleted").route(web::get().to(list_deleted_tax_periods)),
+    )
+    .service(
+        web::resource("/v1/tax/periods/{id}/destroy").route(web::delete().to(destroy_tax_period)),
+    );
 }

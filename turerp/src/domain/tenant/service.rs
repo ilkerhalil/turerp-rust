@@ -96,6 +96,26 @@ impl TenantService {
         self.repo.delete(id).await
     }
 
+    /// Soft delete a tenant
+    pub async fn soft_delete_tenant(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        self.repo.soft_delete(id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted tenant
+    pub async fn restore_tenant(&self, id: i64) -> Result<Tenant, ApiError> {
+        self.repo.restore(id).await
+    }
+
+    /// List all deleted tenants
+    pub async fn list_deleted_tenants(&self) -> Result<Vec<Tenant>, ApiError> {
+        self.repo.find_deleted().await
+    }
+
+    /// Permanently destroy a tenant
+    pub async fn destroy_tenant(&self, id: i64) -> Result<(), ApiError> {
+        self.repo.destroy(id).await
+    }
+
     /// Get tenant database URL
     pub fn get_database_url(&self, base_url: &str, tenant: &Tenant) -> String {
         format!("{}/{}", base_url.trim_end_matches('/'), tenant.db_name)

@@ -51,6 +51,8 @@ pub struct User {
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
 
 impl User {
@@ -74,7 +76,33 @@ impl User {
             is_active: true,
             created_at: Utc::now(),
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         }
+    }
+}
+
+impl crate::common::soft_delete::SoftDeletable for User {
+    fn is_deleted(&self) -> bool {
+        self.deleted_at.is_some()
+    }
+
+    fn deleted_at(&self) -> Option<DateTime<Utc>> {
+        self.deleted_at
+    }
+
+    fn deleted_by(&self) -> Option<i64> {
+        self.deleted_by
+    }
+
+    fn mark_deleted(&mut self, by_user_id: i64) {
+        self.deleted_at = Some(Utc::now());
+        self.deleted_by = Some(by_user_id);
+    }
+
+    fn restore(&mut self) {
+        self.deleted_at = None;
+        self.deleted_by = None;
     }
 }
 

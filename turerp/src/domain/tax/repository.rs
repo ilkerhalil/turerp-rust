@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
 use crate::common::pagination::{PaginatedResult, PaginationParams};
+use crate::common::soft_delete::SoftDeletable;
 use crate::domain::tax::model::{
     CreateTaxRate, TaxPeriod, TaxPeriodDetail, TaxPeriodStatus, TaxRate, TaxType, UpdateTaxRate,
 };
@@ -52,6 +53,18 @@ pub trait TaxRateRepository: Send + Sync {
 
     /// Delete a tax rate
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a tax rate
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted tax rate
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<TaxRate, ApiError>;
+
+    /// Find soft-deleted tax rates (admin use)
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<TaxRate>, ApiError>;
+
+    /// Hard delete a tax rate (permanent destruction — admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed TaxRateRepository
@@ -106,6 +119,8 @@ impl TaxRateRepository for InMemoryTaxRateRepository {
             description: create.description,
             is_default: create.is_default,
             created_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.rates.insert(id, rate.clone());
@@ -117,7 +132,7 @@ impl TaxRateRepository for InMemoryTaxRateRepository {
         Ok(inner
             .rates
             .get(&id)
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .cloned())
     }
 
@@ -131,7 +146,7 @@ impl TaxRateRepository for InMemoryTaxRateRepository {
         let mut items: Vec<TaxRate> = inner
             .rates
             .values()
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .filter(|r| match &tax_type {
                 Some(tt) => r.tax_type == *tt,
                 None => true,
@@ -165,7 +180,7 @@ impl TaxRateRepository for InMemoryTaxRateRepository {
         let mut best: Option<&TaxRate> = None;
 
         for rate in inner.rates.values() {
-            if rate.tenant_id != tenant_id || rate.tax_type != tax_type {
+            if rate.tenant_id != tenant_id || rate.tax_type != tax_type || rate.is_deleted() {
                 continue;
             }
             if rate.effective_from > date {
@@ -223,12 +238,78 @@ impl TaxRateRepository for InMemoryTaxRateRepository {
 
         let rate = inner
             .rates
-            .get(&id)
+            .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
+            .ok_or_else(|| ApiError::NotFound(format!("Tax rate {} not found", id)))?;
+
+        rate.mark_deleted(0);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let rate = inner
+            .rates
+            .get_mut(&id)
             .filter(|r| r.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Tax rate {} not found", id)))?;
 
-        let key = rate.id;
-        inner.rates.remove(&key);
+        if rate.is_deleted() {
+            return Err(ApiError::Conflict(format!(
+                "Tax rate {} is already deleted",
+                id
+            )));
+        }
+
+        rate.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<TaxRate, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let rate = inner
+            .rates
+            .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Tax rate {} not found", id)))?;
+
+        if !rate.is_deleted() {
+            return Err(ApiError::BadRequest(format!(
+                "Tax rate {} is not deleted",
+                id
+            )));
+        }
+
+        rate.restore();
+        Ok(rate.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<TaxRate>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .rates
+            .values()
+            .filter(|r| r.tenant_id == tenant_id && r.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let len_before = inner.rates.len();
+        inner
+            .rates
+            .retain(|_, r| !(r.id == id && r.tenant_id == tenant_id && r.is_deleted()));
+
+        if inner.rates.len() == len_before {
+            return Err(ApiError::NotFound(format!(
+                "Deleted tax rate {} not found",
+                id
+            )));
+        }
         Ok(())
     }
 }
@@ -273,6 +354,18 @@ pub trait TaxPeriodRepository: Send + Sync {
 
     /// Get all detail lines for a tax period
     async fn get_details(&self, period_id: i64) -> Result<Vec<TaxPeriodDetail>, ApiError>;
+
+    /// Soft delete a tax period
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted tax period
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<TaxPeriod, ApiError>;
+
+    /// Find soft-deleted tax periods (admin use)
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<TaxPeriod>, ApiError>;
+
+    /// Hard delete a tax period (permanent destruction — admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed TaxPeriodRepository
@@ -339,6 +432,8 @@ impl TaxPeriodRepository for InMemoryTaxPeriodRepository {
             status: TaxPeriodStatus::Open,
             filed_at: None,
             created_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.periods.insert(id, period.clone());
@@ -351,7 +446,7 @@ impl TaxPeriodRepository for InMemoryTaxPeriodRepository {
         Ok(inner
             .periods
             .get(&id)
-            .filter(|p| p.tenant_id == tenant_id)
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
             .cloned())
     }
 
@@ -365,7 +460,7 @@ impl TaxPeriodRepository for InMemoryTaxPeriodRepository {
         let mut items: Vec<TaxPeriod> = inner
             .periods
             .values()
-            .filter(|p| p.tenant_id == tenant_id)
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
             .filter(|p| match &tax_type {
                 Some(tt) => p.tax_type == *tt,
                 None => true,
@@ -400,11 +495,78 @@ impl TaxPeriodRepository for InMemoryTaxPeriodRepository {
         let existing = inner
             .periods
             .get_mut(&id)
-            .filter(|p| p.tenant_id == tenant_id)
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Tax period {} not found", id)))?;
 
         *existing = period.clone();
         Ok(period)
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let period = inner
+            .periods
+            .get_mut(&id)
+            .filter(|p| p.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Tax period {} not found", id)))?;
+
+        if period.is_deleted() {
+            return Err(ApiError::Conflict(format!(
+                "Tax period {} is already deleted",
+                id
+            )));
+        }
+
+        period.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<TaxPeriod, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let period = inner
+            .periods
+            .get_mut(&id)
+            .filter(|p| p.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Tax period {} not found", id)))?;
+
+        if !period.is_deleted() {
+            return Err(ApiError::BadRequest(format!(
+                "Tax period {} is not deleted",
+                id
+            )));
+        }
+
+        period.restore();
+        Ok(period.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<TaxPeriod>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .periods
+            .values()
+            .filter(|p| p.tenant_id == tenant_id && p.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let len_before = inner.periods.len();
+        inner
+            .periods
+            .retain(|_, p| !(p.id == id && p.tenant_id == tenant_id && p.is_deleted()));
+
+        if inner.periods.len() == len_before {
+            return Err(ApiError::NotFound(format!(
+                "Deleted tax period {} not found",
+                id
+            )));
+        }
+        Ok(())
     }
 
     async fn add_detail(&self, detail: TaxPeriodDetail) -> Result<TaxPeriodDetail, ApiError> {

@@ -3,6 +3,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::impl_soft_deletable;
+
 /// Job priority levels
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default, sqlx::Type)]
 #[sqlx(rename_all = "lowercase")]
@@ -141,7 +143,11 @@ pub struct Job {
     pub last_error: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(Job);
 
 /// Create job request
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,7 +204,11 @@ pub struct JobSchedule {
     pub last_run_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(JobSchedule);
 
 /// Create a recurring job schedule
 #[derive(Debug, Clone, Serialize, Deserialize)]

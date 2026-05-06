@@ -90,6 +90,31 @@ impl SettingsService {
         self.repo.delete(id, tenant_id).await
     }
 
+    /// Soft delete a setting
+    pub async fn soft_delete_setting(
+        &self,
+        tenant_id: i64,
+        id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted setting
+    pub async fn restore_setting(&self, tenant_id: i64, id: i64) -> Result<(), ApiError> {
+        self.repo.restore(id, tenant_id).await
+    }
+
+    /// List deleted settings for a tenant
+    pub async fn list_deleted_settings(&self, tenant_id: i64) -> Result<Vec<Setting>, ApiError> {
+        self.repo.find_deleted(tenant_id).await
+    }
+
+    /// Permanently destroy a soft-deleted setting
+    pub async fn destroy_setting(&self, tenant_id: i64, id: i64) -> Result<(), ApiError> {
+        self.repo.destroy(id, tenant_id).await
+    }
+
     /// Bulk update settings by key
     pub async fn bulk_update(
         &self,

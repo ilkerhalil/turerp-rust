@@ -328,6 +328,68 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
         Ok(())
     }
 
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE chart_accounts
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore chart account: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Deleted chart account not found".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<ChartAccount>, ApiError> {
+        let rows: Vec<ChartAccountRow> = sqlx::query_as(&format!(
+            r#"
+            SELECT {CHART_ACCOUNT_COLUMNS}
+            FROM chart_accounts
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        ))
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted chart accounts: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM chart_accounts
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy chart account: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Deleted chart account not found".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
     async fn update_balance(
         &self,
         id: i64,

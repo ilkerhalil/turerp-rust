@@ -209,6 +209,120 @@ pub async fn delete_setting(
     Ok(HttpResponse::NoContent().finish())
 }
 
+/// Soft delete a setting by ID (admin only)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/settings/{id}/soft",
+    params(("id" = i64, Path, description = "Setting ID")),
+    responses(
+        (status = 204, description = "Setting soft deleted"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - admin required"),
+        (status = 404, description = "Setting not found"),
+        (status = 409, description = "Setting already deleted"),
+    ),
+    tag = "settings"
+)]
+#[delete("/settings/{id}/soft")]
+pub async fn soft_delete_setting(
+    _admin: AdminUser,
+    state: web::Data<AppState>,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let id = path.into_inner();
+    let tenant_id = _admin.0.tenant_id;
+    let deleted_by = _admin.0.sub.parse::<i64>().unwrap_or(0);
+
+    state
+        .settings_service
+        .soft_delete_setting(tenant_id, id, deleted_by)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Restore a soft-deleted setting (admin only)
+#[utoipa::path(
+    post,
+    path = "/api/v1/settings/{id}/restore",
+    params(("id" = i64, Path, description = "Setting ID")),
+    responses(
+        (status = 204, description = "Setting restored"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - admin required"),
+        (status = 404, description = "Deleted setting not found"),
+    ),
+    tag = "settings"
+)]
+#[post("/settings/{id}/restore")]
+pub async fn restore_setting(
+    _admin: AdminUser,
+    state: web::Data<AppState>,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let id = path.into_inner();
+    let tenant_id = _admin.0.tenant_id;
+
+    state
+        .settings_service
+        .restore_setting(tenant_id, id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// List deleted settings for the current tenant (admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/settings/deleted",
+    responses(
+        (status = 200, description = "List of deleted settings"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - admin required"),
+    ),
+    tag = "settings"
+)]
+#[get("/settings/deleted")]
+pub async fn list_deleted_settings(
+    _admin: AdminUser,
+    state: web::Data<AppState>,
+) -> Result<HttpResponse, ApiError> {
+    let tenant_id = _admin.0.tenant_id;
+    let settings = state
+        .settings_service
+        .list_deleted_settings(tenant_id)
+        .await?;
+    let responses: Vec<SettingResponse> = settings.into_iter().map(SettingResponse::from).collect();
+    Ok(HttpResponse::Ok().json(responses))
+}
+
+/// Permanently destroy a soft-deleted setting (admin only)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/settings/{id}/destroy",
+    params(("id" = i64, Path, description = "Setting ID")),
+    responses(
+        (status = 204, description = "Setting permanently destroyed"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - admin required"),
+        (status = 404, description = "Deleted setting not found"),
+    ),
+    tag = "settings"
+)]
+#[delete("/settings/{id}/destroy")]
+pub async fn destroy_setting(
+    _admin: AdminUser,
+    state: web::Data<AppState>,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let id = path.into_inner();
+    let tenant_id = _admin.0.tenant_id;
+
+    state
+        .settings_service
+        .destroy_setting(tenant_id, id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 /// Seed default settings for the current tenant (admin only)
 #[utoipa::path(
     post,
@@ -245,5 +359,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(update_setting)
         .service(bulk_update_settings)
         .service(delete_setting)
+        .service(soft_delete_setting)
+        .service(restore_setting)
+        .service(list_deleted_settings)
+        .service(destroy_setting)
         .service(seed_settings);
 }

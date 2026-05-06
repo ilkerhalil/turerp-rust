@@ -63,6 +63,11 @@ pub trait PurchaseOrderLineRepository: Send + Sync {
     async fn find_by_order(&self, order_id: i64) -> Result<Vec<PurchaseOrderLine>, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseOrderLine>, ApiError>;
     async fn delete_by_order(&self, order_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete all lines for an order
+    async fn soft_delete_by_order(&self, order_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Restore all lines for an order
+    async fn restore_by_order(&self, order_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for GoodsReceipt operations
@@ -99,6 +104,15 @@ pub trait GoodsReceiptLineRepository: Send + Sync {
     ) -> Result<Vec<GoodsReceiptLine>, ApiError>;
     async fn find_by_receipt(&self, receipt_id: i64) -> Result<Vec<GoodsReceiptLine>, ApiError>;
     async fn delete_by_receipt(&self, receipt_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete all lines for a receipt
+    async fn soft_delete_by_receipt(
+        &self,
+        receipt_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError>;
+    /// Restore all lines for a receipt
+    async fn restore_by_receipt(&self, receipt_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type aliases
@@ -177,6 +191,15 @@ pub trait PurchaseRequestLineRepository: Send + Sync {
     ) -> Result<Vec<PurchaseRequestLine>, ApiError>;
     async fn find_by_request(&self, request_id: i64) -> Result<Vec<PurchaseRequestLine>, ApiError>;
     async fn delete_by_request(&self, request_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete all lines for a request
+    async fn soft_delete_by_request(
+        &self,
+        request_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError>;
+    /// Restore all lines for a request
+    async fn restore_by_request(&self, request_id: i64) -> Result<(), ApiError>;
 }
 
 fn calculate_totals(lines: &[CreatePurchaseOrderLine]) -> (Decimal, Decimal, Decimal, Decimal) {
@@ -459,6 +482,8 @@ impl PurchaseOrderLineRepository for InMemoryPurchaseOrderLineRepository {
                 discount_rate: create.discount_rate,
                 line_total,
                 sort_order: i as i32,
+                deleted_at: None,
+                deleted_by: None,
             });
         }
 
@@ -468,13 +493,17 @@ impl PurchaseOrderLineRepository for InMemoryPurchaseOrderLineRepository {
 
     async fn find_by_order(&self, order_id: i64) -> Result<Vec<PurchaseOrderLine>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.lines.get(&order_id).cloned().unwrap_or_default())
+        Ok(inner
+            .lines
+            .get(&order_id)
+            .map(|ls| ls.iter().filter(|l| !l.is_deleted()).cloned().collect())
+            .unwrap_or_default())
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseOrderLine>, ApiError> {
         let inner = self.inner.lock();
         for line_set in inner.lines.values() {
-            if let Some(line) = line_set.iter().find(|l| l.id == id) {
+            if let Some(line) = line_set.iter().find(|l| l.id == id && !l.is_deleted()) {
                 return Ok(Some(line.clone()));
             }
         }
@@ -484,6 +513,26 @@ impl PurchaseOrderLineRepository for InMemoryPurchaseOrderLineRepository {
     async fn delete_by_order(&self, order_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         inner.lines.remove(&order_id);
+        Ok(())
+    }
+
+    async fn soft_delete_by_order(&self, order_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(lines) = inner.lines.get_mut(&order_id) {
+            for line in lines.iter_mut() {
+                line.mark_deleted(deleted_by);
+            }
+        }
+        Ok(())
+    }
+
+    async fn restore_by_order(&self, order_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(lines) = inner.lines.get_mut(&order_id) {
+            for line in lines.iter_mut() {
+                line.restore();
+            }
+        }
         Ok(())
     }
 }
@@ -681,6 +730,8 @@ impl GoodsReceiptLineRepository for InMemoryGoodsReceiptLineRepository {
                 quantity: create.quantity,
                 condition: create.condition,
                 notes: create.notes,
+                deleted_at: None,
+                deleted_by: None,
             });
         }
 
@@ -690,12 +741,40 @@ impl GoodsReceiptLineRepository for InMemoryGoodsReceiptLineRepository {
 
     async fn find_by_receipt(&self, receipt_id: i64) -> Result<Vec<GoodsReceiptLine>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.lines.get(&receipt_id).cloned().unwrap_or_default())
+        Ok(inner
+            .lines
+            .get(&receipt_id)
+            .map(|ls| ls.iter().filter(|l| !l.is_deleted()).cloned().collect())
+            .unwrap_or_default())
     }
 
     async fn delete_by_receipt(&self, receipt_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         inner.lines.remove(&receipt_id);
+        Ok(())
+    }
+
+    async fn soft_delete_by_receipt(
+        &self,
+        receipt_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(lines) = inner.lines.get_mut(&receipt_id) {
+            for line in lines.iter_mut() {
+                line.mark_deleted(deleted_by);
+            }
+        }
+        Ok(())
+    }
+
+    async fn restore_by_receipt(&self, receipt_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(lines) = inner.lines.get_mut(&receipt_id) {
+            for line in lines.iter_mut() {
+                line.restore();
+            }
+        }
         Ok(())
     }
 }
@@ -1025,6 +1104,8 @@ impl PurchaseRequestLineRepository for InMemoryPurchaseRequestLineRepository {
                 quantity: create.quantity,
                 notes: create.notes,
                 sort_order: i as i32,
+                deleted_at: None,
+                deleted_by: None,
             });
         }
 
@@ -1034,12 +1115,40 @@ impl PurchaseRequestLineRepository for InMemoryPurchaseRequestLineRepository {
 
     async fn find_by_request(&self, request_id: i64) -> Result<Vec<PurchaseRequestLine>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.lines.get(&request_id).cloned().unwrap_or_default())
+        Ok(inner
+            .lines
+            .get(&request_id)
+            .map(|ls| ls.iter().filter(|l| !l.is_deleted()).cloned().collect())
+            .unwrap_or_default())
     }
 
     async fn delete_by_request(&self, request_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         inner.lines.remove(&request_id);
+        Ok(())
+    }
+
+    async fn soft_delete_by_request(
+        &self,
+        request_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(lines) = inner.lines.get_mut(&request_id) {
+            for line in lines.iter_mut() {
+                line.mark_deleted(deleted_by);
+            }
+        }
+        Ok(())
+    }
+
+    async fn restore_by_request(&self, request_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        if let Some(lines) = inner.lines.get_mut(&request_id) {
+            for line in lines.iter_mut() {
+                line.restore();
+            }
+        }
         Ok(())
     }
 }

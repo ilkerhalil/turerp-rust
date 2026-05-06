@@ -1,8 +1,9 @@
 //! Sales service for business logic
 use crate::common::pagination::PaginatedResult;
 use crate::domain::sales::model::{
-    CreateQuotation, CreateSalesOrder, CreateSalesOrderLine, Quotation, QuotationResponse,
-    QuotationStatus, SalesOrder, SalesOrderResponse, SalesOrderStatus,
+    CreateQuotation, CreateSalesOrder, CreateSalesOrderLine, Quotation, QuotationLine,
+    QuotationResponse, QuotationStatus, SalesOrder, SalesOrderLine, SalesOrderResponse,
+    SalesOrderStatus,
 };
 use crate::domain::sales::repository::{
     BoxQuotationLineRepository, BoxQuotationRepository, BoxSalesOrderLineRepository,
@@ -134,19 +135,32 @@ impl SalesService {
         self.order_repo.delete(id, tenant_id).await
     }
 
-    /// Soft delete a sales order (sets deleted_at)
+    /// Soft delete a sales order (sets deleted_at) and its lines
     pub async fn soft_delete_order(
         &self,
         id: i64,
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
+        // Soft delete lines first
+        let lines = self.order_line_repo.find_by_order(id).await?;
+        for line in lines {
+            self.order_line_repo
+                .soft_delete(line.id, id, deleted_by)
+                .await?;
+        }
         self.order_repo.soft_delete(id, tenant_id, deleted_by).await
     }
 
-    /// Restore a soft-deleted sales order
+    /// Restore a soft-deleted sales order and its lines
     pub async fn restore_order(&self, id: i64, tenant_id: i64) -> Result<SalesOrder, ApiError> {
-        self.order_repo.restore(id, tenant_id).await
+        let order = self.order_repo.restore(id, tenant_id).await?;
+        // Restore all soft-deleted lines
+        let deleted_lines = self.order_line_repo.find_deleted(order.id).await?;
+        for line in deleted_lines {
+            let _ = self.order_line_repo.restore(line.id, order.id).await;
+        }
+        Ok(order)
     }
 
     /// Restore a soft-deleted sales order and return as response
@@ -155,7 +169,7 @@ impl SalesService {
         id: i64,
         tenant_id: i64,
     ) -> Result<SalesOrderResponse, ApiError> {
-        let order = self.order_repo.restore(id, tenant_id).await?;
+        let order = self.restore_order(id, tenant_id).await?;
         let lines = self.order_line_repo.find_by_order(order.id).await?;
         Ok(SalesOrderResponse::from((order, lines)))
     }
@@ -359,21 +373,35 @@ impl SalesService {
         self.quotation_repo.delete(id, tenant_id).await
     }
 
-    /// Soft delete a quotation (sets deleted_at)
+    /// Soft delete a quotation (sets deleted_at) and its lines
     pub async fn soft_delete_quotation(
         &self,
         id: i64,
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
+        let lines = self.quotation_line_repo.find_by_quotation(id).await?;
+        for line in lines {
+            self.quotation_line_repo
+                .soft_delete(line.id, id, deleted_by)
+                .await?;
+        }
         self.quotation_repo
             .soft_delete(id, tenant_id, deleted_by)
             .await
     }
 
-    /// Restore a soft-deleted quotation
+    /// Restore a soft-deleted quotation and its lines
     pub async fn restore_quotation(&self, id: i64, tenant_id: i64) -> Result<Quotation, ApiError> {
-        self.quotation_repo.restore(id, tenant_id).await
+        let quotation = self.quotation_repo.restore(id, tenant_id).await?;
+        let deleted_lines = self.quotation_line_repo.find_deleted(quotation.id).await?;
+        for line in deleted_lines {
+            let _ = self
+                .quotation_line_repo
+                .restore(line.id, quotation.id)
+                .await;
+        }
+        Ok(quotation)
     }
 
     /// Restore a soft-deleted quotation and return as response
@@ -382,7 +410,7 @@ impl SalesService {
         id: i64,
         tenant_id: i64,
     ) -> Result<QuotationResponse, ApiError> {
-        let quotation = self.quotation_repo.restore(id, tenant_id).await?;
+        let quotation = self.restore_quotation(id, tenant_id).await?;
         let lines = self
             .quotation_line_repo
             .find_by_quotation(quotation.id)
@@ -402,6 +430,86 @@ impl SalesService {
     pub async fn destroy_quotation(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.quotation_line_repo.delete_by_quotation(id).await?;
         self.quotation_repo.destroy(id, tenant_id).await
+    }
+
+    // Sales Order Line operations
+
+    /// Soft delete a sales order line
+    pub async fn soft_delete_order_line(
+        &self,
+        line_id: i64,
+        order_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.order_line_repo
+            .soft_delete(line_id, order_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted sales order line
+    pub async fn restore_order_line(
+        &self,
+        line_id: i64,
+        order_id: i64,
+    ) -> Result<SalesOrderLine, ApiError> {
+        self.order_line_repo.restore(line_id, order_id).await
+    }
+
+    /// List soft-deleted sales order lines
+    pub async fn list_deleted_order_lines(
+        &self,
+        order_id: i64,
+    ) -> Result<Vec<SalesOrderLine>, ApiError> {
+        self.order_line_repo.find_deleted(order_id).await
+    }
+
+    /// Permanently delete a sales order line
+    pub async fn destroy_order_line(&self, line_id: i64, order_id: i64) -> Result<(), ApiError> {
+        self.order_line_repo.destroy(line_id, order_id).await
+    }
+
+    // Quotation Line operations
+
+    /// Soft delete a quotation line
+    pub async fn soft_delete_quotation_line(
+        &self,
+        line_id: i64,
+        quotation_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.quotation_line_repo
+            .soft_delete(line_id, quotation_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted quotation line
+    pub async fn restore_quotation_line(
+        &self,
+        line_id: i64,
+        quotation_id: i64,
+    ) -> Result<QuotationLine, ApiError> {
+        self.quotation_line_repo
+            .restore(line_id, quotation_id)
+            .await
+    }
+
+    /// List soft-deleted quotation lines
+    pub async fn list_deleted_quotation_lines(
+        &self,
+        quotation_id: i64,
+    ) -> Result<Vec<QuotationLine>, ApiError> {
+        self.quotation_line_repo.find_deleted(quotation_id).await
+    }
+
+    /// Permanently delete a quotation line
+    pub async fn destroy_quotation_line(
+        &self,
+        line_id: i64,
+        quotation_id: i64,
+    ) -> Result<(), ApiError> {
+        self.quotation_line_repo
+            .destroy(line_id, quotation_id)
+            .await
     }
 }
 

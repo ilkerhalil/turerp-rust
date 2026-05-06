@@ -733,6 +733,43 @@
         ]
       }
     },
+    "/api/v1/api-keys/tenant/{tenant_id}/deleted": {
+      "get": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "List deleted API keys for a tenant (admin only)",
+        "operationId": "list_deleted_api_keys",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of deleted API keys"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/api-keys/tenant/{tenant_id}/paginated": {
       "get": {
         "tags": [
@@ -939,6 +976,159 @@
           },
           "404": {
             "description": "API key not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/api-keys/{id}/tenant/{tenant_id}/destroy": {
+      "delete": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "Permanently destroy a soft-deleted API key (admin only)",
+        "operationId": "destroy_api_key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "API key ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "API key permanently destroyed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "Deleted API key not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/api-keys/{id}/tenant/{tenant_id}/restore": {
+      "post": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "Restore a soft-deleted API key (admin only)",
+        "operationId": "restore_api_key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "API key ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "API key restored"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "Deleted API key not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/api-keys/{id}/tenant/{tenant_id}/soft": {
+      "delete": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "Soft delete an API key (admin only)",
+        "operationId": "soft_delete_api_key",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "API key ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "tenant_id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "API key soft deleted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin only"
+          },
+          "404": {
+            "description": "API key not found"
+          },
+          "409": {
+            "description": "API key already deleted"
           }
         },
         "security": [
@@ -2858,6 +3048,25 @@
         ]
       }
     },
+    "/api/v1/chart-of-accounts/deleted": {
+      "get": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "List deleted chart accounts (requires admin role)",
+        "operationId": "list_deleted_chart_accounts",
+        "responses": {
+          "200": {
+            "description": "List of deleted chart accounts"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/chart-of-accounts/tree": {
       "get": {
         "tags": [
@@ -3041,6 +3250,39 @@
         ]
       }
     },
+    "/api/v1/chart-of-accounts/{code}/destroy": {
+      "delete": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "Permanently destroy a soft-deleted chart account (requires admin role)",
+        "operationId": "destroy_chart_account",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Account code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Chart account permanently destroyed"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/chart-of-accounts/{code}/recalculate": {
       "post": {
         "tags": [
@@ -3065,6 +3307,46 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/chart-of-accounts/{code}/restore": {
+      "post": {
+        "tags": [
+          "Chart of Accounts"
+        ],
+        "summary": "Restore a soft-deleted chart account (requires admin role)",
+        "operationId": "restore_chart_account",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Account code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chart account restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -4413,6 +4695,35 @@
         ]
       }
     },
+    "/api/v1/currencies/deleted": {
+      "get": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "List deleted currencies (requires admin role)",
+        "operationId": "list_deleted_currencies",
+        "responses": {
+          "200": {
+            "description": "List of deleted currencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CurrencyResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/currencies/{code}": {
       "get": {
         "tags": [
@@ -4501,6 +4812,105 @@
         ]
       }
     },
+    "/api/v1/currencies/{code}/destroy": {
+      "delete": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Permanently destroy a soft-deleted currency (requires admin role)",
+        "operationId": "destroy_currency",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Currency code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Currency permanently destroyed"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/currencies/{code}/restore": {
+      "post": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Restore soft-deleted currency (requires admin role)",
+        "operationId": "restore_currency",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Currency code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Currency restored"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/currencies/{code}/soft": {
+      "delete": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Soft delete currency (requires admin role)",
+        "operationId": "soft_delete_currency",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Currency code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Currency soft deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/custom-fields": {
       "get": {
         "tags": [
@@ -4565,6 +4975,31 @@
           },
           "409": {
             "description": "Field name already exists in module"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-fields/deleted": {
+      "get": {
+        "tags": [
+          "Custom Fields"
+        ],
+        "summary": "List deleted custom field definitions (admin only)",
+        "operationId": "list_deleted_custom_fields",
+        "responses": {
+          "200": {
+            "description": "List of deleted custom fields"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
           }
         },
         "security": [
@@ -4679,6 +5114,93 @@
         "responses": {
           "200": {
             "description": "Custom field deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Custom field not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-fields/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Custom Fields"
+        ],
+        "summary": "Permanently destroy a soft-deleted custom field definition (admin only)",
+        "operationId": "destroy_custom_field",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Custom field ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Custom field permanently destroyed"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Custom field not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-fields/{id}/restore": {
+      "post": {
+        "tags": [
+          "Custom Fields"
+        ],
+        "summary": "Restore a soft-deleted custom field definition (admin only)",
+        "operationId": "restore_custom_field",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Custom field ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Custom field restored",
             "content": {
               "application/json": {
                 "schema": {
@@ -5729,6 +6251,35 @@
         ]
       }
     },
+    "/api/v1/exchange-rates/deleted": {
+      "get": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "List deleted exchange rates (requires admin role)",
+        "operationId": "list_deleted_exchange_rates",
+        "responses": {
+          "200": {
+            "description": "List of deleted exchange rates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ExchangeRateResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/exchange-rates/effective": {
       "get": {
         "tags": [
@@ -5777,6 +6328,108 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/exchange-rates/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Permanently destroy a soft-deleted exchange rate (requires admin role)",
+        "operationId": "destroy_exchange_rate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Exchange rate ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Exchange rate permanently destroyed"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/exchange-rates/{id}/restore": {
+      "post": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Restore soft-deleted exchange rate (requires admin role)",
+        "operationId": "restore_exchange_rate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Exchange rate ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Exchange rate restored"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/exchange-rates/{id}/soft": {
+      "delete": {
+        "tags": [
+          "Currency"
+        ],
+        "summary": "Soft delete exchange rate (requires admin role)",
+        "operationId": "soft_delete_exchange_rate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Exchange rate ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Exchange rate soft deleted"
           },
           "404": {
             "description": "Not found"
@@ -5919,6 +6572,41 @@
           },
           "401": {
             "description": "Not authenticated - missing or invalid JWT token"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feature-flags/deleted": {
+      "get": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "List deleted feature flags endpoint (admin only)",
+        "operationId": "list_deleted_flags",
+        "responses": {
+          "200": {
+            "description": "Deleted feature flags retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FeatureFlagResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
           }
         },
         "security": [
@@ -6075,6 +6763,53 @@
         ]
       }
     },
+    "/api/v1/feature-flags/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Permanently destroy soft-deleted feature flag endpoint (admin only)",
+        "operationId": "destroy_flag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Feature flag ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flag permanently destroyed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Deleted feature flag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/feature-flags/{id}/disable": {
       "post": {
         "tags": [
@@ -6148,6 +6883,100 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/FeatureFlagResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Feature flag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feature-flags/{id}/restore": {
+      "post": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Restore soft-deleted feature flag endpoint (admin only)",
+        "operationId": "restore_flag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Feature flag ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flag restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Deleted feature flag not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/feature-flags/{id}/soft": {
+      "delete": {
+        "tags": [
+          "Feature Flags"
+        ],
+        "summary": "Soft delete feature flag endpoint (admin only)",
+        "operationId": "soft_delete_flag",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Feature flag ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Feature flag soft deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
                 }
               }
             }
@@ -12948,6 +13777,26 @@
         }
       }
     },
+    "/api/v1/settings/deleted": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "List deleted settings for the current tenant (admin only)",
+        "operationId": "list_deleted_settings",
+        "responses": {
+          "200": {
+            "description": "List of deleted settings"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          }
+        }
+      }
+    },
     "/api/v1/settings/seed": {
       "post": {
         "tags": [
@@ -13052,6 +13901,114 @@
           },
           "404": {
             "description": "Setting not found"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Permanently destroy a soft-deleted setting (admin only)",
+        "operationId": "destroy_setting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Setting ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Setting permanently destroyed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          },
+          "404": {
+            "description": "Deleted setting not found"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/{id}/restore": {
+      "post": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Restore a soft-deleted setting (admin only)",
+        "operationId": "restore_setting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Setting ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Setting restored"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          },
+          "404": {
+            "description": "Deleted setting not found"
+          }
+        }
+      }
+    },
+    "/api/v1/settings/{id}/soft": {
+      "delete": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Soft delete a setting by ID (admin only)",
+        "operationId": "soft_delete_setting",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Setting ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Setting soft deleted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          },
+          "404": {
+            "description": "Setting not found"
+          },
+          "409": {
+            "description": "Setting already deleted"
           }
         }
       }
@@ -13956,6 +14913,38 @@
         ]
       }
     },
+    "/api/v1/tax/periods/deleted": {
+      "get": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "List soft-deleted tax periods (requires admin role)",
+        "operationId": "list_deleted_tax_periods",
+        "responses": {
+          "200": {
+            "description": "List of deleted tax periods",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaxPeriodResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/tax/periods/{id}": {
       "get": {
         "tags": [
@@ -13985,6 +14974,41 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Soft delete a tax period (requires admin role)",
+        "operationId": "delete_tax_period",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tax period soft deleted"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Not found"
@@ -14038,6 +15062,43 @@
         ]
       }
     },
+    "/api/v1/tax/periods/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Permanently destroy a soft-deleted tax period (requires admin role)",
+        "operationId": "destroy_tax_period",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tax period permanently deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/tax/periods/{id}/file": {
       "post": {
         "tags": [
@@ -14070,6 +15131,50 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/periods/{id}/restore": {
+      "put": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Restore a soft-deleted tax period (requires admin role)",
+        "operationId": "restore_tax_period",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tax period restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxPeriodResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -14154,6 +15259,38 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TaxRateResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/rates/deleted": {
+      "get": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "List soft-deleted tax rates (requires admin role)",
+        "operationId": "list_deleted_tax_rates",
+        "responses": {
+          "200": {
+            "description": "List of deleted tax rates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TaxRateResponse"
+                  }
                 }
               }
             }
@@ -14297,6 +15434,122 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Soft delete a tax rate (requires admin role)",
+        "operationId": "delete_tax_rate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax rate ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tax rate soft deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/rates/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Permanently destroy a soft-deleted tax rate (requires admin role)",
+        "operationId": "destroy_tax_rate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax rate ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Tax rate permanently deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tax/rates/{id}/restore": {
+      "put": {
+        "tags": [
+          "Tax"
+        ],
+        "summary": "Restore a soft-deleted tax rate (requires admin role)",
+        "operationId": "restore_tax_rate",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tax rate ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tax rate restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxRateResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -14543,6 +15796,25 @@
         ]
       }
     },
+    "/api/v1/tenants/deleted": {
+      "get": {
+        "tags": [
+          "Tenant"
+        ],
+        "summary": "List deleted tenants (requires admin role)",
+        "operationId": "list_deleted_tenants",
+        "responses": {
+          "200": {
+            "description": "List of deleted tenants"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/tenants/{id}": {
       "get": {
         "tags": [
@@ -14649,6 +15921,81 @@
           },
           "403": {
             "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Tenant"
+        ],
+        "summary": "Permanently destroy a tenant (requires admin role)",
+        "operationId": "destroy_tenant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenant permanently destroyed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tenants/{id}/restore": {
+      "post": {
+        "tags": [
+          "Tenant"
+        ],
+        "summary": "Restore a soft-deleted tenant (requires admin role)",
+        "operationId": "restore_tenant",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Tenant ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tenant restored"
+          },
+          "404": {
+            "description": "Not found"
           }
         },
         "security": [
@@ -15080,6 +16427,31 @@
         ]
       }
     },
+    "/api/v1/users/deleted": {
+      "get": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "List deleted users for a tenant (requires admin role)",
+        "operationId": "list_deleted_users",
+        "responses": {
+          "200": {
+            "description": "List of deleted users"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/users/{id}": {
       "get": {
         "tags": [
@@ -15209,6 +16581,100 @@
           },
           "401": {
             "description": "Not authenticated - missing or invalid JWT token"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Permanently destroy a user (requires admin role)",
+        "operationId": "destroy_user",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User permanently destroyed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/{id}/restore": {
+      "post": {
+        "tags": [
+          "Users"
+        ],
+        "summary": "Restore a soft-deleted user (requires admin role)",
+        "operationId": "restore_user",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "User ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
           },
           "403": {
             "description": "Forbidden - admin role required"
@@ -15545,6 +17011,41 @@
         ]
       }
     },
+    "/api/v1/webhooks/deleted": {
+      "get": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "List deleted webhooks for a tenant (admin only)",
+        "operationId": "list_deleted_webhooks",
+        "responses": {
+          "200": {
+            "description": "List of deleted webhooks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WebhookResponse"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/webhooks/deliveries/{id}/retry": {
       "post": {
         "tags": [
@@ -15796,6 +17297,100 @@
           },
           "404": {
             "description": "Webhook not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/webhooks/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Permanently destroy a soft-deleted webhook (admin only)",
+        "operationId": "destroy_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Webhook ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook permanently destroyed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Deleted webhook not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/webhooks/{id}/restore": {
+      "post": {
+        "tags": [
+          "Webhooks"
+        ],
+        "summary": "Restore a soft-deleted webhook (admin only)",
+        "operationId": "restore_webhook",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Webhook ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin access required"
+          },
+          "404": {
+            "description": "Deleted webhook not found"
           }
         },
         "security": [
@@ -16669,6 +18264,19 @@
             "type": "integer",
             "format": "int32"
           },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
           "id": {
             "type": "integer",
             "format": "int64"
@@ -16954,6 +18562,19 @@
         "properties": {
           "created_at": {
             "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           },
           "effective_date": {
             "$ref": "#/components/schemas/NaiveDate"
@@ -18019,6 +19640,19 @@
           "created_at": {
             "$ref": "#/components/schemas/DateTime"
           },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
           "filed_at": {
             "allOf": [
               {
@@ -18206,6 +19840,19 @@
           },
           "created_at": {
             "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           },
           "description": {
             "type": "string"

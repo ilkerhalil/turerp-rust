@@ -5,6 +5,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::impl_soft_deletable;
+
 /// Sales order status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum SalesOrderStatus {
@@ -119,25 +121,7 @@ pub struct SalesOrder {
     pub deleted_by: Option<i64>,
 }
 
-impl crate::common::SoftDeletable for SalesOrder {
-    fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
-    }
-    fn deleted_at(&self) -> Option<DateTime<Utc>> {
-        self.deleted_at
-    }
-    fn deleted_by(&self) -> Option<i64> {
-        self.deleted_by
-    }
-    fn mark_deleted(&mut self, by_user_id: i64) {
-        self.deleted_at = Some(Utc::now());
-        self.deleted_by = Some(by_user_id);
-    }
-    fn restore(&mut self) {
-        self.deleted_at = None;
-        self.deleted_by = None;
-    }
-}
+impl_soft_deletable!(SalesOrder);
 
 /// Sales order line item
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -152,7 +136,11 @@ pub struct SalesOrderLine {
     pub discount_rate: Decimal,
     pub line_total: Decimal,
     pub sort_order: i32,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(SalesOrderLine);
 
 /// Quotation entity
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -176,25 +164,7 @@ pub struct Quotation {
     pub deleted_by: Option<i64>,
 }
 
-impl crate::common::SoftDeletable for Quotation {
-    fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
-    }
-    fn deleted_at(&self) -> Option<DateTime<Utc>> {
-        self.deleted_at
-    }
-    fn deleted_by(&self) -> Option<i64> {
-        self.deleted_by
-    }
-    fn mark_deleted(&mut self, by_user_id: i64) {
-        self.deleted_at = Some(Utc::now());
-        self.deleted_by = Some(by_user_id);
-    }
-    fn restore(&mut self) {
-        self.deleted_at = None;
-        self.deleted_by = None;
-    }
-}
+impl_soft_deletable!(Quotation);
 
 /// Quotation line item
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -209,7 +179,11 @@ pub struct QuotationLine {
     pub discount_rate: Decimal,
     pub line_total: Decimal,
     pub sort_order: i32,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(QuotationLine);
 
 /// Create sales order request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

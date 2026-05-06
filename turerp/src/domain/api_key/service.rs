@@ -110,6 +110,35 @@ impl ApiKeyService {
         self.repo.delete(id, tenant_id).await
     }
 
+    /// Soft delete an API key
+    pub async fn soft_delete_api_key(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted API key
+    pub async fn restore_api_key(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.restore(id, tenant_id).await
+    }
+
+    /// List deleted API keys for a tenant
+    pub async fn list_deleted_api_keys(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<ApiKeyResponse>, ApiError> {
+        let keys = self.repo.find_deleted(tenant_id).await?;
+        Ok(keys.into_iter().map(ApiKeyResponse::from).collect())
+    }
+
+    /// Permanently destroy a soft-deleted API key
+    pub async fn destroy_api_key(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.destroy(id, tenant_id).await
+    }
+
     /// Authenticate an API key (used by middleware/extractor)
     pub async fn authenticate(&self, plain_key: &str) -> Result<ApiKey, ApiError> {
         let key_hash = hash_api_key(plain_key);

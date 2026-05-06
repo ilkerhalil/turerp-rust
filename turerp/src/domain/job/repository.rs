@@ -47,6 +47,30 @@ pub trait JobRepository: Send + Sync {
     /// Clean up old completed/failed/cancelled jobs
     async fn cleanup(&self, older_than: Duration) -> Result<u64, ApiError>;
 
+    /// Soft delete a job
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted job
+    async fn restore(&self, id: i64) -> Result<(), ApiError>;
+
+    /// List deleted jobs for a tenant
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Job>>, ApiError>;
+
+    /// Permanently destroy a soft-deleted job
+    async fn destroy(&self, id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a job schedule
+    async fn soft_delete_schedule(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted job schedule
+    async fn restore_schedule(&self, id: i64) -> Result<(), ApiError>;
+
+    /// List deleted schedules for a tenant
+    async fn find_deleted_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>>, ApiError>;
+
+    /// Permanently destroy a soft-deleted schedule
+    async fn destroy_schedule(&self, id: i64) -> Result<(), ApiError>;
+
     // Cron schedule methods
 
     /// Create a recurring job schedule
@@ -174,6 +198,8 @@ impl JobRepository for InMemoryJobRepository {
             last_error: None,
             created_at: Utc::now(),
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
         self.jobs.write().push(job.clone());
         Ok(job)
@@ -182,7 +208,7 @@ impl JobRepository for InMemoryJobRepository {
     async fn find_by_id(&self,
         id: i64,
     ) -> Result<Option<Job>, ApiError> {
-        Ok(self.jobs.read().iter().find(|j| j.id == id).cloned())
+        Ok(self.jobs.read().iter().find(|j| j.id == id && !j.is_deleted()).cloned())
     }
 
     async fn find_next_pending(&self,
@@ -191,7 +217,8 @@ impl JobRepository for InMemoryJobRepository {
         Ok(jobs
             .iter()
             .filter(|j| {
-                j.status == JobStatus::Pending
+                !j.is_deleted()
+                    && j.status == JobStatus::Pending
                     && j.scheduled_at.map_or(true, |s| s <= Utc::now())
             })
             .max_by(|a, b| {
@@ -208,7 +235,7 @@ impl JobRepository for InMemoryJobRepository {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         job.status = JobStatus::Running;
         job.started_at = Some(Utc::now());
@@ -223,7 +250,7 @@ impl JobRepository for InMemoryJobRepository {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         job.status = JobStatus::Completed;
         job.completed_at = Some(Utc::now());
@@ -238,7 +265,7 @@ impl JobRepository for InMemoryJobRepository {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         job.last_error = Some(error.to_string());
         if job.attempts >= job.max_attempts {
@@ -259,7 +286,7 @@ impl JobRepository for InMemoryJobRepository {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         if job.status != JobStatus::Pending && job.status != JobStatus::Scheduled {
             return Err(ApiError::BadRequest(
@@ -281,7 +308,7 @@ impl JobRepository for InMemoryJobRepository {
             .jobs
             .read()
             .iter()
-            .filter(|j| j.tenant_id == tenant_id && j.status == status)
+            .filter(|j| j.tenant_id == tenant_id && j.status == status && !j.is_deleted())
             .cloned()
             .collect())
     }
@@ -292,7 +319,7 @@ impl JobRepository for InMemoryJobRepository {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         if job.status != JobStatus::Failed {
             return Err(ApiError::BadRequest("Can only retry failed jobs".to_string()));
@@ -317,12 +344,59 @@ impl JobRepository for InMemoryJobRepository {
         let mut jobs = self.jobs.write();
         let before = jobs.len();
         jobs.retain(|j| {
-            !(j.status == JobStatus::Completed
-                || j.status == JobStatus::Failed
-                || j.status == JobStatus::Cancelled)
+            j.is_deleted()
+                || !(j.status == JobStatus::Completed
+                    || j.status == JobStatus::Failed
+                    || j.status == JobStatus::Cancelled)
                 || j.completed_at.map_or(true, |c| c > cutoff)
         });
         Ok((before - jobs.len()) as u64)
+    }
+
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut jobs = self.jobs.write();
+        let job = jobs
+            .iter_mut()
+            .find(|j| j.id == id)
+            .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
+        if job.is_deleted() {
+            return Err(ApiError::Conflict(format!("Job {} is already deleted", id)));
+        }
+        job.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64) -> Result<(), ApiError> {
+        let mut jobs = self.jobs.write();
+        let job = jobs
+            .iter_mut()
+            .find(|j| j.id == id)
+            .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
+        if !job.is_deleted() {
+            return Err(ApiError::BadRequest(format!("Job {} is not deleted", id)));
+        }
+        job.restore();
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Job>, ApiError> {
+        Ok(self
+            .jobs
+            .read()
+            .iter()
+            .filter(|j| j.tenant_id == tenant_id && j.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+        let mut jobs = self.jobs.write();
+        let len_before = jobs.len();
+        jobs.retain(|j| !(j.id == id && j.is_deleted()));
+        if jobs.len() == len_before {
+            return Err(ApiError::NotFound(format!("Deleted job {} not found", id)));
+        }
+        Ok(())
     }
 
     async fn create_schedule(
@@ -342,6 +416,8 @@ impl JobRepository for InMemoryJobRepository {
             last_run_at: None,
             created_at: Utc::now(),
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
         self.schedules.write().push(s.clone());
         Ok(s)
@@ -355,7 +431,7 @@ impl JobRepository for InMemoryJobRepository {
             .schedules
             .read()
             .iter()
-            .filter(|s| s.tenant_id == tenant_id)
+            .filter(|s| s.tenant_id == tenant_id && !s.is_deleted())
             .cloned()
             .collect())
     }
@@ -369,7 +445,7 @@ impl JobRepository for InMemoryJobRepository {
         let mut schedules = self.schedules.write();
         let s = schedules
             .iter_mut()
-            .find(|s| s.id == id)
+            .find(|s| s.id == id && !s.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Schedule {} not found", id)))?;
         s.next_run_at = Some(next_run);
         s.last_run_at = Some(last_run);
@@ -385,7 +461,7 @@ impl JobRepository for InMemoryJobRepository {
         let mut schedules = self.schedules.write();
         let s = schedules
             .iter_mut()
-            .find(|s| s.id == id)
+            .find(|s| s.id == id && !s.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Schedule {} not found", id)))?;
         s.is_active = active;
         s.updated_at = Some(Utc::now());
@@ -399,7 +475,8 @@ impl JobRepository for InMemoryJobRepository {
             .read()
             .iter()
             .filter(|s| {
-                s.is_active
+                !s.is_deleted()
+                    && s.is_active
                     && s.next_run_at.map_or(true, |n| n <= now)
             })
             .cloned()
@@ -412,7 +489,7 @@ impl JobRepository for InMemoryJobRepository {
     ) -> Result<JobCounts, ApiError> {
         let jobs = self.jobs.read();
         let mut counts = JobCounts::default();
-        for j in jobs.iter().filter(|j| j.tenant_id == tenant_id) {
+        for j in jobs.iter().filter(|j| j.tenant_id == tenant_id && !j.is_deleted()) {
             match j.status {
                 JobStatus::Pending => counts.pending += 1,
                 JobStatus::Running => counts.running += 1,
@@ -433,7 +510,7 @@ impl JobRepository for InMemoryJobRepository {
         let jobs = self.jobs.read();
         let mut filtered: Vec<Job> = jobs
             .iter()
-            .filter(|j| j.tenant_id == tenant_id)
+            .filter(|j| j.tenant_id == tenant_id && !j.is_deleted())
             .cloned()
             .collect();
         filtered.sort_by(|a, b| b.created_at.cmp(&a.created_at));
@@ -450,7 +527,7 @@ impl JobRepository for InMemoryJobRepository {
                 .unwrap_or(chrono::Duration::try_seconds(300).unwrap_or(chrono::Duration::max_duration()));
         let mut jobs = self.jobs.write();
         let mut count = 0u64;
-        for j in jobs.iter_mut().filter(|j| j.status == JobStatus::Running) {
+        for j in jobs.iter_mut().filter(|j| j.status == JobStatus::Running && !j.is_deleted()) {
             if j.started_at.map_or(false, |s| s < cutoff) {
                 j.status = JobStatus::Pending;
                 j.attempts += 1;
@@ -460,6 +537,52 @@ impl JobRepository for InMemoryJobRepository {
             }
         }
         Ok(count)
+    }
+
+    async fn soft_delete_schedule(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut schedules = self.schedules.write();
+        let s = schedules
+            .iter_mut()
+            .find(|s| s.id == id)
+            .ok_or_else(|| ApiError::NotFound(format!("Schedule {} not found", id)))?;
+        if s.is_deleted() {
+            return Err(ApiError::Conflict(format!("Schedule {} is already deleted", id)));
+        }
+        s.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore_schedule(&self, id: i64) -> Result<(), ApiError> {
+        let mut schedules = self.schedules.write();
+        let s = schedules
+            .iter_mut()
+            .find(|s| s.id == id)
+            .ok_or_else(|| ApiError::NotFound(format!("Schedule {} not found", id)))?;
+        if !s.is_deleted() {
+            return Err(ApiError::BadRequest(format!("Schedule {} is not deleted", id)));
+        }
+        s.restore();
+        Ok(())
+    }
+
+    async fn find_deleted_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>, ApiError> {
+        Ok(self
+            .schedules
+            .read()
+            .iter()
+            .filter(|s| s.tenant_id == tenant_id && s.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy_schedule(&self, id: i64) -> Result<(), ApiError> {
+        let mut schedules = self.schedules.write();
+        let len_before = schedules.len();
+        schedules.retain(|s| !(s.id == id && s.is_deleted()));
+        if schedules.len() == len_before {
+            return Err(ApiError::NotFound(format!("Deleted schedule {} not found", id)));
+        }
+        Ok(())
     }
 }
 

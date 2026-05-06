@@ -280,6 +280,25 @@ impl ChartOfAccountsService {
         self.delete_account(account.id, tenant_id, deleted_by).await
     }
 
+    /// Restore a soft-deleted chart account
+    pub async fn restore_account(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.restore(id, tenant_id).await
+    }
+
+    /// List deleted chart accounts for a tenant
+    pub async fn list_deleted_accounts(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<ChartAccountResponse>, ApiError> {
+        let accounts = self.repo.find_deleted(tenant_id).await?;
+        Ok(accounts.into_iter().map(|a| a.into()).collect())
+    }
+
+    /// Permanently destroy a soft-deleted chart account
+    pub async fn destroy_account(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.destroy(id, tenant_id).await
+    }
+
     /// Recalculate the balance of a chart account by code
     pub async fn recalculate_balance_by_code(
         &self,

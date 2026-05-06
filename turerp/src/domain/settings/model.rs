@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use utoipa::ToSchema;
 
+use crate::impl_soft_deletable;
+
 /// Supported data types for settings values
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -104,7 +106,11 @@ pub struct Setting {
     pub is_editable: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(Setting);
 
 /// Create setting request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -190,6 +196,8 @@ pub struct SettingResponse {
     pub is_editable: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
 
 impl From<Setting> for SettingResponse {
@@ -219,6 +227,8 @@ impl From<Setting> for SettingResponse {
             is_editable: s.is_editable,
             created_at: s.created_at,
             updated_at: s.updated_at,
+            deleted_at: s.deleted_at,
+            deleted_by: s.deleted_by,
         }
     }
 }
@@ -370,6 +380,8 @@ mod tests {
             is_editable: true,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         let resp = SettingResponse::from(setting);
@@ -392,6 +404,8 @@ mod tests {
             is_editable: true,
             created_at: Utc::now(),
             updated_at: Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         let resp = SettingResponse::from(setting);
