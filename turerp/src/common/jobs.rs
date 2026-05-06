@@ -191,10 +191,11 @@ impl Default for InMemoryJobScheduler {
 impl JobScheduler for InMemoryJobScheduler {
     async fn schedule(&self, create: CreateJob) -> Result<Job, String> {
         let id = self.allocate_id();
+        let is_future = create.scheduled_at.is_some_and(|s| s > Utc::now());
         let job = Job {
             id,
             job_type: create.job_type,
-            status: if create.scheduled_at.is_some() {
+            status: if is_future {
                 JobStatus::Scheduled
             } else {
                 JobStatus::Pending
@@ -238,7 +239,7 @@ impl JobScheduler for InMemoryJobScheduler {
                     JobPriority::Normal => 2,
                     JobPriority::Low => 1,
                 };
-                pa.cmp(&pb).then_with(|| a.created_at.cmp(&b.created_at))
+                pa.cmp(&pb).then_with(|| b.created_at.cmp(&a.created_at))
             })
             .cloned())
     }
@@ -546,5 +547,359 @@ mod tests {
         let retried = scheduler.get_job(job.id).await.unwrap().unwrap();
         assert_eq!(retried.status, JobStatus::Pending);
         assert_eq!(retried.attempts, 0);
+    }
+
+    #[tokio::test]
+    async fn test_schedule_all_job_types() {
+        let scheduler = InMemoryJobScheduler::new();
+
+        let types = vec![
+            JobType::CalculateDepreciation {
+                asset_id: 1,
+                tenant_id: 1,
+            },
+            JobType::RunPayroll {
+                tenant_id: 1,
+                period: "2024-01".to_string(),
+            },
+            JobType::SendReminders { tenant_id: 1 },
+            JobType::ArchiveLogs {
+                tenant_id: 1,
+                older_than_days: 30,
+            },
+            JobType::GenerateReport {
+                tenant_id: 1,
+                report_type: "balance_sheet".to_string(),
+                params: "{}".to_string(),
+            },
+            JobType::SendNotification {
+                notification_id: 1,
+                tenant_id: 1,
+            },
+            JobType::Custom {
+                name: "test".to_string(),
+                payload: "data".to_string(),
+            },
+        ];
+
+        for (i, job_type) in types.into_iter().enumerate() {
+            let job = scheduler
+                .schedule(CreateJob::new(job_type, 1))
+                .await
+                .unwrap();
+            assert_eq!(job.id, (i + 1) as i64);
+            assert_eq!(job.status, JobStatus::Pending);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_scheduled_job_not_picked_up_early() {
+        let scheduler = InMemoryJobScheduler::new();
+        let future = Utc::now() + chrono::Duration::seconds(3600);
+        let job = scheduler
+            .schedule(
+                CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1)
+                    .with_scheduled_at(future),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(job.status, JobStatus::Scheduled);
+
+        let next = scheduler.next_pending().await.unwrap();
+        assert!(next.is_none(), "Future job should not be picked up");
+    }
+
+    #[tokio::test]
+    async fn test_scheduled_job_picked_up_after_time() {
+        let scheduler = InMemoryJobScheduler::new();
+        let past = Utc::now() - chrono::Duration::seconds(1);
+        let job = scheduler
+            .schedule(
+                CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1).with_scheduled_at(past),
+            )
+            .await
+            .unwrap();
+
+        let next = scheduler.next_pending().await.unwrap();
+        assert_eq!(next.unwrap().id, job.id);
+    }
+
+    #[tokio::test]
+    async fn test_exponential_backoff_timing() {
+        let scheduler = InMemoryJobScheduler::new();
+        let job = scheduler
+            .schedule(
+                CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1).with_max_attempts(5),
+            )
+            .await
+            .unwrap();
+        let id = job.id;
+
+        // First failure: backoff = 2^1 = 2 seconds
+        scheduler.mark_running(id).await.unwrap();
+        scheduler.mark_failed(id, "err1").await.unwrap();
+        let j1 = scheduler.get_job(id).await.unwrap().unwrap();
+        assert_eq!(j1.attempts, 1);
+        let delay1 = j1.scheduled_at.unwrap() - Utc::now();
+        assert!(delay1.num_seconds() >= 1 && delay1.num_seconds() <= 3);
+
+        // Second failure: backoff = 2^2 = 4 seconds
+        scheduler.mark_running(id).await.unwrap();
+        scheduler.mark_failed(id, "err2").await.unwrap();
+        let j2 = scheduler.get_job(id).await.unwrap().unwrap();
+        assert_eq!(j2.attempts, 2);
+        let delay2 = j2.scheduled_at.unwrap() - Utc::now();
+        assert!(delay2.num_seconds() >= 3 && delay2.num_seconds() <= 5);
+
+        // Third failure: backoff = 2^3 = 8 seconds
+        scheduler.mark_running(id).await.unwrap();
+        scheduler.mark_failed(id, "err3").await.unwrap();
+        let j3 = scheduler.get_job(id).await.unwrap().unwrap();
+        assert_eq!(j3.attempts, 3);
+        let delay3 = j3.scheduled_at.unwrap() - Utc::now();
+        assert!(delay3.num_seconds() >= 7 && delay3.num_seconds() <= 9);
+    }
+
+    #[tokio::test]
+    async fn test_cancel_running_job_fails() {
+        let scheduler = InMemoryJobScheduler::new();
+        let job = scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+
+        scheduler.mark_running(job.id).await.unwrap();
+        let result = scheduler.cancel(job.id).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Can only cancel"));
+    }
+
+    #[tokio::test]
+    async fn test_retry_non_failed_job_fails() {
+        let scheduler = InMemoryJobScheduler::new();
+        let job = scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+
+        let result = scheduler.retry(job.id).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Can only retry failed jobs"));
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_preserves_incomplete_jobs() {
+        let scheduler = InMemoryJobScheduler::new();
+
+        // Pending job
+        scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+
+        // Running job
+        let running = scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        scheduler.mark_running(running.id).await.unwrap();
+
+        // Completed job
+        let completed = scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        scheduler.mark_running(completed.id).await.unwrap();
+        scheduler.mark_completed(completed.id).await.unwrap();
+
+        // Cleanup with 0 duration should remove only completed
+        let cleaned = scheduler.cleanup(Duration::from_secs(0)).await.unwrap();
+        assert_eq!(cleaned, 1);
+
+        let all = scheduler
+            .list_by_status(1, JobStatus::Pending)
+            .await
+            .unwrap();
+        assert_eq!(all.len(), 1);
+
+        let running_list = scheduler
+            .list_by_status(1, JobStatus::Running)
+            .await
+            .unwrap();
+        assert_eq!(running_list.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_respects_cutoff() {
+        let scheduler = InMemoryJobScheduler::new();
+
+        // Old completed job
+        let old = scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        scheduler.mark_running(old.id).await.unwrap();
+        scheduler.mark_completed(old.id).await.unwrap();
+
+        // Immediate cleanup with huge duration should keep everything
+        let cleaned = scheduler
+            .cleanup(Duration::from_secs(86400 * 365))
+            .await
+            .unwrap();
+        assert_eq!(cleaned, 0);
+    }
+
+    #[tokio::test]
+    async fn test_priority_tie_breaker() {
+        let scheduler = InMemoryJobScheduler::new();
+
+        let job1 = scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        let job2 = scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+
+        let next = scheduler.next_pending().await.unwrap().unwrap();
+        assert_eq!(next.id, job1.id, "Earlier created job should win tie");
+    }
+
+    #[tokio::test]
+    async fn test_tenant_isolation() {
+        let scheduler = InMemoryJobScheduler::new();
+
+        scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 2 }, 2))
+            .await
+            .unwrap();
+        scheduler
+            .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+
+        let tenant1 = scheduler
+            .list_by_status(1, JobStatus::Pending)
+            .await
+            .unwrap();
+        assert_eq!(tenant1.len(), 2);
+
+        let tenant2 = scheduler
+            .list_by_status(2, JobStatus::Pending)
+            .await
+            .unwrap();
+        assert_eq!(tenant2.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_job_not_found() {
+        let scheduler = InMemoryJobScheduler::new();
+        let result = scheduler.get_job(999).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_mark_running_not_found() {
+        let scheduler = InMemoryJobScheduler::new();
+        let result = scheduler.mark_running(999).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_mark_completed_not_found() {
+        let scheduler = InMemoryJobScheduler::new();
+        let result = scheduler.mark_completed(999).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_mark_failed_not_found() {
+        let scheduler = InMemoryJobScheduler::new();
+        let result = scheduler.mark_failed(999, "error").await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_retry_not_found() {
+        let scheduler = InMemoryJobScheduler::new();
+        let result = scheduler.retry(999).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_cancel_not_found() {
+        let scheduler = InMemoryJobScheduler::new();
+        let result = scheduler.cancel(999).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_job_status_transitions() {
+        let scheduler = InMemoryJobScheduler::new();
+        let job = scheduler
+            .schedule(
+                CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1).with_max_attempts(1),
+            )
+            .await
+            .unwrap();
+        let id = job.id;
+
+        // Pending -> Running
+        scheduler.mark_running(id).await.unwrap();
+        let j = scheduler.get_job(id).await.unwrap().unwrap();
+        assert_eq!(j.status, JobStatus::Running);
+        assert_eq!(j.attempts, 1);
+        assert!(j.started_at.is_some());
+
+        // Running -> Failed (max attempts reached)
+        scheduler.mark_failed(id, "boom").await.unwrap();
+        let j = scheduler.get_job(id).await.unwrap().unwrap();
+        assert_eq!(j.status, JobStatus::Failed);
+        assert_eq!(j.last_error, Some("boom".to_string()));
+        assert!(j.completed_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_multiple_retry_cycles() {
+        let scheduler = InMemoryJobScheduler::new();
+        let job = scheduler
+            .schedule(
+                CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1).with_max_attempts(3),
+            )
+            .await
+            .unwrap();
+        let id = job.id;
+
+        // Attempt 1 fails -> retry
+        scheduler.mark_running(id).await.unwrap();
+        scheduler.mark_failed(id, "a").await.unwrap();
+        let j = scheduler.get_job(id).await.unwrap().unwrap();
+        assert_eq!(j.status, JobStatus::Pending);
+        assert_eq!(j.attempts, 1);
+
+        // Attempt 2 fails -> retry
+        scheduler.mark_running(id).await.unwrap();
+        scheduler.mark_failed(id, "b").await.unwrap();
+        let j = scheduler.get_job(id).await.unwrap().unwrap();
+        assert_eq!(j.status, JobStatus::Pending);
+        assert_eq!(j.attempts, 2);
+
+        // Attempt 3 fails -> final failure
+        scheduler.mark_running(id).await.unwrap();
+        scheduler.mark_failed(id, "c").await.unwrap();
+        let j = scheduler.get_job(id).await.unwrap().unwrap();
+        assert_eq!(j.status, JobStatus::Failed);
+        assert_eq!(j.attempts, 3);
+        assert_eq!(j.last_error, Some("c".to_string()));
     }
 }

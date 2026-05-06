@@ -4231,6 +4231,516 @@ async fn test_job_generate_report_retry_on_failure() {
     assert_eq!(json["last_error"], "Report generation failed");
 }
 
+#[actix_web::test]
+async fn test_job_schedule_all_types() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let types = vec![
+        (
+            "calculate_depreciation",
+            json!({"asset_id": 1, "tenant_id": 1}),
+        ),
+        ("run_payroll", json!({"tenant_id": 1, "period": "2024-01"})),
+        ("send_reminders", json!({"tenant_id": 1})),
+        (
+            "archive_logs",
+            json!({"tenant_id": 1, "older_than_days": 30}),
+        ),
+        (
+            "generate_report",
+            json!({"tenant_id": 1, "report_type": "x", "params": "{}"}),
+        ),
+        ("send_notification", json!({"asset_id": 1, "tenant_id": 1})),
+        ("custom", json!({"custom_name": "x", "custom_payload": "y"})),
+    ];
+
+    for (job_type, extra) in types {
+        let mut body = json!({"job_type": job_type, "tenant_id": 1});
+        if let serde_json::Value::Object(ref mut m) = body {
+            if let serde_json::Value::Object(e) = extra {
+                for (k, v) in e {
+                    m.insert(k.clone(), v.clone());
+                }
+            }
+        }
+
+        let req = test::TestRequest::post()
+            .uri("/api/v1/jobs")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .set_json(body)
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::CREATED,
+            "Failed to schedule {}",
+            job_type
+        );
+    }
+}
+
+#[actix_web::test]
+async fn test_job_cancel() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "job_type": "send_reminders",
+            "tenant_id": 1
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let job_id = json["id"].as_i64().unwrap();
+
+    let cancel_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/cancel", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, cancel_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let get_req = test::TestRequest::get()
+        .uri(&format!("/api/v1/jobs/{}", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, get_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "cancelled");
+}
+
+#[actix_web::test]
+async fn test_job_cancel_running_fails() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"job_type": "send_reminders", "tenant_id": 1}))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let job_id = json["id"].as_i64().unwrap();
+
+    let start_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/start", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let _ = test::call_service(&app, start_req).await;
+
+    let cancel_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/cancel", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, cancel_req).await;
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[actix_web::test]
+async fn test_job_retry_failed() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "job_type": "generate_report",
+            "tenant_id": 1,
+            "report_type": "x",
+            "params": "{}",
+            "max_attempts": 1
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let job_id = json["id"].as_i64().unwrap();
+
+    let start_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/start", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let _ = test::call_service(&app, start_req).await;
+
+    let fail_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/fail", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"error": "boom"}))
+        .to_request();
+    let _ = test::call_service(&app, fail_req).await;
+
+    let retry_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/retry", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, retry_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let get_req = test::TestRequest::get()
+        .uri(&format!("/api/v1/jobs/{}", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, get_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "pending");
+    assert_eq!(json["attempts"], 0);
+}
+
+#[actix_web::test]
+async fn test_job_list_by_status() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Schedule 2 pending jobs
+    for _ in 0..2 {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/jobs")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .set_json(json!({"job_type": "send_reminders", "tenant_id": 1}))
+            .to_request();
+        let _ = test::call_service(&app, req).await;
+    }
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/jobs/status/pending")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let jobs = json.as_array().unwrap();
+    assert_eq!(jobs.len(), 2);
+
+    // No completed jobs
+    let req = test::TestRequest::get()
+        .uri("/api/v1/jobs/status/completed")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(json.as_array().unwrap().is_empty());
+}
+
+#[actix_web::test]
+async fn test_job_unauthorized() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .set_json(json!({"job_type": "send_reminders", "tenant_id": 1}))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[actix_web::test]
+async fn test_job_non_admin_forbidden() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"job_type": "send_reminders", "tenant_id": 1}))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[actix_web::test]
+async fn test_job_tenant_isolation() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token1, _) = register_admin!(&app_state, 1);
+    let (token2, _) = register_admin!(&app_state, 2);
+
+    // Tenant 1 schedules a job
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({"job_type": "send_reminders", "tenant_id": 1}))
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+
+    // Tenant 2 schedules a job
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .set_json(json!({"job_type": "send_reminders", "tenant_id": 2}))
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+
+    // Tenant 1 lists pending jobs via status endpoint
+    let req = test::TestRequest::get()
+        .uri("/api/v1/jobs/status/pending")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let jobs = json.as_array().unwrap();
+    // Tenant 1 should only see their own jobs
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0]["tenant_id"], 1);
+
+    // Tenant 2 lists pending jobs
+    let req = test::TestRequest::get()
+        .uri("/api/v1/jobs/status/pending")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let jobs = json.as_array().unwrap();
+    assert_eq!(jobs.len(), 1);
+    assert_eq!(jobs[0]["tenant_id"], 2);
+}
+
+#[actix_web::test]
+async fn test_job_scheduled_future() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let future = (chrono::Utc::now() + chrono::Duration::seconds(3600)).to_rfc3339();
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "job_type": "send_reminders",
+            "tenant_id": 1,
+            "scheduled_at": future
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "scheduled");
+
+    // next_pending should return nothing because job is in the future
+    let next_req = test::TestRequest::get()
+        .uri("/api/v1/jobs/next")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, next_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+}
+
+#[actix_web::test]
+async fn test_job_cleanup_endpoint() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Schedule and complete a job
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"job_type": "send_reminders", "tenant_id": 1}))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let job_id = json["id"].as_i64().unwrap();
+
+    let start_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/start", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let _ = test::call_service(&app, start_req).await;
+
+    let complete_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/complete", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+    let _ = test::call_service(&app, complete_req).await;
+
+    // Cleanup with 0 days
+    let cleanup_req = test::TestRequest::post()
+        .uri("/api/v1/jobs/cleanup/0")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, cleanup_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["cleaned"], 1);
+}
+
+#[actix_web::test]
+async fn test_job_not_found() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/jobs/99999")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_job_invalid_status_filter() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/jobs/status/invalid")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_job_next_priority_ordering() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Schedule low priority first
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "job_type": "send_reminders",
+            "tenant_id": 1,
+            "priority": "low"
+        }))
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+
+    // Schedule critical priority second
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "job_type": "send_reminders",
+            "tenant_id": 1,
+            "priority": "critical"
+        }))
+        .to_request();
+    let _ = test::call_service(&app, req).await;
+
+    let next_req = test::TestRequest::get()
+        .uri("/api/v1/jobs/next")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, next_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["priority"], "critical");
+}
+
+#[actix_web::test]
+async fn test_job_fail_invalid_job_id() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs/99999/fail")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"error": "boom"}))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
+#[actix_web::test]
+async fn test_job_invalid_type() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"job_type": "invalid_type", "tenant_id": 1}))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_job_retry_non_failed_fails() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/jobs")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"job_type": "send_reminders", "tenant_id": 1}))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let job_id = json["id"].as_i64().unwrap();
+
+    let retry_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/jobs/{}/retry", job_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, retry_req).await;
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+}
+
 // ============================================================================
 // Notification Tests
 // ============================================================================

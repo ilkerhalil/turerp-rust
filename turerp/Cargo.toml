@@ -68,6 +68,9 @@ redis = { version = "0.27", features = ["tokio-comp"] }
 governor = "0.8"
 nonzero_ext = "0.3"
 
+# Cron expressions for job scheduling
+cron = "0.15"
+
 # Validation
 regex = "1"
 

@@ -878,8 +878,9 @@ pub mod app {
         let api_key_repo = PostgresApiKeyRepository::new(pool.clone()).into_boxed();
         let api_key_service = crate::domain::api_key::ApiKeyService::new(api_key_repo);
 
-        // Job Scheduler - in-memory
-        let job_scheduler = Arc::new(InMemoryJobScheduler::new()) as Arc<dyn JobScheduler>;
+        // Job Scheduler - PostgreSQL
+        let job_scheduler = Arc::new(db::job_repository::PostgresJobScheduler::new(pool.clone()))
+            as Arc<dyn JobScheduler>;
 
         // Event Bus - in-memory
         let event_bus = Arc::new(InMemoryEventBus::new()) as Arc<dyn EventBus>;
