@@ -2398,6 +2398,77 @@ async fn test_bulk_restore_tax_periods_empty_list() {
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
 
+#[actix_web::test]
+async fn test_bulk_restore_tax_rates_oversized_list() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Bulk restore with more than 100 IDs returns 400 BadRequest
+    let ids: Vec<i64> = (1..=101).collect();
+    let bulk_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({"ids": ids}))
+        .to_request();
+
+    let resp = test::call_service(&app, bulk_req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_bulk_restore_tax_rates_tenant_isolation() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    // Admin in tenant 1 creates and deletes a tax rate
+    let (token1, _) = register_admin!(&app_state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "tax_type": "KDV",
+            "rate": "0.20",
+            "effective_from": "2024-01-01",
+            "description": "Tenant 1 KDV",
+            "is_default": false
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let rate_id = json["id"].as_i64().unwrap();
+
+    // Soft delete it
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/tax/rates/{}", rate_id))
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .to_request();
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // Admin in tenant 2 tries to bulk restore tenant 1's deleted rate
+    let (token2, _) = register_admin!(&app_state, 2);
+
+    let bulk_req = test::TestRequest::post()
+        .uri("/api/v1/tax/rates/bulk-restore")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .set_json(json!({"ids": [rate_id]}))
+        .to_request();
+
+    let resp = test::call_service(&app, bulk_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["restored"].as_u64().unwrap(), 0);
+    assert_eq!(json["items"].as_array().unwrap().len(), 0);
+    assert_eq!(json["failed"].as_array().unwrap().len(), 1);
+}
+
 // ============================================================================
 // Unauthenticated Access Tests
 // ============================================================================

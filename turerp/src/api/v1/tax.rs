@@ -619,9 +619,8 @@ pub async fn destroy_tax_period(
     request_body = BulkRestoreRequest,
     responses(
         (status = 200, description = "Tax rates restored", body = BulkRestoreResponse<TaxRateResponse>),
-        (status = 400, description = "Bad request — empty IDs list"),
+        (status = 400, description = "Bad request — empty or oversized IDs list"),
         (status = 403, description = "Forbidden"),
-        (status = 404, description = "One or more tax rates not found"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -639,6 +638,12 @@ pub async fn bulk_restore_tax_rates(
             crate::error::ApiError::BadRequest("IDs list cannot be empty".to_string())
                 .to_http_response(i18n, locale.as_str()),
         );
+    }
+    if req.ids.len() > 100 {
+        return Ok(crate::error::ApiError::BadRequest(
+            "IDs list cannot exceed 100 items".to_string(),
+        )
+        .to_http_response(i18n, locale.as_str()));
     }
     match tax_service
         .bulk_restore_tax_rates(req.ids, admin_user.0.tenant_id)
@@ -669,9 +674,8 @@ pub async fn bulk_restore_tax_rates(
     request_body = BulkRestoreRequest,
     responses(
         (status = 200, description = "Tax periods restored", body = BulkRestoreResponse<TaxPeriodResponse>),
-        (status = 400, description = "Bad request — empty IDs list"),
+        (status = 400, description = "Bad request — empty or oversized IDs list"),
         (status = 403, description = "Forbidden"),
-        (status = 404, description = "One or more tax periods not found"),
     ),
     security(("bearer_auth" = []))
 )]
@@ -689,6 +693,12 @@ pub async fn bulk_restore_tax_periods(
             crate::error::ApiError::BadRequest("IDs list cannot be empty".to_string())
                 .to_http_response(i18n, locale.as_str()),
         );
+    }
+    if req.ids.len() > 100 {
+        return Ok(crate::error::ApiError::BadRequest(
+            "IDs list cannot exceed 100 items".to_string(),
+        )
+        .to_http_response(i18n, locale.as_str()));
     }
     match tax_service
         .bulk_restore_tax_periods(req.ids, admin_user.0.tenant_id)

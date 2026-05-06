@@ -14942,13 +14942,10 @@
             }
           },
           "400": {
-            "description": "Bad request — empty IDs list"
+            "description": "Bad request — empty or oversized IDs list"
           },
           "403": {
             "description": "Forbidden"
-          },
-          "404": {
-            "description": "One or more tax periods not found"
           }
         },
         "security": [
@@ -15348,13 +15345,10 @@
             }
           },
           "400": {
-            "description": "Bad request — empty IDs list"
+            "description": "Bad request — empty or oversized IDs list"
           },
           "403": {
             "description": "Forbidden"
-          },
-          "404": {
-            "description": "One or more tax rates not found"
           }
         },
         "security": [
