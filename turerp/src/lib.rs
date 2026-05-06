@@ -33,8 +33,7 @@ pub mod app {
 
     use crate::common::{DbRouter, InMemoryDbRouter, ReadAfterWriteMode};
     use crate::common::{
-        EventBus, InMemoryEventBus, InMemoryJobScheduler, InMemoryNotificationService,
-        JobScheduler, NotificationService,
+        EventBus, InMemoryEventBus, InMemoryJobScheduler, JobScheduler, NotificationService,
     };
     use crate::common::{InMemoryReportEngine, ReportEngine};
     use crate::common::{InMemorySearchService, SearchService};
@@ -501,8 +500,23 @@ pub mod app {
             let event_bus = Arc::new(InMemoryEventBus::new()) as Arc<dyn EventBus>;
 
             // Notification Service
-            let notification_service =
-                Arc::new(InMemoryNotificationService::new()) as Arc<dyn NotificationService>;
+            let notification_repo = Arc::new(
+                crate::domain::notification::repository::InMemoryNotificationRepository::new(),
+            ) as crate::domain::notification::repository::BoxNotificationRepository;
+            let in_app_repo = Arc::new(
+                crate::domain::notification::repository::InMemoryInAppNotificationRepository::new(),
+            ) as crate::domain::notification::repository::BoxInAppNotificationRepository;
+            let pref_repo = Arc::new(
+                crate::domain::notification::repository::InMemoryNotificationPreferenceRepository::new(),
+            ) as crate::domain::notification::repository::BoxNotificationPreferenceRepository;
+            let notification_service = Arc::new(
+                crate::domain::notification::service::NotificationService::with_noop_providers(
+                    notification_repo,
+                    in_app_repo,
+                    pref_repo,
+                    job_scheduler.clone(),
+                ),
+            ) as Arc<dyn NotificationService>;
 
             // Report Engine
             let report_engine = Arc::new(InMemoryReportEngine::new()) as Arc<dyn ReportEngine>;
@@ -870,9 +884,22 @@ pub mod app {
         // Event Bus - in-memory
         let event_bus = Arc::new(InMemoryEventBus::new()) as Arc<dyn EventBus>;
 
-        // Notification Service - in-memory
-        let notification_service =
-            Arc::new(InMemoryNotificationService::new()) as Arc<dyn NotificationService>;
+        // Notification Service - PostgreSQL
+        let notification_repo =
+            crate::domain::notification::postgres_repository::PostgresNotificationRepository::new(
+                pool.clone(),
+            )
+            .into_boxed();
+        let in_app_repo = crate::domain::notification::postgres_repository::PostgresInAppNotificationRepository::new(pool.clone()).into_boxed();
+        let pref_repo = crate::domain::notification::postgres_repository::PostgresNotificationPreferenceRepository::new(pool.clone()).into_boxed();
+        let notification_service = Arc::new(
+            crate::domain::notification::service::NotificationService::with_noop_providers(
+                notification_repo,
+                in_app_repo,
+                pref_repo,
+                job_scheduler.clone(),
+            ),
+        ) as Arc<dyn NotificationService>;
 
         // Report Engine - in-memory
         let report_engine = Arc::new(InMemoryReportEngine::new()) as Arc<dyn ReportEngine>;

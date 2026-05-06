@@ -8,12 +8,38 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
+use crate::common::PaginatedResult;
+use crate::error::ApiError;
+
 /// Notification channel
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NotificationChannel {
     Email,
     Sms,
     InApp,
+}
+
+impl std::fmt::Display for NotificationChannel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Email => write!(f, "email"),
+            Self::Sms => write!(f, "sms"),
+            Self::InApp => write!(f, "inapp"),
+        }
+    }
+}
+
+impl std::str::FromStr for NotificationChannel {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "email" => Ok(Self::Email),
+            "sms" => Ok(Self::Sms),
+            "inapp" => Ok(Self::InApp),
+            _ => Err(format!("Invalid notification channel: {}", s)),
+        }
+    }
 }
 
 /// Notification priority
@@ -26,6 +52,31 @@ pub enum NotificationPriority {
     Urgent,
 }
 
+impl std::fmt::Display for NotificationPriority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Low => write!(f, "low"),
+            Self::Normal => write!(f, "normal"),
+            Self::High => write!(f, "high"),
+            Self::Urgent => write!(f, "urgent"),
+        }
+    }
+}
+
+impl std::str::FromStr for NotificationPriority {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "low" => Ok(Self::Low),
+            "normal" => Ok(Self::Normal),
+            "high" => Ok(Self::High),
+            "urgent" => Ok(Self::Urgent),
+            _ => Err(format!("Invalid notification priority: {}", s)),
+        }
+    }
+}
+
 /// Notification status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NotificationStatus {
@@ -35,6 +86,38 @@ pub enum NotificationStatus {
     Delivered,
     Failed,
     Read,
+    Cancelled,
+}
+
+impl std::fmt::Display for NotificationStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Queued => write!(f, "queued"),
+            Self::Sending => write!(f, "sending"),
+            Self::Sent => write!(f, "sent"),
+            Self::Delivered => write!(f, "delivered"),
+            Self::Failed => write!(f, "failed"),
+            Self::Read => write!(f, "read"),
+            Self::Cancelled => write!(f, "cancelled"),
+        }
+    }
+}
+
+impl std::str::FromStr for NotificationStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "queued" => Ok(Self::Queued),
+            "sending" => Ok(Self::Sending),
+            "sent" => Ok(Self::Sent),
+            "delivered" => Ok(Self::Delivered),
+            "failed" => Ok(Self::Failed),
+            "read" => Ok(Self::Read),
+            "cancelled" => Ok(Self::Cancelled),
+            _ => Err(format!("Invalid notification status: {}", s)),
+        }
+    }
 }
 
 /// Notification request
@@ -91,6 +174,27 @@ pub struct EmailTemplate {
     pub body_template: String,
 }
 
+/// Notification preference
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationPreference {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub user_id: i64,
+    pub channel: NotificationChannel,
+    pub notification_type: String,
+    pub enabled: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// DTO for updating a preference
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct UpdatePreference {
+    pub channel: String,
+    pub notification_type: String,
+    pub enabled: bool,
+}
+
 /// Simple template engine using string interpolation
 fn render_template(template: &str, vars: &serde_json::Value) -> String {
     let mut result = template.to_string();
@@ -113,10 +217,24 @@ fn render_template(template: &str, vars: &serde_json::Value) -> String {
 #[async_trait::async_trait]
 pub trait NotificationService: Send + Sync {
     /// Send a notification
-    async fn send(&self, request: NotificationRequest) -> Result<Notification, String>;
+    async fn send(&self, request: NotificationRequest) -> Result<Notification, ApiError>;
 
     /// Get a notification by ID
-    async fn get_notification(&self, id: i64) -> Result<Option<Notification>, String>;
+    async fn get_notification(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<Notification>, ApiError>;
+
+    /// Get notification history for a user
+    async fn get_history(
+        &self,
+        tenant_id: i64,
+        user_id: Option<i64>,
+        channel: Option<NotificationChannel>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<PaginatedResult<Notification>, ApiError>;
 
     /// Get in-app notifications for a user
     async fn get_in_app_notifications(
@@ -124,22 +242,37 @@ pub trait NotificationService: Send + Sync {
         tenant_id: i64,
         user_id: i64,
         unread_only: bool,
-    ) -> Result<Vec<InAppNotification>, String>;
+    ) -> Result<Vec<InAppNotification>, ApiError>;
 
     /// Mark an in-app notification as read
-    async fn mark_as_read(&self, id: i64) -> Result<(), String>;
+    async fn mark_as_read(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Mark all notifications as read for a user
-    async fn mark_all_as_read(&self, tenant_id: i64, user_id: i64) -> Result<u64, String>;
+    async fn mark_all_as_read(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError>;
 
     /// Get unread notification count for a user
-    async fn unread_count(&self, tenant_id: i64, user_id: i64) -> Result<u64, String>;
+    async fn unread_count(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError>;
+
+    /// Get user preferences
+    async fn get_preferences(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+    ) -> Result<Vec<NotificationPreference>, ApiError>;
+
+    /// Update user preferences
+    async fn update_preferences(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        prefs: Vec<UpdatePreference>,
+    ) -> Result<Vec<NotificationPreference>, ApiError>;
 
     /// Register an email template
     fn register_template(&self, template: EmailTemplate);
 
     /// Retry a failed notification
-    async fn retry(&self, id: i64) -> Result<(), String>;
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed notification service
@@ -181,8 +314,10 @@ pub struct InMemoryNotificationService {
     notifications: parking_lot::RwLock<Vec<Notification>>,
     in_app: parking_lot::RwLock<Vec<InAppNotification>>,
     templates: parking_lot::RwLock<Vec<EmailTemplate>>,
+    preferences: parking_lot::RwLock<Vec<NotificationPreference>>,
     next_id: parking_lot::RwLock<i64>,
     next_in_app_id: parking_lot::RwLock<i64>,
+    next_pref_id: parking_lot::RwLock<i64>,
 }
 
 impl InMemoryNotificationService {
@@ -191,8 +326,10 @@ impl InMemoryNotificationService {
             notifications: parking_lot::RwLock::new(Vec::new()),
             in_app: parking_lot::RwLock::new(Vec::new()),
             templates: parking_lot::RwLock::new(default_templates()),
+            preferences: parking_lot::RwLock::new(Vec::new()),
             next_id: parking_lot::RwLock::new(1),
             next_in_app_id: parking_lot::RwLock::new(1),
+            next_pref_id: parking_lot::RwLock::new(1),
         }
     }
 
@@ -208,6 +345,13 @@ impl InMemoryNotificationService {
         let in_app_id = *id;
         *id += 1;
         in_app_id
+    }
+
+    fn allocate_pref_id(&self) -> i64 {
+        let mut id = self.next_pref_id.write();
+        let pref_id = *id;
+        *id += 1;
+        pref_id
     }
 
     fn render_notification(&self, request: &NotificationRequest) -> (String, String) {
@@ -238,7 +382,7 @@ impl Default for InMemoryNotificationService {
 
 #[async_trait::async_trait]
 impl NotificationService for InMemoryNotificationService {
-    async fn send(&self, request: NotificationRequest) -> Result<Notification, String> {
+    async fn send(&self, request: NotificationRequest) -> Result<Notification, ApiError> {
         let id = self.allocate_id();
         let (subject, body) = self.render_notification(&request);
 
@@ -260,7 +404,6 @@ impl NotificationService for InMemoryNotificationService {
             attempts: 1,
         };
 
-        // If in-app, also create an in-app notification
         if request.channel == NotificationChannel::InApp {
             if let Some(user_id) = request.user_id {
                 let in_app_id = self.allocate_in_app_id();
@@ -283,13 +426,50 @@ impl NotificationService for InMemoryNotificationService {
         Ok(notification)
     }
 
-    async fn get_notification(&self, id: i64) -> Result<Option<Notification>, String> {
-        Ok(self
-            .notifications
-            .read()
+    async fn get_notification(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<Notification>, ApiError> {
+        let inner = self.notifications.read();
+        Ok(inner
             .iter()
-            .find(|n| n.id == id)
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
             .cloned())
+    }
+
+    async fn get_history(
+        &self,
+        tenant_id: i64,
+        user_id: Option<i64>,
+        channel: Option<NotificationChannel>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<PaginatedResult<Notification>, ApiError> {
+        let inner = self.notifications.read();
+        let mut filtered: Vec<_> = inner
+            .iter()
+            .filter(|n| n.tenant_id == tenant_id)
+            .filter(|n| user_id.is_none() || n.user_id == user_id)
+            .filter(|n| channel.is_none() || n.channel == channel.unwrap())
+            .cloned()
+            .collect();
+
+        filtered.sort_by_key(|b| std::cmp::Reverse(b.created_at));
+
+        let total = filtered.len() as u64;
+        let items = filtered
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .collect();
+
+        Ok(PaginatedResult::new(
+            items,
+            (offset / limit + 1) as u32,
+            limit as u32,
+            total,
+        ))
     }
 
     async fn get_in_app_notifications(
@@ -297,7 +477,7 @@ impl NotificationService for InMemoryNotificationService {
         tenant_id: i64,
         user_id: i64,
         unread_only: bool,
-    ) -> Result<Vec<InAppNotification>, String> {
+    ) -> Result<Vec<InAppNotification>, ApiError> {
         let in_app = self.in_app.read();
         Ok(in_app
             .iter()
@@ -307,15 +487,14 @@ impl NotificationService for InMemoryNotificationService {
             .collect())
     }
 
-    async fn mark_as_read(&self, id: i64) -> Result<(), String> {
+    async fn mark_as_read(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut in_app = self.in_app.write();
         let notification = in_app
             .iter_mut()
-            .find(|n| n.id == id)
-            .ok_or_else(|| format!("In-app notification {} not found", id))?;
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("In-app notification {} not found", id)))?;
         notification.read = true;
 
-        // Also mark the main notification as read
         let mut notifications = self.notifications.write();
         if let Some(n) = notifications.iter_mut().find(|n| n.id == id) {
             n.status = NotificationStatus::Read;
@@ -325,7 +504,7 @@ impl NotificationService for InMemoryNotificationService {
         Ok(())
     }
 
-    async fn mark_all_as_read(&self, tenant_id: i64, user_id: i64) -> Result<u64, String> {
+    async fn mark_all_as_read(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError> {
         let mut in_app = self.in_app.write();
         let mut count = 0u64;
         for n in in_app.iter_mut() {
@@ -337,12 +516,67 @@ impl NotificationService for InMemoryNotificationService {
         Ok(count)
     }
 
-    async fn unread_count(&self, tenant_id: i64, user_id: i64) -> Result<u64, String> {
+    async fn unread_count(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError> {
         let in_app = self.in_app.read();
         Ok(in_app
             .iter()
             .filter(|n| n.tenant_id == tenant_id && n.user_id == user_id && !n.read)
             .count() as u64)
+    }
+
+    async fn get_preferences(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+    ) -> Result<Vec<NotificationPreference>, ApiError> {
+        let prefs = self.preferences.read();
+        Ok(prefs
+            .iter()
+            .filter(|p| p.tenant_id == tenant_id && p.user_id == user_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn update_preferences(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        prefs: Vec<UpdatePreference>,
+    ) -> Result<Vec<NotificationPreference>, ApiError> {
+        let mut preferences = self.preferences.write();
+        let mut results = Vec::new();
+
+        for pref in prefs {
+            let channel = pref
+                .channel
+                .parse()
+                .map_err(|e: String| ApiError::Validation(format!("Invalid channel: {}", e)))?;
+
+            if let Some(existing) = preferences.iter_mut().find(|p| {
+                p.tenant_id == tenant_id
+                    && p.user_id == user_id
+                    && p.channel == channel
+                    && p.notification_type == pref.notification_type
+            }) {
+                existing.enabled = pref.enabled;
+                existing.updated_at = Utc::now();
+                results.push(existing.clone());
+            } else {
+                let new_pref = NotificationPreference {
+                    id: self.allocate_pref_id(),
+                    tenant_id,
+                    user_id,
+                    channel,
+                    notification_type: pref.notification_type,
+                    enabled: pref.enabled,
+                    created_at: Utc::now(),
+                    updated_at: Utc::now(),
+                };
+                preferences.push(new_pref.clone());
+                results.push(new_pref);
+            }
+        }
+        Ok(results)
     }
 
     fn register_template(&self, template: EmailTemplate) {
@@ -351,15 +585,17 @@ impl NotificationService for InMemoryNotificationService {
         templates.push(template);
     }
 
-    async fn retry(&self, id: i64) -> Result<(), String> {
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut notifications = self.notifications.write();
         let notification = notifications
             .iter_mut()
-            .find(|n| n.id == id)
-            .ok_or_else(|| format!("Notification {} not found", id))?;
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Notification {} not found", id)))?;
 
         if notification.status != NotificationStatus::Failed {
-            return Err("Can only retry failed notifications".to_string());
+            return Err(ApiError::BadRequest(
+                "Can only retry failed notifications".to_string(),
+            ));
         }
 
         notification.status = NotificationStatus::Sent;
@@ -367,6 +603,285 @@ impl NotificationService for InMemoryNotificationService {
         notification.attempts += 1;
         notification.last_error = None;
         Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Conversions between common and domain notification types
+// ---------------------------------------------------------------------------
+
+impl From<NotificationChannel> for crate::domain::notification::model::NotificationChannel {
+    fn from(c: NotificationChannel) -> Self {
+        match c {
+            NotificationChannel::Email => Self::Email,
+            NotificationChannel::Sms => Self::Sms,
+            NotificationChannel::InApp => Self::InApp,
+        }
+    }
+}
+
+impl From<NotificationPriority> for crate::domain::notification::model::NotificationPriority {
+    fn from(p: NotificationPriority) -> Self {
+        match p {
+            NotificationPriority::Low => Self::Low,
+            NotificationPriority::Normal => Self::Normal,
+            NotificationPriority::High => Self::High,
+            NotificationPriority::Urgent => Self::Urgent,
+        }
+    }
+}
+
+impl From<crate::domain::notification::model::NotificationChannel> for NotificationChannel {
+    fn from(c: crate::domain::notification::model::NotificationChannel) -> Self {
+        match c {
+            crate::domain::notification::model::NotificationChannel::Email => Self::Email,
+            crate::domain::notification::model::NotificationChannel::Sms => Self::Sms,
+            crate::domain::notification::model::NotificationChannel::InApp => Self::InApp,
+        }
+    }
+}
+
+impl From<crate::domain::notification::model::NotificationPriority> for NotificationPriority {
+    fn from(p: crate::domain::notification::model::NotificationPriority) -> Self {
+        match p {
+            crate::domain::notification::model::NotificationPriority::Low => Self::Low,
+            crate::domain::notification::model::NotificationPriority::Normal => Self::Normal,
+            crate::domain::notification::model::NotificationPriority::High => Self::High,
+            crate::domain::notification::model::NotificationPriority::Urgent => Self::Urgent,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Adapter: bridge domain notification service to common trait
+// ---------------------------------------------------------------------------
+
+#[async_trait::async_trait]
+impl NotificationService for crate::domain::notification::service::NotificationService {
+    async fn send(&self, request: NotificationRequest) -> Result<Notification, ApiError> {
+        use crate::domain::notification::model::NotificationRequest as DomainRequest;
+
+        let domain_request = DomainRequest {
+            tenant_id: request.tenant_id,
+            user_id: request.user_id,
+            channel: request.channel.into(),
+            priority: request.priority.into(),
+            template_key: request.template_key,
+            template_vars: request.template_vars,
+            recipient: request.recipient,
+        };
+
+        let response =
+            crate::domain::notification::service::NotificationService::send(self, domain_request)
+                .await?;
+
+        Ok(Notification {
+            id: response.id,
+            tenant_id: response.tenant_id,
+            user_id: response.user_id,
+            channel: request.channel,
+            priority: request.priority,
+            status: response
+                .status
+                .parse()
+                .unwrap_or(NotificationStatus::Queued),
+            template_key: response.template_key.unwrap_or_default(),
+            subject: response.subject,
+            body: response.body,
+            recipient: response.recipient,
+            created_at: response.created_at,
+            sent_at: response.sent_at,
+            read_at: None,
+            last_error: None,
+            attempts: response.attempts,
+        })
+    }
+
+    async fn get_notification(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<Notification>, ApiError> {
+        let response = crate::domain::notification::service::NotificationService::get_notification(
+            self, id, tenant_id,
+        )
+        .await?;
+        Ok(response.map(|r| Notification {
+            id: r.id,
+            tenant_id: r.tenant_id,
+            user_id: r.user_id,
+            channel: r.channel.parse().unwrap_or(NotificationChannel::Email),
+            priority: r.priority.parse().unwrap_or_default(),
+            status: r.status.parse().unwrap_or(NotificationStatus::Queued),
+            template_key: r.template_key.unwrap_or_default(),
+            subject: r.subject,
+            body: r.body,
+            recipient: r.recipient,
+            created_at: r.created_at,
+            sent_at: r.sent_at,
+            read_at: None,
+            last_error: None,
+            attempts: r.attempts,
+        }))
+    }
+
+    async fn get_history(
+        &self,
+        tenant_id: i64,
+        user_id: Option<i64>,
+        channel: Option<NotificationChannel>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<PaginatedResult<Notification>, ApiError> {
+        let result = crate::domain::notification::service::NotificationService::get_history(
+            self,
+            tenant_id,
+            user_id,
+            channel.map(|c| c.into()),
+            limit,
+            offset,
+        )
+        .await?;
+
+        Ok(result.map(|r| Notification {
+            id: r.id,
+            tenant_id: r.tenant_id,
+            user_id: r.user_id,
+            channel: r.channel.parse().unwrap_or(NotificationChannel::Email),
+            priority: r.priority.parse().unwrap_or_default(),
+            status: r.status.parse().unwrap_or(NotificationStatus::Queued),
+            template_key: r.template_key.unwrap_or_default(),
+            subject: r.subject,
+            body: r.body,
+            recipient: r.recipient,
+            created_at: r.created_at,
+            sent_at: r.sent_at,
+            read_at: None,
+            last_error: None,
+            attempts: r.attempts,
+        }))
+    }
+
+    async fn get_in_app_notifications(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        unread_only: bool,
+    ) -> Result<Vec<InAppNotification>, ApiError> {
+        let responses =
+            crate::domain::notification::service::NotificationService::get_in_app_notifications(
+                self,
+                tenant_id,
+                user_id,
+                unread_only,
+            )
+            .await?;
+
+        Ok(responses
+            .into_iter()
+            .map(|r| InAppNotification {
+                id: r.id,
+                tenant_id: r.tenant_id,
+                user_id: r.user_id,
+                title: r.title,
+                message: r.message,
+                notification_type: r.notification_type,
+                read: r.read,
+                created_at: r.created_at.parse().unwrap_or(Utc::now()),
+                link: r.link,
+            })
+            .collect())
+    }
+
+    async fn mark_as_read(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        crate::domain::notification::service::NotificationService::mark_as_read(self, id, tenant_id)
+            .await
+    }
+
+    async fn mark_all_as_read(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError> {
+        crate::domain::notification::service::NotificationService::mark_all_as_read(
+            self, tenant_id, user_id,
+        )
+        .await
+    }
+
+    async fn unread_count(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError> {
+        crate::domain::notification::service::NotificationService::unread_count(
+            self, tenant_id, user_id,
+        )
+        .await
+    }
+
+    async fn get_preferences(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+    ) -> Result<Vec<NotificationPreference>, ApiError> {
+        let responses = crate::domain::notification::service::NotificationService::get_preferences(
+            self, tenant_id, user_id,
+        )
+        .await?;
+
+        Ok(responses
+            .into_iter()
+            .map(|r| NotificationPreference {
+                id: r.id,
+                tenant_id,
+                user_id,
+                channel: r.channel.parse().unwrap_or(NotificationChannel::Email),
+                notification_type: r.notification_type,
+                enabled: r.enabled,
+                created_at: r.updated_at,
+                updated_at: r.updated_at,
+            })
+            .collect())
+    }
+
+    async fn update_preferences(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        prefs: Vec<UpdatePreference>,
+    ) -> Result<Vec<NotificationPreference>, ApiError> {
+        let domain_prefs: Vec<crate::domain::notification::model::UpdatePreference> = prefs
+            .into_iter()
+            .map(|p| crate::domain::notification::model::UpdatePreference {
+                channel: p.channel,
+                notification_type: p.notification_type,
+                enabled: p.enabled,
+            })
+            .collect();
+
+        let responses =
+            crate::domain::notification::service::NotificationService::update_preferences(
+                self,
+                tenant_id,
+                user_id,
+                domain_prefs,
+            )
+            .await?;
+
+        Ok(responses
+            .into_iter()
+            .map(|r| NotificationPreference {
+                id: r.id,
+                tenant_id,
+                user_id,
+                channel: r.channel.parse().unwrap_or(NotificationChannel::Email),
+                notification_type: r.notification_type,
+                enabled: r.enabled,
+                created_at: r.updated_at,
+                updated_at: r.updated_at,
+            })
+            .collect())
+    }
+
+    fn register_template(&self, template: EmailTemplate) {
+        let _ = template;
+    }
+
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        crate::domain::notification::service::NotificationService::retry(self, id, tenant_id).await
     }
 }
 
@@ -456,7 +971,7 @@ mod tests {
         let count = service.unread_count(1, 1).await.unwrap();
         assert_eq!(count, 1);
 
-        service.mark_as_read(1).await.unwrap();
+        service.mark_as_read(1, 1).await.unwrap();
 
         let count = service.unread_count(1, 1).await.unwrap();
         assert_eq!(count, 0);
@@ -567,5 +1082,204 @@ mod tests {
 
         let result = render_template("Hello {{unknown}}", &vars);
         assert_eq!(result, "Hello {{unknown}}");
+    }
+
+    #[tokio::test]
+    async fn test_send_sms_notification() {
+        let service = InMemoryNotificationService::new();
+
+        let notification = service
+            .send(NotificationRequest {
+                tenant_id: 1,
+                user_id: Some(1),
+                channel: NotificationChannel::Sms,
+                priority: NotificationPriority::High,
+                template_key: "stock_low".to_string(),
+                template_vars: serde_json::json!({
+                    "product_name": "Widget A",
+                    "warehouse_name": "Main",
+                    "quantity": "3",
+                    "min_stock": "10"
+                }),
+                recipient: "+905551234567".to_string(),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(notification.tenant_id, 1);
+        assert_eq!(notification.channel, NotificationChannel::Sms);
+        assert_eq!(notification.status, NotificationStatus::Sent);
+        assert_eq!(notification.recipient, "+905551234567");
+        assert!(notification.body.contains("Widget A"));
+    }
+
+    #[tokio::test]
+    async fn test_get_notification_by_id() {
+        let service = InMemoryNotificationService::new();
+
+        let sent = service
+            .send(NotificationRequest {
+                tenant_id: 1,
+                user_id: Some(1),
+                channel: NotificationChannel::Email,
+                priority: NotificationPriority::Normal,
+                template_key: "invoice_created".to_string(),
+                template_vars: serde_json::json!({
+                    "customer_name": "Acme Corp",
+                    "invoice_number": "INV-002",
+                    "amount": "2000.00",
+                    "currency": "TRY",
+                    "due_date": "2024-03-01"
+                }),
+                recipient: "test@example.com".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let found = service.get_notification(sent.id, 1).await.unwrap();
+        assert!(found.is_some());
+        let found = found.unwrap();
+        assert_eq!(found.id, sent.id);
+        assert_eq!(found.template_key, "invoice_created");
+
+        let not_found = service.get_notification(9999, 1).await.unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_retry_failed_notification() {
+        let service = InMemoryNotificationService::new();
+
+        let notification = service
+            .send(NotificationRequest {
+                tenant_id: 1,
+                user_id: Some(1),
+                channel: NotificationChannel::Email,
+                priority: NotificationPriority::Normal,
+                template_key: "payment_received".to_string(),
+                template_vars: serde_json::json!({
+                    "customer_name": "Beta Inc",
+                    "payment_id": "PAY-001",
+                    "amount": "5000.00",
+                    "currency": "TRY",
+                    "payment_date": "2024-01-15"
+                }),
+                recipient: "finance@example.com".to_string(),
+            })
+            .await
+            .unwrap();
+
+        let result = service.retry(notification.id, 1).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_unread_only_filter() {
+        let service = InMemoryNotificationService::new();
+
+        for i in 0..2 {
+            service
+                .send(NotificationRequest {
+                    tenant_id: 1,
+                    user_id: Some(1),
+                    channel: NotificationChannel::InApp,
+                    priority: NotificationPriority::Normal,
+                    template_key: "stock_low".to_string(),
+                    template_vars: serde_json::json!({
+                        "product_name": format!("Product {}", i),
+                        "warehouse_name": "Main",
+                        "quantity": "5",
+                        "min_stock": "10"
+                    }),
+                    recipient: "warehouse@example.com".to_string(),
+                })
+                .await
+                .unwrap();
+        }
+
+        let all = service.get_in_app_notifications(1, 1, false).await.unwrap();
+        assert_eq!(all.len(), 2);
+
+        let unread = service.get_in_app_notifications(1, 1, true).await.unwrap();
+        assert_eq!(unread.len(), 2);
+
+        service.mark_as_read(1, 1).await.unwrap();
+
+        let unread_after = service.get_in_app_notifications(1, 1, true).await.unwrap();
+        assert_eq!(unread_after.len(), 1);
+
+        let all_after = service.get_in_app_notifications(1, 1, false).await.unwrap();
+        assert_eq!(all_after.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_missing_template_fallback() {
+        let service = InMemoryNotificationService::new();
+
+        let notification = service
+            .send(NotificationRequest {
+                tenant_id: 1,
+                user_id: Some(1),
+                channel: NotificationChannel::Email,
+                priority: NotificationPriority::Normal,
+                template_key: "nonexistent_template".to_string(),
+                template_vars: serde_json::json!({"foo": "bar"}),
+                recipient: "test@example.com".to_string(),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(notification.status, NotificationStatus::Sent);
+        assert!(notification.subject.contains("nonexistent_template"));
+        assert!(notification.body.contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_get_history() {
+        let service = InMemoryNotificationService::new();
+
+        for i in 0..5 {
+            service
+                .send(NotificationRequest {
+                    tenant_id: 1,
+                    user_id: Some(1),
+                    channel: NotificationChannel::Email,
+                    priority: NotificationPriority::Normal,
+                    template_key: "invoice_created".to_string(),
+                    template_vars: serde_json::json!({
+                        "customer_name": format!("Customer {}", i),
+                        "invoice_number": format!("INV-{}", i),
+                        "amount": "1000.00",
+                        "currency": "TRY",
+                        "due_date": "2024-02-01"
+                    }),
+                    recipient: format!("customer{}@example.com", i),
+                })
+                .await
+                .unwrap();
+        }
+
+        let history = service.get_history(1, Some(1), None, 10, 0).await.unwrap();
+        assert_eq!(history.items.len(), 5);
+        assert_eq!(history.total, 5);
+    }
+
+    #[tokio::test]
+    async fn test_preferences() {
+        let service = InMemoryNotificationService::new();
+
+        let prefs = vec![UpdatePreference {
+            channel: "email".to_string(),
+            notification_type: "invoice_created".to_string(),
+            enabled: false,
+        }];
+
+        let updated = service.update_preferences(1, 1, prefs).await.unwrap();
+        assert_eq!(updated.len(), 1);
+        assert!(!updated[0].enabled);
+
+        let fetched = service.get_preferences(1, 1).await.unwrap();
+        assert_eq!(fetched.len(), 1);
+        assert!(!fetched[0].enabled);
     }
 }
