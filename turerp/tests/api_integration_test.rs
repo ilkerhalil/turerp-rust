@@ -5123,6 +5123,200 @@ async fn test_retry_notification() {
 }
 
 #[actix_web::test]
+async fn test_notification_soft_delete() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Send a notification
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Soft Delete Corp",
+                "invoice_number": "INV-SD-001",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "sd@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    // Soft delete returns 204 NoContent
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+}
+
+#[actix_web::test]
+async fn test_notification_list_deleted_and_restore() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Send a notification
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "List Corp",
+                "invoice_number": "INV-LIST-001",
+                "amount": "2000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "list@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    // Soft delete
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // List deleted notifications
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let deleted: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(deleted
+        .iter()
+        .any(|n| n["id"].as_i64() == Some(notification_id)));
+
+    // Restore
+    let restore_req = test::TestRequest::post()
+        .uri(&format!(
+            "/api/v1/notifications/{}/restore",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, restore_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Verify not in deleted list anymore
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let deleted: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(!deleted
+        .iter()
+        .any(|n| n["id"].as_i64() == Some(notification_id)));
+}
+
+#[actix_web::test]
+async fn test_notification_destroy() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Send a notification
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Destroy Corp",
+                "invoice_number": "INV-DEST-001",
+                "amount": "3000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "destroy@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    // Soft delete
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // Destroy permanently
+    let destroy_req = test::TestRequest::delete()
+        .uri(&format!(
+            "/api/v1/notifications/{}/destroy",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, destroy_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // Verify not in deleted list
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let deleted: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(!deleted
+        .iter()
+        .any(|n| n["id"].as_i64() == Some(notification_id)));
+}
+
+#[actix_web::test]
 async fn test_send_notification_invalid_channel() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
