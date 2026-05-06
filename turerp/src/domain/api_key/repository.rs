@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::soft_delete::SoftDeletable;
 use crate::domain::api_key::model::{ApiKey, ApiKeyScope};
 use crate::error::ApiError;
 
@@ -54,6 +55,18 @@ pub trait ApiKeyRepository: Send + Sync {
 
     /// Delete an API key
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete an API key
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted API key
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// List deleted API keys for a tenant
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<ApiKey>, ApiError>;
+
+    /// Permanently destroy a soft-deleted API key
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Update last_used_at timestamp
     async fn touch_last_used(&self, id: i64) -> Result<(), ApiError>;
@@ -116,6 +129,8 @@ impl ApiKeyRepository for InMemoryApiKeyRepository {
             last_used_at: None,
             created_at: chrono::Utc::now(),
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.keys.push(key.clone());
@@ -127,7 +142,7 @@ impl ApiKeyRepository for InMemoryApiKeyRepository {
         Ok(inner
             .keys
             .iter()
-            .find(|k| k.id == id && k.tenant_id == tenant_id)
+            .find(|k| k.id == id && k.tenant_id == tenant_id && !k.is_deleted())
             .cloned())
     }
 
@@ -136,7 +151,7 @@ impl ApiKeyRepository for InMemoryApiKeyRepository {
         Ok(inner
             .keys
             .iter()
-            .find(|k| k.key_hash == key_hash && k.is_active)
+            .find(|k| k.key_hash == key_hash && k.is_active && !k.is_deleted())
             .cloned())
     }
 
@@ -145,7 +160,7 @@ impl ApiKeyRepository for InMemoryApiKeyRepository {
         Ok(inner
             .keys
             .iter()
-            .filter(|k| k.tenant_id == tenant_id)
+            .filter(|k| k.tenant_id == tenant_id && !k.is_deleted())
             .cloned()
             .collect())
     }
@@ -160,7 +175,7 @@ impl ApiKeyRepository for InMemoryApiKeyRepository {
         let all: Vec<_> = inner
             .keys
             .iter()
-            .filter(|k| k.tenant_id == tenant_id)
+            .filter(|k| k.tenant_id == tenant_id && !k.is_deleted())
             .cloned()
             .collect();
         let total = all.len() as u64;
@@ -185,7 +200,7 @@ impl ApiKeyRepository for InMemoryApiKeyRepository {
         let key = inner
             .keys
             .iter_mut()
-            .find(|k| k.id == id && k.tenant_id == tenant_id)
+            .find(|k| k.id == id && k.tenant_id == tenant_id && !k.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("API key {} not found", id)))?;
 
         if let Some(n) = name {
@@ -219,12 +234,76 @@ impl ApiKeyRepository for InMemoryApiKeyRepository {
         Ok(())
     }
 
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let key = inner
+            .keys
+            .iter_mut()
+            .find(|k| k.id == id && k.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("API key {} not found", id)))?;
+
+        if key.is_deleted() {
+            return Err(ApiError::Conflict(format!(
+                "API key {} is already deleted",
+                id
+            )));
+        }
+
+        key.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let key = inner
+            .keys
+            .iter_mut()
+            .find(|k| k.id == id && k.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("API key {} not found", id)))?;
+
+        if !key.is_deleted() {
+            return Err(ApiError::BadRequest(format!(
+                "API key {} is not deleted",
+                id
+            )));
+        }
+
+        key.restore();
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<ApiKey>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .keys
+            .iter()
+            .filter(|k| k.tenant_id == tenant_id && k.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let len_before = inner.keys.len();
+        inner
+            .keys
+            .retain(|k| !(k.id == id && k.tenant_id == tenant_id && k.is_deleted()));
+
+        if inner.keys.len() == len_before {
+            return Err(ApiError::NotFound(format!(
+                "Deleted API key {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
+
     async fn touch_last_used(&self, id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         let key = inner
             .keys
             .iter_mut()
-            .find(|k| k.id == id)
+            .find(|k| k.id == id && !k.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("API key {} not found", id)))?;
         key.last_used_at = Some(chrono::Utc::now());
         Ok(())

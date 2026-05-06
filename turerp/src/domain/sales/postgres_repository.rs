@@ -162,6 +162,8 @@ struct SalesOrderLineRow {
     discount_rate: Decimal,
     line_total: Decimal,
     sort_order: i32,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<SalesOrderLineRow> for SalesOrderLine {
@@ -177,6 +179,8 @@ impl From<SalesOrderLineRow> for SalesOrderLine {
             discount_rate: row.discount_rate,
             line_total: row.line_total,
             sort_order: row.sort_order,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -306,6 +310,8 @@ struct QuotationLineRow {
     discount_rate: Decimal,
     line_total: Decimal,
     sort_order: i32,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<QuotationLineRow> for QuotationLine {
@@ -321,6 +327,8 @@ impl From<QuotationLineRow> for QuotationLine {
             discount_rate: row.discount_rate,
             line_total: row.line_total,
             sort_order: row.sort_order,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -770,7 +778,8 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
                                                unit_price, tax_rate, discount_rate, line_total, sort_order)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING id, order_id, product_id, description, quantity,
-                          unit_price, tax_rate, discount_rate, line_total, sort_order
+                          unit_price, tax_rate, discount_rate, line_total, sort_order,
+                          deleted_at, deleted_by
                 "#,
             )
             .bind(order_id)
@@ -796,9 +805,10 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
         let rows: Vec<SalesOrderLineRow> = sqlx::query_as(
             r#"
             SELECT id, order_id, product_id, description, quantity,
-                   unit_price, tax_rate, discount_rate, line_total, sort_order
+                   unit_price, tax_rate, discount_rate, line_total, sort_order,
+                   deleted_at, deleted_by
             FROM sales_order_lines
-            WHERE order_id = $1
+            WHERE order_id = $1 AND deleted_at IS NULL
             ORDER BY sort_order
             "#,
         )
@@ -828,6 +838,107 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
                 e
             ))
         })?;
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, _order_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE sales_order_lines
+            SET deleted_at = NOW(), deleted_by = $2
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to soft delete sales order line: {}", e))
+        })?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Sales order line not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, _order_id: i64) -> Result<SalesOrderLine, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE sales_order_lines
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore sales order line: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Sales order line not found or not deleted".to_string(),
+            ));
+        }
+
+        let row: SalesOrderLineRow = sqlx::query_as(
+            r#"
+            SELECT id, order_id, product_id, description, quantity,
+                   unit_price, tax_rate, discount_rate, line_total, sort_order,
+                   deleted_at, deleted_by
+            FROM sales_order_lines
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to find restored sales order line: {}", e))
+        })?;
+
+        Ok(row.into())
+    }
+
+    async fn find_deleted(&self, order_id: i64) -> Result<Vec<SalesOrderLine>, ApiError> {
+        let rows: Vec<SalesOrderLineRow> = sqlx::query_as(
+            r#"
+            SELECT id, order_id, product_id, description, quantity,
+                   unit_price, tax_rate, discount_rate, line_total, sort_order,
+                   deleted_at, deleted_by
+            FROM sales_order_lines
+            WHERE order_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY sort_order
+            "#,
+        )
+        .bind(order_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to find deleted sales order lines: {}", e))
+        })?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, _order_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM sales_order_lines
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy sales order line: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Sales order line not found".to_string()));
+        }
 
         Ok(())
     }
@@ -1255,7 +1366,8 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
                                              unit_price, tax_rate, discount_rate, line_total, sort_order)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING id, quotation_id, product_id, description, quantity,
-                          unit_price, tax_rate, discount_rate, line_total, sort_order
+                          unit_price, tax_rate, discount_rate, line_total, sort_order,
+                          deleted_at, deleted_by
                 "#,
             )
             .bind(quotation_id)
@@ -1281,9 +1393,10 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
         let rows: Vec<QuotationLineRow> = sqlx::query_as(
             r#"
             SELECT id, quotation_id, product_id, description, quantity,
-                   unit_price, tax_rate, discount_rate, line_total, sort_order
+                   unit_price, tax_rate, discount_rate, line_total, sort_order,
+                   deleted_at, deleted_by
             FROM quotation_lines
-            WHERE quotation_id = $1
+            WHERE quotation_id = $1 AND deleted_at IS NULL
             ORDER BY sort_order
             "#,
         )
@@ -1316,6 +1429,110 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
                 e
             ))
         })?;
+
+        Ok(())
+    }
+
+    async fn soft_delete(
+        &self,
+        id: i64,
+        _quotation_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE quotation_lines
+            SET deleted_at = NOW(), deleted_by = $2
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete quotation line: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Quotation line not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, _quotation_id: i64) -> Result<QuotationLine, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE quotation_lines
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore quotation line: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Quotation line not found or not deleted".to_string(),
+            ));
+        }
+
+        let row: QuotationLineRow = sqlx::query_as(
+            r#"
+            SELECT id, quotation_id, product_id, description, quantity,
+                   unit_price, tax_rate, discount_rate, line_total, sort_order,
+                   deleted_at, deleted_by
+            FROM quotation_lines
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to find restored quotation line: {}", e))
+        })?;
+
+        Ok(row.into())
+    }
+
+    async fn find_deleted(&self, quotation_id: i64) -> Result<Vec<QuotationLine>, ApiError> {
+        let rows: Vec<QuotationLineRow> = sqlx::query_as(
+            r#"
+            SELECT id, quotation_id, product_id, description, quantity,
+                   unit_price, tax_rate, discount_rate, line_total, sort_order,
+                   deleted_at, deleted_by
+            FROM quotation_lines
+            WHERE quotation_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY sort_order
+            "#,
+        )
+        .bind(quotation_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to find deleted quotation lines: {}", e))
+        })?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, _quotation_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM quotation_lines
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy quotation line: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Quotation line not found".to_string()));
+        }
 
         Ok(())
     }

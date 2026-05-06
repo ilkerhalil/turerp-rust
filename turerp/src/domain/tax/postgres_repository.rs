@@ -33,6 +33,8 @@ struct TaxRateRow {
     description: String,
     is_default: bool,
     created_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -58,6 +60,8 @@ impl From<TaxRateRow> for TaxRate {
             description: row.description,
             is_default: row.is_default,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -81,6 +85,8 @@ struct TaxPeriodRow {
     status: String,
     filed_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
     total_count: Option<i64>,
 }
 
@@ -117,6 +123,8 @@ impl From<TaxPeriodRow> for TaxPeriod {
             status,
             filed_at: row.filed_at,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -179,7 +187,7 @@ impl PostgresTaxRateRepository {
 /// Common column list for tax_rates SELECT queries
 const TAX_RATE_COLUMNS: &str = r#"
     id, tenant_id, tax_type, rate, effective_from, effective_to,
-    category, description, is_default, created_at
+    category, description, is_default, created_at, deleted_at, deleted_by
 "#;
 
 #[async_trait]
@@ -380,6 +388,83 @@ impl TaxRateRepository for PostgresTaxRateRepository {
 
         Ok(())
     }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE tax_rates
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete tax rate: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Tax rate not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<TaxRate, ApiError> {
+        let row: TaxRateRow = sqlx::query_as(&format!(
+            r#"
+            UPDATE tax_rates
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            RETURNING {TAX_RATE_COLUMNS}, 0 as total_count
+            "#,
+        ))
+        .bind(id)
+        .bind(tenant_id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "TaxRate"))?;
+
+        Ok(row.into())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<TaxRate>, ApiError> {
+        let rows: Vec<TaxRateRow> = sqlx::query_as(&format!(
+            r#"
+            SELECT {TAX_RATE_COLUMNS}, 0 as total_count
+            FROM tax_rates
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        ))
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted tax rates: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM tax_rates
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy tax rate: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Deleted tax rate not found".to_string()));
+        }
+
+        Ok(())
+    }
 }
 
 // ===========================================================================
@@ -407,7 +492,7 @@ impl PostgresTaxPeriodRepository {
 const TAX_PERIOD_COLUMNS: &str = r#"
     id, tenant_id, tax_type, period_year, period_month,
     total_base, total_tax, total_deduction, net_tax,
-    status, filed_at, created_at
+    status, filed_at, created_at, deleted_at, deleted_by
 "#;
 
 #[async_trait]
@@ -444,7 +529,7 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
             r#"
             SELECT {TAX_PERIOD_COLUMNS}, 0 as total_count
             FROM tax_periods
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         ))
         .bind(id)
@@ -473,7 +558,7 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
                     SELECT {TAX_PERIOD_COLUMNS},
                            COUNT(*) OVER() as total_count
                     FROM tax_periods
-                    WHERE tenant_id = $1 AND tax_type = $2
+                    WHERE tenant_id = $1 AND tax_type = $2 AND deleted_at IS NULL
                     ORDER BY period_year DESC, period_month DESC
                     LIMIT $3 OFFSET $4
                     "#,
@@ -501,7 +586,7 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
                     SELECT {TAX_PERIOD_COLUMNS},
                            COUNT(*) OVER() as total_count
                     FROM tax_periods
-                    WHERE tenant_id = $1
+                    WHERE tenant_id = $1 AND deleted_at IS NULL
                     ORDER BY period_year DESC, period_month DESC
                     LIMIT $2 OFFSET $3
                     "#,
@@ -546,7 +631,7 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
                 net_tax = $7,
                 status = $8,
                 filed_at = $9
-            WHERE id = $10 AND tenant_id = $11
+            WHERE id = $10 AND tenant_id = $11 AND deleted_at IS NULL
             RETURNING {TAX_PERIOD_COLUMNS}, 0 as total_count
             "#,
         ))
@@ -609,5 +694,84 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
         .map_err(|e| ApiError::Database(format!("Failed to get tax period details: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE tax_periods
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete tax period: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Tax period not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<TaxPeriod, ApiError> {
+        let row: TaxPeriodRow = sqlx::query_as(&format!(
+            r#"
+            UPDATE tax_periods
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            RETURNING {TAX_PERIOD_COLUMNS}, 0 as total_count
+            "#,
+        ))
+        .bind(id)
+        .bind(tenant_id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "TaxPeriod"))?;
+
+        Ok(row.into())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<TaxPeriod>, ApiError> {
+        let rows: Vec<TaxPeriodRow> = sqlx::query_as(&format!(
+            r#"
+            SELECT {TAX_PERIOD_COLUMNS}, 0 as total_count
+            FROM tax_periods
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        ))
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted tax periods: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM tax_periods
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy tax period: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Deleted tax period not found".to_string(),
+            ));
+        }
+
+        Ok(())
     }
 }

@@ -209,6 +209,66 @@ impl CustomFieldRepository for PostgresCustomFieldRepository {
 
         Ok(())
     }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"UPDATE custom_field_definitions
+                SET deleted_at = NULL, deleted_by = NULL
+                WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL"#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted custom field {} not found",
+                id
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<CustomFieldDefinition>, ApiError> {
+        let rows: Vec<CustomFieldDefinitionRow> = sqlx::query_as(
+            r#"SELECT id, tenant_id, module, field_name, field_label, field_type, required,
+                options, sort_order, is_active,
+                created_at, updated_at, deleted_at, deleted_by
+                FROM custom_field_definitions
+                WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+                ORDER BY deleted_at DESC"#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+        Ok(rows.into_iter().map(|r| r.into_definition()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"DELETE FROM custom_field_definitions
+                WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL"#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted custom field {} not found",
+                id
+            )));
+        }
+
+        Ok(())
+    }
 }
 
 /// Helper struct for sqlx mapping

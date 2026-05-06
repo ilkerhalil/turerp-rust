@@ -201,6 +201,132 @@ pub async fn update_currency(
     }
 }
 
+/// Soft delete currency (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/currencies/{code}/soft", tag = "Currency",
+    params(("code" = String, Path, description = "Currency code")),
+    responses((status = 204, description = "Currency soft deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn soft_delete_currency(
+    admin_user: AdminUser,
+    currency_service: web::Data<CurrencyService>,
+    path: web::Path<String>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let code = path.into_inner();
+    let currency = match currency_service
+        .get_currency_by_code(&code, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(c) => c,
+        Err(e) => return Ok(e.to_http_response(i18n, locale.as_str())),
+    };
+
+    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    match currency_service
+        .soft_delete_currency(currency.id, admin_user.0.tenant_id, deleted_by)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore soft-deleted currency (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/currencies/{code}/restore", tag = "Currency",
+    params(("code" = String, Path, description = "Currency code")),
+    responses((status = 204, description = "Currency restored"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_currency(
+    admin_user: AdminUser,
+    currency_service: web::Data<CurrencyService>,
+    path: web::Path<String>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let code = path.into_inner();
+    let currency = match currency_service
+        .get_currency_by_code(&code, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(c) => c,
+        Err(e) => return Ok(e.to_http_response(i18n, locale.as_str())),
+    };
+
+    match currency_service
+        .restore_currency(currency.id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List deleted currencies (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/currencies/deleted", tag = "Currency",
+    responses((status = 200, description = "List of deleted currencies", body = Vec<CurrencyResponse>)),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_currencies(
+    admin_user: AdminUser,
+    currency_service: web::Data<CurrencyService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match currency_service
+        .list_deleted_currencies(admin_user.0.tenant_id)
+        .await
+    {
+        Ok(currencies) => {
+            let mapped: Vec<CurrencyResponse> =
+                currencies.into_iter().map(CurrencyResponse::from).collect();
+            Ok(HttpResponse::Ok().json(mapped))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Permanently destroy a soft-deleted currency (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/currencies/{code}/destroy", tag = "Currency",
+    params(("code" = String, Path, description = "Currency code")),
+    responses((status = 204, description = "Currency permanently destroyed"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_currency(
+    admin_user: AdminUser,
+    currency_service: web::Data<CurrencyService>,
+    path: web::Path<String>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let code = path.into_inner();
+    let currency = match currency_service
+        .get_currency_by_code(&code, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(c) => c,
+        Err(e) => return Ok(e.to_http_response(i18n, locale.as_str())),
+    };
+
+    match currency_service
+        .destroy_currency(currency.id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Exchange rate endpoints
 // ---------------------------------------------------------------------------
@@ -328,6 +454,108 @@ pub async fn get_effective_rate(
     }
 }
 
+/// Soft delete exchange rate (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/exchange-rates/{id}/soft", tag = "Currency",
+    params(("id" = i64, Path, description = "Exchange rate ID")),
+    responses((status = 204, description = "Exchange rate soft deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn soft_delete_exchange_rate(
+    admin_user: AdminUser,
+    currency_service: web::Data<CurrencyService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    match currency_service
+        .soft_delete_exchange_rate(id, admin_user.0.tenant_id, deleted_by)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore soft-deleted exchange rate (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/exchange-rates/{id}/restore", tag = "Currency",
+    params(("id" = i64, Path, description = "Exchange rate ID")),
+    responses((status = 204, description = "Exchange rate restored"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_exchange_rate(
+    admin_user: AdminUser,
+    currency_service: web::Data<CurrencyService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    match currency_service
+        .restore_exchange_rate(id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List deleted exchange rates (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/exchange-rates/deleted", tag = "Currency",
+    responses((status = 200, description = "List of deleted exchange rates", body = Vec<ExchangeRateResponse>)),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_exchange_rates(
+    admin_user: AdminUser,
+    currency_service: web::Data<CurrencyService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match currency_service
+        .list_deleted_exchange_rates(admin_user.0.tenant_id)
+        .await
+    {
+        Ok(rates) => {
+            let mapped: Vec<ExchangeRateResponse> =
+                rates.into_iter().map(ExchangeRateResponse::from).collect();
+            Ok(HttpResponse::Ok().json(mapped))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Permanently destroy a soft-deleted exchange rate (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/exchange-rates/{id}/destroy", tag = "Currency",
+    params(("id" = i64, Path, description = "Exchange rate ID")),
+    responses((status = 204, description = "Exchange rate permanently destroyed"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_exchange_rate(
+    admin_user: AdminUser,
+    currency_service: web::Data<CurrencyService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let id = path.into_inner();
+    match currency_service
+        .destroy_exchange_rate(id, admin_user.0.tenant_id)
+        .await
+    {
+        Ok(()) => Ok(HttpResponse::NoContent().finish()),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Route configuration
 // ---------------------------------------------------------------------------
@@ -339,13 +567,21 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("", web::get().to(list_currencies))
             .route("", web::post().to(create_currency))
             .route("/{code}", web::get().to(get_currency))
-            .route("/{code}", web::put().to(update_currency)),
+            .route("/{code}", web::put().to(update_currency))
+            .route("/{code}/soft", web::delete().to(soft_delete_currency))
+            .route("/{code}/restore", web::post().to(restore_currency))
+            .route("/deleted", web::get().to(list_deleted_currencies))
+            .route("/{code}/destroy", web::delete().to(destroy_currency)),
     )
     .service(
         web::scope("/exchange-rates")
             .route("", web::get().to(list_exchange_rates))
             .route("", web::post().to(create_exchange_rate))
             .route("/convert", web::get().to(convert_amount))
-            .route("/effective", web::get().to(get_effective_rate)),
+            .route("/effective", web::get().to(get_effective_rate))
+            .route("/{id}/soft", web::delete().to(soft_delete_exchange_rate))
+            .route("/{id}/restore", web::post().to(restore_exchange_rate))
+            .route("/deleted", web::get().to(list_deleted_exchange_rates))
+            .route("/{id}/destroy", web::delete().to(destroy_exchange_rate)),
     );
 }

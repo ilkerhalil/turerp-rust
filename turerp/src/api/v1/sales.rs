@@ -237,6 +237,87 @@ pub async fn destroy_sales_order(
     Ok(HttpResponse::NoContent().finish())
 }
 
+// --- Sales Order Lines ---
+
+/// Delete sales order line (requires admin role, soft delete)
+#[utoipa::path(
+    delete, path = "/api/v1/sales/orders/{order_id}/lines/{line_id}", tag = "Sales",
+    params(("order_id" = i64, Path, description = "Sales order ID"), ("line_id" = i64, Path, description = "Line ID")),
+    responses((status = 200, description = "Line deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn delete_sales_order_line(
+    admin_user: AdminUser,
+    sales_service: web::Data<SalesService>,
+    path: web::Path<(i64, i64)>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let (order_id, line_id) = path.into_inner();
+    let deleted_by = admin_user.0.user_id()?;
+    match sales_service
+        .soft_delete_order_line(line_id, order_id, deleted_by)
+        .await
+    {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "sales.order.line.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore a soft-deleted sales order line (admin only)
+#[utoipa::path(
+    put, path = "/api/v1/sales/orders/{order_id}/lines/{line_id}/restore", tag = "Sales",
+    params(("order_id" = i64, Path, description = "Sales order ID"), ("line_id" = i64, Path, description = "Line ID")),
+    responses((status = 200, description = "Line restored", body = SalesOrderLine), (status = 404, description = "Not found or not deleted")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_sales_order_line(
+    _admin_user: AdminUser,
+    sales_service: web::Data<SalesService>,
+    path: web::Path<(i64, i64)>,
+) -> ApiResult<HttpResponse> {
+    let (order_id, line_id) = path.into_inner();
+    let line = sales_service.restore_order_line(line_id, order_id).await?;
+    Ok(HttpResponse::Ok().json(line))
+}
+
+/// List soft-deleted sales order lines (admin only)
+#[utoipa::path(
+    get, path = "/api/v1/sales/orders/{order_id}/lines/deleted", tag = "Sales",
+    params(("order_id" = i64, Path, description = "Sales order ID")),
+    responses((status = 200, description = "List of deleted lines")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_sales_order_lines(
+    _admin_user: AdminUser,
+    sales_service: web::Data<SalesService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let lines: Vec<_> = sales_service.list_deleted_order_lines(*path).await?;
+    Ok(HttpResponse::Ok().json(lines))
+}
+
+/// Permanently delete a sales order line (admin only)
+#[utoipa::path(
+    delete, path = "/api/v1/sales/orders/{order_id}/lines/{line_id}/destroy", tag = "Sales",
+    params(("order_id" = i64, Path, description = "Sales order ID"), ("line_id" = i64, Path, description = "Line ID")),
+    responses((status = 204, description = "Line permanently deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_sales_order_line(
+    _admin_user: AdminUser,
+    sales_service: web::Data<SalesService>,
+    path: web::Path<(i64, i64)>,
+) -> ApiResult<HttpResponse> {
+    let (order_id, line_id) = path.into_inner();
+    sales_service.destroy_order_line(line_id, order_id).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 // --- Quotations ---
 
 /// Create quotation (requires admin role)
@@ -489,6 +570,91 @@ pub async fn destroy_quotation(
     Ok(HttpResponse::NoContent().finish())
 }
 
+// --- Quotation Lines ---
+
+/// Delete quotation line (requires admin role, soft delete)
+#[utoipa::path(
+    delete, path = "/api/v1/sales/quotations/{quotation_id}/lines/{line_id}", tag = "Sales",
+    params(("quotation_id" = i64, Path, description = "Quotation ID"), ("line_id" = i64, Path, description = "Line ID")),
+    responses((status = 200, description = "Line deleted", body = MessageResponse), (status = 403, description = "Forbidden")),
+    security(("bearer_auth" = []))
+)]
+pub async fn delete_quotation_line(
+    admin_user: AdminUser,
+    sales_service: web::Data<SalesService>,
+    path: web::Path<(i64, i64)>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let (quotation_id, line_id) = path.into_inner();
+    let deleted_by = admin_user.0.user_id()?;
+    match sales_service
+        .soft_delete_quotation_line(line_id, quotation_id, deleted_by)
+        .await
+    {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "sales.quotation.line.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore a soft-deleted quotation line (admin only)
+#[utoipa::path(
+    put, path = "/api/v1/sales/quotations/{quotation_id}/lines/{line_id}/restore", tag = "Sales",
+    params(("quotation_id" = i64, Path, description = "Quotation ID"), ("line_id" = i64, Path, description = "Line ID")),
+    responses((status = 200, description = "Line restored", body = QuotationLine), (status = 404, description = "Not found or not deleted")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_quotation_line(
+    _admin_user: AdminUser,
+    sales_service: web::Data<SalesService>,
+    path: web::Path<(i64, i64)>,
+) -> ApiResult<HttpResponse> {
+    let (quotation_id, line_id) = path.into_inner();
+    let line = sales_service
+        .restore_quotation_line(line_id, quotation_id)
+        .await?;
+    Ok(HttpResponse::Ok().json(line))
+}
+
+/// List soft-deleted quotation lines (admin only)
+#[utoipa::path(
+    get, path = "/api/v1/sales/quotations/{quotation_id}/lines/deleted", tag = "Sales",
+    params(("quotation_id" = i64, Path, description = "Quotation ID")),
+    responses((status = 200, description = "List of deleted lines")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_quotation_lines(
+    _admin_user: AdminUser,
+    sales_service: web::Data<SalesService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    let lines: Vec<_> = sales_service.list_deleted_quotation_lines(*path).await?;
+    Ok(HttpResponse::Ok().json(lines))
+}
+
+/// Permanently delete a quotation line (admin only)
+#[utoipa::path(
+    delete, path = "/api/v1/sales/quotations/{quotation_id}/lines/{line_id}/destroy", tag = "Sales",
+    params(("quotation_id" = i64, Path, description = "Quotation ID"), ("line_id" = i64, Path, description = "Line ID")),
+    responses((status = 204, description = "Line permanently deleted"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_quotation_line(
+    _admin_user: AdminUser,
+    sales_service: web::Data<SalesService>,
+    path: web::Path<(i64, i64)>,
+) -> ApiResult<HttpResponse> {
+    let (quotation_id, line_id) = path.into_inner();
+    sales_service
+        .destroy_quotation_line(line_id, quotation_id)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct UpdateOrderStatusRequest {
     pub status: SalesOrderStatus,
@@ -529,6 +695,22 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::put().to(update_sales_order_status)),
     )
     .service(
+        web::resource("/v1/sales/orders/{order_id}/lines/{line_id}")
+            .route(web::delete().to(delete_sales_order_line)),
+    )
+    .service(
+        web::resource("/v1/sales/orders/{order_id}/lines/{line_id}/restore")
+            .route(web::put().to(restore_sales_order_line)),
+    )
+    .service(
+        web::resource("/v1/sales/orders/{order_id}/lines/deleted")
+            .route(web::get().to(list_deleted_sales_order_lines)),
+    )
+    .service(
+        web::resource("/v1/sales/orders/{order_id}/lines/{line_id}/destroy")
+            .route(web::delete().to(destroy_sales_order_line)),
+    )
+    .service(
         web::resource("/v1/sales/quotations")
             .route(web::get().to(get_quotations))
             .route(web::post().to(create_quotation)),
@@ -559,5 +741,21 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/sales/quotations/{id}/convert")
             .route(web::post().to(convert_quotation_to_order)),
+    )
+    .service(
+        web::resource("/v1/sales/quotations/{quotation_id}/lines/{line_id}")
+            .route(web::delete().to(delete_quotation_line)),
+    )
+    .service(
+        web::resource("/v1/sales/quotations/{quotation_id}/lines/{line_id}/restore")
+            .route(web::put().to(restore_quotation_line)),
+    )
+    .service(
+        web::resource("/v1/sales/quotations/{quotation_id}/lines/deleted")
+            .route(web::get().to(list_deleted_quotation_lines)),
+    )
+    .service(
+        web::resource("/v1/sales/quotations/{quotation_id}/lines/{line_id}/destroy")
+            .route(web::delete().to(destroy_quotation_line)),
     );
 }

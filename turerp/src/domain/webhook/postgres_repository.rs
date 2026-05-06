@@ -306,6 +306,62 @@ impl WebhookRepository for PostgresWebhookRepository {
         }
         Ok(())
     }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            "UPDATE webhooks SET deleted_at = NULL, deleted_by = NULL WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL",
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Webhook"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted webhook {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Webhook>, ApiError> {
+        let rows = sqlx::query_as::<_, WebhookRow>(
+            r#"
+            SELECT id, tenant_id, url, description, event_types, secret, status,
+                created_at, updated_at, deleted_at, deleted_by
+            FROM webhooks
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Webhook"))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            "DELETE FROM webhooks WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL",
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Webhook"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted webhook {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------

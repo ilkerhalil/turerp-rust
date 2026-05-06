@@ -5,6 +5,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::impl_soft_deletable;
+
 /// Invoice status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default, ToSchema)]
 pub enum InvoiceStatus {
@@ -114,25 +116,7 @@ pub struct Invoice {
     pub deleted_by: Option<i64>,
 }
 
-impl crate::common::SoftDeletable for Invoice {
-    fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
-    }
-    fn deleted_at(&self) -> Option<DateTime<Utc>> {
-        self.deleted_at
-    }
-    fn deleted_by(&self) -> Option<i64> {
-        self.deleted_by
-    }
-    fn mark_deleted(&mut self, by_user_id: i64) {
-        self.deleted_at = Some(Utc::now());
-        self.deleted_by = Some(by_user_id);
-    }
-    fn restore(&mut self) {
-        self.deleted_at = None;
-        self.deleted_by = None;
-    }
-}
+impl_soft_deletable!(Invoice);
 
 /// Invoice line item
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -147,7 +131,11 @@ pub struct InvoiceLine {
     pub discount_rate: Decimal,
     pub line_total: Decimal,
     pub sort_order: i32,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(InvoiceLine);
 
 /// Payment record
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -162,7 +150,11 @@ pub struct Payment {
     pub reference_number: Option<String>,
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(Payment);
 
 /// Create invoice request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

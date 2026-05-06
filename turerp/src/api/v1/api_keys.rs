@@ -169,6 +169,116 @@ async fn delete_api_key(
     Ok(HttpResponse::NoContent().finish())
 }
 
+/// Soft delete an API key (admin only)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/api-keys/{id}/tenant/{tenant_id}/soft",
+    tag = "API Keys",
+    params(
+        ("id" = i64, Path, description = "API key ID"),
+        ("tenant_id" = i64, Path, description = "Tenant ID"),
+    ),
+    responses(
+        (status = 204, description = "API key soft deleted"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - admin only"),
+        (status = 404, description = "API key not found"),
+        (status = 409, description = "API key already deleted"),
+    ),
+    security(("bearer_auth" = [])),
+)]
+async fn soft_delete_api_key(
+    _admin: AdminUser,
+    service: web::Data<ApiKeyService>,
+    path: web::Path<(i64, i64)>,
+) -> Result<HttpResponse, ApiError> {
+    let (id, tenant_id) = path.into_inner();
+    let deleted_by = _admin.0.sub.parse::<i64>().unwrap_or(0);
+    service
+        .soft_delete_api_key(id, tenant_id, deleted_by)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Restore a soft-deleted API key (admin only)
+#[utoipa::path(
+    post,
+    path = "/api/v1/api-keys/{id}/tenant/{tenant_id}/restore",
+    tag = "API Keys",
+    params(
+        ("id" = i64, Path, description = "API key ID"),
+        ("tenant_id" = i64, Path, description = "Tenant ID"),
+    ),
+    responses(
+        (status = 204, description = "API key restored"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - admin only"),
+        (status = 404, description = "Deleted API key not found"),
+    ),
+    security(("bearer_auth" = [])),
+)]
+async fn restore_api_key(
+    _admin: AdminUser,
+    service: web::Data<ApiKeyService>,
+    path: web::Path<(i64, i64)>,
+) -> Result<HttpResponse, ApiError> {
+    let (id, tenant_id) = path.into_inner();
+    service.restore_api_key(id, tenant_id).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// List deleted API keys for a tenant (admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/api-keys/tenant/{tenant_id}/deleted",
+    tag = "API Keys",
+    params(
+        ("tenant_id" = i64, Path, description = "Tenant ID"),
+    ),
+    responses(
+        (status = 200, description = "List of deleted API keys"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - admin only"),
+    ),
+    security(("bearer_auth" = [])),
+)]
+async fn list_deleted_api_keys(
+    _admin: AdminUser,
+    service: web::Data<ApiKeyService>,
+    path: web::Path<i64>,
+) -> Result<HttpResponse, ApiError> {
+    let tenant_id = path.into_inner();
+    let keys = service.list_deleted_api_keys(tenant_id).await?;
+    Ok(HttpResponse::Ok().json(keys))
+}
+
+/// Permanently destroy a soft-deleted API key (admin only)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/api-keys/{id}/tenant/{tenant_id}/destroy",
+    tag = "API Keys",
+    params(
+        ("id" = i64, Path, description = "API key ID"),
+        ("tenant_id" = i64, Path, description = "Tenant ID"),
+    ),
+    responses(
+        (status = 204, description = "API key permanently destroyed"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden - admin only"),
+        (status = 404, description = "Deleted API key not found"),
+    ),
+    security(("bearer_auth" = [])),
+)]
+async fn destroy_api_key(
+    _admin: AdminUser,
+    service: web::Data<ApiKeyService>,
+    path: web::Path<(i64, i64)>,
+) -> Result<HttpResponse, ApiError> {
+    let (id, tenant_id) = path.into_inner();
+    service.destroy_api_key(id, tenant_id).await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
 /// Validate API key scope (for testing)
 #[utoipa::path(
     get,
@@ -213,6 +323,22 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/{id}/tenant/{tenant_id}", web::get().to(get_api_key))
             .route("/{id}/tenant/{tenant_id}", web::put().to(update_api_key))
             .route("/{id}/tenant/{tenant_id}", web::delete().to(delete_api_key))
+            .route(
+                "/{id}/tenant/{tenant_id}/soft",
+                web::delete().to(soft_delete_api_key),
+            )
+            .route(
+                "/{id}/tenant/{tenant_id}/restore",
+                web::post().to(restore_api_key),
+            )
+            .route(
+                "/tenant/{tenant_id}/deleted",
+                web::get().to(list_deleted_api_keys),
+            )
+            .route(
+                "/{id}/tenant/{tenant_id}/destroy",
+                web::delete().to(destroy_api_key),
+            )
             // Scope check (API key auth)
             .route("/check-scope/{scope}", web::get().to(check_scope)),
     );

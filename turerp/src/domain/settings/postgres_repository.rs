@@ -27,6 +27,8 @@ struct SettingRow {
     is_editable: bool,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<SettingRow> for Setting {
@@ -50,6 +52,8 @@ impl From<SettingRow> for Setting {
             is_editable: row.is_editable,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -79,7 +83,10 @@ impl SettingsRepository for PostgresSettingsRepository {
                 description, is_sensitive, is_editable
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            RETURNING *
+            RETURNING
+                id, tenant_id, key, value, default_value, data_type, group_name,
+                description, is_sensitive, is_editable, created_at, updated_at,
+                deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -108,7 +115,13 @@ impl SettingsRepository for PostgresSettingsRepository {
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Setting>, ApiError> {
         let row = sqlx::query_as::<_, SettingRow>(
-            "SELECT * FROM settings WHERE id = $1 AND tenant_id = $2",
+            r#"
+            SELECT id, tenant_id, key, value, default_value, data_type, group_name,
+                description, is_sensitive, is_editable, created_at, updated_at,
+                deleted_at, deleted_by
+            FROM settings
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
         )
         .bind(id)
         .bind(tenant_id)
@@ -121,7 +134,13 @@ impl SettingsRepository for PostgresSettingsRepository {
 
     async fn find_by_key(&self, tenant_id: i64, key: &str) -> Result<Option<Setting>, ApiError> {
         let row = sqlx::query_as::<_, SettingRow>(
-            "SELECT * FROM settings WHERE tenant_id = $1 AND key = $2",
+            r#"
+            SELECT id, tenant_id, key, value, default_value, data_type, group_name,
+                description, is_sensitive, is_editable, created_at, updated_at,
+                deleted_at, deleted_by
+            FROM settings
+            WHERE tenant_id = $1 AND key = $2 AND deleted_at IS NULL
+            "#,
         )
         .bind(tenant_id)
         .bind(key)
@@ -139,7 +158,14 @@ impl SettingsRepository for PostgresSettingsRepository {
     ) -> Result<Vec<Setting>, ApiError> {
         let rows: Vec<SettingRow> = if let Some(group_name) = group {
             sqlx::query_as(
-                "SELECT * FROM settings WHERE tenant_id = $1 AND group_name = $2 ORDER BY key",
+                r#"
+                SELECT id, tenant_id, key, value, default_value, data_type, group_name,
+                    description, is_sensitive, is_editable, created_at, updated_at,
+                    deleted_at, deleted_by
+                FROM settings
+                WHERE tenant_id = $1 AND group_name = $2 AND deleted_at IS NULL
+                ORDER BY key
+                "#,
             )
             .bind(tenant_id)
             .bind(group_name)
@@ -147,11 +173,20 @@ impl SettingsRepository for PostgresSettingsRepository {
             .await
             .map_err(|e| map_sqlx_error(e, "Setting"))?
         } else {
-            sqlx::query_as("SELECT * FROM settings WHERE tenant_id = $1 ORDER BY key")
-                .bind(tenant_id)
-                .fetch_all(&*self.pool)
-                .await
-                .map_err(|e| map_sqlx_error(e, "Setting"))?
+            sqlx::query_as(
+                r#"
+                SELECT id, tenant_id, key, value, default_value, data_type, group_name,
+                    description, is_sensitive, is_editable, created_at, updated_at,
+                    deleted_at, deleted_by
+                FROM settings
+                WHERE tenant_id = $1 AND deleted_at IS NULL
+                ORDER BY key
+                "#,
+            )
+            .bind(tenant_id)
+            .fetch_all(&*self.pool)
+            .await
+            .map_err(|e| map_sqlx_error(e, "Setting"))?
         };
 
         Ok(rows.into_iter().map(Into::into).collect())
@@ -172,7 +207,15 @@ impl SettingsRepository for PostgresSettingsRepository {
 
         if let Some(group_name) = group {
             rows = sqlx::query_as(
-                "SELECT * FROM settings WHERE tenant_id = $1 AND group_name = $2 ORDER BY key LIMIT $3 OFFSET $4"
+                r#"
+                SELECT id, tenant_id, key, value, default_value, data_type, group_name,
+                    description, is_sensitive, is_editable, created_at, updated_at,
+                    deleted_at, deleted_by
+                FROM settings
+                WHERE tenant_id = $1 AND group_name = $2 AND deleted_at IS NULL
+                ORDER BY key
+                LIMIT $3 OFFSET $4
+                "#,
             )
             .bind(tenant_id)
             .bind(group_name)
@@ -183,7 +226,7 @@ impl SettingsRepository for PostgresSettingsRepository {
             .map_err(|e| map_sqlx_error(e, "Setting"))?;
 
             total = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM settings WHERE tenant_id = $1 AND group_name = $2",
+                "SELECT COUNT(*) FROM settings WHERE tenant_id = $1 AND group_name = $2 AND deleted_at IS NULL",
             )
             .bind(tenant_id)
             .bind(group_name)
@@ -192,7 +235,15 @@ impl SettingsRepository for PostgresSettingsRepository {
             .map_err(|e| map_sqlx_error(e, "Setting"))?;
         } else {
             rows = sqlx::query_as(
-                "SELECT * FROM settings WHERE tenant_id = $1 ORDER BY key LIMIT $2 OFFSET $3",
+                r#"
+                SELECT id, tenant_id, key, value, default_value, data_type, group_name,
+                    description, is_sensitive, is_editable, created_at, updated_at,
+                    deleted_at, deleted_by
+                FROM settings
+                WHERE tenant_id = $1 AND deleted_at IS NULL
+                ORDER BY key
+                LIMIT $2 OFFSET $3
+                "#,
             )
             .bind(tenant_id)
             .bind(limit)
@@ -201,11 +252,13 @@ impl SettingsRepository for PostgresSettingsRepository {
             .await
             .map_err(|e| map_sqlx_error(e, "Setting"))?;
 
-            total = sqlx::query_scalar("SELECT COUNT(*) FROM settings WHERE tenant_id = $1")
-                .bind(tenant_id)
-                .fetch_one(&*self.pool)
-                .await
-                .map_err(|e| map_sqlx_error(e, "Setting"))?;
+            total = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM settings WHERE tenant_id = $1 AND deleted_at IS NULL",
+            )
+            .bind(tenant_id)
+            .fetch_one(&*self.pool)
+            .await
+            .map_err(|e| map_sqlx_error(e, "Setting"))?;
         }
 
         let items = rows.into_iter().map(Into::into).collect();
@@ -234,8 +287,11 @@ impl SettingsRepository for PostgresSettingsRepository {
             UPDATE settings
             SET value = $1, default_value = $2, description = $3,
                 is_sensitive = $4, is_editable = $5, updated_at = NOW()
-            WHERE id = $6 AND tenant_id = $7
-            RETURNING *
+            WHERE id = $6 AND tenant_id = $7 AND deleted_at IS NULL
+            RETURNING
+                id, tenant_id, key, value, default_value, data_type, group_name,
+                description, is_sensitive, is_editable, created_at, updated_at,
+                deleted_at, deleted_by
             "#,
         )
         .bind(&value)
@@ -253,12 +309,14 @@ impl SettingsRepository for PostgresSettingsRepository {
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        let result = sqlx::query("DELETE FROM settings WHERE id = $1 AND tenant_id = $2")
-            .bind(id)
-            .bind(tenant_id)
-            .execute(&*self.pool)
-            .await
-            .map_err(|e| map_sqlx_error(e, "Setting"))?;
+        let result = sqlx::query(
+            "DELETE FROM settings WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Setting"))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound(format!("Setting {} not found", id)));
@@ -268,12 +326,14 @@ impl SettingsRepository for PostgresSettingsRepository {
     }
 
     async fn delete_by_key(&self, tenant_id: i64, key: &str) -> Result<(), ApiError> {
-        sqlx::query("DELETE FROM settings WHERE tenant_id = $1 AND key = $2")
-            .bind(tenant_id)
-            .bind(key)
-            .execute(&*self.pool)
-            .await
-            .map_err(|e| map_sqlx_error(e, "Setting"))?;
+        sqlx::query(
+            "DELETE FROM settings WHERE tenant_id = $1 AND key = $2 AND deleted_at IS NULL",
+        )
+        .bind(tenant_id)
+        .bind(key)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Setting"))?;
 
         Ok(())
     }
@@ -290,8 +350,11 @@ impl SettingsRepository for PostgresSettingsRepository {
                 r#"
                 UPDATE settings
                 SET value = $1, updated_at = NOW()
-                WHERE tenant_id = $2 AND key = $3
-                RETURNING *
+                WHERE tenant_id = $2 AND key = $3 AND deleted_at IS NULL
+                RETURNING
+                    id, tenant_id, key, value, default_value, data_type, group_name,
+                    description, is_sensitive, is_editable, created_at, updated_at,
+                    deleted_at, deleted_by
                 "#,
             )
             .bind(&item.value)
@@ -311,7 +374,9 @@ impl SettingsRepository for PostgresSettingsRepository {
 
     async fn key_exists(&self, tenant_id: i64, key: &str) -> Result<bool, ApiError> {
         let count: i64 =
-            sqlx::query_scalar("SELECT COUNT(*) FROM settings WHERE tenant_id = $1 AND key = $2")
+            sqlx::query_scalar(
+                "SELECT COUNT(*) FROM settings WHERE tenant_id = $1 AND key = $2 AND deleted_at IS NULL"
+            )
                 .bind(tenant_id)
                 .bind(key)
                 .fetch_one(&*self.pool)
@@ -319,5 +384,90 @@ impl SettingsRepository for PostgresSettingsRepository {
                 .map_err(|e| map_sqlx_error(e, "Setting"))?;
 
         Ok(count > 0)
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE settings
+            SET deleted_at = NOW(), deleted_by = $3, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Setting"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!("Setting {} not found", id)));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE settings
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Setting"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted setting {} not found",
+                id
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Setting>, ApiError> {
+        let rows: Vec<SettingRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, key, value, default_value, data_type, group_name,
+                description, is_sensitive, is_editable, created_at, updated_at,
+                deleted_at, deleted_by
+            FROM settings
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Setting"))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            "DELETE FROM settings WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL",
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Setting"))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(format!(
+                "Deleted setting {} not found",
+                id
+            )));
+        }
+
+        Ok(())
     }
 }

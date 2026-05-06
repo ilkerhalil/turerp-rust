@@ -82,6 +82,18 @@ impl WebhookService {
             .await
     }
 
+    pub async fn restore_webhook(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.webhook_repo.restore(id, tenant_id).await
+    }
+
+    pub async fn list_deleted_webhooks(&self, tenant_id: i64) -> Result<Vec<Webhook>, ApiError> {
+        self.webhook_repo.find_deleted(tenant_id).await
+    }
+
+    pub async fn destroy_webhook(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.webhook_repo.destroy(id, tenant_id).await
+    }
+
     // --- Delivery ---
 
     pub async fn list_deliveries(

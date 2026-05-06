@@ -193,6 +193,139 @@ pub async fn delete_flag(
     }
 }
 
+/// Soft delete feature flag endpoint (admin only)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/feature-flags/{id}/soft",
+    tag = "Feature Flags",
+    params(
+        ("id" = i64, Path, description = "Feature flag ID")
+    ),
+    responses(
+        (status = 200, description = "Feature flag soft deleted", body = MessageResponse),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden - admin access required"),
+        (status = 404, description = "Feature flag not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn soft_delete_flag(
+    _admin_user: AdminUser,
+    feature_service: web::Data<FeatureFlagService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let deleted_by = _admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    match feature_service.soft_delete(*path, deleted_by).await {
+        Ok(_) => {
+            let msg = i18n.t(locale.as_str(), "generic.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore soft-deleted feature flag endpoint (admin only)
+#[utoipa::path(
+    post,
+    path = "/api/v1/feature-flags/{id}/restore",
+    tag = "Feature Flags",
+    params(
+        ("id" = i64, Path, description = "Feature flag ID")
+    ),
+    responses(
+        (status = 200, description = "Feature flag restored", body = MessageResponse),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden - admin access required"),
+        (status = 404, description = "Deleted feature flag not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn restore_flag(
+    _admin_user: AdminUser,
+    feature_service: web::Data<FeatureFlagService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match feature_service.restore(*path).await {
+        Ok(_) => {
+            let msg = i18n.t(locale.as_str(), "generic.restored");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List deleted feature flags endpoint (admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/feature-flags/deleted",
+    tag = "Feature Flags",
+    responses(
+        (status = 200, description = "Deleted feature flags retrieved", body = Vec<FeatureFlagResponse>),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden - admin access required")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn list_deleted_flags(
+    _admin_user: AdminUser,
+    feature_service: web::Data<FeatureFlagService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match feature_service.find_deleted().await {
+        Ok(flags) => Ok(HttpResponse::Ok().json(flags)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Permanently destroy soft-deleted feature flag endpoint (admin only)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/feature-flags/{id}/destroy",
+    tag = "Feature Flags",
+    params(
+        ("id" = i64, Path, description = "Feature flag ID")
+    ),
+    responses(
+        (status = 200, description = "Feature flag permanently destroyed", body = MessageResponse),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 403, description = "Forbidden - admin access required"),
+        (status = 404, description = "Deleted feature flag not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn destroy_flag(
+    _admin_user: AdminUser,
+    feature_service: web::Data<FeatureFlagService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match feature_service.destroy(*path).await {
+        Ok(_) => {
+            let msg = i18n.t(locale.as_str(), "generic.destroyed");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
 /// Enable feature flag endpoint (admin only)
 #[utoipa::path(
     post,
@@ -335,5 +468,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     )
     .service(web::resource("/v1/feature-flags/{id}/enable").route(web::post().to(enable_flag)))
     .service(web::resource("/v1/feature-flags/{id}/disable").route(web::post().to(disable_flag)))
+    .service(web::resource("/v1/feature-flags/{id}/soft").route(web::delete().to(soft_delete_flag)))
+    .service(web::resource("/v1/feature-flags/{id}/restore").route(web::post().to(restore_flag)))
+    .service(web::resource("/v1/feature-flags/deleted").route(web::get().to(list_deleted_flags)))
+    .service(web::resource("/v1/feature-flags/{id}/destroy").route(web::delete().to(destroy_flag)))
     .service(web::resource("/v1/feature-flags/check/{name}").route(web::get().to(check_feature)));
 }

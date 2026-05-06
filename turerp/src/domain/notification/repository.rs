@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
+use crate::common::soft_delete::SoftDeletable;
 use crate::common::PaginatedResult;
 use crate::domain::notification::model::{
     InAppNotification, Notification, NotificationChannel, NotificationPreference,
@@ -37,6 +38,14 @@ pub trait NotificationRepository: Send + Sync {
     ) -> Result<(), ApiError>;
 
     async fn increment_attempt(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Notification>, ApiError>;
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for in-app notifications
@@ -56,6 +65,14 @@ pub trait InAppNotificationRepository: Send + Sync {
     async fn mark_all_as_read(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError>;
 
     async fn unread_count(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError>;
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<InAppNotification>, ApiError>;
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for notification preferences
@@ -138,7 +155,7 @@ impl NotificationRepository for InMemoryNotificationRepository {
         Ok(inner
             .notifications
             .iter()
-            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .find(|n| n.id == id && n.tenant_id == tenant_id && !n.is_deleted())
             .cloned())
     }
 
@@ -155,6 +172,7 @@ impl NotificationRepository for InMemoryNotificationRepository {
             .notifications
             .iter()
             .filter(|n| n.tenant_id == tenant_id)
+            .filter(|n| !n.is_deleted())
             .filter(|n| user_id.is_none() || n.user_id == user_id)
             .filter(|n| channel.is_none() || n.channel == channel.unwrap())
             .cloned()
@@ -189,7 +207,7 @@ impl NotificationRepository for InMemoryNotificationRepository {
         let n = inner
             .notifications
             .iter_mut()
-            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .find(|n| n.id == id && n.tenant_id == tenant_id && !n.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Notification {} not found", id)))?;
         n.status = status;
         if let Some(mid) = provider_message_id {
@@ -209,9 +227,75 @@ impl NotificationRepository for InMemoryNotificationRepository {
         let n = inner
             .notifications
             .iter_mut()
-            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .find(|n| n.id == id && n.tenant_id == tenant_id && !n.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Notification {} not found", id)))?;
         n.attempts += 1;
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.write();
+        let n = inner
+            .notifications
+            .iter_mut()
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Notification {} not found", id)))?;
+
+        if n.is_deleted() {
+            return Err(ApiError::Conflict(format!(
+                "Notification {} is already deleted",
+                id
+            )));
+        }
+
+        n.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.write();
+        let n = inner
+            .notifications
+            .iter_mut()
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Notification {} not found", id)))?;
+
+        if !n.is_deleted() {
+            return Err(ApiError::BadRequest(format!(
+                "Notification {} is not deleted",
+                id
+            )));
+        }
+
+        n.restore();
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Notification>, ApiError> {
+        let inner = self.inner.read();
+        let mut results: Vec<_> = inner
+            .notifications
+            .iter()
+            .filter(|n| n.tenant_id == tenant_id && n.is_deleted())
+            .cloned()
+            .collect();
+        results.sort_by_key(|n| std::cmp::Reverse(n.deleted_at.unwrap()));
+        Ok(results)
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.write();
+        let len_before = inner.notifications.len();
+        inner
+            .notifications
+            .retain(|n| !(n.id == id && n.tenant_id == tenant_id && n.is_deleted()));
+
+        if inner.notifications.len() == len_before {
+            return Err(ApiError::NotFound(format!(
+                "Deleted notification {} not found",
+                id
+            )));
+        }
         Ok(())
     }
 }
@@ -265,7 +349,7 @@ impl InAppNotificationRepository for InMemoryInAppNotificationRepository {
         let mut filtered: Vec<_> = inner
             .notifications
             .iter()
-            .filter(|n| n.tenant_id == tenant_id && n.user_id == user_id)
+            .filter(|n| n.tenant_id == tenant_id && n.user_id == user_id && !n.is_deleted())
             .filter(|n| !unread_only || !n.read)
             .cloned()
             .collect();
@@ -278,7 +362,7 @@ impl InAppNotificationRepository for InMemoryInAppNotificationRepository {
         let n = inner
             .notifications
             .iter_mut()
-            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .find(|n| n.id == id && n.tenant_id == tenant_id && !n.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("In-app notification {} not found", id)))?;
         n.read = true;
         n.read_at = Some(chrono::Utc::now());
@@ -289,7 +373,7 @@ impl InAppNotificationRepository for InMemoryInAppNotificationRepository {
         let mut inner = self.inner.write();
         let mut count = 0u64;
         for n in inner.notifications.iter_mut() {
-            if n.tenant_id == tenant_id && n.user_id == user_id && !n.read {
+            if n.tenant_id == tenant_id && n.user_id == user_id && !n.read && !n.is_deleted() {
                 n.read = true;
                 n.read_at = Some(chrono::Utc::now());
                 count += 1;
@@ -303,8 +387,76 @@ impl InAppNotificationRepository for InMemoryInAppNotificationRepository {
         Ok(inner
             .notifications
             .iter()
-            .filter(|n| n.tenant_id == tenant_id && n.user_id == user_id && !n.read)
+            .filter(|n| {
+                n.tenant_id == tenant_id && n.user_id == user_id && !n.read && !n.is_deleted()
+            })
             .count() as u64)
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.write();
+        let n = inner
+            .notifications
+            .iter_mut()
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("In-app notification {} not found", id)))?;
+
+        if n.is_deleted() {
+            return Err(ApiError::Conflict(format!(
+                "In-app notification {} is already deleted",
+                id
+            )));
+        }
+
+        n.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.write();
+        let n = inner
+            .notifications
+            .iter_mut()
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("In-app notification {} not found", id)))?;
+
+        if !n.is_deleted() {
+            return Err(ApiError::BadRequest(format!(
+                "In-app notification {} is not deleted",
+                id
+            )));
+        }
+
+        n.restore();
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<InAppNotification>, ApiError> {
+        let inner = self.inner.read();
+        let mut results: Vec<_> = inner
+            .notifications
+            .iter()
+            .filter(|n| n.tenant_id == tenant_id && n.is_deleted())
+            .cloned()
+            .collect();
+        results.sort_by_key(|n| std::cmp::Reverse(n.deleted_at.unwrap()));
+        Ok(results)
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.write();
+        let len_before = inner.notifications.len();
+        inner
+            .notifications
+            .retain(|n| !(n.id == id && n.tenant_id == tenant_id && n.is_deleted()));
+
+        if inner.notifications.len() == len_before {
+            return Err(ApiError::NotFound(format!(
+                "Deleted in-app notification {} not found",
+                id
+            )));
+        }
+        Ok(())
     }
 }
 
@@ -345,7 +497,7 @@ impl NotificationPreferenceRepository for InMemoryNotificationPreferenceReposito
         Ok(inner
             .preferences
             .iter()
-            .filter(|p| p.tenant_id == tenant_id && p.user_id == user_id)
+            .filter(|p| p.tenant_id == tenant_id && p.user_id == user_id && !p.is_deleted())
             .cloned()
             .collect())
     }
@@ -363,6 +515,7 @@ impl NotificationPreferenceRepository for InMemoryNotificationPreferenceReposito
                 && p.user_id == user_id
                 && p.channel == channel
                 && p.notification_type == notification_type
+                && !p.is_deleted()
         });
         Ok(pref.map(|p| p.enabled).unwrap_or(true))
     }
@@ -387,6 +540,7 @@ impl NotificationPreferenceRepository for InMemoryNotificationPreferenceReposito
                     && p.user_id == user_id
                     && p.channel == channel
                     && p.notification_type == pref.notification_type
+                    && !p.is_deleted()
             }) {
                 existing.enabled = pref.enabled;
                 existing.updated_at = chrono::Utc::now();
@@ -401,6 +555,8 @@ impl NotificationPreferenceRepository for InMemoryNotificationPreferenceReposito
                     enabled: pref.enabled,
                     created_at: chrono::Utc::now(),
                     updated_at: chrono::Utc::now(),
+                    deleted_at: None,
+                    deleted_by: None,
                 };
                 inner.next_id += 1;
                 inner.preferences.push(new_pref.clone());
@@ -437,6 +593,8 @@ mod tests {
             last_error: None,
             attempts: 0,
             job_id: None,
+            deleted_at: None,
+            deleted_by: None,
         }
     }
 
@@ -486,6 +644,8 @@ mod tests {
             read_at: None,
             link: None,
             related_notification_id: None,
+            deleted_at: None,
+            deleted_by: None,
         };
         let created = repo.create(n).await.unwrap();
         assert_eq!(created.id, 1);
@@ -509,6 +669,8 @@ mod tests {
             read_at: None,
             link: None,
             related_notification_id: None,
+            deleted_at: None,
+            deleted_by: None,
         };
         repo.create(n).await.unwrap();
 

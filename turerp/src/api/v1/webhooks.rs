@@ -304,6 +304,96 @@ pub async fn retry_delivery(
     }
 }
 
+/// Restore a soft-deleted webhook (admin only)
+#[utoipa::path(
+    post,
+    path = "/api/v1/webhooks/{id}/restore",
+    tag = "Webhooks",
+    params(("id" = i64, Path, description = "Webhook ID")),
+    responses(
+        (status = 200, description = "Webhook restored", body = MessageResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin access required"),
+        (status = 404, description = "Deleted webhook not found")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_webhook(
+    admin_user: AdminUser,
+    service: web::Data<WebhookService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service.restore_webhook(*path, admin_user.0.tenant_id).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "webhook.restored");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List deleted webhooks for a tenant (admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/webhooks/deleted",
+    tag = "Webhooks",
+    responses(
+        (status = 200, description = "List of deleted webhooks", body = Vec<WebhookResponse>),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin access required")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_webhooks(
+    admin_user: AdminUser,
+    service: web::Data<WebhookService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service.list_deleted_webhooks(admin_user.0.tenant_id).await {
+        Ok(list) => {
+            let resp: Vec<WebhookResponse> = list.into_iter().map(Into::into).collect();
+            Ok(HttpResponse::Ok().json(resp))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Permanently destroy a soft-deleted webhook (admin only)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/webhooks/{id}/destroy",
+    tag = "Webhooks",
+    params(("id" = i64, Path, description = "Webhook ID")),
+    responses(
+        (status = 200, description = "Webhook permanently destroyed", body = MessageResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin access required"),
+        (status = 404, description = "Deleted webhook not found")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_webhook(
+    admin_user: AdminUser,
+    service: web::Data<WebhookService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match service.destroy_webhook(*path, admin_user.0.tenant_id).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "webhook.destroyed");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
 /// Configure webhook routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -311,6 +401,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(list_webhooks))
             .route(web::post().to(create_webhook)),
     )
+    .service(web::resource("/v1/webhooks/deleted").route(web::get().to(list_deleted_webhooks)))
     .service(
         web::resource("/v1/webhooks/{id}")
             .route(web::get().to(get_webhook))
@@ -318,6 +409,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::delete().to(delete_webhook)),
     )
     .service(web::resource("/v1/webhooks/{id}/test").route(web::post().to(test_webhook)))
+    .service(web::resource("/v1/webhooks/{id}/restore").route(web::post().to(restore_webhook)))
+    .service(web::resource("/v1/webhooks/{id}/destroy").route(web::delete().to(destroy_webhook)))
     .service(web::resource("/v1/webhooks/{id}/deliveries").route(web::get().to(list_deliveries)))
     .service(
         web::resource("/v1/webhooks/deliveries/{id}/retry").route(web::post().to(retry_delivery)),

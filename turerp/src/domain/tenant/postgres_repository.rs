@@ -22,6 +22,9 @@ struct TenantRow {
     base_currency: String,
     supported_currencies: Vec<String>,
     created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<TenantRow> for Tenant {
@@ -35,6 +38,9 @@ impl From<TenantRow> for Tenant {
             base_currency: row.base_currency,
             supported_currencies: row.supported_currencies,
             created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -49,6 +55,9 @@ struct TenantRowWithTotal {
     base_currency: String,
     supported_currencies: Vec<String>,
     created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
     total_count: i64,
 }
 
@@ -63,6 +72,9 @@ impl From<TenantRowWithTotal> for (Tenant, i64) {
             base_currency: row.base_currency,
             supported_currencies: row.supported_currencies,
             created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         };
         (tenant, row.total_count)
     }
@@ -92,7 +104,7 @@ impl TenantRepository for PostgresTenantRepository {
             r#"
             INSERT INTO tenants (name, subdomain, is_active, created_at)
             VALUES ($1, $2, true, NOW())
-            RETURNING id, name, subdomain, is_active, created_at
+            RETURNING id, name, subdomain, is_active, base_currency, supported_currencies, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&create.name)
@@ -107,9 +119,9 @@ impl TenantRepository for PostgresTenantRepository {
     async fn find_by_id(&self, id: i64) -> Result<Option<Tenant>, ApiError> {
         let result: Option<TenantRow> = sqlx::query_as(
             r#"
-            SELECT id, name, subdomain, is_active, created_at
+            SELECT id, name, subdomain, is_active, base_currency, supported_currencies, created_at, updated_at, deleted_at, deleted_by
             FROM tenants
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -123,9 +135,9 @@ impl TenantRepository for PostgresTenantRepository {
     async fn find_by_subdomain(&self, subdomain: &str) -> Result<Option<Tenant>, ApiError> {
         let result: Option<TenantRow> = sqlx::query_as(
             r#"
-            SELECT id, name, subdomain, is_active, created_at
+            SELECT id, name, subdomain, is_active, base_currency, supported_currencies, created_at, updated_at, deleted_at, deleted_by
             FROM tenants
-            WHERE subdomain = $1
+            WHERE subdomain = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(subdomain)
@@ -139,8 +151,9 @@ impl TenantRepository for PostgresTenantRepository {
     async fn find_all(&self) -> Result<Vec<Tenant>, ApiError> {
         let rows: Vec<TenantRow> = sqlx::query_as(
             r#"
-            SELECT id, name, subdomain, is_active, created_at
+            SELECT id, name, subdomain, is_active, base_currency, supported_currencies, created_at, updated_at, deleted_at, deleted_by
             FROM tenants
+            WHERE deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -160,9 +173,10 @@ impl TenantRepository for PostgresTenantRepository {
 
         let rows: Vec<TenantRowWithTotal> = sqlx::query_as(
             r#"
-            SELECT id, name, subdomain, is_active, created_at,
+            SELECT id, name, subdomain, is_active, base_currency, supported_currencies, created_at, updated_at, deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM tenants
+            WHERE deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $1 OFFSET $2
             "#,
@@ -191,8 +205,8 @@ impl TenantRepository for PostgresTenantRepository {
                 subdomain = COALESCE($2, subdomain),
                 is_active = COALESCE($3, is_active),
                 updated_at = NOW()
-            WHERE id = $4
-            RETURNING id, name, subdomain, is_active, created_at
+            WHERE id = $4 AND deleted_at IS NULL
+            RETURNING id, name, subdomain, is_active, base_currency, supported_currencies, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.name)
@@ -209,8 +223,9 @@ impl TenantRepository for PostgresTenantRepository {
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM tenants
-            WHERE id = $1
+            UPDATE tenants
+            SET deleted_at = NOW(), updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -225,10 +240,83 @@ impl TenantRepository for PostgresTenantRepository {
         Ok(())
     }
 
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE tenants
+            SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete tenant: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Tenant not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64) -> Result<Tenant, ApiError> {
+        let row: TenantRow = sqlx::query_as(
+            r#"
+            UPDATE tenants
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND deleted_at IS NOT NULL
+            RETURNING id, name, subdomain, is_active, base_currency, supported_currencies, created_at, updated_at, deleted_at, deleted_by
+            "#,
+        )
+        .bind(id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Tenant"))?;
+
+        Ok(row.into())
+    }
+
+    async fn find_deleted(&self) -> Result<Vec<Tenant>, ApiError> {
+        let rows: Vec<TenantRow> = sqlx::query_as(
+            r#"
+            SELECT id, name, subdomain, is_active, base_currency, supported_currencies, created_at, updated_at, deleted_at, deleted_by
+            FROM tenants
+            WHERE deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted tenants: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM tenants
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy tenant: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Tenant not found".to_string()));
+        }
+
+        Ok(())
+    }
+
     async fn subdomain_exists(&self, subdomain: &str) -> Result<bool, ApiError> {
         let result: (bool,) = sqlx::query_as(
             r#"
-            SELECT EXISTS(SELECT 1 FROM tenants WHERE subdomain = $1)
+            SELECT EXISTS(SELECT 1 FROM tenants WHERE subdomain = $1 AND deleted_at IS NULL)
             "#,
         )
         .bind(subdomain)

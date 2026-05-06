@@ -5,6 +5,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::impl_soft_deletable;
+
 /// Purchase order status
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 pub enum PurchaseOrderStatus {
@@ -113,25 +115,7 @@ pub struct PurchaseOrder {
     pub deleted_by: Option<i64>,
 }
 
-impl crate::common::SoftDeletable for PurchaseOrder {
-    fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
-    }
-    fn deleted_at(&self) -> Option<DateTime<Utc>> {
-        self.deleted_at
-    }
-    fn deleted_by(&self) -> Option<i64> {
-        self.deleted_by
-    }
-    fn mark_deleted(&mut self, by_user_id: i64) {
-        self.deleted_at = Some(Utc::now());
-        self.deleted_by = Some(by_user_id);
-    }
-    fn restore(&mut self) {
-        self.deleted_at = None;
-        self.deleted_by = None;
-    }
-}
+impl_soft_deletable!(PurchaseOrder);
 
 /// Purchase order line item
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -147,7 +131,11 @@ pub struct PurchaseOrderLine {
     pub discount_rate: Decimal,
     pub line_total: Decimal,
     pub sort_order: i32,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(PurchaseOrderLine);
 
 /// Purchase request entity
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -166,25 +154,7 @@ pub struct PurchaseRequest {
     pub deleted_by: Option<i64>,
 }
 
-impl crate::common::SoftDeletable for PurchaseRequest {
-    fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
-    }
-    fn deleted_at(&self) -> Option<DateTime<Utc>> {
-        self.deleted_at
-    }
-    fn deleted_by(&self) -> Option<i64> {
-        self.deleted_by
-    }
-    fn mark_deleted(&mut self, by_user_id: i64) {
-        self.deleted_at = Some(Utc::now());
-        self.deleted_by = Some(by_user_id);
-    }
-    fn restore(&mut self) {
-        self.deleted_at = None;
-        self.deleted_by = None;
-    }
-}
+impl_soft_deletable!(PurchaseRequest);
 
 /// Purchase request line
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -196,7 +166,11 @@ pub struct PurchaseRequestLine {
     pub quantity: Decimal,
     pub notes: Option<String>,
     pub sort_order: i32,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(PurchaseRequestLine);
 
 /// Goods receipt entity
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -213,25 +187,7 @@ pub struct GoodsReceipt {
     pub deleted_by: Option<i64>,
 }
 
-impl crate::common::SoftDeletable for GoodsReceipt {
-    fn is_deleted(&self) -> bool {
-        self.deleted_at.is_some()
-    }
-    fn deleted_at(&self) -> Option<DateTime<Utc>> {
-        self.deleted_at
-    }
-    fn deleted_by(&self) -> Option<i64> {
-        self.deleted_by
-    }
-    fn mark_deleted(&mut self, by_user_id: i64) {
-        self.deleted_at = Some(Utc::now());
-        self.deleted_by = Some(by_user_id);
-    }
-    fn restore(&mut self) {
-        self.deleted_at = None;
-        self.deleted_by = None;
-    }
-}
+impl_soft_deletable!(GoodsReceipt);
 
 /// Goods receipt line
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -243,7 +199,11 @@ pub struct GoodsReceiptLine {
     pub quantity: Decimal,
     pub condition: String,
     pub notes: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(GoodsReceiptLine);
 
 /// Create purchase request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -541,7 +501,6 @@ impl From<(GoodsReceipt, Vec<GoodsReceiptLine>)> for GoodsReceiptResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::SoftDeletable;
 
     #[test]
     fn test_create_purchase_order_validation() {

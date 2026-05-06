@@ -174,6 +174,8 @@ struct InvoiceLineRow {
     discount_rate: Decimal,
     line_total: Decimal,
     sort_order: i32,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<InvoiceLineRow> for InvoiceLine {
@@ -189,6 +191,8 @@ impl From<InvoiceLineRow> for InvoiceLine {
             discount_rate: row.discount_rate,
             line_total: row.line_total,
             sort_order: row.sort_order,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -206,6 +210,8 @@ struct PaymentRow {
     reference_number: Option<String>,
     notes: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<PaymentRow> for Payment {
@@ -221,6 +227,8 @@ impl From<PaymentRow> for Payment {
             reference_number: row.reference_number,
             notes: row.notes,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -770,7 +778,8 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
                                            unit_price, tax_rate, discount_rate, line_total, sort_order)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING id, invoice_id, product_id, description, quantity,
-                          unit_price, tax_rate, discount_rate, line_total, sort_order
+                          unit_price, tax_rate, discount_rate, line_total, sort_order,
+                          deleted_at, deleted_by
                 "#,
             )
             .bind(invoice_id)
@@ -796,9 +805,10 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
         let rows: Vec<InvoiceLineRow> = sqlx::query_as(
             r#"
             SELECT id, invoice_id, product_id, description, quantity,
-                   unit_price, tax_rate, discount_rate, line_total, sort_order
+                   unit_price, tax_rate, discount_rate, line_total, sort_order,
+                   deleted_at, deleted_by
             FROM invoice_lines
-            WHERE invoice_id = $1
+            WHERE invoice_id = $1 AND deleted_at IS NULL
             ORDER BY sort_order
             "#,
         )
@@ -823,6 +833,100 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete invoice lines: {}", e)))?;
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE invoice_lines
+            SET deleted_at = NOW(), deleted_by = $2
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete invoice line: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("InvoiceLine not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64) -> Result<InvoiceLine, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE invoice_lines
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore invoice line: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "InvoiceLine not found or not deleted".to_string(),
+            ));
+        }
+
+        let row: InvoiceLineRow = sqlx::query_as(
+            r#"
+            SELECT id, invoice_id, product_id, description, quantity,
+                   unit_price, tax_rate, discount_rate, line_total, sort_order,
+                   deleted_at, deleted_by
+            FROM invoice_lines
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "InvoiceLine"))?;
+
+        Ok(row.into())
+    }
+
+    async fn find_deleted(&self) -> Result<Vec<InvoiceLine>, ApiError> {
+        let rows: Vec<InvoiceLineRow> = sqlx::query_as(
+            r#"
+            SELECT id, invoice_id, product_id, description, quantity,
+                   unit_price, tax_rate, discount_rate, line_total, sort_order,
+                   deleted_at, deleted_by
+            FROM invoice_lines
+            WHERE deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted invoice lines: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM invoice_lines
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy invoice line: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("InvoiceLine not found".to_string()));
+        }
 
         Ok(())
     }
@@ -854,7 +958,8 @@ impl PaymentRepository for PostgresPaymentRepository {
                                   payment_method, reference_number, notes, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
             RETURNING id, tenant_id, invoice_id, amount, payment_date,
-                      payment_method, reference_number, notes, created_at
+                      payment_method, reference_number, notes, created_at,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -875,9 +980,10 @@ impl PaymentRepository for PostgresPaymentRepository {
         let result: Option<PaymentRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, invoice_id, amount, payment_date,
-                   payment_method, reference_number, notes, created_at
+                   payment_method, reference_number, notes, created_at,
+                   deleted_at, deleted_by
             FROM payments
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -893,9 +999,10 @@ impl PaymentRepository for PostgresPaymentRepository {
         let rows: Vec<PaymentRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, invoice_id, amount, payment_date,
-                   payment_method, reference_number, notes, created_at
+                   payment_method, reference_number, notes, created_at,
+                   deleted_at, deleted_by
             FROM payments
-            WHERE invoice_id = $1
+            WHERE invoice_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -919,6 +1026,105 @@ impl PaymentRepository for PostgresPaymentRepository {
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete payment: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Payment not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE payments
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete payment: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("Payment not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Payment, ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE payments
+            SET deleted_at = NULL, deleted_by = NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to restore payment: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound(
+                "Payment not found or not deleted".to_string(),
+            ));
+        }
+
+        let row: PaymentRow = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, invoice_id, amount, payment_date,
+                   payment_method, reference_number, notes, created_at,
+                   deleted_at, deleted_by
+            FROM payments
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Payment"))?;
+
+        Ok(row.into())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Payment>, ApiError> {
+        let rows: Vec<PaymentRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, invoice_id, amount, payment_date,
+                   payment_method, reference_number, notes, created_at,
+                   deleted_at, deleted_by
+            FROM payments
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted payments: {}", e)))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM payments
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy payment: {}", e)))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound("Payment not found".to_string()));

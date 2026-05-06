@@ -188,6 +188,109 @@ pub async fn update_user(
     )
 )]
 pub async fn delete_user(
+    admin_user: AdminUser,
+    user_service: web::Data<UserService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let tenant_id = admin_user.0.tenant_id;
+    let deleted_by = admin_user.0.user_id()?;
+    let id = *path;
+    match user_service
+        .soft_delete_user(id, tenant_id, deleted_by)
+        .await
+    {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "user.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore a soft-deleted user (requires admin role)
+#[utoipa::path(
+    post,
+    path = "/api/v1/users/{id}/restore",
+    tag = "Users",
+    params(
+        ("id" = i64, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "User restored", body = UserResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 404, description = "User not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn restore_user(
+    admin_user: AdminUser,
+    user_service: web::Data<UserService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let tenant_id = admin_user.0.tenant_id;
+    let id = *path;
+    match user_service.restore_user(id, tenant_id).await {
+        Ok(user) => Ok(HttpResponse::Ok().json(user)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List deleted users for a tenant (requires admin role)
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/deleted",
+    tag = "Users",
+    responses(
+        (status = 200, description = "List of deleted users"),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn list_deleted_users(
+    admin_user: AdminUser,
+    user_service: web::Data<UserService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let tenant_id = admin_user.0.tenant_id;
+    match user_service.list_deleted_users(tenant_id).await {
+        Ok(users) => Ok(HttpResponse::Ok().json(users)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Permanently destroy a user (requires admin role)
+#[utoipa::path(
+    delete,
+    path = "/api/v1/users/{id}/destroy",
+    tag = "Users",
+    params(
+        ("id" = i64, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "User permanently destroyed", body = MessageResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 403, description = "Forbidden - admin role required"),
+        (status = 404, description = "User not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
+pub async fn destroy_user(
     _admin_user: AdminUser,
     user_service: web::Data<UserService>,
     path: web::Path<i64>,
@@ -197,9 +300,9 @@ pub async fn delete_user(
     let i18n = resolve(&i18n);
     let tenant_id = _admin_user.0.tenant_id;
     let id = *path;
-    match user_service.delete_user(id, tenant_id).await {
+    match user_service.destroy_user(id, tenant_id).await {
         Ok(()) => {
-            let msg = i18n.t(locale.as_str(), "user.deleted");
+            let msg = i18n.t(locale.as_str(), "user.destroyed");
             Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
@@ -213,10 +316,13 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_users))
             .route(web::post().to(create_user)),
     )
+    .service(web::resource("/v1/users/deleted").route(web::get().to(list_deleted_users)))
     .service(
         web::resource("/v1/users/{id}")
             .route(web::get().to(get_user))
             .route(web::put().to(update_user))
             .route(web::delete().to(delete_user)),
-    );
+    )
+    .service(web::resource("/v1/users/{id}/restore").route(web::post().to(restore_user)))
+    .service(web::resource("/v1/users/{id}/destroy").route(web::delete().to(destroy_user)));
 }

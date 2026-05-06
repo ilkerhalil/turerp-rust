@@ -25,6 +25,8 @@ struct UserRow {
     is_active: bool,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<UserRow> for User {
@@ -50,6 +52,8 @@ impl From<UserRow> for User {
             is_active: row.is_active,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -67,6 +71,8 @@ struct UserRowWithTotal {
     is_active: bool,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
     total_count: i64,
 }
 
@@ -92,6 +98,8 @@ impl From<UserRowWithTotal> for (User, i64) {
             is_active: row.is_active,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         };
         (user, row.total_count)
     }
@@ -124,7 +132,7 @@ impl UserRepository for PostgresUserRepository {
             r#"
             INSERT INTO users (username, email, full_name, password, tenant_id, role, is_active, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-            RETURNING id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
+            RETURNING id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&create.username)
@@ -144,9 +152,9 @@ impl UserRepository for PostgresUserRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<User>, ApiError> {
         let result: Option<UserRow> = sqlx::query_as(
             r#"
-            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at, deleted_at, deleted_by
             FROM users
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -165,9 +173,9 @@ impl UserRepository for PostgresUserRepository {
     ) -> Result<Option<User>, ApiError> {
         let result: Option<UserRow> = sqlx::query_as(
             r#"
-            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at, deleted_at, deleted_by
             FROM users
-            WHERE username = $1 AND tenant_id = $2
+            WHERE username = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(username)
@@ -182,9 +190,9 @@ impl UserRepository for PostgresUserRepository {
     async fn find_by_email(&self, email: &str, tenant_id: i64) -> Result<Option<User>, ApiError> {
         let result: Option<UserRow> = sqlx::query_as(
             r#"
-            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at, deleted_at, deleted_by
             FROM users
-            WHERE email = $1 AND tenant_id = $2
+            WHERE email = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(email)
@@ -199,9 +207,9 @@ impl UserRepository for PostgresUserRepository {
     async fn find_all(&self, tenant_id: i64) -> Result<Vec<User>, ApiError> {
         let rows: Vec<UserRow> = sqlx::query_as(
             r#"
-            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at, deleted_at, deleted_by
             FROM users
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -223,10 +231,10 @@ impl UserRepository for PostgresUserRepository {
 
         let rows: Vec<UserRowWithTotal> = sqlx::query_as(
             r#"
-            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at,
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at, deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM users
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -260,8 +268,8 @@ impl UserRepository for PostgresUserRepository {
                 is_active = COALESCE($4, is_active),
                 role = COALESCE($5, role),
                 updated_at = NOW()
-            WHERE id = $6 AND tenant_id = $7
-            RETURNING id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at
+            WHERE id = $6 AND tenant_id = $7 AND deleted_at IS NULL
+            RETURNING id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.username)
@@ -281,8 +289,9 @@ impl UserRepository for PostgresUserRepository {
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM users
-            WHERE id = $1 AND tenant_id = $2
+            UPDATE users
+            SET deleted_at = NOW(), updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -298,10 +307,87 @@ impl UserRepository for PostgresUserRepository {
         Ok(())
     }
 
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            UPDATE users
+            SET deleted_at = NOW(), deleted_by = $3, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(deleted_by)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to soft delete user: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("User not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<User, ApiError> {
+        let row: UserRow = sqlx::query_as(
+            r#"
+            UPDATE users
+            SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+            RETURNING id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at, deleted_at, deleted_by
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "User"))?;
+
+        Ok(row.into())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<User>, ApiError> {
+        let rows: Vec<UserRow> = sqlx::query_as(
+            r#"
+            SELECT id, username, email, full_name, password, tenant_id, role, is_active, created_at, updated_at, deleted_at, deleted_by
+            FROM users
+            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find deleted users: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM users
+            WHERE id = $1 AND tenant_id = $2
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to destroy user: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("User not found".to_string()));
+        }
+
+        Ok(())
+    }
+
     async fn username_exists(&self, username: &str, tenant_id: i64) -> Result<bool, ApiError> {
         let result: (bool,) = sqlx::query_as(
             r#"
-            SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND tenant_id = $2)
+            SELECT EXISTS(SELECT 1 FROM users WHERE username = $1 AND tenant_id = $2 AND deleted_at IS NULL)
             "#,
         )
         .bind(username)
@@ -316,7 +402,7 @@ impl UserRepository for PostgresUserRepository {
     async fn email_exists(&self, email: &str, tenant_id: i64) -> Result<bool, ApiError> {
         let result: (bool,) = sqlx::query_as(
             r#"
-            SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND tenant_id = $2)
+            SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 AND tenant_id = $2 AND deleted_at IS NULL)
             "#,
         )
         .bind(email)

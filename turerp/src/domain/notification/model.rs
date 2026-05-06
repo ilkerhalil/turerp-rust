@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
+use crate::impl_soft_deletable;
+
 /// Notification channel
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
@@ -151,6 +153,8 @@ pub struct Notification {
     pub last_error: Option<String>,
     pub attempts: u32,
     pub job_id: Option<i64>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
 
 /// In-app notification for the notification bell
@@ -167,6 +171,8 @@ pub struct InAppNotification {
     pub read_at: Option<DateTime<Utc>>,
     pub link: Option<String>,
     pub related_notification_id: Option<i64>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
 
 /// Notification preference
@@ -180,6 +186,8 @@ pub struct NotificationPreference {
     pub enabled: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
 
 /// DTO for updating a preference
@@ -293,6 +301,10 @@ impl From<NotificationPreference> for NotificationPreferenceResponse {
     }
 }
 
+impl_soft_deletable!(Notification);
+impl_soft_deletable!(InAppNotification);
+impl_soft_deletable!(NotificationPreference);
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,6 +364,8 @@ mod tests {
             last_error: None,
             attempts: 1,
             job_id: None,
+            deleted_at: None,
+            deleted_by: None,
         };
         let resp: NotificationResponse = n.into();
         assert_eq!(resp.channel, "email");

@@ -122,6 +122,31 @@ pub async fn update_tenant(
     security(("bearer_auth" = []))
 )]
 pub async fn delete_tenant(
+    admin_user: AdminUser,
+    tenant_service: web::Data<TenantService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let deleted_by = admin_user.0.user_id()?;
+    match tenant_service.soft_delete_tenant(*path, deleted_by).await {
+        Ok(()) => {
+            let msg = i18n.t(locale.as_str(), "tenant.deleted");
+            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Restore a soft-deleted tenant (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/tenants/{id}/restore", tag = "Tenant",
+    params(("id" = i64, Path, description = "Tenant ID")),
+    responses((status = 200, description = "Tenant restored"), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_tenant(
     _admin_user: AdminUser,
     tenant_service: web::Data<TenantService>,
     path: web::Path<i64>,
@@ -129,9 +154,49 @@ pub async fn delete_tenant(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match tenant_service.delete_tenant(*path).await {
+    match tenant_service.restore_tenant(*path).await {
+        Ok(tenant) => Ok(HttpResponse::Ok().json(tenant)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List deleted tenants (requires admin role)
+#[utoipa::path(
+    get, path = "/api/v1/tenants/deleted", tag = "Tenant",
+    responses((status = 200, description = "List of deleted tenants")),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_tenants(
+    _admin_user: AdminUser,
+    tenant_service: web::Data<TenantService>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match tenant_service.list_deleted_tenants().await {
+        Ok(tenants) => Ok(HttpResponse::Ok().json(tenants)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Permanently destroy a tenant (requires admin role)
+#[utoipa::path(
+    delete, path = "/api/v1/tenants/{id}/destroy", tag = "Tenant",
+    params(("id" = i64, Path, description = "Tenant ID")),
+    responses((status = 200, description = "Tenant permanently destroyed", body = MessageResponse), (status = 404, description = "Not found")),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_tenant(
+    _admin_user: AdminUser,
+    tenant_service: web::Data<TenantService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match tenant_service.destroy_tenant(*path).await {
         Ok(()) => {
-            let msg = i18n.t(locale.as_str(), "tenant.deleted");
+            let msg = i18n.t(locale.as_str(), "tenant.destroyed");
             Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
@@ -273,12 +338,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_tenants))
             .route(web::post().to(create_tenant)),
     )
+    .service(web::resource("/v1/tenants/deleted").route(web::get().to(list_deleted_tenants)))
     .service(
         web::resource("/v1/tenants/{id}")
             .route(web::get().to(get_tenant))
             .route(web::put().to(update_tenant))
             .route(web::delete().to(delete_tenant)),
     )
+    .service(web::resource("/v1/tenants/{id}/restore").route(web::post().to(restore_tenant)))
+    .service(web::resource("/v1/tenants/{id}/destroy").route(web::delete().to(destroy_tenant)))
     .service(
         web::resource("/v1/tenant-configs")
             .route(web::get().to(get_tenant_configs))

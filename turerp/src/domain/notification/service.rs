@@ -119,6 +119,8 @@ impl NotificationService {
                     last_error: Some("Disabled by user preference".to_string()),
                     attempts: 0,
                     job_id: None,
+                    deleted_at: None,
+                    deleted_by: None,
                 };
                 let saved = self.notification_repo.create(notification).await?;
                 return Ok(saved.into());
@@ -145,6 +147,8 @@ impl NotificationService {
             last_error: None,
             attempts: 0,
             job_id: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         let saved = self.notification_repo.create(notification).await?;
@@ -164,6 +168,8 @@ impl NotificationService {
                     read_at: None,
                     link: None,
                     related_notification_id: Some(saved.id),
+                    deleted_at: None,
+                    deleted_by: None,
                 };
                 self.in_app_repo.create(in_app).await?;
             }
@@ -404,6 +410,37 @@ impl NotificationService {
         self.template_engine
             .write()
             .register(key, subject, body, html)
+    }
+
+    /// Soft delete a notification
+    pub async fn soft_delete(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.notification_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
+    }
+
+    /// Restore a soft-deleted notification
+    pub async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.notification_repo.restore(id, tenant_id).await
+    }
+
+    /// List deleted notifications for a tenant
+    pub async fn find_deleted(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<NotificationResponse>, ApiError> {
+        let notifications = self.notification_repo.find_deleted(tenant_id).await?;
+        Ok(notifications.into_iter().map(Into::into).collect())
+    }
+
+    /// Permanently destroy a soft-deleted notification
+    pub async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.notification_repo.destroy(id, tenant_id).await
     }
 }
 

@@ -2,9 +2,12 @@
 //!
 //! Represents a feature flag that can be toggled on/off globally or per-tenant.
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
+
+use crate::impl_soft_deletable;
 
 /// Feature flag status
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -43,7 +46,13 @@ pub struct FeatureFlag {
     pub created_at: chrono::NaiveDateTime,
     /// Last update timestamp
     pub updated_at: chrono::NaiveDateTime,
+    /// Soft delete timestamp
+    pub deleted_at: Option<DateTime<Utc>>,
+    /// User ID who deleted this record
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(FeatureFlag);
 
 /// Create feature flag request
 #[derive(Debug, Clone, Deserialize, Validate, ToSchema)]
@@ -173,6 +182,8 @@ mod tests {
             tenant_id: Some(1),
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         let response: FeatureFlagResponse = flag.into();

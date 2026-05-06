@@ -102,6 +102,48 @@ impl FeatureFlagService {
         Ok(deleted)
     }
 
+    /// Soft delete a feature flag
+    pub async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<bool, ApiError> {
+        let deleted = self.repository.soft_delete(id, deleted_by).await?;
+        if !deleted {
+            return Err(ApiError::NotFound(format!(
+                "Feature flag with id {} not found",
+                id
+            )));
+        }
+        Ok(deleted)
+    }
+
+    /// Restore a soft-deleted feature flag
+    pub async fn restore(&self, id: i64) -> Result<bool, ApiError> {
+        let restored = self.repository.restore(id).await?;
+        if !restored {
+            return Err(ApiError::NotFound(format!(
+                "Deleted feature flag with id {} not found",
+                id
+            )));
+        }
+        Ok(restored)
+    }
+
+    /// List deleted feature flags
+    pub async fn find_deleted(&self) -> Result<Vec<FeatureFlagResponse>, ApiError> {
+        let flags = self.repository.find_deleted().await?;
+        Ok(flags.into_iter().map(|f| f.into()).collect())
+    }
+
+    /// Permanently destroy a soft-deleted feature flag
+    pub async fn destroy(&self, id: i64) -> Result<bool, ApiError> {
+        let destroyed = self.repository.destroy(id).await?;
+        if !destroyed {
+            return Err(ApiError::NotFound(format!(
+                "Deleted feature flag with id {} not found",
+                id
+            )));
+        }
+        Ok(destroyed)
+    }
+
     /// Check if a feature is enabled
     pub async fn is_enabled(&self, name: &str, tenant_id: Option<i64>) -> Result<bool, ApiError> {
         self.repository.is_enabled(name, tenant_id).await

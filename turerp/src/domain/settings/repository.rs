@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
+use crate::common::soft_delete::SoftDeletable;
 use crate::domain::settings::model::{
     BulkUpdateSettingItem, CreateSetting, Setting, UpdateSetting,
 };
@@ -58,6 +59,18 @@ pub trait SettingsRepository: Send + Sync {
 
     /// Check if a key exists for a tenant
     async fn key_exists(&self, tenant_id: i64, key: &str) -> Result<bool, ApiError>;
+
+    /// Soft delete a setting
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted setting
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// List deleted settings for a tenant
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Setting>, ApiError>;
+
+    /// Permanently destroy a soft-deleted setting
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed SettingsRepository
@@ -124,6 +137,8 @@ impl SettingsRepository for InMemorySettingsRepository {
             is_editable: create.is_editable,
             created_at: now,
             updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.settings.insert(id, setting.clone());
@@ -146,7 +161,9 @@ impl SettingsRepository for InMemorySettingsRepository {
         Ok(inner
             .tenant_keys
             .get(&(tenant_id, key.to_string()))
-            .and_then(|id| inner.settings.get(id).cloned()))
+            .and_then(|id| inner.settings.get(id))
+            .filter(|s| !s.is_deleted())
+            .cloned())
     }
 
     async fn find_all(
@@ -158,7 +175,7 @@ impl SettingsRepository for InMemorySettingsRepository {
         let items: Vec<Setting> = inner
             .settings
             .values()
-            .filter(|s| s.tenant_id == tenant_id)
+            .filter(|s| s.tenant_id == tenant_id && !s.is_deleted())
             .filter(|s| {
                 if let Some(g) = group {
                     s.group.to_string() == g.to_lowercase()
@@ -182,7 +199,7 @@ impl SettingsRepository for InMemorySettingsRepository {
         let mut items: Vec<Setting> = inner
             .settings
             .values()
-            .filter(|s| s.tenant_id == tenant_id)
+            .filter(|s| s.tenant_id == tenant_id && !s.is_deleted())
             .filter(|s| {
                 if let Some(g) = group {
                     s.group.to_string() == g.to_lowercase()
@@ -289,6 +306,72 @@ impl SettingsRepository for InMemorySettingsRepository {
         let inner = self.inner.lock();
         Ok(inner
             .tenant_keys
-            .contains_key(&(tenant_id, key.to_string())))
+            .get(&(tenant_id, key.to_string()))
+            .and_then(|id| inner.settings.get(id))
+            .map(|s| !s.is_deleted())
+            .unwrap_or(false))
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let setting = inner
+            .settings
+            .get_mut(&id)
+            .filter(|s| s.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Setting {} not found", id)))?;
+
+        if setting.is_deleted() {
+            return Err(ApiError::Conflict(format!(
+                "Setting {} is already deleted",
+                id
+            )));
+        }
+
+        setting.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let setting = inner
+            .settings
+            .get_mut(&id)
+            .filter(|s| s.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Setting {} not found", id)))?;
+
+        if !setting.is_deleted() {
+            return Err(ApiError::BadRequest(format!(
+                "Setting {} is not deleted",
+                id
+            )));
+        }
+
+        setting.restore();
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Setting>, ApiError> {
+        let inner = self.inner.lock();
+        let items: Vec<Setting> = inner
+            .settings
+            .values()
+            .filter(|s| s.tenant_id == tenant_id && s.is_deleted())
+            .cloned()
+            .collect();
+        Ok(items)
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let setting = inner
+            .settings
+            .get(&id)
+            .filter(|s| s.tenant_id == tenant_id && s.is_deleted())
+            .ok_or_else(|| ApiError::NotFound(format!("Deleted setting {} not found", id)))?;
+
+        let key = setting.key.clone();
+        inner.settings.remove(&id);
+        inner.tenant_keys.remove(&(tenant_id, key));
+        Ok(())
     }
 }

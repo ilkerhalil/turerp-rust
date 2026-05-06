@@ -8,6 +8,8 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::impl_soft_deletable;
+
 /// Currency entity
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Currency {
@@ -21,7 +23,11 @@ pub struct Currency {
     pub is_base: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(Currency);
 
 /// Exchange rate entity
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -33,7 +39,11 @@ pub struct ExchangeRate {
     pub rate: Decimal,
     pub effective_date: NaiveDate,
     pub created_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
+
+impl_soft_deletable!(ExchangeRate);
 
 /// Result of a currency conversion
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -316,6 +326,8 @@ mod tests {
             is_base: true,
             created_at: Utc::now(),
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         let response = CurrencyResponse::from(currency);

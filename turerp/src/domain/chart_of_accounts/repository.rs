@@ -59,6 +59,15 @@ pub trait ChartAccountRepository: Send + Sync {
     /// Soft delete a chart account
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
 
+    /// Restore a soft-deleted chart account
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Find all soft-deleted chart accounts for a tenant
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<ChartAccount>, ApiError>;
+
+    /// Permanently destroy a soft-deleted chart account
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
     /// Update the balance of a chart account
     async fn update_balance(
         &self,
@@ -257,6 +266,66 @@ impl ChartAccountRepository for InMemoryChartAccountRepository {
         }
 
         account.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let account = inner
+            .accounts
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Chart account {} not found", id)))?;
+
+        if account.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Chart account {} not found",
+                id
+            )));
+        }
+
+        if !account.is_deleted() {
+            return Err(ApiError::BadRequest(
+                "Chart account is not deleted".to_string(),
+            ));
+        }
+
+        account.restore();
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<ChartAccount>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .accounts
+            .values()
+            .filter(|a| a.tenant_id == tenant_id && a.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let account = inner
+            .accounts
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Chart account {} not found", id)))?;
+
+        if account.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Chart account {} not found",
+                id
+            )));
+        }
+
+        if !account.is_deleted() {
+            return Err(ApiError::BadRequest(
+                "Chart account must be soft deleted before destroy".to_string(),
+            ));
+        }
+
+        inner.accounts.remove(&id);
         Ok(())
     }
 

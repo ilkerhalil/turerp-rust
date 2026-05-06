@@ -98,6 +98,18 @@ pub trait InvoiceLineRepository: Send + Sync {
     ) -> Result<Vec<InvoiceLine>, ApiError>;
     async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<InvoiceLine>, ApiError>;
     async fn delete_by_invoice(&self, invoice_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete an invoice line
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted invoice line
+    async fn restore(&self, id: i64) -> Result<InvoiceLine, ApiError>;
+
+    /// Find soft-deleted invoice lines (admin use)
+    async fn find_deleted(&self) -> Result<Vec<InvoiceLine>, ApiError>;
+
+    /// Hard delete an invoice line (permanent destruction — admin only)
+    async fn destroy(&self, id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for Payment operations.
@@ -108,6 +120,18 @@ pub trait PaymentRepository: Send + Sync {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Payment>, ApiError>;
     async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<Payment>, ApiError>;
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a payment
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted payment
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Payment, ApiError>;
+
+    /// Find soft-deleted payments (admin use)
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Payment>, ApiError>;
+
+    /// Hard delete a payment (permanent destruction — admin only)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type aliases
@@ -585,6 +609,8 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
                 discount_rate: create.discount_rate,
                 line_total,
                 sort_order: i as i32,
+                deleted_at: None,
+                deleted_by: None,
             });
         }
 
@@ -594,13 +620,65 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
 
     async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<InvoiceLine>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.lines.get(&invoice_id).cloned().unwrap_or_default())
+        Ok(inner
+            .lines
+            .get(&invoice_id)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|l| !l.is_deleted())
+            .collect())
     }
 
     async fn delete_by_invoice(&self, invoice_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         inner.lines.remove(&invoice_id);
         Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        for lines in inner.lines.values_mut() {
+            if let Some(line) = lines.iter_mut().find(|l| l.id == id) {
+                line.mark_deleted(deleted_by);
+                return Ok(());
+            }
+        }
+        Err(ApiError::NotFound(format!("InvoiceLine {} not found", id)))
+    }
+
+    async fn restore(&self, id: i64) -> Result<InvoiceLine, ApiError> {
+        let mut inner = self.inner.lock();
+        for lines in inner.lines.values_mut() {
+            if let Some(line) = lines.iter_mut().find(|l| l.id == id) {
+                line.restore();
+                return Ok(line.clone());
+            }
+        }
+        Err(ApiError::NotFound(format!(
+            "InvoiceLine {} not found or not deleted",
+            id
+        )))
+    }
+
+    async fn find_deleted(&self) -> Result<Vec<InvoiceLine>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .lines
+            .values()
+            .flat_map(|v| v.iter().filter(|l| l.is_deleted()).cloned())
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        for lines in inner.lines.values_mut() {
+            if lines.iter().any(|l| l.id == id) {
+                lines.retain(|l| l.id != id);
+                return Ok(());
+            }
+        }
+        Err(ApiError::NotFound(format!("InvoiceLine {} not found", id)))
     }
 }
 
@@ -656,6 +734,8 @@ impl PaymentRepository for InMemoryPaymentRepository {
             reference_number: create.reference_number,
             notes: create.notes,
             created_at: chrono::Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.payments.insert(id, payment.clone());
@@ -673,7 +753,7 @@ impl PaymentRepository for InMemoryPaymentRepository {
         Ok(inner
             .payments
             .get(&id)
-            .filter(|p| p.tenant_id == tenant_id)
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
             .cloned())
     }
 
@@ -687,11 +767,70 @@ impl PaymentRepository for InMemoryPaymentRepository {
         Ok(ids
             .iter()
             .filter_map(|id| inner.payments.get(id).cloned())
+            .filter(|p| !p.is_deleted())
             .collect())
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let payment = inner
+            .payments
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Payment {} not found", id)))?;
+
+        if payment.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Payment {} not found", id)));
+        }
+
+        inner.payments.remove(&id);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
+        let payment = inner
+            .payments
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Payment {} not found", id)))?;
+
+        if payment.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Payment {} not found", id)));
+        }
+
+        payment.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Payment, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let payment = inner
+            .payments
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Payment {} not found", id)))?;
+
+        if payment.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Payment {} not found", id)));
+        }
+
+        payment.restore();
+        Ok(payment.clone())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Payment>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .payments
+            .values()
+            .filter(|p| p.tenant_id == tenant_id && p.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+
         let payment = inner
             .payments
             .get(&id)

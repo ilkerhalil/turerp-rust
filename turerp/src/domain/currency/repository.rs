@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
 use crate::common::pagination::{PaginatedResult, PaginationParams};
+use crate::common::soft_delete::SoftDeletable;
 use crate::domain::currency::model::{
     CreateCurrency, CreateExchangeRate, Currency, ExchangeRate, UpdateCurrency, UpdateExchangeRate,
 };
@@ -50,6 +51,18 @@ pub trait CurrencyRepository: Send + Sync {
 
     /// Delete a currency
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a currency
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted currency
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// List deleted currencies for a tenant
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Currency>, ApiError>;
+
+    /// Permanently destroy a soft-deleted currency
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed CurrencyRepository
@@ -104,6 +117,8 @@ impl CurrencyRepository for InMemoryCurrencyRepository {
             is_base: create.is_base,
             created_at: now,
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.currencies.insert(id, currency.clone());
@@ -115,7 +130,7 @@ impl CurrencyRepository for InMemoryCurrencyRepository {
         Ok(inner
             .currencies
             .get(&id)
-            .filter(|c| c.tenant_id == tenant_id)
+            .filter(|c| c.tenant_id == tenant_id && !c.is_deleted())
             .cloned())
     }
 
@@ -125,7 +140,7 @@ impl CurrencyRepository for InMemoryCurrencyRepository {
         Ok(inner
             .currencies
             .values()
-            .find(|c| c.tenant_id == tenant_id && c.code == code_upper)
+            .find(|c| c.tenant_id == tenant_id && c.code == code_upper && !c.is_deleted())
             .cloned())
     }
 
@@ -134,7 +149,7 @@ impl CurrencyRepository for InMemoryCurrencyRepository {
         Ok(inner
             .currencies
             .values()
-            .find(|c| c.tenant_id == tenant_id && c.is_base)
+            .find(|c| c.tenant_id == tenant_id && c.is_base && !c.is_deleted())
             .cloned())
     }
 
@@ -148,7 +163,7 @@ impl CurrencyRepository for InMemoryCurrencyRepository {
         let mut items: Vec<Currency> = inner
             .currencies
             .values()
-            .filter(|c| c.tenant_id == tenant_id)
+            .filter(|c| c.tenant_id == tenant_id && !c.is_deleted())
             .filter(|c| match active_only {
                 Some(true) => c.is_active,
                 Some(false) => !c.is_active,
@@ -184,7 +199,7 @@ impl CurrencyRepository for InMemoryCurrencyRepository {
         let currency = inner
             .currencies
             .get_mut(&id)
-            .filter(|c| c.tenant_id == tenant_id)
+            .filter(|c| c.tenant_id == tenant_id && !c.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Currency {} not found", id)))?;
 
         if let Some(name) = update.name {
@@ -218,6 +233,70 @@ impl CurrencyRepository for InMemoryCurrencyRepository {
 
         let key = currency.id;
         inner.currencies.remove(&key);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let currency = inner
+            .currencies
+            .get_mut(&id)
+            .filter(|c| c.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Currency {} not found", id)))?;
+
+        if currency.is_deleted() {
+            return Err(ApiError::Conflict(format!(
+                "Currency {} is already deleted",
+                id
+            )));
+        }
+
+        currency.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let currency = inner
+            .currencies
+            .get_mut(&id)
+            .filter(|c| c.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Currency {} not found", id)))?;
+
+        if !currency.is_deleted() {
+            return Err(ApiError::BadRequest(format!(
+                "Currency {} is not deleted",
+                id
+            )));
+        }
+
+        currency.restore();
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Currency>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .currencies
+            .values()
+            .filter(|c| c.tenant_id == tenant_id && c.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let len_before = inner.currencies.len();
+        inner
+            .currencies
+            .retain(|_, c| !(c.id == id && c.tenant_id == tenant_id && c.is_deleted()));
+
+        if inner.currencies.len() == len_before {
+            return Err(ApiError::NotFound(format!(
+                "Deleted currency {} not found",
+                id
+            )));
+        }
         Ok(())
     }
 }
@@ -275,6 +354,18 @@ pub trait ExchangeRateRepository: Send + Sync {
 
     /// Delete an exchange rate
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete an exchange rate
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted exchange rate
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// List deleted exchange rates for a tenant
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<ExchangeRate>, ApiError>;
+
+    /// Permanently destroy a soft-deleted exchange rate
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed ExchangeRateRepository
@@ -330,6 +421,8 @@ impl ExchangeRateRepository for InMemoryExchangeRateRepository {
             rate: create.rate,
             effective_date: create.effective_date,
             created_at: now,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.rates.insert(id, rate.clone());
@@ -341,7 +434,7 @@ impl ExchangeRateRepository for InMemoryExchangeRateRepository {
         Ok(inner
             .rates
             .get(&id)
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .cloned())
     }
 
@@ -359,7 +452,7 @@ impl ExchangeRateRepository for InMemoryExchangeRateRepository {
         let mut best: Option<&ExchangeRate> = None;
 
         for rate in inner.rates.values() {
-            if rate.tenant_id != tenant_id {
+            if rate.tenant_id != tenant_id || rate.is_deleted() {
                 continue;
             }
             if rate.from_currency != from_upper || rate.to_currency != to_upper {
@@ -388,7 +481,7 @@ impl ExchangeRateRepository for InMemoryExchangeRateRepository {
         let mut items: Vec<ExchangeRate> = inner
             .rates
             .values()
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .filter(|r| match &currency {
                 Some(c) => {
                     let c_upper = c.trim().to_uppercase();
@@ -436,7 +529,7 @@ impl ExchangeRateRepository for InMemoryExchangeRateRepository {
         let mut best_rates: HashMap<(String, String), &ExchangeRate> = HashMap::new();
 
         for rate in inner.rates.values() {
-            if rate.tenant_id != tenant_id || rate.effective_date > date {
+            if rate.tenant_id != tenant_id || rate.effective_date > date || rate.is_deleted() {
                 continue;
             }
             let key = (rate.from_currency.clone(), rate.to_currency.clone());
@@ -480,7 +573,7 @@ impl ExchangeRateRepository for InMemoryExchangeRateRepository {
         let rate = inner
             .rates
             .get_mut(&id)
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Exchange rate {} not found", id)))?;
 
         if let Some(r) = update.rate {
@@ -504,6 +597,70 @@ impl ExchangeRateRepository for InMemoryExchangeRateRepository {
 
         let key = rate.id;
         inner.rates.remove(&key);
+        Ok(())
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let rate = inner
+            .rates
+            .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Exchange rate {} not found", id)))?;
+
+        if rate.is_deleted() {
+            return Err(ApiError::Conflict(format!(
+                "Exchange rate {} is already deleted",
+                id
+            )));
+        }
+
+        rate.mark_deleted(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let rate = inner
+            .rates
+            .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Exchange rate {} not found", id)))?;
+
+        if !rate.is_deleted() {
+            return Err(ApiError::BadRequest(format!(
+                "Exchange rate {} is not deleted",
+                id
+            )));
+        }
+
+        rate.restore();
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<ExchangeRate>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .rates
+            .values()
+            .filter(|r| r.tenant_id == tenant_id && r.is_deleted())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let len_before = inner.rates.len();
+        inner
+            .rates
+            .retain(|_, r| !(r.id == id && r.tenant_id == tenant_id && r.is_deleted()));
+
+        if inner.rates.len() == len_before {
+            return Err(ApiError::NotFound(format!(
+                "Deleted exchange rate {} not found",
+                id
+            )));
+        }
         Ok(())
     }
 }
