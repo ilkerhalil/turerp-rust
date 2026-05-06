@@ -655,6 +655,7 @@ use utoipa::OpenApi;
             crate::domain::tax::model::CreateTaxPeriod,
             crate::domain::tax::model::TaxRateResponse,
             crate::domain::tax::model::TaxPeriodResponse,
+            crate::domain::tax::model::BulkRestoreFailed,
             crate::api::v1::tax::CalculateTaxRequest,
             crate::api::v1::tax::CalculateInvoiceTaxRequest,
             crate::api::v1::tax::EffectiveRateQuery,

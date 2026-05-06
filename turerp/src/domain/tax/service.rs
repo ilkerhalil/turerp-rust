@@ -107,17 +107,19 @@ impl TaxService {
         &self,
         ids: Vec<i64>,
         tenant_id: i64,
-    ) -> Result<Vec<TaxRate>, ApiError> {
+    ) -> Result<(Vec<TaxRate>, Vec<(i64, String)>), ApiError> {
         let mut restored = Vec::new();
+        let mut failed = Vec::new();
         for id in ids {
             match self.rate_repo.restore(id, tenant_id).await {
                 Ok(rate) => restored.push(rate),
                 Err(e) => {
                     tracing::warn!("Failed to restore tax rate {}: {}", id, e);
+                    failed.push((id, e.to_string()));
                 }
             }
         }
-        Ok(restored)
+        Ok((restored, failed))
     }
 
     /// List soft-deleted tax rates
@@ -292,17 +294,19 @@ impl TaxService {
         &self,
         ids: Vec<i64>,
         tenant_id: i64,
-    ) -> Result<Vec<TaxPeriod>, ApiError> {
+    ) -> Result<(Vec<TaxPeriod>, Vec<(i64, String)>), ApiError> {
         let mut restored = Vec::new();
+        let mut failed = Vec::new();
         for id in ids {
             match self.period_repo.restore(id, tenant_id).await {
                 Ok(period) => restored.push(period),
                 Err(e) => {
                     tracing::warn!("Failed to restore tax period {}: {}", id, e);
+                    failed.push((id, e.to_string()));
                 }
             }
         }
-        Ok(restored)
+        Ok((restored, failed))
     }
 
     /// List soft-deleted tax periods

@@ -9,7 +9,8 @@ use utoipa::ToSchema;
 use crate::common::pagination::{default_page, default_per_page, PaginationParams};
 use crate::common::MessageResponse;
 use crate::domain::tax::model::{
-    CreateTaxPeriod, CreateTaxRate, TaxPeriodResponse, TaxRateResponse, TaxType, UpdateTaxRate,
+    BulkRestoreFailed, BulkRestoreResponse, CreateTaxPeriod, CreateTaxRate, TaxPeriodResponse,
+    TaxRateResponse, TaxType, UpdateTaxRate,
 };
 use crate::domain::tax::service::TaxService;
 use crate::error::ApiResult;
@@ -616,7 +617,12 @@ pub async fn destroy_tax_period(
 #[utoipa::path(
     post, path = "/api/v1/tax/rates/bulk-restore", tag = "Tax",
     request_body = BulkRestoreRequest,
-    responses((status = 200, description = "Tax rates restored", body = Vec<TaxRateResponse>), (status = 403, description = "Forbidden")),
+    responses(
+        (status = 200, description = "Tax rates restored", body = BulkRestoreResponse<TaxRateResponse>),
+        (status = 400, description = "Bad request — empty IDs list"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "One or more tax rates not found"),
+    ),
     security(("bearer_auth" = []))
 )]
 pub async fn bulk_restore_tax_rates(
@@ -628,17 +634,30 @@ pub async fn bulk_restore_tax_rates(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let req = payload.into_inner();
+    if req.ids.is_empty() {
+        return Ok(
+            crate::error::ApiError::BadRequest("IDs list cannot be empty".to_string())
+                .to_http_response(i18n, locale.as_str()),
+        );
+    }
     match tax_service
         .bulk_restore_tax_rates(req.ids, admin_user.0.tenant_id)
         .await
     {
-        Ok(rates) => {
-            let responses: Vec<TaxRateResponse> =
-                rates.into_iter().map(TaxRateResponse::from).collect();
-            Ok(HttpResponse::Ok().json(serde_json::json!({
-                "restored": responses.len(),
-                "items": responses,
-            })))
+        Ok((restored_rates, failed_tuples)) => {
+            let items: Vec<TaxRateResponse> = restored_rates
+                .into_iter()
+                .map(TaxRateResponse::from)
+                .collect();
+            let failed: Vec<BulkRestoreFailed> = failed_tuples
+                .into_iter()
+                .map(|(id, reason)| BulkRestoreFailed { id, reason })
+                .collect();
+            Ok(HttpResponse::Ok().json(BulkRestoreResponse {
+                restored: items.len(),
+                items,
+                failed,
+            }))
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -648,7 +667,12 @@ pub async fn bulk_restore_tax_rates(
 #[utoipa::path(
     post, path = "/api/v1/tax/periods/bulk-restore", tag = "Tax",
     request_body = BulkRestoreRequest,
-    responses((status = 200, description = "Tax periods restored", body = Vec<TaxPeriodResponse>), (status = 403, description = "Forbidden")),
+    responses(
+        (status = 200, description = "Tax periods restored", body = BulkRestoreResponse<TaxPeriodResponse>),
+        (status = 400, description = "Bad request — empty IDs list"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "One or more tax periods not found"),
+    ),
     security(("bearer_auth" = []))
 )]
 pub async fn bulk_restore_tax_periods(
@@ -660,17 +684,30 @@ pub async fn bulk_restore_tax_periods(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let req = payload.into_inner();
+    if req.ids.is_empty() {
+        return Ok(
+            crate::error::ApiError::BadRequest("IDs list cannot be empty".to_string())
+                .to_http_response(i18n, locale.as_str()),
+        );
+    }
     match tax_service
         .bulk_restore_tax_periods(req.ids, admin_user.0.tenant_id)
         .await
     {
-        Ok(periods) => {
-            let responses: Vec<TaxPeriodResponse> =
-                periods.into_iter().map(TaxPeriodResponse::from).collect();
-            Ok(HttpResponse::Ok().json(serde_json::json!({
-                "restored": responses.len(),
-                "items": responses,
-            })))
+        Ok((restored_periods, failed_tuples)) => {
+            let items: Vec<TaxPeriodResponse> = restored_periods
+                .into_iter()
+                .map(TaxPeriodResponse::from)
+                .collect();
+            let failed: Vec<BulkRestoreFailed> = failed_tuples
+                .into_iter()
+                .map(|(id, reason)| BulkRestoreFailed { id, reason })
+                .collect();
+            Ok(HttpResponse::Ok().json(BulkRestoreResponse {
+                restored: items.len(),
+                items,
+                failed,
+            }))
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
@@ -686,15 +723,15 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(web::resource("/v1/tax/rates/effective").route(web::get().to(get_effective_rate)))
     .service(web::resource("/v1/tax/rates/deleted").route(web::get().to(list_deleted_tax_rates)))
     .service(
+        web::resource("/v1/tax/rates/bulk-restore").route(web::post().to(bulk_restore_tax_rates)),
+    )
+    .service(
         web::resource("/v1/tax/rates/{id}")
             .route(web::get().to(get_tax_rate))
             .route(web::put().to(update_tax_rate))
             .route(web::delete().to(delete_tax_rate)),
     )
     .service(web::resource("/v1/tax/rates/{id}/restore").route(web::put().to(restore_tax_rate)))
-    .service(
-        web::resource("/v1/tax/rates/bulk-restore").route(web::post().to(bulk_restore_tax_rates)),
-    )
     .service(web::resource("/v1/tax/rates/{id}/destroy").route(web::delete().to(destroy_tax_rate)))
     .service(web::resource("/v1/tax/calculate").route(web::post().to(calculate_tax)))
     .service(
@@ -706,6 +743,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_tax_period)),
     )
     .service(
+        web::resource("/v1/tax/periods/bulk-restore")
+            .route(web::post().to(bulk_restore_tax_periods)),
+    )
+    .service(
         web::resource("/v1/tax/periods/{id}")
             .route(web::get().to(get_tax_period))
             .route(web::delete().to(delete_tax_period)),
@@ -715,10 +756,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     )
     .service(web::resource("/v1/tax/periods/{id}/file").route(web::post().to(file_tax_period)))
     .service(web::resource("/v1/tax/periods/{id}/restore").route(web::put().to(restore_tax_period)))
-    .service(
-        web::resource("/v1/tax/periods/bulk-restore")
-            .route(web::post().to(bulk_restore_tax_periods)),
-    )
     .service(
         web::resource("/v1/tax/periods/deleted").route(web::get().to(list_deleted_tax_periods)),
     )

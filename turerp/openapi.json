@@ -14936,16 +14936,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TaxPeriodResponse"
-                  }
+                  "$ref": "#/components/schemas/BulkRestoreResponse"
                 }
               }
             }
           },
+          "400": {
+            "description": "Bad request — empty IDs list"
+          },
           "403": {
             "description": "Forbidden"
+          },
+          "404": {
+            "description": "One or more tax periods not found"
           }
         },
         "security": [
@@ -15339,16 +15342,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/TaxRateResponse"
-                  }
+                  "$ref": "#/components/schemas/BulkRestoreResponse"
                 }
               }
             }
           },
+          "400": {
+            "description": "Bad request — empty IDs list"
+          },
           "403": {
             "description": "Forbidden"
+          },
+          "404": {
+            "description": "One or more tax rates not found"
           }
         },
         "security": [
@@ -17671,6 +17677,23 @@
             "type": "string"
           },
           "signer": {
+            "type": "string"
+          }
+        }
+      },
+      "BulkRestoreFailed": {
+        "type": "object",
+        "description": "Failed item in a bulk restore operation",
+        "required": [
+          "id",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reason": {
             "type": "string"
           }
         }
