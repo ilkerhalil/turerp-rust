@@ -102,6 +102,26 @@ impl TaxService {
         self.rate_repo.restore(id, tenant_id).await
     }
 
+    /// Bulk restore soft-deleted tax rates
+    pub async fn bulk_restore_tax_rates(
+        &self,
+        ids: Vec<i64>,
+        tenant_id: i64,
+    ) -> Result<(Vec<TaxRate>, Vec<(i64, String)>), ApiError> {
+        let mut restored = Vec::new();
+        let mut failed = Vec::new();
+        for id in ids {
+            match self.rate_repo.restore(id, tenant_id).await {
+                Ok(rate) => restored.push(rate),
+                Err(e) => {
+                    tracing::warn!("Failed to restore tax rate {}: {}", id, e);
+                    failed.push((id, e.to_string()));
+                }
+            }
+        }
+        Ok((restored, failed))
+    }
+
     /// List soft-deleted tax rates
     pub async fn list_deleted_tax_rates(&self, tenant_id: i64) -> Result<Vec<TaxRate>, ApiError> {
         self.rate_repo.find_deleted(tenant_id).await
@@ -267,6 +287,26 @@ impl TaxService {
     /// Restore a soft-deleted tax period
     pub async fn restore_tax_period(&self, id: i64, tenant_id: i64) -> Result<TaxPeriod, ApiError> {
         self.period_repo.restore(id, tenant_id).await
+    }
+
+    /// Bulk restore soft-deleted tax periods
+    pub async fn bulk_restore_tax_periods(
+        &self,
+        ids: Vec<i64>,
+        tenant_id: i64,
+    ) -> Result<(Vec<TaxPeriod>, Vec<(i64, String)>), ApiError> {
+        let mut restored = Vec::new();
+        let mut failed = Vec::new();
+        for id in ids {
+            match self.period_repo.restore(id, tenant_id).await {
+                Ok(period) => restored.push(period),
+                Err(e) => {
+                    tracing::warn!("Failed to restore tax period {}: {}", id, e);
+                    failed.push((id, e.to_string()));
+                }
+            }
+        }
+        Ok((restored, failed))
     }
 
     /// List soft-deleted tax periods

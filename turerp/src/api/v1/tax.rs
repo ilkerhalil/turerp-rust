@@ -9,7 +9,8 @@ use utoipa::ToSchema;
 use crate::common::pagination::{default_page, default_per_page, PaginationParams};
 use crate::common::MessageResponse;
 use crate::domain::tax::model::{
-    CreateTaxPeriod, CreateTaxRate, TaxPeriodResponse, TaxRateResponse, TaxType, UpdateTaxRate,
+    BulkRestoreFailed, BulkRestoreResponse, CreateTaxPeriod, CreateTaxRate, TaxPeriodResponse,
+    TaxRateResponse, TaxType, UpdateTaxRate,
 };
 use crate::domain::tax::service::TaxService;
 use crate::error::ApiResult;
@@ -67,6 +68,12 @@ pub struct CalculateTaxRequest {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CalculateInvoiceTaxRequest {
     pub invoice_id: i64,
+}
+
+/// Request body for bulk restore operations
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct BulkRestoreRequest {
+    pub ids: Vec<i64>,
 }
 
 /// Query params for getting the effective tax rate
@@ -606,6 +613,116 @@ pub async fn destroy_tax_period(
     }
 }
 
+/// Bulk restore soft-deleted tax rates (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/tax/rates/bulk-restore", tag = "Tax",
+    request_body = BulkRestoreRequest,
+    responses(
+        (status = 200, description = "Tax rates restored", body = BulkRestoreResponse<TaxRateResponse>),
+        (status = 400, description = "Bad request — empty or oversized IDs list"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn bulk_restore_tax_rates(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    payload: web::Json<BulkRestoreRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let req = payload.into_inner();
+    if req.ids.is_empty() {
+        return Ok(
+            crate::error::ApiError::BadRequest("IDs list cannot be empty".to_string())
+                .to_http_response(i18n, locale.as_str()),
+        );
+    }
+    if req.ids.len() > 100 {
+        return Ok(crate::error::ApiError::BadRequest(
+            "IDs list cannot exceed 100 items".to_string(),
+        )
+        .to_http_response(i18n, locale.as_str()));
+    }
+    match tax_service
+        .bulk_restore_tax_rates(req.ids, admin_user.0.tenant_id)
+        .await
+    {
+        Ok((restored_rates, failed_tuples)) => {
+            let items: Vec<TaxRateResponse> = restored_rates
+                .into_iter()
+                .map(TaxRateResponse::from)
+                .collect();
+            let failed: Vec<BulkRestoreFailed> = failed_tuples
+                .into_iter()
+                .map(|(id, reason)| BulkRestoreFailed { id, reason })
+                .collect();
+            Ok(HttpResponse::Ok().json(BulkRestoreResponse {
+                restored: items.len(),
+                items,
+                failed,
+            }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Bulk restore soft-deleted tax periods (requires admin role)
+#[utoipa::path(
+    post, path = "/api/v1/tax/periods/bulk-restore", tag = "Tax",
+    request_body = BulkRestoreRequest,
+    responses(
+        (status = 200, description = "Tax periods restored", body = BulkRestoreResponse<TaxPeriodResponse>),
+        (status = 400, description = "Bad request — empty or oversized IDs list"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn bulk_restore_tax_periods(
+    admin_user: AdminUser,
+    tax_service: web::Data<TaxService>,
+    payload: web::Json<BulkRestoreRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    let req = payload.into_inner();
+    if req.ids.is_empty() {
+        return Ok(
+            crate::error::ApiError::BadRequest("IDs list cannot be empty".to_string())
+                .to_http_response(i18n, locale.as_str()),
+        );
+    }
+    if req.ids.len() > 100 {
+        return Ok(crate::error::ApiError::BadRequest(
+            "IDs list cannot exceed 100 items".to_string(),
+        )
+        .to_http_response(i18n, locale.as_str()));
+    }
+    match tax_service
+        .bulk_restore_tax_periods(req.ids, admin_user.0.tenant_id)
+        .await
+    {
+        Ok((restored_periods, failed_tuples)) => {
+            let items: Vec<TaxPeriodResponse> = restored_periods
+                .into_iter()
+                .map(TaxPeriodResponse::from)
+                .collect();
+            let failed: Vec<BulkRestoreFailed> = failed_tuples
+                .into_iter()
+                .map(|(id, reason)| BulkRestoreFailed { id, reason })
+                .collect();
+            Ok(HttpResponse::Ok().json(BulkRestoreResponse {
+                restored: items.len(),
+                items,
+                failed,
+            }))
+        }
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
 /// Configure tax engine routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -615,6 +732,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     )
     .service(web::resource("/v1/tax/rates/effective").route(web::get().to(get_effective_rate)))
     .service(web::resource("/v1/tax/rates/deleted").route(web::get().to(list_deleted_tax_rates)))
+    .service(
+        web::resource("/v1/tax/rates/bulk-restore").route(web::post().to(bulk_restore_tax_rates)),
+    )
     .service(
         web::resource("/v1/tax/rates/{id}")
             .route(web::get().to(get_tax_rate))
@@ -631,6 +751,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         web::resource("/v1/tax/periods")
             .route(web::get().to(list_tax_periods))
             .route(web::post().to(create_tax_period)),
+    )
+    .service(
+        web::resource("/v1/tax/periods/bulk-restore")
+            .route(web::post().to(bulk_restore_tax_periods)),
     )
     .service(
         web::resource("/v1/tax/periods/{id}")
