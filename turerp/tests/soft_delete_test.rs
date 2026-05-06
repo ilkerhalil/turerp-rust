@@ -1880,7 +1880,606 @@ async fn test_soft_delete_then_create_same_code() {
 }
 
 // ============================================================================
-// Section 14: Cross-Domain Soft Delete Consistency
+// Section 14: Notification Module Soft Delete Tests
+// ============================================================================
+
+#[actix_web::test]
+async fn test_notification_soft_delete_and_restore_lifecycle() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Send a notification
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Test Corp",
+                "invoice_number": "INV-SD-001",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "test@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    // Soft delete the notification
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // Verify notification is NOT in normal history list
+    let history_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/history")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, history_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = json["items"].as_array().unwrap();
+    assert!(
+        !items
+            .iter()
+            .any(|i| i["id"].as_i64() == Some(notification_id)),
+        "Deleted notification should not appear in normal history list"
+    );
+
+    // Verify notification appears in deleted list
+    let deleted_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, deleted_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let deleted_items: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(
+        deleted_items
+            .iter()
+            .any(|i| i["id"].as_i64() == Some(notification_id)),
+        "Deleted notification should appear in deleted list"
+    );
+
+    // Restore the notification
+    let restore_req = test::TestRequest::post()
+        .uri(&format!(
+            "/api/v1/notifications/{}/restore",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, restore_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Verify notification is back in normal history list
+    let history_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/history")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, history_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = json["items"].as_array().unwrap();
+    assert!(
+        items
+            .iter()
+            .any(|i| i["id"].as_i64() == Some(notification_id)),
+        "Restored notification should appear in normal history list"
+    );
+
+    // Verify notification is NOT in deleted list anymore
+    let deleted_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, deleted_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let deleted_items: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(
+        !deleted_items
+            .iter()
+            .any(|i| i["id"].as_i64() == Some(notification_id)),
+        "Restored notification should not appear in deleted list"
+    );
+}
+
+#[actix_web::test]
+async fn test_notification_destroy_permanently_removes_record() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Send a notification
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Destroy Corp",
+                "invoice_number": "INV-DEST-001",
+                "amount": "2000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "destroy@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    // Soft delete
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // Destroy permanently
+    let destroy_req = test::TestRequest::delete()
+        .uri(&format!(
+            "/api/v1/notifications/{}/destroy",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, destroy_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // Verify not in deleted list
+    let deleted_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, deleted_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let deleted_items: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(
+        !deleted_items
+            .iter()
+            .any(|i| i["id"].as_i64() == Some(notification_id)),
+        "Destroyed notification should not appear in deleted list"
+    );
+}
+
+#[actix_web::test]
+async fn test_notification_list_deleted_requires_admin() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (admin_token, _) = register_admin!(&app_state, 1);
+    let (user_token, _) = register_user!(&app, 1);
+
+    // Admin can list deleted notifications
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "Admin should be able to list deleted notifications"
+    );
+
+    // Normal user cannot list deleted notifications
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to list deleted notifications"
+    );
+}
+
+#[actix_web::test]
+async fn test_notification_restore_requires_admin() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (admin_token, _) = register_admin!(&app_state, 1);
+
+    // Send and soft delete as admin
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Restore Corp",
+                "invoice_number": "INV-REST-001",
+                "amount": "1500.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "restore@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .to_request();
+
+    let _ = test::call_service(&app, delete_req).await;
+
+    // Normal user cannot restore
+    let (user_token, _) = register_user!(&app, 1);
+
+    let restore_req = test::TestRequest::post()
+        .uri(&format!(
+            "/api/v1/notifications/{}/restore",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, restore_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to restore deleted notification"
+    );
+
+    // Admin can restore
+    let restore_req = test::TestRequest::post()
+        .uri(&format!(
+            "/api/v1/notifications/{}/restore",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, restore_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::OK,
+        "Admin should be able to restore deleted notification"
+    );
+}
+
+#[actix_web::test]
+async fn test_notification_destroy_requires_admin() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (admin_token, _) = register_admin!(&app_state, 1);
+
+    // Send and soft delete as admin
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Destroy Corp",
+                "invoice_number": "INV-DEST-001",
+                "amount": "1500.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "destroy@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .to_request();
+
+    let _ = test::call_service(&app, delete_req).await;
+
+    // Normal user cannot destroy
+    let (user_token, _) = register_user!(&app, 1);
+
+    let destroy_req = test::TestRequest::delete()
+        .uri(&format!(
+            "/api/v1/notifications/{}/destroy",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, destroy_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to destroy notification"
+    );
+
+    // Admin can destroy
+    let destroy_req = test::TestRequest::delete()
+        .uri(&format!(
+            "/api/v1/notifications/{}/destroy",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, destroy_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::NO_CONTENT,
+        "Admin should be able to destroy notification"
+    );
+}
+
+#[actix_web::test]
+async fn test_tenant_isolation_deleted_notifications() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token1, _) = register_admin!(&app_state, 1);
+    let (token2, _) = register_admin!(&app_state, 2);
+
+    // Tenant 1 sends and soft deletes a notification
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Tenant1 Corp",
+                "invoice_number": "INV-T1-001",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "t1@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .to_request();
+
+    let _ = test::call_service(&app, delete_req).await;
+
+    // Tenant 2 should not see tenant 1's deleted notifications
+    let deleted_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, deleted_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let deleted_items: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert!(
+        !deleted_items
+            .iter()
+            .any(|i| i["id"].as_i64() == Some(notification_id)),
+        "Tenant 2 should not see tenant 1's deleted notification"
+    );
+
+    // Tenant 2 should not be able to restore tenant 1's deleted notification
+    let restore_req = test::TestRequest::post()
+        .uri(&format!(
+            "/api/v1/notifications/{}/restore",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, restore_req).await;
+    assert!(
+        resp.status() == StatusCode::NOT_FOUND || resp.status() == StatusCode::FORBIDDEN,
+        "Tenant 2 should not be able to restore tenant 1's deleted notification, got: {:?}",
+        resp.status()
+    );
+}
+
+#[actix_web::test]
+async fn test_notification_double_soft_delete_idempotent() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Send a notification
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Double Corp",
+                "invoice_number": "INV-DBL-001",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "double@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    // First soft delete
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+    // Second soft delete should return 404 (not found in active list)
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::NOT_FOUND,
+        "Double soft delete should return 404"
+    );
+}
+
+#[actix_web::test]
+async fn test_notification_restore_non_deleted_record_returns_404() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Send a notification (not deleted)
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "No Restore Corp",
+                "invoice_number": "INV-NO-001",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "norestore@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    // Try to restore a non-deleted notification
+    let restore_req = test::TestRequest::post()
+        .uri(&format!(
+            "/api/v1/notifications/{}/restore",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, restore_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::NOT_FOUND,
+        "Restoring non-deleted notification should return 404"
+    );
+}
+
+#[actix_web::test]
+async fn test_notification_soft_delete_nonexistent_record_returns_404() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let delete_req = test::TestRequest::delete()
+        .uri("/api/v1/notifications/999999")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::NOT_FOUND,
+        "Deleting non-existent notification should return 404"
+    );
+}
+
+#[actix_web::test]
+async fn test_notification_destroy_nonexistent_deleted_record_returns_404() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let destroy_req = test::TestRequest::delete()
+        .uri("/api/v1/notifications/999999/destroy")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, destroy_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::NOT_FOUND,
+        "Destroying non-existent deleted notification should return 404"
+    );
+}
+
+// ============================================================================
+// Section 15: Cross-Domain Soft Delete Consistency
 // ============================================================================
 
 #[actix_web::test]
@@ -1901,6 +2500,7 @@ async fn test_all_soft_delete_endpoints_return_consistent_status_codes() {
         ("/api/v1/assets/999999", "Asset"),
         ("/api/v1/webhooks/999999", "Webhook"),
         ("/api/v1/crm/leads/999999", "CRM Lead"),
+        ("/api/v1/notifications/999999", "Notification"),
     ];
 
     for (path, name) in endpoints {

@@ -10738,6 +10738,25 @@
         ]
       }
     },
+    "/api/v1/notifications/deleted": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "List deleted notifications",
+        "operationId": "list_deleted_notifications",
+        "responses": {
+          "200": {
+            "description": "List of deleted notifications"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/notifications/in-app": {
       "get": {
         "tags": [
@@ -10853,6 +10872,74 @@
         ]
       }
     },
+    "/api/v1/notifications/{id}": {
+      "delete": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Soft delete a notification",
+        "operationId": "soft_delete_notification",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Notification ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Notification soft deleted"
+          },
+          "404": {
+            "description": "Notification not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Permanently destroy a soft-deleted notification",
+        "operationId": "destroy_notification",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Notification ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Notification permanently destroyed"
+          },
+          "404": {
+            "description": "Deleted notification not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/notifications/{id}/read": {
       "put": {
         "tags": [
@@ -10875,6 +10962,40 @@
         "responses": {
           "200": {
             "description": "Notification marked as read"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/{id}/restore": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Restore a soft-deleted notification",
+        "operationId": "restore_notification",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Notification ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification restored"
+          },
+          "404": {
+            "description": "Deleted notification not found"
           }
         },
         "security": [
