@@ -60,6 +60,11 @@ pub enum JobType {
     },
     /// Custom job with arbitrary payload
     Custom { name: String, payload: String },
+    /// Send a notification via email, SMS, or in-app
+    SendNotification {
+        notification_id: i64,
+        tenant_id: i64,
+    },
 }
 
 /// A scheduled job

@@ -46,6 +46,32 @@ pub struct MarkReadResponse {
     pub marked: u64,
 }
 
+/// History query params
+#[derive(Debug, Deserialize)]
+pub struct HistoryQueryParams {
+    pub channel: Option<String>,
+    #[serde(default = "default_limit")]
+    pub limit: i64,
+    #[serde(default = "default_offset")]
+    pub offset: i64,
+}
+
+fn default_limit() -> i64 {
+    20
+}
+
+fn default_offset() -> i64 {
+    0
+}
+
+/// Preference update request
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct UpdatePreferenceRequest {
+    pub channel: String,
+    pub notification_type: String,
+    pub enabled: bool,
+}
+
 /// Send a notification
 #[utoipa::path(
     post,
@@ -88,8 +114,46 @@ pub async fn send_notification(
         template_vars: body.template_vars.clone(),
         recipient: body.recipient.clone(),
     };
-    let notification = service.send(request).await.map_err(ApiError::Internal)?;
+    let notification = service.send(request).await?;
     Ok(HttpResponse::Created().json(notification))
+}
+
+/// Get notification history
+#[utoipa::path(
+    get,
+    path = "/api/v1/notifications/history",
+    tag = "Notifications",
+    params(
+        ("channel" = Option<String>, Query, description = "Filter by channel: email, sms, inapp"),
+        ("limit" = Option<i64>, Query, description = "Page size (default 20)"),
+        ("offset" = Option<i64>, Query, description = "Offset (default 0)")
+    ),
+    responses((status = 200, description = "Notification history")),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_notification_history(
+    admin_user: AdminUser,
+    query: web::Query<HistoryQueryParams>,
+    service: web::Data<dyn NotificationService>,
+) -> Result<HttpResponse, ApiError> {
+    let channel = query
+        .channel
+        .as_ref()
+        .map(|c| c.parse::<NotificationChannel>())
+        .transpose()
+        .map_err(|e: String| ApiError::Validation(e))?;
+
+    let history = service
+        .get_history(
+            admin_user.0.tenant_id,
+            Some(admin_user.0.user_id()?),
+            channel,
+            query.limit,
+            query.offset,
+        )
+        .await?;
+
+    Ok(HttpResponse::Ok().json(history))
 }
 
 /// Get in-app notifications for current user
@@ -112,8 +176,7 @@ pub async fn get_in_app_notifications(
             admin_user.0.user_id()?,
             query.unread_only.unwrap_or(false),
         )
-        .await
-        .map_err(ApiError::Internal)?;
+        .await?;
     let responses: Vec<InAppNotificationResponse> = notifications
         .iter()
         .map(|n| InAppNotificationResponse {
@@ -145,8 +208,7 @@ pub async fn get_unread_count(
 ) -> Result<HttpResponse, ApiError> {
     let count = service
         .unread_count(admin_user.0.tenant_id, admin_user.0.user_id()?)
-        .await
-        .map_err(ApiError::Internal)?;
+        .await?;
     Ok(HttpResponse::Ok().json(UnreadCountResponse { count }))
 }
 
@@ -160,12 +222,12 @@ pub async fn get_unread_count(
     security(("bearer_auth" = []))
 )]
 pub async fn mark_notification_read(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     path: web::Path<i64>,
     service: web::Data<dyn NotificationService>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
-    service.mark_as_read(id).await.map_err(ApiError::Internal)?;
+    service.mark_as_read(id, admin_user.0.tenant_id).await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Notification marked as read"})))
 }
 
@@ -183,8 +245,7 @@ pub async fn mark_all_read(
 ) -> Result<HttpResponse, ApiError> {
     let count = service
         .mark_all_as_read(admin_user.0.tenant_id, admin_user.0.user_id()?)
-        .await
-        .map_err(ApiError::Internal)?;
+        .await?;
     Ok(HttpResponse::Ok().json(MarkReadResponse { marked: count }))
 }
 
@@ -198,13 +259,61 @@ pub async fn mark_all_read(
     security(("bearer_auth" = []))
 )]
 pub async fn retry_notification(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     path: web::Path<i64>,
     service: web::Data<dyn NotificationService>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
-    service.retry(id).await.map_err(ApiError::Internal)?;
+    service.retry(id, admin_user.0.tenant_id).await?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Notification queued for retry"})))
+}
+
+/// Get notification preferences
+#[utoipa::path(
+    get,
+    path = "/api/v1/notifications/preferences",
+    tag = "Notifications",
+    responses((status = 200, description = "User notification preferences")),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_preferences(
+    admin_user: AdminUser,
+    service: web::Data<dyn NotificationService>,
+) -> Result<HttpResponse, ApiError> {
+    let prefs = service
+        .get_preferences(admin_user.0.tenant_id, admin_user.0.user_id()?)
+        .await?;
+    Ok(HttpResponse::Ok().json(prefs))
+}
+
+/// Update notification preferences
+#[utoipa::path(
+    put,
+    path = "/api/v1/notifications/preferences",
+    tag = "Notifications",
+    request_body = Vec<UpdatePreferenceRequest>,
+    responses((status = 200, description = "Preferences updated")),
+    security(("bearer_auth" = []))
+)]
+pub async fn update_preferences(
+    admin_user: AdminUser,
+    body: web::Json<Vec<UpdatePreferenceRequest>>,
+    service: web::Data<dyn NotificationService>,
+) -> Result<HttpResponse, ApiError> {
+    let prefs = body
+        .into_inner()
+        .into_iter()
+        .map(|p| crate::common::UpdatePreference {
+            channel: p.channel,
+            notification_type: p.notification_type,
+            enabled: p.enabled,
+        })
+        .collect();
+
+    let updated = service
+        .update_preferences(admin_user.0.tenant_id, admin_user.0.user_id()?, prefs)
+        .await?;
+    Ok(HttpResponse::Ok().json(updated))
 }
 
 #[derive(Debug, Deserialize)]
@@ -217,9 +326,12 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/v1/notifications")
             .route("/send", web::post().to(send_notification))
+            .route("/history", web::get().to(get_notification_history))
             .route("/in-app", web::get().to(get_in_app_notifications))
             .route("/unread-count", web::get().to(get_unread_count))
             .route("/read-all", web::put().to(mark_all_read))
+            .route("/preferences", web::get().to(get_preferences))
+            .route("/preferences", web::put().to(update_preferences))
             .route("/{id}/read", web::put().to(mark_notification_read))
             .route("/{id}/retry", web::post().to(retry_notification)),
     );

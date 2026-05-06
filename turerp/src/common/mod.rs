@@ -30,8 +30,8 @@ pub use jobs::{
 };
 pub use notifications::{
     BoxNotificationService, EmailTemplate, InAppNotification, InMemoryNotificationService,
-    Notification, NotificationChannel, NotificationPriority, NotificationRequest,
-    NotificationService, NotificationStatus,
+    Notification, NotificationChannel, NotificationPreference, NotificationPriority,
+    NotificationRequest, NotificationService, NotificationStatus, UpdatePreference,
 };
 pub use pagination::{PaginatedResult, PaginationParams};
 pub use read_replicas::{

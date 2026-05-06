@@ -10,9 +10,10 @@ use turerp::api::{
     auth_configure, users_configure, v1_accounting_configure, v1_assets_configure,
     v1_cari_configure, v1_chart_of_accounts_configure, v1_crm_configure,
     v1_feature_flags_configure, v1_hr_configure, v1_invoice_configure, v1_jobs_configure,
-    v1_manufacturing_configure, v1_product_variants_configure, v1_project_configure,
-    v1_purchase_requests_configure, v1_reports_configure, v1_sales_configure, v1_search_configure,
-    v1_stock_configure, v1_tax_configure, v1_tenant_configure, v1_webhooks_configure,
+    v1_manufacturing_configure, v1_notifications_configure, v1_product_variants_configure,
+    v1_project_configure, v1_purchase_requests_configure, v1_reports_configure, v1_sales_configure,
+    v1_search_configure, v1_stock_configure, v1_tax_configure, v1_tenant_configure,
+    v1_webhooks_configure,
 };
 use turerp::app::create_app_state_in_memory;
 use turerp::config::Config;
@@ -46,7 +47,8 @@ fn configure_v1_routes(cfg: &mut web::ServiceConfig) {
         .configure(v1_webhooks_configure)
         .configure(v1_search_configure)
         .configure(v1_reports_configure)
-        .configure(v1_jobs_configure);
+        .configure(v1_jobs_configure)
+        .configure(v1_notifications_configure);
 }
 
 /// Create app state with default config for testing
@@ -111,6 +113,7 @@ fn build_full_test_app(
         .app_data(state.search_service.clone())
         .app_data(state.report_engine.clone())
         .app_data(state.job_scheduler.clone())
+        .app_data(state.notification_service.clone())
         .service(
             web::scope("/api")
                 .configure(configure_all_routes)
@@ -4226,4 +4229,469 @@ async fn test_job_generate_report_retry_on_failure() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["status"], "failed");
     assert_eq!(json["last_error"], "Report generation failed");
+}
+
+// ============================================================================
+// Notification Tests
+// ============================================================================
+
+#[actix_web::test]
+async fn test_send_email_notification() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "priority": "high",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Acme Corp",
+                "invoice_number": "INV-TEST-001",
+                "amount": "1500.00",
+                "currency": "TRY",
+                "due_date": "2024-06-01"
+            },
+            "recipient": "customer@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["channel"], "Email");
+    assert_eq!(json["status"], "Queued");
+    assert!(json["subject"].as_str().unwrap().contains("INV-TEST-001"));
+    assert!(json["body"].as_str().unwrap().contains("Acme Corp"));
+    assert_eq!(json["recipient"], "customer@example.com");
+}
+
+#[actix_web::test]
+async fn test_send_sms_notification() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "sms",
+            "priority": "urgent",
+            "template_key": "stock_low",
+            "template_vars": {
+                "product_name": "Critical Part",
+                "warehouse_name": "Main",
+                "quantity": "2",
+                "min_stock": "10"
+            },
+            "recipient": "+905551234567"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["channel"], "Sms");
+    assert_eq!(json["status"], "Queued");
+    assert_eq!(json["recipient"], "+905551234567");
+}
+
+#[actix_web::test]
+async fn test_send_in_app_notification() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, user_id) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": user_id,
+            "channel": "inapp",
+            "priority": "normal",
+            "template_key": "payment_received",
+            "template_vars": {
+                "customer_name": "Beta Inc",
+                "payment_id": "PAY-TEST-001",
+                "amount": "3000.00",
+                "currency": "TRY",
+                "payment_date": "2024-05-01"
+            },
+            "recipient": "user@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["channel"], "InApp");
+    assert_eq!(json["status"], "Queued");
+}
+
+#[actix_web::test]
+async fn test_get_in_app_notifications() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, user_id) = register_admin!(&app_state, 1);
+
+    // Send two in-app notifications
+    for i in 0..2 {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notifications/send")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .set_json(json!({
+                "user_id": user_id,
+                "channel": "inapp",
+                "template_key": "employee_hired",
+                "template_vars": {
+                    "employee_name": format!("Employee {}", i),
+                    "department": "Engineering",
+                    "start_date": "2024-01-01"
+                },
+                "recipient": "hr@example.com"
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+
+    // Get all in-app notifications
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/in-app")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notifications = json.as_array().unwrap();
+    assert_eq!(notifications.len(), 2);
+    assert!(!notifications[0]["read"].as_bool().unwrap());
+}
+
+#[actix_web::test]
+async fn test_get_unread_in_app_notifications() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, user_id) = register_admin!(&app_state, 1);
+
+    // Send three in-app notifications
+    for i in 0..3 {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notifications/send")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .set_json(json!({
+                "user_id": user_id,
+                "channel": "inapp",
+                "template_key": "stock_low",
+                "template_vars": {
+                    "product_name": format!("Product {}", i),
+                    "warehouse_name": "Main",
+                    "quantity": "5",
+                    "min_stock": "10"
+                },
+                "recipient": "warehouse@example.com"
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+
+    // Mark one as read
+    let mark_req = test::TestRequest::put()
+        .uri("/api/v1/notifications/1/read")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, mark_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Get unread-only
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/in-app?unread_only=true")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notifications = json.as_array().unwrap();
+    assert_eq!(notifications.len(), 2);
+}
+
+#[actix_web::test]
+async fn test_get_unread_count() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, user_id) = register_admin!(&app_state, 1);
+
+    // Send two in-app notifications
+    for i in 0..2 {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notifications/send")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .set_json(json!({
+                "user_id": user_id,
+                "channel": "inapp",
+                "template_key": "password_reset",
+                "template_vars": {
+                    "reset_link": format!("https://example.com/reset/{}", i),
+                    "expiry_minutes": "30"
+                },
+                "recipient": "user@example.com"
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/unread-count")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["count"], 2);
+}
+
+#[actix_web::test]
+async fn test_mark_notification_read() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, user_id) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": user_id,
+            "channel": "inapp",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Gamma Ltd",
+                "invoice_number": "INV-READ-001",
+                "amount": "500.00",
+                "currency": "TRY",
+                "due_date": "2024-07-01"
+            },
+            "recipient": "billing@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // Mark as read
+    let mark_req = test::TestRequest::put()
+        .uri("/api/v1/notifications/1/read")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, mark_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["message"], "Notification marked as read");
+}
+
+#[actix_web::test]
+async fn test_mark_all_notifications_read() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, user_id) = register_admin!(&app_state, 1);
+
+    for i in 0..3 {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notifications/send")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .set_json(json!({
+                "user_id": user_id,
+                "channel": "inapp",
+                "template_key": "payment_received",
+                "template_vars": {
+                    "customer_name": format!("Customer {}", i),
+                    "payment_id": format!("PAY-{}", i),
+                    "amount": "1000.00",
+                    "currency": "TRY",
+                    "payment_date": "2024-05-01"
+                },
+                "recipient": "finance@example.com"
+            }))
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+
+    let mark_req = test::TestRequest::put()
+        .uri("/api/v1/notifications/read-all")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, mark_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["marked"], 3);
+}
+
+#[actix_web::test]
+async fn test_retry_notification() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    // Send a notification (in-memory always succeeds)
+    let req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Delta Corp",
+                "invoice_number": "INV-RETRY-001",
+                "amount": "2500.00",
+                "currency": "TRY",
+                "due_date": "2024-08-01"
+            },
+            "recipient": "delta@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    // Retry should fail because status is Queued, not Failed
+    let retry_req = test::TestRequest::post()
+        .uri(&format!("/api/v1/notifications/{}/retry", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, retry_req).await;
+    // Can only retry failed notifications
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_send_notification_invalid_channel() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token, _) = register_admin!(&app_state, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "push",
+            "template_key": "invoice_created",
+            "template_vars": {},
+            "recipient": "test@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+}
+
+#[actix_web::test]
+async fn test_notification_tenant_isolation() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&app_state)).await;
+
+    let (token1, user1_id) = register_admin!(&app_state, 1);
+    let (token2, user2_id) = register_admin!(&app_state, 2);
+
+    // Tenant 1 sends in-app notification
+    let req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "user_id": user1_id,
+            "channel": "inapp",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Tenant1 Customer",
+                "invoice_number": "INV-T1-001",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-09-01"
+            },
+            "recipient": "t1@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // Tenant 2 lists in-app notifications - should be empty
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/in-app")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notifications = json.as_array().unwrap();
+    assert!(
+        notifications.is_empty(),
+        "Tenant 2 should not see tenant 1 notifications"
+    );
+
+    // Tenant 2 unread count should be 0
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/unread-count")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["count"], 0);
 }

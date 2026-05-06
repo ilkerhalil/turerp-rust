@@ -11,9 +11,9 @@ use serde_json::json;
 use turerp::api::{
     auth_configure, users_configure, v1_accounting_configure, v1_assets_configure,
     v1_cari_configure, v1_chart_of_accounts_configure, v1_crm_configure, v1_hr_configure,
-    v1_invoice_configure, v1_manufacturing_configure, v1_project_configure, v1_sales_configure,
-    v1_search_configure, v1_stock_configure, v1_tax_configure, v1_tenant_configure,
-    v1_webhooks_configure,
+    v1_invoice_configure, v1_manufacturing_configure, v1_notifications_configure,
+    v1_project_configure, v1_sales_configure, v1_search_configure, v1_stock_configure,
+    v1_tax_configure, v1_tenant_configure, v1_webhooks_configure,
 };
 use turerp::app::create_app_state_in_memory;
 use turerp::config::Config;
@@ -40,7 +40,8 @@ fn configure_all_routes(cfg: &mut web::ServiceConfig) {
             .configure(v1_chart_of_accounts_configure)
             .configure(v1_tax_configure)
             .configure(v1_webhooks_configure)
-            .configure(v1_search_configure),
+            .configure(v1_search_configure)
+            .configure(v1_notifications_configure),
     );
 }
 
@@ -91,6 +92,7 @@ fn build_full_test_app(
         .app_data(state.tax_service.clone())
         .app_data(state.webhook_service.clone())
         .app_data(state.search_service.clone())
+        .app_data(state.notification_service.clone())
         .configure(configure_all_routes)
 }
 
@@ -109,6 +111,7 @@ macro_rules! test_app {
             .app_data($state.tax_service.clone())
             .app_data($state.webhook_service.clone())
             .app_data($state.search_service.clone())
+            .app_data($state.notification_service.clone())
             .configure(configure_all_routes)
     };
 }
@@ -1716,4 +1719,247 @@ async fn test_search_cari_tenant_isolation_security() {
         items.is_empty(),
         "Tenant 2 should not find tenant 1's cari records"
     );
+}
+
+// ============================================================================
+// Notification Security Tests
+// ============================================================================
+
+#[actix_web::test]
+async fn test_unauthenticated_notification_send_rejected() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {},
+            "recipient": "test@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[actix_web::test]
+async fn test_unauthenticated_notification_list_rejected() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/in-app")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[actix_web::test]
+async fn test_unauthenticated_unread_count_rejected() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/unread-count")
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_send_notification() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {},
+            "recipient": "test@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to send notifications"
+    );
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_list_notifications() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/in-app")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to list notifications"
+    );
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_mark_notification_read() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::put()
+        .uri("/api/v1/notifications/1/read")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to mark notifications as read"
+    );
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_retry_notification() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::post()
+        .uri("/api/v1/notifications/1/retry")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to retry notifications"
+    );
+}
+
+#[actix_web::test]
+async fn test_tenant_isolation_notifications() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    // Admin in tenant 1 creates notification
+    let token1 = sec_register_admin!(&state, 1);
+
+    let create_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", token1)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "inapp",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Tenant 1 Customer",
+                "invoice_number": "INV-T1-001",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-09-01"
+            },
+            "recipient": "t1@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, create_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    // Admin in tenant 2 lists notifications - should not see tenant 1's data
+    let token2 = sec_register_admin!(&state, 2);
+
+    let list_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/in-app")
+        .insert_header(("Authorization", format!("Bearer {}", token2)))
+        .to_request();
+
+    let resp = test::call_service(&app, list_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notifications = json.as_array().unwrap();
+    assert!(
+        notifications.is_empty(),
+        "Tenant 2 should not see tenant 1's notifications (IDOR)"
+    );
+}
+
+#[actix_web::test]
+async fn test_sql_injection_in_notification_fields() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let token = sec_register_admin!(&state, 1);
+
+    // Try SQL injection in template key and recipient
+    let malicious_payloads = vec![
+        json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "'; DROP TABLE notifications;--",
+            "template_vars": {},
+            "recipient": "test@example.com"
+        }),
+        json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "'; DROP TABLE users;--",
+                "invoice_number": "INV-001",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-01-01"
+            },
+            "recipient": "test@example.com"
+        }),
+        json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {},
+            "recipient": "test@example.com'; DROP TABLE notifications;--"
+        }),
+    ];
+
+    for payload in malicious_payloads {
+        let req = test::TestRequest::post()
+            .uri("/api/v1/notifications/send")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .set_json(payload)
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        // Should not crash the server - any status except panic is acceptable
+        assert!(
+            resp.status() == StatusCode::CREATED
+                || resp.status() == StatusCode::BAD_REQUEST
+                || resp.status() == StatusCode::INTERNAL_SERVER_ERROR,
+            "SQL injection in notification fields should be handled safely, got: {:?}",
+            resp.status()
+        );
+    }
 }

@@ -37,6 +37,7 @@ impl JobResponse {
                 JobType::SendReminders { .. } => "send_reminders".to_string(),
                 JobType::ArchiveLogs { .. } => "archive_logs".to_string(),
                 JobType::GenerateReport { .. } => "generate_report".to_string(),
+                JobType::SendNotification { .. } => "send_notification".to_string(),
                 JobType::Custom { .. } => "custom".to_string(),
             },
             status: match job.status {
@@ -125,6 +126,10 @@ pub async fn schedule_job(
             tenant_id: body.tenant_id,
             report_type: body.report_type.clone().unwrap_or_default(),
             params: body.params.clone().unwrap_or_default(),
+        },
+        "send_notification" => JobType::SendNotification {
+            notification_id: body.asset_id.unwrap_or(0),
+            tenant_id: body.tenant_id,
         },
         "custom" => JobType::Custom {
             name: body.custom_name.clone().unwrap_or_default(),

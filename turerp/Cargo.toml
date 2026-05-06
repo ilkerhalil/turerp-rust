@@ -100,6 +100,12 @@ rust_xlsxwriter = "0.94"
 printpdf = "0.3"
 csv = "1.4"
 
+# Email delivery
+lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"] }
+
+# Template engine
+handlebars = "6.0"
+
 # Mocking for tests
 mockall = "0.12"
 
