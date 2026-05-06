@@ -1859,6 +1859,240 @@ async fn test_normal_user_cannot_retry_notification() {
 }
 
 #[actix_web::test]
+async fn test_normal_user_cannot_soft_delete_notification() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let admin_token = sec_register_admin!(&state, 1);
+
+    // Admin sends a notification
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Test Corp",
+                "invoice_number": "INV-SEC-001",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "sec@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    // Normal user tries to soft delete
+    let user_token = sec_register_user!(&app, 1);
+
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, delete_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to soft delete notification"
+    );
+
+    // Verify notification still exists
+    let history_req = test::TestRequest::get()
+        .uri("/api/v1/notifications/history")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, history_req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = json["items"].as_array().unwrap();
+    assert!(
+        items
+            .iter()
+            .any(|i| i["id"].as_i64() == Some(notification_id)),
+        "Notification should still exist after failed delete attempt"
+    );
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_restore_notification() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let admin_token = sec_register_admin!(&state, 1);
+
+    // Admin sends and soft deletes a notification
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Test Corp",
+                "invoice_number": "INV-SEC-002",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "sec2@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .to_request();
+
+    let _ = test::call_service(&app, delete_req).await;
+
+    // Normal user tries to restore
+    let user_token = sec_register_user!(&app, 1);
+
+    let restore_req = test::TestRequest::post()
+        .uri(&format!(
+            "/api/v1/notifications/{}/restore",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, restore_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to restore notification"
+    );
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_destroy_notification() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let admin_token = sec_register_admin!(&state, 1);
+
+    // Admin sends and soft deletes a notification
+    let send_req = test::TestRequest::post()
+        .uri("/api/v1/notifications/send")
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .set_json(json!({
+            "user_id": 1,
+            "channel": "email",
+            "template_key": "invoice_created",
+            "template_vars": {
+                "customer_name": "Test Corp",
+                "invoice_number": "INV-SEC-003",
+                "amount": "1000.00",
+                "currency": "TRY",
+                "due_date": "2024-12-01"
+            },
+            "recipient": "sec3@example.com"
+        }))
+        .to_request();
+
+    let resp = test::call_service(&app, send_req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let notification_id = json["id"].as_i64().unwrap();
+
+    let delete_req = test::TestRequest::delete()
+        .uri(&format!("/api/v1/notifications/{}", notification_id))
+        .insert_header(("Authorization", format!("Bearer {}", admin_token)))
+        .to_request();
+
+    let _ = test::call_service(&app, delete_req).await;
+
+    // Normal user tries to destroy
+    let user_token = sec_register_user!(&app, 1);
+
+    let destroy_req = test::TestRequest::delete()
+        .uri(&format!(
+            "/api/v1/notifications/{}/destroy",
+            notification_id
+        ))
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, destroy_req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to destroy notification"
+    );
+}
+
+#[actix_web::test]
+async fn test_normal_user_cannot_list_deleted_notifications() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let user_token = sec_register_user!(&app, 1);
+
+    let req = test::TestRequest::get()
+        .uri("/api/v1/notifications/deleted")
+        .insert_header(("Authorization", format!("Bearer {}", user_token)))
+        .to_request();
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::FORBIDDEN,
+        "Normal user should not be able to list deleted notifications"
+    );
+}
+
+#[actix_web::test]
+async fn test_unauthenticated_notification_soft_delete_rejected() {
+    let state = create_test_app_state();
+    let app = test::init_service(build_full_test_app(&state)).await;
+
+    let endpoints = vec![
+        ("DELETE", "/api/v1/notifications/1"),
+        ("POST", "/api/v1/notifications/1/restore"),
+        ("DELETE", "/api/v1/notifications/1/destroy"),
+        ("GET", "/api/v1/notifications/deleted"),
+    ];
+
+    for (method, path) in endpoints {
+        let req = match method {
+            "GET" => test::TestRequest::get().uri(path),
+            "POST" => test::TestRequest::post().uri(path),
+            "DELETE" => test::TestRequest::delete().uri(path),
+            _ => continue,
+        }
+        .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNAUTHORIZED,
+            "Unauthenticated {} {} should return 401",
+            method,
+            path
+        );
+    }
+}
+
+#[actix_web::test]
 async fn test_tenant_isolation_notifications() {
     let state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&state)).await;

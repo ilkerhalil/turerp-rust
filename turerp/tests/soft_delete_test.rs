@@ -2376,7 +2376,7 @@ async fn test_notification_double_soft_delete_idempotent() {
     let resp = test::call_service(&app, delete_req).await;
     assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
-    // Second soft delete should return 404 (not found in active list)
+    // Second soft delete should return 409 (already deleted)
     let delete_req = test::TestRequest::delete()
         .uri(&format!("/api/v1/notifications/{}", notification_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -2385,13 +2385,13 @@ async fn test_notification_double_soft_delete_idempotent() {
     let resp = test::call_service(&app, delete_req).await;
     assert_eq!(
         resp.status(),
-        StatusCode::NOT_FOUND,
-        "Double soft delete should return 404"
+        StatusCode::CONFLICT,
+        "Double soft delete should return 409 Conflict"
     );
 }
 
 #[actix_web::test]
-async fn test_notification_restore_non_deleted_record_returns_404() {
+async fn test_notification_restore_non_deleted_record_returns_400() {
     let app_state = create_test_app_state();
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
@@ -2433,8 +2433,8 @@ async fn test_notification_restore_non_deleted_record_returns_404() {
     let resp = test::call_service(&app, restore_req).await;
     assert_eq!(
         resp.status(),
-        StatusCode::NOT_FOUND,
-        "Restoring non-deleted notification should return 404"
+        StatusCode::BAD_REQUEST,
+        "Restoring non-deleted notification should return 400 BadRequest"
     );
 }
 

@@ -478,6 +478,12 @@ impl NotificationService for InMemoryNotificationService {
             .take(limit as usize)
             .collect();
 
+        if limit <= 0 {
+            return Err(ApiError::BadRequest(
+                "Limit must be greater than 0".to_string(),
+            ));
+        }
+
         Ok(PaginatedResult::new(
             items,
             (offset / limit + 1) as u32,
@@ -510,7 +516,10 @@ impl NotificationService for InMemoryNotificationService {
         notification.read = true;
 
         let mut notifications = self.notifications.write();
-        if let Some(n) = notifications.iter_mut().find(|n| n.id == id) {
+        if let Some(n) = notifications
+            .iter_mut()
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+        {
             n.status = NotificationStatus::Read;
             n.read_at = Some(Utc::now());
         }

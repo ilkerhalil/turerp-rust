@@ -286,7 +286,11 @@ pub async fn soft_delete_notification(
     service: web::Data<dyn NotificationService>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
-    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    let deleted_by = admin_user
+        .0
+        .sub
+        .parse::<i64>()
+        .map_err(|_| ApiError::BadRequest("Invalid user ID in token".to_string()))?;
     service
         .soft_delete(id, admin_user.0.tenant_id, deleted_by)
         .await?;
