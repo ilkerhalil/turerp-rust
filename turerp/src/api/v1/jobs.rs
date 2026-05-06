@@ -348,7 +348,7 @@ pub async fn retry_job(
     security(("bearer_auth" = []))
 )]
 pub async fn list_jobs_by_status(
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<String>,
     _query: web::Query<PaginationParams>,
     scheduler: web::Data<dyn JobScheduler>,
@@ -365,7 +365,7 @@ pub async fn list_jobs_by_status(
     };
 
     let jobs = scheduler
-        .list_by_status(0, status)
+        .list_by_status(admin.0.tenant_id, status)
         .await
         .map_err(ApiError::Internal)?;
 
