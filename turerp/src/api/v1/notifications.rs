@@ -1,8 +1,11 @@
 //! Notification API endpoints (v1)
 
 use crate::common::{
-    NotificationChannel, NotificationPriority, NotificationRequest, NotificationService,
+    MessageResponse, NotificationChannel, NotificationPriority, NotificationRequest,
+    NotificationService,
 };
+#[allow(unused_imports)]
+use crate::domain::notification::model::{NotificationPreferenceResponse, NotificationResponse};
 use crate::error::ApiError;
 use crate::middleware::AdminUser;
 use actix_web::{web, HttpResponse};
@@ -79,7 +82,7 @@ pub struct UpdatePreferenceRequest {
     tag = "Notifications",
     request_body = SendNotificationRequest,
     responses(
-        (status = 201, description = "Notification sent"),
+        (status = 201, description = "Notification sent", body = NotificationResponse),
         (status = 400, description = "Invalid request"),
     ),
     security(("bearer_auth" = []))
@@ -128,7 +131,7 @@ pub async fn send_notification(
         ("limit" = Option<i64>, Query, description = "Page size (default 20)"),
         ("offset" = Option<i64>, Query, description = "Offset (default 0)")
     ),
-    responses((status = 200, description = "Notification history")),
+    responses((status = 200, description = "Notification history", body = crate::common::PaginatedResult<NotificationResponse>)),
     security(("bearer_auth" = []))
 )]
 pub async fn get_notification_history(
@@ -162,7 +165,7 @@ pub async fn get_notification_history(
     path = "/api/v1/notifications/in-app",
     tag = "Notifications",
     params(("unread_only" = Option<bool>, Query, description = "Only unread notifications")),
-    responses((status = 200, description = "List of in-app notifications")),
+    responses((status = 200, description = "List of in-app notifications", body = Vec<InAppNotificationResponse>)),
     security(("bearer_auth" = []))
 )]
 pub async fn get_in_app_notifications(
@@ -218,7 +221,7 @@ pub async fn get_unread_count(
     path = "/api/v1/notifications/{id}/read",
     tag = "Notifications",
     params(("id" = i64, Path, description = "Notification ID")),
-    responses((status = 200, description = "Notification marked as read")),
+    responses((status = 200, description = "Notification marked as read", body = MessageResponse)),
     security(("bearer_auth" = []))
 )]
 pub async fn mark_notification_read(
@@ -228,7 +231,9 @@ pub async fn mark_notification_read(
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
     service.mark_as_read(id, admin_user.0.tenant_id).await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Notification marked as read"})))
+    Ok(HttpResponse::Ok().json(MessageResponse {
+        message: "Notification marked as read".to_string(),
+    }))
 }
 
 /// Mark all notifications as read
@@ -255,7 +260,7 @@ pub async fn mark_all_read(
     path = "/api/v1/notifications/{id}/retry",
     tag = "Notifications",
     params(("id" = i64, Path, description = "Notification ID")),
-    responses((status = 200, description = "Notification retried")),
+    responses((status = 200, description = "Notification retried", body = MessageResponse)),
     security(("bearer_auth" = []))
 )]
 pub async fn retry_notification(
@@ -265,7 +270,100 @@ pub async fn retry_notification(
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
     service.retry(id, admin_user.0.tenant_id).await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Notification queued for retry"})))
+    Ok(HttpResponse::Ok().json(MessageResponse {
+        message: "Notification queued for retry".to_string(),
+    }))
+}
+
+/// Soft delete a notification
+#[utoipa::path(
+    delete,
+    path = "/api/v1/notifications/{id}",
+    tag = "Notifications",
+    params(("id" = i64, Path, description = "Notification ID")),
+    responses(
+        (status = 204, description = "Notification soft deleted"),
+        (status = 404, description = "Notification not found"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn soft_delete_notification(
+    admin_user: AdminUser,
+    path: web::Path<i64>,
+    service: web::Data<dyn NotificationService>,
+) -> Result<HttpResponse, ApiError> {
+    let id = path.into_inner();
+    let deleted_by = admin_user
+        .0
+        .sub
+        .parse::<i64>()
+        .map_err(|_| ApiError::BadRequest("Invalid user ID in token".to_string()))?;
+    service
+        .soft_delete(id, admin_user.0.tenant_id, deleted_by)
+        .await?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+/// Restore a soft-deleted notification
+#[utoipa::path(
+    post,
+    path = "/api/v1/notifications/{id}/restore",
+    tag = "Notifications",
+    params(("id" = i64, Path, description = "Notification ID")),
+    responses(
+        (status = 200, description = "Notification restored", body = MessageResponse),
+        (status = 404, description = "Deleted notification not found"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn restore_notification(
+    admin_user: AdminUser,
+    path: web::Path<i64>,
+    service: web::Data<dyn NotificationService>,
+) -> Result<HttpResponse, ApiError> {
+    let id = path.into_inner();
+    service.restore(id, admin_user.0.tenant_id).await?;
+    Ok(HttpResponse::Ok().json(MessageResponse {
+        message: "Notification restored".to_string(),
+    }))
+}
+
+/// List deleted notifications
+#[utoipa::path(
+    get,
+    path = "/api/v1/notifications/deleted",
+    tag = "Notifications",
+    responses((status = 200, description = "List of deleted notifications", body = Vec<NotificationResponse>)),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_deleted_notifications(
+    admin_user: AdminUser,
+    service: web::Data<dyn NotificationService>,
+) -> Result<HttpResponse, ApiError> {
+    let notifications = service.find_deleted(admin_user.0.tenant_id).await?;
+    Ok(HttpResponse::Ok().json(notifications))
+}
+
+/// Permanently destroy a soft-deleted notification
+#[utoipa::path(
+    delete,
+    path = "/api/v1/notifications/{id}/destroy",
+    tag = "Notifications",
+    params(("id" = i64, Path, description = "Notification ID")),
+    responses(
+        (status = 204, description = "Notification permanently destroyed"),
+        (status = 404, description = "Deleted notification not found"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn destroy_notification(
+    admin_user: AdminUser,
+    path: web::Path<i64>,
+    service: web::Data<dyn NotificationService>,
+) -> Result<HttpResponse, ApiError> {
+    let id = path.into_inner();
+    service.destroy(id, admin_user.0.tenant_id).await?;
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Get notification preferences
@@ -273,7 +371,7 @@ pub async fn retry_notification(
     get,
     path = "/api/v1/notifications/preferences",
     tag = "Notifications",
-    responses((status = 200, description = "User notification preferences")),
+    responses((status = 200, description = "User notification preferences", body = Vec<NotificationPreferenceResponse>)),
     security(("bearer_auth" = []))
 )]
 pub async fn get_preferences(
@@ -292,7 +390,7 @@ pub async fn get_preferences(
     path = "/api/v1/notifications/preferences",
     tag = "Notifications",
     request_body = Vec<UpdatePreferenceRequest>,
-    responses((status = 200, description = "Preferences updated")),
+    responses((status = 200, description = "Preferences updated", body = Vec<NotificationPreferenceResponse>)),
     security(("bearer_auth" = []))
 )]
 pub async fn update_preferences(
@@ -330,9 +428,13 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/in-app", web::get().to(get_in_app_notifications))
             .route("/unread-count", web::get().to(get_unread_count))
             .route("/read-all", web::put().to(mark_all_read))
+            .route("/deleted", web::get().to(list_deleted_notifications))
             .route("/preferences", web::get().to(get_preferences))
             .route("/preferences", web::put().to(update_preferences))
+            .route("/{id}", web::delete().to(soft_delete_notification))
             .route("/{id}/read", web::put().to(mark_notification_read))
-            .route("/{id}/retry", web::post().to(retry_notification)),
+            .route("/{id}/retry", web::post().to(retry_notification))
+            .route("/{id}/restore", web::post().to(restore_notification))
+            .route("/{id}/destroy", web::delete().to(destroy_notification)),
     );
 }

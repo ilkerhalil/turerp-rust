@@ -148,6 +148,8 @@ pub struct Notification {
     pub created_at: DateTime<Utc>,
     pub sent_at: Option<DateTime<Utc>>,
     pub read_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
     pub last_error: Option<String>,
     pub attempts: u32,
 }
@@ -273,6 +275,18 @@ pub trait NotificationService: Send + Sync {
 
     /// Retry a failed notification
     async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Soft delete a notification
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+
+    /// Restore a soft-deleted notification
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// List deleted notifications for a tenant
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Notification>, ApiError>;
+
+    /// Permanently destroy a soft-deleted notification
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed notification service
@@ -401,6 +415,8 @@ impl NotificationService for InMemoryNotificationService {
             sent_at: Some(Utc::now()),
             read_at: None,
             last_error: None,
+            deleted_at: None,
+            deleted_by: None,
             attempts: 1,
         };
 
@@ -434,7 +450,7 @@ impl NotificationService for InMemoryNotificationService {
         let inner = self.notifications.read();
         Ok(inner
             .iter()
-            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .find(|n| n.id == id && n.tenant_id == tenant_id && n.deleted_at.is_none())
             .cloned())
     }
 
@@ -446,10 +462,17 @@ impl NotificationService for InMemoryNotificationService {
         limit: i64,
         offset: i64,
     ) -> Result<PaginatedResult<Notification>, ApiError> {
+        if limit <= 0 {
+            return Err(ApiError::BadRequest(
+                "Limit must be greater than 0".to_string(),
+            ));
+        }
+
         let inner = self.notifications.read();
         let mut filtered: Vec<_> = inner
             .iter()
             .filter(|n| n.tenant_id == tenant_id)
+            .filter(|n| n.deleted_at.is_none())
             .filter(|n| user_id.is_none() || n.user_id == user_id)
             .filter(|n| channel.is_none() || n.channel == channel.unwrap())
             .cloned()
@@ -496,7 +519,10 @@ impl NotificationService for InMemoryNotificationService {
         notification.read = true;
 
         let mut notifications = self.notifications.write();
-        if let Some(n) = notifications.iter_mut().find(|n| n.id == id) {
+        if let Some(n) = notifications
+            .iter_mut()
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+        {
             n.status = NotificationStatus::Read;
             n.read_at = Some(Utc::now());
         }
@@ -604,6 +630,57 @@ impl NotificationService for InMemoryNotificationService {
         notification.last_error = None;
         Ok(())
     }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let mut notifications = self.notifications.write();
+        let notification = notifications
+            .iter_mut()
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Notification {} not found", id)))?;
+        notification.deleted_at = Some(Utc::now());
+        notification.deleted_by = Some(deleted_by);
+        Ok(())
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut notifications = self.notifications.write();
+        let notification = notifications
+            .iter_mut()
+            .find(|n| n.id == id && n.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Notification {} not found", id)))?;
+        if notification.deleted_at.is_none() {
+            return Err(ApiError::BadRequest(format!(
+                "Notification {} is not deleted",
+                id
+            )));
+        }
+        notification.deleted_at = None;
+        notification.deleted_by = None;
+        Ok(())
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Notification>, ApiError> {
+        let notifications = self.notifications.read();
+        Ok(notifications
+            .iter()
+            .filter(|n| n.tenant_id == tenant_id && n.deleted_at.is_some())
+            .cloned()
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut notifications = self.notifications.write();
+        let before = notifications.len();
+        notifications
+            .retain(|n| !(n.id == id && n.tenant_id == tenant_id && n.deleted_at.is_some()));
+        if notifications.len() == before {
+            return Err(ApiError::NotFound(format!(
+                "Deleted notification {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -693,6 +770,8 @@ impl NotificationService for crate::domain::notification::service::NotificationS
             sent_at: response.sent_at,
             read_at: None,
             last_error: None,
+            deleted_at: None,
+            deleted_by: None,
             attempts: response.attempts,
         })
     }
@@ -721,6 +800,8 @@ impl NotificationService for crate::domain::notification::service::NotificationS
             sent_at: r.sent_at,
             read_at: None,
             last_error: None,
+            deleted_at: None,
+            deleted_by: None,
             attempts: r.attempts,
         }))
     }
@@ -758,6 +839,8 @@ impl NotificationService for crate::domain::notification::service::NotificationS
             sent_at: r.sent_at,
             read_at: None,
             last_error: None,
+            deleted_at: None,
+            deleted_by: None,
             attempts: r.attempts,
         }))
     }
@@ -882,6 +965,52 @@ impl NotificationService for crate::domain::notification::service::NotificationS
 
     async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         crate::domain::notification::service::NotificationService::retry(self, id, tenant_id).await
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        crate::domain::notification::service::NotificationService::soft_delete(
+            self, id, tenant_id, deleted_by,
+        )
+        .await
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        crate::domain::notification::service::NotificationService::restore(self, id, tenant_id)
+            .await
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Notification>, ApiError> {
+        let responses = crate::domain::notification::service::NotificationService::find_deleted(
+            self, tenant_id,
+        )
+        .await?;
+        Ok(responses
+            .into_iter()
+            .map(|r| Notification {
+                id: r.id,
+                tenant_id: r.tenant_id,
+                user_id: r.user_id,
+                channel: r.channel.parse().unwrap_or(NotificationChannel::Email),
+                priority: r.priority.parse().unwrap_or_default(),
+                status: r.status.parse().unwrap_or(NotificationStatus::Queued),
+                template_key: r.template_key.unwrap_or_default(),
+                subject: r.subject,
+                body: r.body,
+                recipient: r.recipient,
+                created_at: r.created_at,
+                sent_at: r.sent_at,
+                read_at: None,
+                deleted_at: None,
+                deleted_by: None,
+                last_error: None,
+                attempts: r.attempts,
+            })
+            .collect())
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        crate::domain::notification::service::NotificationService::destroy(self, id, tenant_id)
+            .await
     }
 }
 

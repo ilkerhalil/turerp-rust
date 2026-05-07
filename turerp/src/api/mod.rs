@@ -504,6 +504,10 @@ use utoipa::OpenApi;
         crate::api::v1::notifications::mark_notification_read,
         crate::api::v1::notifications::mark_all_read,
         crate::api::v1::notifications::retry_notification,
+        crate::api::v1::notifications::soft_delete_notification,
+        crate::api::v1::notifications::restore_notification,
+        crate::api::v1::notifications::list_deleted_notifications,
+        crate::api::v1::notifications::destroy_notification,
         // Reports
         crate::api::v1::reports::generate_report,
         crate::api::v1::reports::list_reports,
@@ -620,6 +624,8 @@ use utoipa::OpenApi;
             crate::api::v1::notifications::InAppNotificationResponse,
             crate::api::v1::notifications::UnreadCountResponse,
             crate::api::v1::notifications::MarkReadResponse,
+            crate::domain::notification::model::NotificationResponse,
+            crate::domain::notification::model::NotificationPreferenceResponse,
             // Reports
             crate::api::v1::reports::GenerateReportRequest,
             crate::api::v1::reports::ReportMetaResponse,

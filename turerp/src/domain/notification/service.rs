@@ -230,6 +230,11 @@ impl NotificationService {
         limit: i64,
         offset: i64,
     ) -> Result<PaginatedResult<NotificationResponse>, ApiError> {
+        if limit <= 0 {
+            return Err(ApiError::BadRequest(
+                "Limit must be greater than 0".to_string(),
+            ));
+        }
         let result = self
             .notification_repo
             .find_by_user(tenant_id, user_id, channel, limit, offset)
