@@ -26154,10 +26154,10 @@
         "type": "string",
         "description": "Entity types that can have workflow approval processes",
         "enum": [
-          "Invoice",
-          "PurchaseOrder",
-          "Expense",
-          "StockTransfer"
+          "invoice",
+          "purchase_order",
+          "expense",
+          "stock_transfer"
         ]
       },
       "WorkflowInstance": {
@@ -26319,11 +26319,11 @@
         "type": "string",
         "description": "Overall status of a workflow instance",
         "enum": [
-          "Draft",
-          "Pending",
-          "Approved",
-          "Rejected",
-          "Completed"
+          "draft",
+          "pending",
+          "approved",
+          "rejected",
+          "completed"
         ]
       },
       "WorkflowStep": {
@@ -26442,9 +26442,9 @@
         "type": "string",
         "description": "Status of an individual workflow step",
         "enum": [
-          "Pending",
-          "Approved",
-          "Rejected"
+          "pending",
+          "approved",
+          "rejected"
         ]
       },
       "WorkflowTemplate": {
