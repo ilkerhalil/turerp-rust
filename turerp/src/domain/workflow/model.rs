@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 
 /// Entity types that can have workflow approval processes
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum WorkflowEntityType {
     Invoice,
     PurchaseOrder,
@@ -40,6 +41,7 @@ impl std::str::FromStr for WorkflowEntityType {
 
 /// Overall status of a workflow instance
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum WorkflowStatus {
     #[default]
     Draft,
@@ -78,6 +80,7 @@ impl std::str::FromStr for WorkflowStatus {
 
 /// Status of an individual workflow step
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, ToSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum WorkflowStepStatus {
     #[default]
     Pending,

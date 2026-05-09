@@ -49,18 +49,24 @@ pub mod app {
     use crate::domain::audit::repository::BoxAuditLogRepository;
     use crate::domain::audit::service::AuditService;
     use crate::domain::auth::AuthService;
+    use crate::domain::bank::repository::BoxBankRepository;
+    use crate::domain::bank::service::BankService;
     use crate::domain::cari::repository::BoxCariRepository;
     use crate::domain::cari::service::CariService;
     use crate::domain::chart_of_accounts::repository::BoxChartAccountRepository;
     use crate::domain::chart_of_accounts::service::ChartOfAccountsService;
     use crate::domain::company::repository::BoxCompanyRepository;
     use crate::domain::company::service::CompanyService;
+    use crate::domain::cost_center::repository::BoxCostCenterRepository;
+    use crate::domain::cost_center::service::CostCenterService;
     use crate::domain::crm::repository::{
         BoxCampaignRepository, BoxLeadRepository, BoxOpportunityRepository, BoxTicketRepository,
     };
     use crate::domain::crm::service::CrmService;
     use crate::domain::custom_field::repository::BoxCustomFieldRepository;
     use crate::domain::custom_field::service::CustomFieldService;
+    use crate::domain::dashboard::repository::BoxDashboardRepository;
+    use crate::domain::dashboard::service::DashboardService;
     use crate::domain::feature::service::FeatureFlagService;
     use crate::domain::feature::FeatureFlagRepository;
     use crate::domain::hr::repository::{
@@ -98,6 +104,8 @@ pub mod app {
         BoxStockLevelRepository, BoxStockMovementRepository, BoxWarehouseRepository,
     };
     use crate::domain::stock::service::StockService;
+    use crate::domain::subscription::repository::BoxSubscriptionRepository;
+    use crate::domain::subscription::service::SubscriptionService;
     use crate::domain::tax::repository::{BoxTaxPeriodRepository, BoxTaxRateRepository};
     use crate::domain::tax::service::TaxService;
     use crate::domain::tenant::repository::BoxTenantRepository;
@@ -109,6 +117,8 @@ pub mod app {
     use crate::domain::user::service::UserService;
     use crate::domain::webhook::repository::{BoxWebhookDeliveryRepository, BoxWebhookRepository};
     use crate::domain::webhook::service::WebhookService;
+    use crate::domain::workflow::repository::BoxWorkflowRepository;
+    use crate::domain::workflow::service::WorkflowService;
     use crate::i18n::I18n;
     use crate::utils::jwt::JwtService;
 
@@ -118,9 +128,11 @@ pub mod app {
     };
     use crate::domain::assets::repository::InMemoryAssetsRepository;
     use crate::domain::audit::repository::InMemoryAuditLogRepository;
+    use crate::domain::bank::repository::InMemoryBankRepository;
     use crate::domain::cari::repository::InMemoryCariRepository;
     use crate::domain::chart_of_accounts::repository::InMemoryChartAccountRepository;
     use crate::domain::company::repository::InMemoryCompanyRepository;
+    use crate::domain::cost_center::repository::InMemoryCostCenterRepository;
     use crate::domain::crm::repository::{
         InMemoryCampaignRepository, InMemoryLeadRepository, InMemoryOpportunityRepository,
         InMemoryTicketRepository,
@@ -131,6 +143,7 @@ pub mod app {
     };
     use crate::domain::currency::service::CurrencyService;
     use crate::domain::custom_field::repository::InMemoryCustomFieldRepository;
+    use crate::domain::dashboard::repository::InMemoryDashboardRepository;
     use crate::domain::feature::repository::InMemoryFeatureFlagRepository;
     use crate::domain::hr::repository::{
         InMemoryAttendanceRepository, InMemoryEmployeeRepository, InMemoryLeaveRequestRepository,
@@ -163,12 +176,14 @@ pub mod app {
     use crate::domain::stock::repository::{
         InMemoryStockLevelRepository, InMemoryStockMovementRepository, InMemoryWarehouseRepository,
     };
+    use crate::domain::subscription::repository::InMemorySubscriptionRepository;
     use crate::domain::tax::repository::{InMemoryTaxPeriodRepository, InMemoryTaxRateRepository};
     use crate::domain::tenant::repository::InMemoryTenantRepository;
     use crate::domain::user::repository::InMemoryUserRepository;
     use crate::domain::webhook::repository::{
         InMemoryWebhookDeliveryRepository, InMemoryWebhookRepository,
     };
+    use crate::domain::workflow::repository::InMemoryWorkflowRepository;
 
     #[cfg(feature = "postgres")]
     use crate::common::PostgresSearchService;
@@ -187,9 +202,13 @@ pub mod app {
     #[cfg(feature = "postgres")]
     use crate::domain::audit::postgres_repository::PostgresAuditLogRepository;
     #[cfg(feature = "postgres")]
+    use crate::domain::bank::postgres_repository::PostgresBankRepository;
+    #[cfg(feature = "postgres")]
     use crate::domain::cari::postgres_repository::PostgresCariRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::company::postgres_repository::PostgresCompanyRepository;
+    #[cfg(feature = "postgres")]
+    use crate::domain::cost_center::postgres_repository::PostgresCostCenterRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::crm::postgres_repository::{
         PostgresCampaignRepository, PostgresLeadRepository, PostgresOpportunityRepository,
@@ -199,6 +218,8 @@ pub mod app {
     use crate::domain::currency::postgres_repository::{
         PostgresCurrencyRepository, PostgresExchangeRateRepository,
     };
+    #[cfg(feature = "postgres")]
+    use crate::domain::dashboard::postgres_repository::PostgresDashboardRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::efatura::postgres_repository::PostgresEFaturaRepository;
     #[cfg(feature = "postgres")]
@@ -245,6 +266,8 @@ pub mod app {
         PostgresStockLevelRepository, PostgresStockMovementRepository, PostgresWarehouseRepository,
     };
     #[cfg(feature = "postgres")]
+    use crate::domain::subscription::postgres_repository::PostgresSubscriptionRepository;
+    #[cfg(feature = "postgres")]
     use crate::domain::tax::postgres_repository::{
         PostgresTaxPeriodRepository, PostgresTaxRateRepository,
     };
@@ -256,6 +279,8 @@ pub mod app {
     use crate::domain::webhook::postgres_repository::{
         PostgresWebhookDeliveryRepository, PostgresWebhookRepository,
     };
+    #[cfg(feature = "postgres")]
+    use crate::domain::workflow::postgres_repository::PostgresWorkflowRepository;
     #[cfg(feature = "postgres")]
     use sqlx::PgPool;
 
@@ -284,7 +309,13 @@ pub mod app {
         pub product_service: web::Data<ProductService>,
         pub purchase_service: web::Data<PurchaseService>,
         pub audit_service: web::Data<AuditService>,
+        pub bank_service: web::Data<BankService>,
+        pub cost_center_service: web::Data<CostCenterService>,
+        pub dashboard_service: web::Data<DashboardService>,
+        pub file_storage: web::Data<dyn crate::common::file_storage::FileStorage>,
         pub qc_service: web::Data<crate::domain::manufacturing::QualityControlService>,
+        pub subscription_service: web::Data<SubscriptionService>,
+        pub workflow_service: web::Data<WorkflowService>,
         pub settings_service: web::Data<crate::domain::settings::SettingsService>,
         pub api_key_service: web::Data<crate::domain::api_key::ApiKeyService>,
         pub job_scheduler: web::Data<dyn JobScheduler>,
@@ -582,6 +613,35 @@ pub mod app {
             let search_service: Arc<dyn SearchService> =
                 Arc::new(InMemorySearchService::new()) as Arc<dyn SearchService>;
 
+            // Bank
+            let bank_repo = Arc::new(InMemoryBankRepository::new()) as BoxBankRepository;
+            let bank_service = BankService::new(bank_repo);
+
+            // Cost Centers
+            let cost_center_repo =
+                Arc::new(InMemoryCostCenterRepository::new()) as BoxCostCenterRepository;
+            let cost_center_service = CostCenterService::new(cost_center_repo);
+
+            // Dashboard
+            let dashboard_repo =
+                Arc::new(InMemoryDashboardRepository::new()) as BoxDashboardRepository;
+            let dashboard_service = DashboardService::new(dashboard_repo, cache_service.clone());
+
+            // Subscriptions
+            let subscription_repo =
+                Arc::new(InMemorySubscriptionRepository::new()) as BoxSubscriptionRepository;
+            let subscription_service = SubscriptionService::new(subscription_repo);
+
+            // Workflows
+            let workflow_repo =
+                Arc::new(InMemoryWorkflowRepository::new()) as BoxWorkflowRepository;
+            let workflow_service = WorkflowService::new(workflow_repo, notification_service.clone(), job_scheduler.clone());
+
+            // File Storage
+            let file_storage: Arc<dyn crate::common::file_storage::FileStorage> =
+                Arc::new(crate::common::file_storage::LocalFileStorage::new("/tmp/turerp-test-files"))
+                    as Arc<dyn crate::common::file_storage::FileStorage>;
+
             // Rate limit stats
             let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
 
@@ -608,6 +668,10 @@ pub mod app {
                 product_service,
                 purchase_service,
                 audit_service,
+                bank_service,
+                cost_center_service,
+                dashboard_service,
+                file_storage,
                 qc_service,
                 settings_service,
                 api_key_service,
@@ -615,7 +679,9 @@ pub mod app {
                 event_bus,
                 notification_service,
                 report_engine,
+                subscription_service,
                 tracing_service,
+                workflow_service,
                 db_router,
                 tax_service,
                 currency_service,
@@ -655,6 +721,10 @@ pub mod app {
             product_service,
             purchase_service,
             audit_service,
+            bank_service,
+            cost_center_service,
+            dashboard_service,
+            file_storage,
             qc_service,
             settings_service,
             api_key_service,
@@ -662,7 +732,9 @@ pub mod app {
             event_bus,
             notification_service,
             report_engine,
+            subscription_service,
             tracing_service,
+            workflow_service,
             db_router,
             tax_service,
             currency_service,
@@ -699,6 +771,10 @@ pub mod app {
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
+            bank_service: web::Data::new(bank_service),
+            cost_center_service: web::Data::new(cost_center_service),
+            dashboard_service: web::Data::new(dashboard_service),
+            file_storage: web::Data::from(file_storage),
             qc_service: web::Data::new(qc_service),
             settings_service: web::Data::new(settings_service),
             api_key_service: web::Data::new(api_key_service),
@@ -706,7 +782,9 @@ pub mod app {
             event_bus: web::Data::from(event_bus),
             notification_service: web::Data::from(notification_service),
             report_engine: web::Data::from(report_engine),
+            subscription_service: web::Data::new(subscription_service),
             tracing_service: web::Data::from(tracing_service),
+            workflow_service: web::Data::new(workflow_service),
             db_router: web::Data::from(db_router),
             cdc_listener: None,
             i18n: web::Data::new(i18n),
@@ -913,6 +991,25 @@ pub mod app {
         let audit_repo = PostgresAuditLogRepository::new(pool.clone()).into_boxed();
         let audit_service = AuditService::new(audit_repo);
 
+        // Bank - PostgreSQL
+        let bank_repo = PostgresBankRepository::new(pool.clone()).into_boxed();
+        let bank_service = BankService::new(bank_repo);
+
+        // Cost Centers - PostgreSQL
+        let cost_center_repo = PostgresCostCenterRepository::new(pool.clone()).into_boxed();
+        let cost_center_service = CostCenterService::new(cost_center_repo);
+
+        // Dashboard - PostgreSQL
+        let dashboard_repo = PostgresDashboardRepository::new(pool.clone()).into_boxed();
+        let dashboard_service = DashboardService::new(dashboard_repo, cache_service.clone());
+
+        // Subscriptions - PostgreSQL
+        let subscription_repo = PostgresSubscriptionRepository::new(pool.clone()).into_boxed();
+        let subscription_service = SubscriptionService::new(subscription_repo);
+
+        // Workflows - PostgreSQL
+        let workflow_repo = PostgresWorkflowRepository::new(pool.clone()).into_boxed();
+
         // API Keys - PostgreSQL
         let api_key_repo = PostgresApiKeyRepository::new(pool.clone()).into_boxed();
         let api_key_service = crate::domain::api_key::ApiKeyService::new(api_key_repo);
@@ -940,6 +1037,12 @@ pub mod app {
                 job_scheduler.clone(),
             ),
         ) as Arc<dyn NotificationService>;
+
+        let workflow_service = WorkflowService::new(
+            workflow_repo,
+            notification_service.clone(),
+            job_scheduler.clone(),
+        );
 
         // Report Engine - in-memory
         let report_engine = Arc::new(InMemoryReportEngine::new()) as Arc<dyn ReportEngine>;
@@ -1026,6 +1129,13 @@ pub mod app {
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
+            bank_service: web::Data::new(bank_service),
+            cost_center_service: web::Data::new(cost_center_service),
+            dashboard_service: web::Data::new(dashboard_service),
+            file_storage: web::Data::from(Arc::new(
+                crate::common::file_storage::LocalFileStorage::new("/tmp/turerp-test-files"),
+            )
+                as Arc<dyn crate::common::file_storage::FileStorage>),
             qc_service: web::Data::new(qc_service),
             settings_service: web::Data::new(settings_service),
             api_key_service: web::Data::new(api_key_service),
@@ -1033,7 +1143,9 @@ pub mod app {
             event_bus: web::Data::from(event_bus),
             notification_service: web::Data::from(notification_service),
             report_engine: web::Data::from(report_engine),
+            subscription_service: web::Data::new(subscription_service),
             tracing_service: web::Data::from(tracing_service),
+            workflow_service: web::Data::new(workflow_service),
             db_router: web::Data::from(db_router),
             tax_service: web::Data::new(tax_service),
             currency_service: web::Data::new(currency_service),
@@ -1081,6 +1193,10 @@ pub mod app {
             product_service,
             purchase_service,
             audit_service,
+            bank_service,
+            cost_center_service,
+            dashboard_service,
+            file_storage,
             qc_service,
             settings_service,
             api_key_service,
@@ -1088,7 +1204,9 @@ pub mod app {
             event_bus,
             notification_service,
             report_engine,
+            subscription_service,
             tracing_service,
+            workflow_service,
             db_router,
             tax_service,
             currency_service,
@@ -1144,6 +1262,10 @@ pub mod app {
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
+            bank_service: web::Data::new(bank_service),
+            cost_center_service: web::Data::new(cost_center_service),
+            dashboard_service: web::Data::new(dashboard_service),
+            file_storage: web::Data::from(file_storage),
             qc_service: web::Data::new(qc_service),
             settings_service: web::Data::new(settings_service),
             api_key_service: web::Data::new(api_key_service),
@@ -1151,7 +1273,9 @@ pub mod app {
             event_bus: web::Data::from(event_bus),
             notification_service: web::Data::from(notification_service),
             report_engine: web::Data::from(report_engine),
+            subscription_service: web::Data::new(subscription_service),
             tracing_service: web::Data::from(tracing_service),
+            workflow_service: web::Data::new(workflow_service),
             db_router: web::Data::from(db_router),
             tax_service: web::Data::new(tax_service),
             currency_service: web::Data::new(currency_service),

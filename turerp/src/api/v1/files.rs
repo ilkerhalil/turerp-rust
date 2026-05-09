@@ -264,7 +264,7 @@ pub async fn list_files(
 /// Configure file storage routes
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope("/files")
+        web::scope("/v1/files")
             .route("", web::post().to(upload_file))
             .route("", web::get().to(list_files))
             .route("/{id}", web::get().to(get_file))
