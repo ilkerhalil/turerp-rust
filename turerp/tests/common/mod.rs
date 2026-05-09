@@ -200,6 +200,37 @@ macro_rules! register_user {
     }};
 }
 
+/// Helper macro to create a workflow template for testing
+#[macro_export]
+macro_rules! create_workflow_template {
+    ($app:expr, $token:expr) => {{
+        let req = auth_request(
+            actix_web::http::Method::POST,
+            "/api/v1/workflows/templates",
+            $token,
+        )
+        .set_json(json!({
+            "name": "Purchase Order Approval",
+            "description": "2-step approval workflow",
+            "entity_type": "purchase_order",
+            "config_json": {
+                "steps": [
+                    {"step_number": 1, "step_name": "Manager Review", "approver_role": "manager"},
+                    {"step_number": 2, "step_name": "Admin Approval", "approver_role": "admin"}
+                ]
+            }
+        }))
+        .to_request();
+
+        let resp = test::call_service($app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED, "Template creation failed");
+
+        let body = to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        json["id"].as_i64().unwrap()
+    }};
+}
+
 #[allow(dead_code)]
 pub fn auth_request(method: actix_web::http::Method, uri: &str, token: &str) -> test::TestRequest {
     test::TestRequest::default()
