@@ -30,6 +30,8 @@ struct SubscriptionPlanRow {
     is_active: bool,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<SubscriptionPlanRow> for SubscriptionPlan {
@@ -55,6 +57,8 @@ impl From<SubscriptionPlanRow> for SubscriptionPlan {
             is_active: row.is_active,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -73,6 +77,8 @@ struct SubscriptionRow {
     next_billing_date: Option<NaiveDate>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<SubscriptionRow> for Subscription {
@@ -99,6 +105,8 @@ impl From<SubscriptionRow> for Subscription {
             next_billing_date: row.next_billing_date,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -169,7 +177,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
             r#"
             INSERT INTO subscription_plans (tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-            RETURNING id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at
+            RETURNING id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -194,9 +202,9 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
     ) -> Result<Option<SubscriptionPlan>, ApiError> {
         let result: Option<SubscriptionPlanRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at
+            SELECT id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at, deleted_at, deleted_by
             FROM subscription_plans
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -214,9 +222,9 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
     ) -> Result<Vec<SubscriptionPlan>, ApiError> {
         let rows: Vec<SubscriptionPlanRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at
+            SELECT id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at, deleted_at, deleted_by
             FROM subscription_plans
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -248,8 +256,8 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
                 features = COALESCE($6, features),
                 is_active = COALESCE($7, is_active),
                 updated_at = NOW()
-            WHERE id = $8 AND tenant_id = $9
-            RETURNING id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at
+            WHERE id = $8 AND tenant_id = $9 AND deleted_at IS NULL
+            RETURNING id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.name)
@@ -271,9 +279,10 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
     async fn delete_plan(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM subscription_plans
-            WHERE id = $1 AND tenant_id = $2
-              AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE plan_id = $1 AND tenant_id = $2)
+            UPDATE subscription_plans
+            SET deleted_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+              AND NOT EXISTS (SELECT 1 FROM subscriptions WHERE plan_id = $1 AND tenant_id = $2 AND deleted_at IS NULL)
             "#,
         )
         .bind(id)
@@ -303,7 +312,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
             r#"
             INSERT INTO subscriptions (tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, NOW())
-            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at
+            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -328,9 +337,9 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
     ) -> Result<Option<Subscription>, ApiError> {
         let result: Option<SubscriptionRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at
+            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
             FROM subscriptions
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -348,9 +357,9 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
     ) -> Result<Vec<Subscription>, ApiError> {
         let rows: Vec<SubscriptionRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at
+            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
             FROM subscriptions
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -371,9 +380,9 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
 
         let rows: Vec<SubscriptionRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at
+            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
             FROM subscriptions
-            WHERE customer_id = $1 AND tenant_id = $2 AND status = $3
+            WHERE customer_id = $1 AND tenant_id = $2 AND status = $3 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -406,8 +415,8 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
                 auto_renew = COALESCE($5, auto_renew),
                 next_billing_date = COALESCE($6, next_billing_date),
                 updated_at = NOW()
-            WHERE id = $7 AND tenant_id = $8
-            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at
+            WHERE id = $7 AND tenant_id = $8 AND deleted_at IS NULL
+            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(update.plan_id)
@@ -428,8 +437,9 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
     async fn delete_subscription(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM subscriptions
-            WHERE id = $1 AND tenant_id = $2
+            UPDATE subscriptions
+            SET deleted_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -456,10 +466,10 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
 
         let rows: Vec<SubscriptionRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at
+            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
             FROM subscriptions
             WHERE tenant_id = $1 AND status = $2 AND auto_renew = true
-              AND next_billing_date IS NOT NULL AND next_billing_date <= $3
+              AND next_billing_date IS NOT NULL AND next_billing_date <= $3 AND deleted_at IS NULL
             ORDER BY next_billing_date ASC
             "#,
         )
@@ -477,9 +487,9 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
         // Get the subscription and plan billing cycle
         let sub: SubscriptionRow = sqlx::query_as(
             r#"
-            SELECT s.id, s.tenant_id, s.customer_id, s.plan_id, s.start_date, s.end_date, s.status, s.auto_renew, s.last_billed_at, s.next_billing_date, s.created_at, s.updated_at
+            SELECT s.id, s.tenant_id, s.customer_id, s.plan_id, s.start_date, s.end_date, s.status, s.auto_renew, s.last_billed_at, s.next_billing_date, s.created_at, s.updated_at, s.deleted_at, s.deleted_by
             FROM subscriptions s
-            WHERE s.id = $1 AND s.tenant_id = $2
+            WHERE s.id = $1 AND s.tenant_id = $2 AND s.deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -490,7 +500,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
 
         let plan_row: (String,) = sqlx::query_as(
             r#"
-            SELECT billing_cycle FROM subscription_plans WHERE id = $1 AND tenant_id = $2
+            SELECT billing_cycle FROM subscription_plans WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(sub.plan_id)
@@ -535,8 +545,8 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
                 next_billing_date = $1,
                 end_date = $2,
                 updated_at = NOW()
-            WHERE id = $3 AND tenant_id = $4
-            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at
+            WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL
+            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(new_next)

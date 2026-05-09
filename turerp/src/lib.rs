@@ -1108,7 +1108,7 @@ pub mod app {
         let db_pool = web::Data::new(Arc::new(pool));
 
         // Register webhook subscriber on event bus
-        futures::executor::block_on(async {
+        tokio::runtime::Handle::current().block_on(async {
             event_bus
                 .subscribe(Arc::new(
                     crate::domain::webhook::subscriber::WebhookSubscriber::new(Arc::new(

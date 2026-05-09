@@ -370,13 +370,13 @@ impl Default for Config {
             environment: Environment::Development,
             server: ServerConfig::default(),
             database: DatabaseConfig {
-                url: "postgres://postgres:postgres@localhost:5432/turerp".to_string(),
+                url: String::new(),
                 max_connections: 10,
                 min_connections: 5,
             },
             redis: RedisConfig::default(),
             jwt: JwtConfig {
-                secret: "dev-secret-do-not-use-in-production".to_string(),
+                secret: String::new(),
                 access_token_expiration: 3600,
                 refresh_token_expiration: 604800,
             },
@@ -541,7 +541,14 @@ mod tests {
 
     #[test]
     fn test_tenant_database_url() {
-        let config = Config::default();
+        let config = Config {
+            database: DatabaseConfig {
+                url: "postgres://postgres:postgres@localhost:5432/turerp".to_string(),
+                max_connections: 10,
+                min_connections: 5,
+            },
+            ..Default::default()
+        };
         let tenant_url = config.tenant_database_url("tenant_abc");
         assert!(tenant_url.contains("tenant_abc"));
         assert!(tenant_url.contains("turerp") || tenant_url.contains("postgres"));
@@ -706,7 +713,14 @@ mod tests {
 
     #[test]
     fn test_config_master_database_url() {
-        let config = Config::default();
+        let config = Config {
+            database: DatabaseConfig {
+                url: "postgres://user:pass@host/db".to_string(),
+                max_connections: 10,
+                min_connections: 5,
+            },
+            ..Default::default()
+        };
         let url = config.master_database_url();
         assert!(!url.is_empty());
     }

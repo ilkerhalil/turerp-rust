@@ -27,6 +27,8 @@ struct WorkflowTemplateRow {
     config_json: serde_json::Value,
     is_active: bool,
     created_at: DateTime<Utc>,
+    deleted_at: Option<DateTime<Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<WorkflowTemplateRow> for WorkflowTemplate {
@@ -48,6 +50,8 @@ impl From<WorkflowTemplateRow> for WorkflowTemplate {
             config_json: row.config_json,
             is_active: row.is_active,
             created_at: row.created_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -195,7 +199,7 @@ impl WorkflowRepository for PostgresWorkflowRepository {
             r#"
             INSERT INTO workflow_templates (tenant_id, name, description, entity_type, config_json, is_active)
             VALUES ($1, $2, $3, $4, $5, true)
-            RETURNING id, tenant_id, name, description, entity_type, config_json, is_active, created_at
+            RETURNING id, tenant_id, name, description, entity_type, config_json, is_active, created_at, deleted_at, deleted_by
             "#
         )
         .bind(tenant_id)
@@ -216,9 +220,9 @@ impl WorkflowRepository for PostgresWorkflowRepository {
     ) -> Result<Option<WorkflowTemplate>, ApiError> {
         let row: Option<WorkflowTemplateRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, entity_type, config_json, is_active, created_at
+            SELECT id, tenant_id, name, description, entity_type, config_json, is_active, created_at, deleted_at, deleted_by
             FROM workflow_templates
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -232,9 +236,9 @@ impl WorkflowRepository for PostgresWorkflowRepository {
     async fn find_templates(&self, tenant_id: i64) -> Result<Vec<WorkflowTemplate>, ApiError> {
         let rows: Vec<WorkflowTemplateRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, entity_type, config_json, is_active, created_at
+            SELECT id, tenant_id, name, description, entity_type, config_json, is_active, created_at, deleted_at, deleted_by
             FROM workflow_templates
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -248,8 +252,9 @@ impl WorkflowRepository for PostgresWorkflowRepository {
     async fn delete_template(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM workflow_templates
-            WHERE id = $1 AND tenant_id = $2
+            UPDATE workflow_templates
+            SET deleted_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)

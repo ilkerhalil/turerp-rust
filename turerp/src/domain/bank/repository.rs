@@ -615,6 +615,8 @@ impl BankRepository for InMemoryBankRepository {
             is_active: create.is_active,
             created_at: chrono::Utc::now(),
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.rules.insert(id, rule.clone());
@@ -626,7 +628,7 @@ impl BankRepository for InMemoryBankRepository {
         Ok(inner
             .rules
             .values()
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .cloned()
             .collect())
     }
@@ -636,7 +638,7 @@ impl BankRepository for InMemoryBankRepository {
         Ok(inner
             .rules
             .values()
-            .filter(|r| r.tenant_id == tenant_id && r.is_active)
+            .filter(|r| r.tenant_id == tenant_id && r.is_active && !r.is_deleted())
             .cloned()
             .collect())
     }
@@ -650,7 +652,7 @@ impl BankRepository for InMemoryBankRepository {
         Ok(inner
             .rules
             .get(&id)
-            .filter(|r| r.tenant_id == tenant_id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
             .cloned())
     }
 
@@ -664,6 +666,7 @@ impl BankRepository for InMemoryBankRepository {
         let rule = inner
             .rules
             .get_mut(&id)
+            .filter(|r| !r.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Rule {} not found", id)))?;
 
         if rule.tenant_id != tenant_id {
@@ -694,14 +697,14 @@ impl BankRepository for InMemoryBankRepository {
         let mut inner = self.inner.lock();
         let rule = inner
             .rules
-            .get(&id)
+            .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Rule {} not found", id)))?;
 
         if rule.tenant_id != tenant_id {
             return Err(ApiError::NotFound(format!("Rule {} not found", id)));
         }
 
-        inner.rules.remove(&id);
+        rule.mark_deleted(0); // system delete in in-memory repo
         Ok(())
     }
 }

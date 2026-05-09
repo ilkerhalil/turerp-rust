@@ -225,7 +225,7 @@ pub async fn soft_delete_currency(
         Err(e) => return Ok(e.to_http_response(i18n, locale.as_str())),
     };
 
-    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    let deleted_by = admin_user.0.user_id()?;
     match currency_service
         .soft_delete_currency(currency.id, admin_user.0.tenant_id, deleted_by)
         .await
@@ -470,7 +470,7 @@ pub async fn soft_delete_exchange_rate(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    let deleted_by = admin_user.0.user_id()?;
     match currency_service
         .soft_delete_exchange_rate(id, admin_user.0.tenant_id, deleted_by)
         .await

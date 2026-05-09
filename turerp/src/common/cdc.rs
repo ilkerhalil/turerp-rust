@@ -205,7 +205,7 @@ pub fn parse_cdc_event(payload: Value) -> Result<CdcEvent, String> {
     let tenant_id = payload
         .get("tenant_id")
         .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+        .ok_or("Missing 'tenant_id' in CDC payload")?;
 
     let old_data = payload
         .get("old")
@@ -366,7 +366,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_cdc_event_missing_tenant_id_defaults_to_zero() {
+    fn test_parse_cdc_event_missing_tenant_id_fails() {
         let payload = json!({
             "table": "stock_movements",
             "operation": "INSERT",
@@ -374,8 +374,7 @@ mod tests {
             "old": null,
             "new": {"product_id": 1}
         });
-        let event = parse_cdc_event(payload).unwrap();
-        assert_eq!(event.tenant_id, 0);
+        assert!(parse_cdc_event(payload).is_err());
     }
 
     #[test]

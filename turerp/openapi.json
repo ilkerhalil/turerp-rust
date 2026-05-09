@@ -6691,16 +6691,64 @@
         ],
         "summary": "Get all KPIs",
         "operationId": "get_all_kpis",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DashboardFilter"
-              }
+        "parameters": [
+          {
+            "name": "date_from",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/DateTime"
+                }
+              ],
+              "nullable": true
             }
           },
-          "required": true
-        },
+          {
+            "name": "date_to",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/DateTime"
+                }
+              ],
+              "nullable": true
+            }
+          },
+          {
+            "name": "company_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "branch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "product_category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "All KPIs",
@@ -6739,18 +6787,64 @@
             "schema": {
               "type": "string"
             }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DashboardFilter"
-              }
+          },
+          {
+            "name": "date_from",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/DateTime"
+                }
+              ],
+              "nullable": true
             }
           },
-          "required": true
-        },
+          {
+            "name": "date_to",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/DateTime"
+                }
+              ],
+              "nullable": true
+            }
+          },
+          {
+            "name": "company_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "branch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "product_category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Single KPI",
@@ -9250,7 +9344,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Attendance soft-deleted"
           },
           "403": {
@@ -9466,7 +9560,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Employee soft-deleted"
           },
           "403": {
@@ -9805,7 +9899,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Leave request soft-deleted"
           },
           "403": {
@@ -9957,7 +10051,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Leave type soft-deleted"
           },
           "403": {
@@ -10187,7 +10281,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Payroll soft-deleted"
           },
           "403": {
@@ -24094,6 +24188,19 @@
           "created_at": {
             "$ref": "#/components/schemas/DateTime"
           },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
           "id": {
             "type": "integer",
             "format": "int64"
@@ -24510,6 +24617,19 @@
             "type": "integer",
             "format": "int64"
           },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
           "end_date": {
             "allOf": [
               {
@@ -24692,6 +24812,19 @@
           },
           "currency": {
             "type": "string"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           },
           "description": {
             "type": "string",
@@ -26331,6 +26464,19 @@
           "config_json": {},
           "created_at": {
             "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           },
           "description": {
             "type": "string"

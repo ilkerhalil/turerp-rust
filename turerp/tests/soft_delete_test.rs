@@ -1632,7 +1632,7 @@ async fn test_employee_soft_delete_and_restore() {
         .to_request();
 
     let resp = test::call_service(&app, delete_req).await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // Verify not found
     let get_req = test::TestRequest::get()

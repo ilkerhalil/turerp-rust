@@ -7,6 +7,7 @@ use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::common::SoftDeletable;
 use crate::domain::subscription::model::{
     BillingCycle, CreatePlan, CreateSubscription, Subscription, SubscriptionInvoice,
     SubscriptionInvoiceStatus, SubscriptionPlan, SubscriptionStatus, UpdatePlan,
@@ -145,6 +146,8 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
             is_active: create.is_active,
             created_at: Utc::now(),
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.plans.insert(id, plan.clone());
@@ -160,7 +163,7 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
         Ok(inner
             .plans
             .get(&id)
-            .filter(|p| p.tenant_id == tenant_id)
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
             .cloned())
     }
 
@@ -172,7 +175,7 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
         Ok(inner
             .plans
             .values()
-            .filter(|p| p.tenant_id == tenant_id)
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
             .cloned()
             .collect())
     }
@@ -188,7 +191,7 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
         let plan = inner
             .plans
             .get_mut(&id)
-            .filter(|p| p.tenant_id == tenant_id)
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Plan {} not found", id)))?;
 
         if let Some(name) = update.name {
@@ -220,20 +223,17 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
     async fn delete_plan(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
 
-        if !inner
+        let _plan = inner
             .plans
             .get(&id)
-            .map(|p| p.tenant_id == tenant_id)
-            .unwrap_or(false)
-        {
-            return Err(ApiError::NotFound(format!("Plan {} not found", id)));
-        }
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
+            .ok_or_else(|| ApiError::NotFound(format!("Plan {} not found", id)))?;
 
         // Prevent deleting a plan that has active subscriptions
         let has_subscriptions = inner
             .subscriptions
             .values()
-            .any(|s| s.plan_id == id && s.tenant_id == tenant_id);
+            .any(|s| s.plan_id == id && s.tenant_id == tenant_id && !s.is_deleted());
 
         if has_subscriptions {
             return Err(ApiError::BadRequest(
@@ -241,7 +241,7 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
             ));
         }
 
-        inner.plans.remove(&id);
+        inner.plans.get_mut(&id).unwrap().mark_deleted(0);
         Ok(())
     }
 
@@ -266,6 +266,8 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
             next_billing_date: create.next_billing_date,
             created_at: Utc::now(),
             updated_at: None,
+            deleted_at: None,
+            deleted_by: None,
         };
 
         inner.subscriptions.insert(id, sub.clone());
@@ -281,7 +283,7 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
         Ok(inner
             .subscriptions
             .get(&id)
-            .filter(|s| s.tenant_id == tenant_id)
+            .filter(|s| s.tenant_id == tenant_id && !s.is_deleted())
             .cloned())
     }
 
@@ -293,7 +295,7 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
         Ok(inner
             .subscriptions
             .values()
-            .filter(|s| s.tenant_id == tenant_id)
+            .filter(|s| s.tenant_id == tenant_id && !s.is_deleted())
             .cloned()
             .collect())
     }
@@ -311,6 +313,7 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
                 s.customer_id == customer_id
                     && s.tenant_id == tenant_id
                     && s.status == SubscriptionStatus::Active
+                    && !s.is_deleted()
             })
             .cloned()
             .collect())
@@ -327,7 +330,7 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
         let sub = inner
             .subscriptions
             .get_mut(&id)
-            .filter(|s| s.tenant_id == tenant_id)
+            .filter(|s| s.tenant_id == tenant_id && !s.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Subscription {} not found", id)))?;
 
         if let Some(plan_id) = update.plan_id {
@@ -356,20 +359,13 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
     async fn delete_subscription(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
 
-        if !inner
+        let sub = inner
             .subscriptions
-            .get(&id)
-            .map(|s| s.tenant_id == tenant_id)
-            .unwrap_or(false)
-        {
-            return Err(ApiError::NotFound(format!("Subscription {} not found", id)));
-        }
+            .get_mut(&id)
+            .filter(|s| s.tenant_id == tenant_id && !s.is_deleted())
+            .ok_or_else(|| ApiError::NotFound(format!("Subscription {} not found", id)))?;
 
-        inner.subscriptions.remove(&id);
-        // Also remove associated invoices
-        inner
-            .invoices
-            .retain(|_, inv| inv.subscription_id != id || inv.tenant_id != tenant_id);
+        sub.mark_deleted(0);
         Ok(())
     }
 

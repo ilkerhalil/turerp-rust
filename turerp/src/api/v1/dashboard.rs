@@ -29,7 +29,7 @@ fn default_limit() -> i64 {
     get,
     path = "/api/v1/dashboard/kpis",
     tag = "Dashboard",
-    request_body = DashboardFilter,
+    params(DashboardFilter),
     responses(
         (status = 200, description = "All KPIs", body = crate::domain::dashboard::model::KpiResponse),
         (status = 401, description = "Not authenticated")
@@ -39,7 +39,7 @@ fn default_limit() -> i64 {
 pub async fn get_all_kpis(
     auth_user: AuthUser,
     dashboard_service: web::Data<DashboardService>,
-    filter: web::Json<DashboardFilter>,
+    filter: web::Query<DashboardFilter>,
 ) -> ApiResult<HttpResponse> {
     match dashboard_service
         .get_all_kpis(auth_user.0.tenant_id, &filter)
@@ -56,9 +56,9 @@ pub async fn get_all_kpis(
     path = "/api/v1/dashboard/kpis/{name}",
     tag = "Dashboard",
     params(
-        ("name" = String, Path, description = "KPI name (revenue, profit, cash_flow, stock_value, customer_count)")
+        ("name" = String, Path, description = "KPI name (revenue, profit, cash_flow, stock_value, customer_count)"),
+        DashboardFilter
     ),
-    request_body = DashboardFilter,
     responses(
         (status = 200, description = "Single KPI", body = crate::domain::dashboard::model::KpiWidget),
         (status = 400, description = "Invalid KPI name"),
@@ -70,7 +70,7 @@ pub async fn get_single_kpi(
     auth_user: AuthUser,
     dashboard_service: web::Data<DashboardService>,
     path: web::Path<String>,
-    filter: web::Json<DashboardFilter>,
+    filter: web::Query<DashboardFilter>,
 ) -> ApiResult<HttpResponse> {
     let name = match path.parse::<KpiName>() {
         Ok(n) => n,

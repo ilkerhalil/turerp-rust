@@ -76,7 +76,7 @@ pub async fn import_file(
             entity_type,
             format,
             file_data,
-            admin_user.0.sub.parse::<i64>().unwrap_or(0),
+            admin_user.0.user_id()?,
         )
         .await?;
 
@@ -207,7 +207,7 @@ pub async fn download_template(
     security(("bearer_auth" = []))
 )]
 pub async fn export_entity(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     path: web::Path<String>,
     query: web::Query<ExportQuery>,
     import_service: web::Data<dyn ImportService>,
@@ -224,7 +224,7 @@ pub async fn export_entity(
         .map_err(ApiError::Validation)?;
 
     let data = import_service
-        .export(_admin_user.0.tenant_id, entity_type, format)
+        .export(admin_user.0.tenant_id, entity_type, format)
         .await?;
 
     let content_type = match format {

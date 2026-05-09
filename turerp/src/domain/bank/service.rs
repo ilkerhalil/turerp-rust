@@ -17,6 +17,22 @@ use crate::error::ApiError;
 static INVOICE_REF_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)(?:fatura|inv|invoice)[\s#:-]*(\d+)").unwrap());
 static NUMERIC_REF_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(\d{4,})\b").unwrap());
+static NESTED_QUANTIFIER_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\([^)]*\+[^)]*\)\+").unwrap());
+
+fn validate_regex_pattern(pattern: &str) -> Result<(), String> {
+    if pattern.len() > 500 {
+        return Err("Pattern too long".to_string());
+    }
+    if pattern.contains("(")
+        && pattern.contains("+")
+        && pattern.contains(")")
+        && NESTED_QUANTIFIER_REGEX.is_match(pattern)
+    {
+        return Err("Pattern contains dangerous nested quantifiers".to_string());
+    }
+    Ok(())
+}
 
 /// Bank service
 #[derive(Clone)]
@@ -446,12 +462,14 @@ impl BankService {
 
             let matched = match rule.match_field {
                 crate::domain::bank::model::MatchField::Description => {
+                    validate_regex_pattern(&rule.match_pattern).map_err(ApiError::Validation)?;
                     let pattern = regex::Regex::new(&rule.match_pattern).ok();
                     pattern
                         .map(|re| re.is_match(&tx.description))
                         .unwrap_or(false)
                 }
                 crate::domain::bank::model::MatchField::Reference => {
+                    validate_regex_pattern(&rule.match_pattern).map_err(ApiError::Validation)?;
                     let pattern = regex::Regex::new(&rule.match_pattern).ok();
                     pattern
                         .map(|re| {

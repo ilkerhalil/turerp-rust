@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 
+use crate::common::SoftDeletable;
 use crate::domain::workflow::model::{
     CreateWorkflowTemplate, WorkflowAuditLog, WorkflowEntityType, WorkflowInstance, WorkflowStatus,
     WorkflowStep, WorkflowStepStatus, WorkflowTemplate,
@@ -174,6 +175,8 @@ impl WorkflowRepository for InMemoryWorkflowRepository {
             config_json: create.config_json,
             is_active: true,
             created_at: chrono::Utc::now(),
+            deleted_at: None,
+            deleted_by: None,
         };
         inner.templates.insert(id, template.clone());
         Ok(template)
@@ -188,7 +191,7 @@ impl WorkflowRepository for InMemoryWorkflowRepository {
         Ok(inner
             .templates
             .get(&id)
-            .filter(|t| t.tenant_id == tenant_id)
+            .filter(|t| t.tenant_id == tenant_id && !t.is_deleted())
             .cloned())
     }
 
@@ -197,22 +200,19 @@ impl WorkflowRepository for InMemoryWorkflowRepository {
         Ok(inner
             .templates
             .values()
-            .filter(|t| t.tenant_id == tenant_id)
+            .filter(|t| t.tenant_id == tenant_id && !t.is_deleted())
             .cloned()
             .collect())
     }
 
     async fn delete_template(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
-        let exists = inner
+        let template = inner
             .templates
-            .get(&id)
-            .filter(|t| t.tenant_id == tenant_id)
-            .is_some();
-        if !exists {
-            return Err(ApiError::NotFound(format!("Template {} not found", id)));
-        }
-        inner.templates.remove(&id);
+            .get_mut(&id)
+            .filter(|t| t.tenant_id == tenant_id && !t.is_deleted())
+            .ok_or_else(|| ApiError::NotFound(format!("Template {} not found", id)))?;
+        template.mark_deleted(0);
         Ok(())
     }
 

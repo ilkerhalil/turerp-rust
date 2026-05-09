@@ -105,7 +105,7 @@ pub struct ChartData {
 }
 
 /// Dashboard filter parameters
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct DashboardFilter {
     pub date_from: Option<DateTime<Utc>>,
     pub date_to: Option<DateTime<Utc>>,

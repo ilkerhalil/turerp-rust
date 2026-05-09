@@ -162,11 +162,12 @@ pub async fn download_file(
         .await
         .map_err(ApiError::Internal)?;
 
+    let safe_filename = meta.original_filename.replace(['\r', '\n', '"'], "");
     Ok(HttpResponse::Ok()
         .content_type(meta.content_type)
         .insert_header((
             actix_web::http::header::CONTENT_DISPOSITION,
-            format!("attachment; filename=\"{}\"", meta.original_filename),
+            format!("attachment; filename=\"{}\"", safe_filename),
         ))
         .body(data))
 }

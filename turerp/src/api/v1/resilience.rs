@@ -9,6 +9,7 @@ use utoipa::ToSchema;
 use crate::common::circuit_breaker::{CircuitBreakerRegistry, CircuitBreakerStats};
 use crate::common::retry::RetryStatsSnapshot;
 use crate::error::ApiError;
+use crate::middleware::AdminUser;
 
 // ---------------------------------------------------------------------------
 // DTOs
@@ -60,6 +61,7 @@ pub struct ServicePath {
 )]
 #[get("/resilience/circuit-breakers")]
 pub async fn list_circuit_breakers(
+    _admin_user: AdminUser,
     registry: web::Data<CircuitBreakerRegistry>,
 ) -> Result<HttpResponse, ApiError> {
     let circuit_breakers = registry.list_all();
@@ -87,6 +89,7 @@ pub async fn list_circuit_breakers(
 )]
 #[post("/resilience/circuit-breakers/{service}/reset")]
 pub async fn reset_circuit_breaker(
+    _admin_user: AdminUser,
     registry: web::Data<CircuitBreakerRegistry>,
     path: web::Path<ServicePath>,
 ) -> Result<HttpResponse, ApiError> {
@@ -119,6 +122,7 @@ pub async fn reset_circuit_breaker(
 )]
 #[get("/resilience/retry-stats")]
 pub async fn get_retry_stats(
+    _admin_user: AdminUser,
     retry_stats: web::Data<crate::common::retry::BoxRetryStats>,
 ) -> Result<HttpResponse, ApiError> {
     let snapshot = retry_stats.snapshot();

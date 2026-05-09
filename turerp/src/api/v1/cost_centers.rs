@@ -175,7 +175,7 @@ pub async fn delete_cost_center(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    let deleted_by = admin_user.0.user_id()?;
     match cost_center_service
         .delete_cost_center(id, admin_user.0.tenant_id, deleted_by)
         .await

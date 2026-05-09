@@ -154,6 +154,8 @@ struct ReconciliationRuleRow {
     is_active: bool,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+    deleted_by: Option<i64>,
 }
 
 impl From<ReconciliationRuleRow> for ReconciliationRule {
@@ -176,6 +178,8 @@ impl From<ReconciliationRuleRow> for ReconciliationRule {
             is_active: row.is_active,
             created_at: row.created_at,
             updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
         }
     }
 }
@@ -703,9 +707,9 @@ impl BankRepository for PostgresBankRepository {
     async fn find_rules(&self, tenant_id: i64) -> Result<Vec<ReconciliationRule>, ApiError> {
         let rows: Vec<ReconciliationRuleRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at, updated_at
+            SELECT id, tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at, updated_at, deleted_at, deleted_by
             FROM reconciliation_rules
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -720,9 +724,9 @@ impl BankRepository for PostgresBankRepository {
     async fn find_active_rules(&self, tenant_id: i64) -> Result<Vec<ReconciliationRule>, ApiError> {
         let rows: Vec<ReconciliationRuleRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at, updated_at
+            SELECT id, tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at, updated_at, deleted_at, deleted_by
             FROM reconciliation_rules
-            WHERE tenant_id = $1 AND is_active = TRUE
+            WHERE tenant_id = $1 AND is_active = TRUE AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -741,9 +745,9 @@ impl BankRepository for PostgresBankRepository {
     ) -> Result<Option<ReconciliationRule>, ApiError> {
         let result: Option<ReconciliationRuleRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at, updated_at
+            SELECT id, tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at, updated_at, deleted_at, deleted_by
             FROM reconciliation_rules
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -773,8 +777,8 @@ impl BankRepository for PostgresBankRepository {
                 auto_match = COALESCE($4, auto_match),
                 is_active = COALESCE($5, is_active),
                 updated_at = NOW()
-            WHERE id = $6 AND tenant_id = $7
-            RETURNING id, tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at, updated_at
+            WHERE id = $6 AND tenant_id = $7 AND deleted_at IS NULL
+            RETURNING id, tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.rule_name)
@@ -794,8 +798,9 @@ impl BankRepository for PostgresBankRepository {
     async fn delete_rule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM reconciliation_rules
-            WHERE id = $1 AND tenant_id = $2
+            UPDATE reconciliation_rules
+            SET deleted_at = NOW()
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)

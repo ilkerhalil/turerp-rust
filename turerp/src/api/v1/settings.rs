@@ -231,7 +231,7 @@ pub async fn soft_delete_setting(
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
     let tenant_id = _admin.0.tenant_id;
-    let deleted_by = _admin.0.sub.parse::<i64>().unwrap_or(0);
+    let deleted_by = _admin.0.user_id()?;
 
     state
         .settings_service

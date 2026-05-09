@@ -272,6 +272,7 @@ impl JobScheduler for PostgresJobScheduler {
                 END DESC,
                 created_at ASC
             LIMIT 1
+            FOR UPDATE SKIP LOCKED
             "#,
         )
         .fetch_optional(&*self.pool)

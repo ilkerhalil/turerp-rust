@@ -91,7 +91,7 @@ pub async fn start_workflow(
             return Ok(ApiError::Validation(e).to_http_response(i18n, locale.as_str()));
         }
     };
-    let user_id = auth_user.0.sub.parse::<i64>().unwrap_or(0);
+    let user_id = auth_user.0.user_id()?;
     match workflow_service
         .start_workflow(
             req.template_id,
@@ -125,7 +125,7 @@ pub async fn approve_step(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    let user_id = auth_user.0.sub.parse::<i64>().unwrap_or(0);
+    let user_id = auth_user.0.user_id()?;
     // Find the current pending step for this instance
     let detail = match workflow_service
         .get_instance(id, auth_user.0.tenant_id)
@@ -178,7 +178,7 @@ pub async fn reject_step(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    let user_id = auth_user.0.sub.parse::<i64>().unwrap_or(0);
+    let user_id = auth_user.0.user_id()?;
     let detail = match workflow_service
         .get_instance(id, auth_user.0.tenant_id)
         .await
@@ -228,7 +228,7 @@ pub async fn resubmit_workflow(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    let user_id = auth_user.0.sub.parse::<i64>().unwrap_or(0);
+    let user_id = auth_user.0.user_id()?;
     match workflow_service
         .resubmit(id, user_id, auth_user.0.tenant_id)
         .await
@@ -251,7 +251,7 @@ pub async fn get_pending_approvals(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let user_id = auth_user.0.sub.parse::<i64>().unwrap_or(0);
+    let user_id = auth_user.0.user_id()?;
     match workflow_service
         .get_pending_approvals(user_id, auth_user.0.tenant_id)
         .await

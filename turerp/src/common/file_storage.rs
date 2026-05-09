@@ -6,6 +6,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -127,11 +128,16 @@ impl LocalFileStorage {
     }
 
     fn compute_checksum(data: &[u8]) -> String {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        use std::hash::{Hash, Hasher};
-        data.hash(&mut hasher);
-        let hash = hasher.finish();
-        format!("{:016x}", hash)
+        let hash = Sha256::digest(data);
+        hex::encode(hash)
+    }
+
+    fn sanitize_filename(filename: &str) -> String {
+        std::path::Path::new(filename)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unnamed")
+            .to_string()
     }
 }
 
@@ -140,7 +146,8 @@ impl FileStorage for LocalFileStorage {
     async fn upload(&self, upload: FileUpload) -> Result<FileMetadata, String> {
         let id = self.allocate_id();
         let checksum = Self::compute_checksum(&upload.data);
-        let storage_path = format!("tenant_{}/{}/{}", upload.tenant_id, id, upload.filename);
+        let safe_name = Self::sanitize_filename(&upload.filename);
+        let storage_path = format!("tenant_{}/{}/{}", upload.tenant_id, id, safe_name);
 
         // Create tenant directory
         let tenant_dir = self.tenant_path(upload.tenant_id);
@@ -148,14 +155,14 @@ impl FileStorage for LocalFileStorage {
             .map_err(|e| format!("Failed to create directory: {}", e))?;
 
         // Write file
-        let file_path = tenant_dir.join(format!("{}_{}", id, upload.filename));
+        let file_path = tenant_dir.join(format!("{}_{}", id, safe_name));
         std::fs::write(&file_path, &upload.data)
             .map_err(|e| format!("Failed to write file: {}", e))?;
 
         let metadata = FileMetadata {
             id,
             tenant_id: upload.tenant_id,
-            filename: format!("{}_{}", id, upload.filename),
+            filename: format!("{}_{}", id, safe_name),
             original_filename: upload.filename,
             content_type: upload.content_type,
             size_bytes: upload.data.len() as i64,
@@ -211,7 +218,8 @@ impl FileStorage for LocalFileStorage {
         file.deleted_at = Some(Utc::now());
 
         // Optionally remove physical file
-        let file_path = self.tenant_path(tenant_id).join(&file.filename);
+        let safe_name = Self::sanitize_filename(&file.filename);
+        let file_path = self.tenant_path(tenant_id).join(&safe_name);
         std::fs::remove_file(&file_path).ok();
 
         Ok(())

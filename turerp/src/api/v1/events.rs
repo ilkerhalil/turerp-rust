@@ -262,8 +262,9 @@ pub struct CdcStatusResponse {
 )]
 pub async fn get_cdc_status(
     _admin_user: AdminUser,
-    _app_state: web::Data<crate::app::AppState>,
+    app_state: web::Data<crate::app::AppState>,
 ) -> Result<HttpResponse, ApiError> {
+    let _ = &app_state;
     #[cfg(feature = "postgres")]
     {
         if let Some(ref listener) = app_state.cdc_listener {
