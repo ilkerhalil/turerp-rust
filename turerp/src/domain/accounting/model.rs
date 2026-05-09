@@ -104,6 +104,7 @@ impl std::str::FromStr for AccountSubType {
 pub struct Account {
     pub id: i64,
     pub tenant_id: i64,
+    pub company_id: i64,
     pub code: String,
     pub name: String,
     pub account_type: AccountType,
@@ -141,6 +142,8 @@ impl crate::common::SoftDeletable for Account {
 pub struct JournalEntry {
     pub id: i64,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub entry_number: String,
     pub date: DateTime<Utc>,
     pub description: String,
@@ -244,6 +247,7 @@ pub struct TrialBalance {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateAccount {
     pub tenant_id: i64,
+    pub company_id: i64,
     pub code: String,
     pub name: String,
     pub account_type: AccountType,
@@ -273,6 +277,8 @@ impl CreateAccount {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateJournalEntry {
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub date: DateTime<Utc>,
     pub description: String,
     pub reference: Option<String>,
@@ -339,6 +345,7 @@ mod tests {
     fn test_create_account_validation() {
         let valid = CreateAccount {
             tenant_id: 1,
+            company_id: 1,
             code: "1000".to_string(),
             name: "Cash".to_string(),
             account_type: AccountType::Asset,
@@ -350,6 +357,7 @@ mod tests {
 
         let invalid = CreateAccount {
             tenant_id: 1,
+            company_id: 1,
             code: "".to_string(),
             name: "".to_string(),
             account_type: AccountType::Asset,
@@ -364,6 +372,7 @@ mod tests {
     fn test_journal_entry_validation() {
         let valid = CreateJournalEntry {
             tenant_id: 1,
+            company_id: 1,
             date: Utc::now(),
             description: "Test entry".to_string(),
             reference: Some("REF001".to_string()),
@@ -389,6 +398,7 @@ mod tests {
 
         let invalid = CreateJournalEntry {
             tenant_id: 1,
+            company_id: 1,
             date: Utc::now(),
             description: "Test".to_string(),
             reference: None,
@@ -491,4 +501,8 @@ mod tests {
         );
         assert!(JournalEntryStatus::from_str("Invalid").is_err());
     }
+}
+
+fn default_company_id() -> i64 {
+    1
 }

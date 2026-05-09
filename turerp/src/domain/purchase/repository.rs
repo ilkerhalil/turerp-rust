@@ -276,6 +276,7 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
         let order = PurchaseOrder {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             order_number,
             cari_id: create.cari_id,
             status: PurchaseOrderStatus::Draft,
@@ -578,6 +579,7 @@ impl GoodsReceiptRepository for InMemoryGoodsReceiptRepository {
         let receipt = GoodsReceipt {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             receipt_number,
             purchase_order_id: create.purchase_order_id,
             status: GoodsReceiptStatus::Pending,
@@ -820,6 +822,7 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         let request = PurchaseRequest {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             request_number,
             status: PurchaseRequestStatus::Draft,
             requested_by: create.requested_by,

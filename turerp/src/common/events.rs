@@ -162,7 +162,8 @@ pub struct OutboxEvent {
 }
 
 /// Status of an outbox event
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(rename_all = "snake_case")]
 pub enum EventStatus {
     Pending,
     Published,
@@ -225,6 +226,9 @@ pub trait EventBus: Send + Sync {
 
     /// Retry a dead-lettered event
     async fn retry_dead_letter(&self, entry_id: i64) -> Result<(), String>;
+
+    /// Retry a failed or dead-lettered outbox event
+    async fn retry_outbox(&self, event_id: i64) -> Result<(), String>;
 }
 
 /// Type alias for boxed event bus
@@ -277,24 +281,24 @@ impl InMemoryEventBus {
         entry_id
     }
 
-    fn dispatch_to_subscribers(&self, event: &DomainEvent) -> Result<(), String> {
-        let subscribers = self.subscribers.read();
+    async fn dispatch_to_subscribers(&self, event: &DomainEvent) -> Result<(), String> {
         let event_type = event.event_type();
+        let to_notify: Vec<Arc<dyn EventSubscriber>> = {
+            let subscribers = self.subscribers.read();
+            subscribers
+                .iter()
+                .filter(|s| {
+                    let interested = s.subscribed_to();
+                    interested.is_empty() || interested.iter().any(|t| t == event_type || t == "*")
+                })
+                .cloned()
+                .collect()
+        };
 
-        for subscriber in subscribers.iter() {
-            let interested = subscriber.subscribed_to();
-            if interested.is_empty() || interested.iter().any(|t| t == event_type || t == "*") {
-                // Fire-and-forget: spawn task for each subscriber
-                // In production this would use tokio::spawn, but for in-memory
-                // we call directly to keep things synchronous for testing
-                if let Err(e) = futures::executor::block_on(subscriber.handle(event)) {
-                    tracing::warn!(
-                        "Subscriber {} failed for event {}: {}",
-                        subscriber.name(),
-                        event_type,
-                        e
-                    );
-                }
+        for subscriber in to_notify {
+            let name = subscriber.name().to_string();
+            if let Err(e) = subscriber.handle(event).await {
+                tracing::warn!("Subscriber {} failed for event {}: {}", name, event_type, e);
             }
         }
         Ok(())
@@ -330,7 +334,7 @@ impl EventBus for InMemoryEventBus {
         self.outbox.write().push(outbox_event);
 
         // Immediately dispatch to subscribers (in-memory only)
-        self.dispatch_to_subscribers(&event)?;
+        self.dispatch_to_subscribers(&event).await?;
 
         // Mark as published
         let mut outbox = self.outbox.write();
@@ -371,7 +375,7 @@ impl EventBus for InMemoryEventBus {
         let mut processed = 0u64;
         for event in pending {
             // Dispatch to subscribers
-            self.dispatch_to_subscribers(&event.event)?;
+            self.dispatch_to_subscribers(&event.event).await?;
 
             // Mark as published
             let mut outbox = self.outbox.write();
@@ -463,6 +467,21 @@ impl EventBus for InMemoryEventBus {
         // Remove from DLQ
         self.dead_letters.write().retain(|e| e.id != entry_id);
 
+        Ok(())
+    }
+
+    async fn retry_outbox(&self, event_id: i64) -> Result<(), String> {
+        let mut outbox = self.outbox.write();
+        let event = outbox
+            .iter_mut()
+            .find(|e| {
+                e.id == event_id
+                    && (e.status == EventStatus::Failed || e.status == EventStatus::DeadLettered)
+            })
+            .ok_or_else(|| format!("Retryable outbox event {} not found", event_id))?;
+        event.status = EventStatus::Pending;
+        event.attempts = 0;
+        event.last_error = None;
         Ok(())
     }
 }

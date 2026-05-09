@@ -2197,6 +2197,783 @@
         }
       }
     },
+    "/api/v1/bank/accounts": {
+      "get": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Get all bank accounts (requires authentication)",
+        "operationId": "get_accounts",
+        "responses": {
+          "200": {
+            "description": "List of bank accounts"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Create a bank account (requires admin role)",
+        "operationId": "create_account",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBankAccount"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Bank account created successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/accounts/{id}": {
+      "get": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Get bank account by ID (requires authentication)",
+        "operationId": "get_account",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bank account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bank account found"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Bank account not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Update a bank account (requires admin role)",
+        "operationId": "update_account",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bank account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBankAccount"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Bank account updated"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Bank account not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Delete a bank account (requires admin role)",
+        "operationId": "delete_account",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bank account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bank account deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Bank account not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/accounts/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Permanently delete a bank account (admin only)",
+        "operationId": "destroy_account",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bank account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Bank account permanently deleted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Bank account not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/accounts/{id}/restore": {
+      "put": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Restore a soft-deleted bank account (admin only)",
+        "operationId": "restore_account",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bank account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bank account restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankAccountResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Bank account not found or not deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/accounts/{id}/statements": {
+      "post": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Upload a statement file for a bank account (requires admin role)",
+        "operationId": "upload_statement",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bank account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportBankStatement"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Statement imported successfully"
+          },
+          "400": {
+            "description": "Invalid statement format"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Bank account not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/accounts/{id}/transactions": {
+      "get": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Get transactions for a bank account (requires authentication)",
+        "operationId": "get_transactions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bank account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of transactions"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Bank account not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/accounts/{id}/transactions/unmatched": {
+      "get": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Get unmatched transactions for a bank account (requires authentication)",
+        "operationId": "get_unmatched_transactions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bank account ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of unmatched transactions"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Bank account not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/reconcile": {
+      "post": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Trigger auto-reconciliation (requires admin role)",
+        "operationId": "auto_reconcile",
+        "responses": {
+          "200": {
+            "description": "Auto-reconciliation completed"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/reconciliation": {
+      "get": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Get reconciliation report (requires authentication)",
+        "operationId": "get_reconciliation_report",
+        "responses": {
+          "200": {
+            "description": "Reconciliation report"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/rules": {
+      "get": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Get all reconciliation rules (requires authentication)",
+        "operationId": "get_rules",
+        "responses": {
+          "200": {
+            "description": "List of reconciliation rules"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Create a reconciliation rule (requires admin role)",
+        "operationId": "create_rule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReconciliationRule"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Rule created successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/rules/{id}": {
+      "get": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Get reconciliation rule by ID (requires authentication)",
+        "operationId": "get_rule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Rule ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rule found"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Rule not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Update a reconciliation rule (requires admin role)",
+        "operationId": "update_rule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Rule ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateReconciliationRule"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Rule updated"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Rule not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Delete a reconciliation rule (requires admin role)",
+        "operationId": "delete_rule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Rule ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rule deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Rule not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/transactions/{id}/match": {
+      "post": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Manually match a transaction (requires admin role)",
+        "operationId": "match_transaction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Transaction ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchTransaction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Transaction matched"
+          },
+          "400": {
+            "description": "Already matched"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Transaction not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bank/transactions/{id}/unmatch": {
+      "post": {
+        "tags": [
+          "Bank"
+        ],
+        "summary": "Unmatch a transaction (requires admin role)",
+        "operationId": "unmatch_transaction",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Transaction ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transaction unmatched"
+          },
+          "400": {
+            "description": "Already unmatched"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Transaction not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/cari": {
       "get": {
         "tags": [
@@ -2961,6 +3738,32 @@
         ]
       }
     },
+    "/api/v1/cdc/status": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Get CDC listener status (admin only)",
+        "operationId": "get_cdc_status",
+        "responses": {
+          "200": {
+            "description": "CDC status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CdcStatusResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/chart-of-accounts": {
       "get": {
         "tags": [
@@ -3344,6 +4147,536 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cost-centers": {
+      "get": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "List cost centers (paginated, optional type filter)",
+        "operationId": "list_cost_centers",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "center_type",
+            "in": "query",
+            "description": "Filter by type (cost, profit)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of cost centers"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "Create a cost center (requires admin role)",
+        "operationId": "create_cost_center",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCostCenter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Cost center created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostCenterResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cost-centers/bulk-restore": {
+      "post": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "Bulk restore soft-deleted cost centers (requires admin role)",
+        "operationId": "bulk_restore_cost_centers",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkRestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Cost centers restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.cost_center.model.BulkRestoreResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request — empty or oversized IDs list"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cost-centers/deleted": {
+      "get": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "List soft-deleted cost centers (requires admin role)",
+        "operationId": "list_deleted_cost_centers",
+        "responses": {
+          "200": {
+            "description": "List of deleted cost centers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CostCenterResponse"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cost-centers/{id}": {
+      "get": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "Get a cost center by ID",
+        "operationId": "get_cost_center",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cost center ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cost center found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostCenterResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "Update a cost center (requires admin role)",
+        "operationId": "update_cost_center",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cost center ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCostCenter"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Cost center updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostCenterResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "Soft delete a cost center (requires admin role)",
+        "operationId": "delete_cost_center",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cost center ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cost center soft deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cost-centers/{id}/allocations": {
+      "get": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "Get allocations for a cost center",
+        "operationId": "get_allocations",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cost center ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of allocations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.cost_center.model.AllocationResponse"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cost center not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "Create an allocation for a cost center",
+        "operationId": "create_allocation",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cost center ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAllocation"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Allocation created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.cost_center.model.AllocationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cost center not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cost-centers/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "Permanently destroy a soft-deleted cost center (requires admin role)",
+        "operationId": "destroy_cost_center",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cost center ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Cost center permanently deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cost-centers/{id}/profitability": {
+      "get": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "Get profitability report for a cost center",
+        "operationId": "get_profitability",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cost center ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "period_start",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/DateTime"
+                }
+              ],
+              "nullable": true
+            }
+          },
+          {
+            "name": "period_end",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/DateTime"
+                }
+              ],
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Profitability report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.cost_center.model.ProfitabilityReport"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Cost center not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cost-centers/{id}/restore": {
+      "put": {
+        "tags": [
+          "Cost Centers"
+        ],
+        "summary": "Restore a soft-deleted cost center (requires admin role)",
+        "operationId": "restore_cost_center",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Cost center ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cost center restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostCenterResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Not found"
@@ -5226,6 +6559,420 @@
         ]
       }
     },
+    "/api/v1/dashboard/charts/revenue-by-category": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Get revenue by category pie chart data",
+        "operationId": "get_revenue_by_category_chart",
+        "responses": {
+          "200": {
+            "description": "Revenue by category chart data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.dashboard.model.ChartData"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dashboard/charts/sales": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Get sales time-series chart data",
+        "operationId": "get_sales_chart",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sales chart data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.dashboard.model.ChartData"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dashboard/charts/top-products": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Get top products bar chart data",
+        "operationId": "get_top_products_chart",
+        "parameters": [
+          {
+            "name": "period",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top products chart data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.dashboard.model.ChartData"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dashboard/kpis": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Get all KPIs",
+        "operationId": "get_all_kpis",
+        "parameters": [
+          {
+            "name": "date_from",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/DateTime"
+                }
+              ],
+              "nullable": true
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/DateTime"
+                }
+              ],
+              "nullable": true
+            }
+          },
+          {
+            "name": "company_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "branch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "product_category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All KPIs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.dashboard.model.KpiResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dashboard/kpis/{name}": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Get a single KPI by name",
+        "operationId": "get_single_kpi",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "KPI name (revenue, profit, cash_flow, stock_value, customer_count)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/DateTime"
+                }
+              ],
+              "nullable": true
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/DateTime"
+                }
+              ],
+              "nullable": true
+            }
+          },
+          {
+            "name": "company_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "branch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "product_category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Single KPI",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.dashboard.model.KpiWidget"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid KPI name"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dashboard/widgets": {
+      "get": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "List saved widget configurations",
+        "operationId": "list_widgets",
+        "responses": {
+          "200": {
+            "description": "List of widgets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.dashboard.model.DashboardWidgetConfig"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Save a widget configuration (admin only)",
+        "operationId": "create_widget",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWidgetConfig"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Widget created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.dashboard.model.DashboardWidgetConfig"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dashboard/widgets/{id}": {
+      "delete": {
+        "tags": [
+          "Dashboard"
+        ],
+        "summary": "Delete a widget configuration (admin only)",
+        "operationId": "delete_widget",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Widget ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Widget deleted"
+          },
+          "404": {
+            "description": "Widget not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/edefter/periods": {
       "get": {
         "tags": [
@@ -6005,6 +7752,59 @@
         ]
       }
     },
+    "/api/v1/events/dlq": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Get dead letter queue (admin only)",
+        "operationId": "get_dlq",
+        "responses": {
+          "200": {
+            "description": "List of dead letter entries"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/events/dlq/retry/{id}": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Retry a dead letter event via DLQ endpoint (admin only)",
+        "operationId": "retry_dlq",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Dead letter entry ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event retried"
+          },
+          "404": {
+            "description": "Entry not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/events/outbox/pending": {
       "get": {
         "tags": [
@@ -6041,6 +7841,40 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/events/outbox/retry/{id}": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Retry a failed outbox event",
+        "operationId": "retry_outbox_event",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Outbox event ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Event queued for retry"
+          },
+          "404": {
+            "description": "Event not found or not retryable"
           }
         },
         "security": [
@@ -7510,7 +9344,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Attendance soft-deleted"
           },
           "403": {
@@ -7726,7 +9560,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Employee soft-deleted"
           },
           "403": {
@@ -8065,7 +9899,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Leave request soft-deleted"
           },
           "403": {
@@ -8217,7 +10051,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Leave type soft-deleted"
           },
           "403": {
@@ -8447,7 +10281,7 @@
           }
         ],
         "responses": {
-          "200": {
+          "204": {
             "description": "Payroll soft-deleted"
           },
           "403": {
@@ -12976,6 +14810,168 @@
         ]
       }
     },
+    "/api/v1/resilience/circuit-breakers": {
+      "get": {
+        "tags": [
+          "Resilience"
+        ],
+        "summary": "List all circuit breaker states",
+        "description": "Returns the current state, failure counts, and statistics for all\nregistered circuit breakers (GIB, email, SMS, bank, webhook, file storage).",
+        "operationId": "list_circuit_breakers",
+        "responses": {
+          "200": {
+            "description": "Circuit breaker states",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircuitBreakerListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/resilience/circuit-breakers/{service}/reset": {
+      "post": {
+        "tags": [
+          "Resilience"
+        ],
+        "summary": "Reset a specific circuit breaker",
+        "description": "Manually resets the circuit breaker for the given service to Closed state.\nUseful after resolving an external service outage.",
+        "operationId": "reset_circuit_breaker",
+        "parameters": [
+          {
+            "name": "service",
+            "in": "path",
+            "description": "Service name (gib, email, sms, bank, webhook, file_storage)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Circuit breaker reset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircuitBreakerResetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown service",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/resilience/retry-stats": {
+      "get": {
+        "tags": [
+          "Resilience"
+        ],
+        "summary": "Get retry statistics",
+        "description": "Returns global retry attempt, success, and exhaustion counters.",
+        "operationId": "get_retry_stats",
+        "responses": {
+          "200": {
+            "description": "Retry statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryStatsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/sales/orders": {
       "get": {
         "tags": [
@@ -14912,6 +16908,489 @@
           },
           "404": {
             "description": "Warehouse not found or not deleted"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/subscription-plans": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "List all subscription plans (requires authentication)",
+        "operationId": "list_plans",
+        "responses": {
+          "200": {
+            "description": "List of plans"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Create a subscription plan (admin only)",
+        "operationId": "create_plan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlan"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Plan created successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/subscription-plans/{id}": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscription plan by ID (requires authentication)",
+        "operationId": "get_plan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plan found"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Plan not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Update a subscription plan (admin only)",
+        "operationId": "update_plan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePlan"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Plan updated"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Plan not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Delete a subscription plan (admin only)",
+        "operationId": "delete_plan",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Plan ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Plan deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "403": {
+            "description": "Forbidden - admin role required"
+          },
+          "404": {
+            "description": "Plan not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/subscriptions": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "List all subscriptions (requires authentication)",
+        "operationId": "list_subscriptions",
+        "responses": {
+          "200": {
+            "description": "List of subscriptions"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Create a subscription (requires authentication)",
+        "operationId": "create_subscription",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubscription"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Subscription created successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/subscriptions/due-for-billing": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscriptions due for billing",
+        "operationId": "due_for_billing",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "description": "Billing cutoff date (YYYY-MM-DD)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of subscriptions due for billing"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/subscriptions/{id}": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get subscription by ID (requires authentication)",
+        "operationId": "get_subscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscription found"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Subscription not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Update a subscription (requires authentication)",
+        "operationId": "update_subscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSubscription"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Subscription updated"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Subscription not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Delete a subscription (requires authentication)",
+        "operationId": "delete_subscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscription deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Subscription not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/subscriptions/{id}/invoices": {
+      "get": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Get invoices for a subscription",
+        "operationId": "get_subscription_invoices",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of subscription invoices"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Subscription not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/subscriptions/{id}/renew": {
+      "post": {
+        "tags": [
+          "Subscriptions"
+        ],
+        "summary": "Renew a subscription",
+        "operationId": "renew_subscription",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Subscription ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscription renewed"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Subscription not found"
           }
         },
         "security": [
@@ -17699,6 +20178,368 @@
           }
         ]
       }
+    },
+    "/api/v1/workflows/instances": {
+      "post": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "Start a workflow instance",
+        "operationId": "start_workflow",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartWorkflowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Instance started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstanceResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/instances/{id}": {
+      "get": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "Get workflow instance details",
+        "operationId": "get_instance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Instance ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Instance details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstanceDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/instances/{id}/approve": {
+      "post": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "Approve a workflow step",
+        "operationId": "approve_step",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Instance ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveStep"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Step approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstanceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/instances/{id}/audit": {
+      "get": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "Get audit trail for a workflow instance",
+        "operationId": "get_instance_audit",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Instance ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit trail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.workflow.model.WorkflowAuditLogResponse"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/instances/{id}/reject": {
+      "post": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "Reject a workflow step",
+        "operationId": "reject_step",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Instance ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectStep"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Step rejected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstanceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/instances/{id}/resubmit": {
+      "post": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "Resubmit a rejected workflow",
+        "operationId": "resubmit_workflow",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Instance ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workflow resubmitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstanceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/pending": {
+      "get": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "Get my pending approvals",
+        "operationId": "get_pending_approvals",
+        "responses": {
+          "200": {
+            "description": "Pending approvals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowInstanceResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/workflows/templates": {
+      "get": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "List workflow templates",
+        "operationId": "list_templates",
+        "responses": {
+          "200": {
+            "description": "List of templates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowTemplateResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Workflows"
+        ],
+        "summary": "Create a workflow template (requires admin role)",
+        "operationId": "create_template",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkflowTemplate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Template created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowTemplateResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -17747,6 +20588,75 @@
           }
         }
       },
+      "AgingBucket": {
+        "type": "object",
+        "description": "Aging bucket for AR/AP reports",
+        "required": [
+          "bucket",
+          "amount",
+          "count"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "bucket": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "AllocationResponse": {
+        "type": "object",
+        "description": "Allocation response",
+        "required": [
+          "id",
+          "tenant_id",
+          "source_type",
+          "source_id",
+          "cost_center_id",
+          "amount",
+          "percentage",
+          "allocation_date"
+        ],
+        "properties": {
+          "allocation_date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "cost_center_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "percentage": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "ApiKeyScope": {
         "type": "string",
         "description": "API Key permission scope",
@@ -17764,6 +20674,16 @@
           "productwrite",
           "reportread"
         ]
+      },
+      "ApproveStep": {
+        "type": "object",
+        "description": "Approve the current step",
+        "properties": {
+          "comment": {
+            "type": "string",
+            "nullable": true
+          }
+        }
       },
       "BackupCodesResponse": {
         "type": "object",
@@ -17811,6 +20731,338 @@
           }
         }
       },
+      "BankAccount": {
+        "type": "object",
+        "description": "Bank account entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "bank_code",
+          "account_number",
+          "account_name",
+          "currency",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "account_name": {
+            "type": "string"
+          },
+          "account_number": {
+            "type": "string"
+          },
+          "bank_code": {
+            "$ref": "#/components/schemas/BankCode"
+          },
+          "branch_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "company_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "iban": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "BankAccountResponse": {
+        "type": "object",
+        "description": "Bank account response (without sensitive internal data)",
+        "required": [
+          "id",
+          "tenant_id",
+          "bank_code",
+          "account_number",
+          "account_name",
+          "currency",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "account_name": {
+            "type": "string"
+          },
+          "account_number": {
+            "type": "string"
+          },
+          "bank_code": {
+            "$ref": "#/components/schemas/BankCode"
+          },
+          "branch_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "company_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "iban": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "BankCode": {
+        "type": "string",
+        "description": "Turkish bank codes",
+        "enum": [
+          "halkbank",
+          "ziraat",
+          "isbankasi",
+          "garanti",
+          "yapikredi",
+          "akbank"
+        ]
+      },
+      "BankStatement": {
+        "type": "object",
+        "description": "Bank statement entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "account_id",
+          "statement_date",
+          "format",
+          "raw_data",
+          "processed",
+          "created_at"
+        ],
+        "properties": {
+          "account_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "format": {
+            "$ref": "#/components/schemas/StatementFormat"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "processed": {
+            "type": "boolean"
+          },
+          "raw_data": {
+            "type": "string"
+          },
+          "statement_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BankTransaction": {
+        "type": "object",
+        "description": "Bank transaction entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "account_id",
+          "transaction_date",
+          "description",
+          "amount",
+          "currency",
+          "match_status",
+          "created_at"
+        ],
+        "properties": {
+          "account_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "balance_after": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "match_status": {
+            "$ref": "#/components/schemas/MatchStatus"
+          },
+          "matched_invoice_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "matched_payment_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "reference_no": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "transaction_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          }
+        }
+      },
+      "BankTransactionResponse": {
+        "type": "object",
+        "description": "Bank transaction response",
+        "required": [
+          "id",
+          "tenant_id",
+          "account_id",
+          "transaction_date",
+          "description",
+          "amount",
+          "currency",
+          "match_status",
+          "created_at"
+        ],
+        "properties": {
+          "account_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "balance_after": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "match_status": {
+            "$ref": "#/components/schemas/MatchStatus"
+          },
+          "matched_invoice_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "matched_payment_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "reference_no": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "transaction_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          }
+        }
+      },
       "BeratInfo": {
         "type": "object",
         "description": "Berat (certificate) information",
@@ -17844,6 +21096,15 @@
           }
         }
       },
+      "BillingCycle": {
+        "type": "string",
+        "description": "Billing cycle for subscription plans",
+        "enum": [
+          "monthly",
+          "quarterly",
+          "yearly"
+        ]
+      },
       "BulkRestoreFailed": {
         "type": "object",
         "description": "Failed item in a bulk restore operation",
@@ -17858,6 +21119,49 @@
           },
           "reason": {
             "type": "string"
+          }
+        }
+      },
+      "BulkRestoreRequest": {
+        "type": "object",
+        "description": "Request body for bulk restore operations",
+        "required": [
+          "ids"
+        ],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "BulkRestoreResponse": {
+        "type": "object",
+        "description": "Response for bulk restore operations",
+        "required": [
+          "restored",
+          "items",
+          "failed"
+        ],
+        "properties": {
+          "failed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkRestoreFailed"
+            }
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/T"
+            }
+          },
+          "restored": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       },
@@ -17907,6 +21211,29 @@
         "properties": {
           "reason": {
             "type": "string"
+          }
+        }
+      },
+      "CdcStatusResponse": {
+        "type": "object",
+        "description": "CDC status response",
+        "required": [
+          "active",
+          "channels"
+        ],
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "last_event_time": {
+            "type": "string",
+            "nullable": true
           }
         }
       },
@@ -18059,6 +21386,200 @@
           }
         }
       },
+      "ChartData": {
+        "type": "object",
+        "description": "Chart data response",
+        "required": [
+          "labels",
+          "datasets"
+        ],
+        "properties": {
+          "datasets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChartDataset"
+            }
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ChartDataset": {
+        "type": "object",
+        "description": "Chart dataset for time-series or categorical charts",
+        "required": [
+          "label",
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Decimal"
+            }
+          },
+          "label": {
+            "type": "string"
+          }
+        }
+      },
+      "ChartPeriodQuery": {
+        "type": "object",
+        "description": "Query parameters for chart endpoints",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "period": {
+            "type": "string"
+          }
+        }
+      },
+      "CircuitBreakerConfig": {
+        "type": "object",
+        "description": "Circuit breaker configuration",
+        "required": [
+          "failure_threshold",
+          "success_threshold",
+          "timeout_duration_ms",
+          "half_open_max_calls"
+        ],
+        "properties": {
+          "failure_threshold": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of consecutive failures before opening the circuit",
+            "minimum": 0
+          },
+          "half_open_max_calls": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Max calls allowed in half-open state",
+            "minimum": 0
+          },
+          "success_threshold": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of consecutive successes in half-open before closing",
+            "minimum": 0
+          },
+          "timeout_duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Duration the circuit stays open before transitioning to half-open",
+            "minimum": 0
+          }
+        }
+      },
+      "CircuitBreakerListResponse": {
+        "type": "object",
+        "description": "Response for listing all circuit breakers",
+        "required": [
+          "circuit_breakers"
+        ],
+        "properties": {
+          "circuit_breakers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CircuitBreakerStats"
+            }
+          }
+        }
+      },
+      "CircuitBreakerResetResponse": {
+        "type": "object",
+        "description": "Response for a single circuit breaker reset",
+        "required": [
+          "message",
+          "service"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          }
+        }
+      },
+      "CircuitBreakerStats": {
+        "type": "object",
+        "description": "Circuit breaker statistics snapshot",
+        "required": [
+          "service_name",
+          "state",
+          "failure_count",
+          "success_count",
+          "half_open_calls",
+          "total_failures",
+          "total_successes",
+          "state_changes"
+        ],
+        "properties": {
+          "failure_count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "half_open_calls": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "last_failure_time_secs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "minimum": 0
+          },
+          "opened_at_secs": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "minimum": 0
+          },
+          "service_name": {
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/CircuitState"
+          },
+          "state_changes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "success_count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "total_failures": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "total_successes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "CircuitState": {
+        "type": "string",
+        "description": "Circuit breaker state",
+        "enum": [
+          "Closed",
+          "Open",
+          "HalfOpen"
+        ]
+      },
       "ConversionResult": {
         "type": "object",
         "description": "Result of a currency conversion",
@@ -18087,6 +21608,230 @@
             "$ref": "#/components/schemas/Decimal"
           },
           "to_currency": {
+            "type": "string"
+          }
+        }
+      },
+      "CostCenter": {
+        "type": "object",
+        "description": "Cost center / profit center entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "code",
+          "name",
+          "center_type",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "center_type": {
+            "$ref": "#/components/schemas/CostCenterType"
+          },
+          "code": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "CostCenterAllocation": {
+        "type": "object",
+        "description": "Cost center allocation record",
+        "required": [
+          "id",
+          "tenant_id",
+          "source_type",
+          "source_id",
+          "cost_center_id",
+          "amount",
+          "percentage",
+          "allocation_date",
+          "created_at"
+        ],
+        "properties": {
+          "allocation_date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "cost_center_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "percentage": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CostCenterResponse": {
+        "type": "object",
+        "description": "Cost center response (excludes soft-delete metadata)",
+        "required": [
+          "id",
+          "tenant_id",
+          "code",
+          "name",
+          "center_type",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "center_type": {
+            "$ref": "#/components/schemas/CostCenterType"
+          },
+          "code": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "CostCenterType": {
+        "type": "string",
+        "description": "Type of cost center: cost or profit",
+        "enum": [
+          "Cost",
+          "Profit"
+        ]
+      },
+      "CreateAllocation": {
+        "type": "object",
+        "description": "Create a new cost center allocation",
+        "required": [
+          "source_type",
+          "source_id",
+          "cost_center_id",
+          "amount"
+        ],
+        "properties": {
+          "allocation_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "cost_center_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "percentage": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source_type": {
             "type": "string"
           }
         }
@@ -18128,6 +21873,50 @@
           }
         }
       },
+      "CreateBankAccount": {
+        "type": "object",
+        "description": "Data for creating a new bank account",
+        "required": [
+          "bank_code",
+          "account_number",
+          "account_name",
+          "tenant_id"
+        ],
+        "properties": {
+          "account_name": {
+            "type": "string"
+          },
+          "account_number": {
+            "type": "string"
+          },
+          "bank_code": {
+            "type": "string"
+          },
+          "branch_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "company_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string"
+          },
+          "iban": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "CreateChartAccount": {
         "type": "object",
         "description": "Data for creating a new chart account",
@@ -18156,6 +21945,38 @@
           },
           "parent_code": {
             "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "CreateCostCenter": {
+        "type": "object",
+        "description": "Create a new cost center",
+        "required": [
+          "code",
+          "name",
+          "center_type"
+        ],
+        "properties": {
+          "center_type": {
+            "$ref": "#/components/schemas/CostCenterType"
+          },
+          "code": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           }
         }
@@ -18268,11 +22089,16 @@
         "description": "Create goods receipt request",
         "required": [
           "tenant_id",
+          "company_id",
           "purchase_order_id",
           "receipt_date",
           "lines"
         ],
         "properties": {
+          "company_id": {
+            "type": "integer",
+            "format": "int64"
+          },
           "lines": {
             "type": "array",
             "items": {
@@ -18381,6 +22207,124 @@
           "year": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "CreatePlan": {
+        "type": "object",
+        "description": "Data for creating a subscription plan",
+        "required": [
+          "name",
+          "billing_cycle",
+          "base_amount",
+          "tenant_id"
+        ],
+        "properties": {
+          "base_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "billing_cycle": {
+            "$ref": "#/components/schemas/BillingCycle"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "features": {
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreateReconciliationRule": {
+        "type": "object",
+        "description": "Data for creating a reconciliation rule",
+        "required": [
+          "rule_name",
+          "match_field",
+          "match_pattern",
+          "tenant_id"
+        ],
+        "properties": {
+          "auto_match": {
+            "type": "boolean"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "match_field": {
+            "$ref": "#/components/schemas/MatchField"
+          },
+          "match_pattern": {
+            "type": "string"
+          },
+          "rule_name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreateSubscription": {
+        "type": "object",
+        "description": "Data for creating a subscription",
+        "required": [
+          "customer_id",
+          "plan_id",
+          "start_date",
+          "tenant_id"
+        ],
+        "properties": {
+          "auto_renew": {
+            "type": "boolean"
+          },
+          "customer_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "end_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "next_billing_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "start_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubscriptionStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -18509,6 +22453,56 @@
           }
         }
       },
+      "CreateWidgetConfig": {
+        "type": "object",
+        "description": "Request to create or update a widget configuration",
+        "required": [
+          "widget_type",
+          "title",
+          "position"
+        ],
+        "properties": {
+          "filter": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DashboardFilter"
+              }
+            ],
+            "nullable": true
+          },
+          "position": {
+            "$ref": "#/components/schemas/WidgetPosition"
+          },
+          "title": {
+            "type": "string"
+          },
+          "widget_type": {
+            "$ref": "#/components/schemas/WidgetType"
+          }
+        }
+      },
+      "CreateWorkflowTemplate": {
+        "type": "object",
+        "description": "Create a new workflow template",
+        "required": [
+          "name",
+          "description",
+          "entity_type",
+          "config_json"
+        ],
+        "properties": {
+          "config_json": {},
+          "description": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/WorkflowEntityType"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
       "Currency": {
         "type": "object",
         "description": "Currency entity",
@@ -18632,6 +22626,89 @@
           }
         }
       },
+      "DashboardFilter": {
+        "type": "object",
+        "description": "Dashboard filter parameters",
+        "properties": {
+          "branch_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "company_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "date_from": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "date_to": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "product_category": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "DashboardWidgetConfig": {
+        "type": "object",
+        "description": "Dashboard widget configuration",
+        "required": [
+          "id",
+          "tenant_id",
+          "widget_type",
+          "title",
+          "position",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "filter": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DashboardFilter"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "position": {
+            "$ref": "#/components/schemas/WidgetPosition"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "widget_type": {
+            "$ref": "#/components/schemas/WidgetType"
+          }
+        }
+      },
       "DeadLetterResponse": {
         "type": "object",
         "description": "Dead letter entry response",
@@ -18692,6 +22769,20 @@
         "properties": {
           "password": {
             "type": "string"
+          }
+        }
+      },
+      "DueForBillingQuery": {
+        "type": "object",
+        "description": "Query parameters for due-for-billing endpoint",
+        "properties": {
+          "date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
           }
         }
       },
@@ -18906,6 +22997,22 @@
           }
         }
       },
+      "ExpenseSummary": {
+        "type": "object",
+        "description": "Expense summary entry",
+        "required": [
+          "category",
+          "amount"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "category": {
+            "type": "string"
+          }
+        }
+      },
       "FailJobRequest": {
         "type": "object",
         "description": "Fail job request",
@@ -19020,6 +23127,7 @@
         "required": [
           "id",
           "tenant_id",
+          "company_id",
           "receipt_number",
           "purchase_order_id",
           "status",
@@ -19027,6 +23135,10 @@
           "created_at"
         ],
         "properties": {
+          "company_id": {
+            "type": "integer",
+            "format": "int64"
+          },
           "created_at": {
             "$ref": "#/components/schemas/DateTime"
           },
@@ -19075,6 +23187,7 @@
         "description": "Goods receipt response",
         "required": [
           "id",
+          "company_id",
           "receipt_number",
           "purchase_order_id",
           "status",
@@ -19082,6 +23195,10 @@
           "lines"
         ],
         "properties": {
+          "company_id": {
+            "type": "integer",
+            "format": "int64"
+          },
           "id": {
             "type": "integer",
             "format": "int64"
@@ -19120,6 +23237,21 @@
           "Completed",
           "Cancelled"
         ]
+      },
+      "ImportBankStatement": {
+        "type": "object",
+        "description": "Data for importing a bank statement",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/StatementFormat"
+          }
+        }
       },
       "InAppNotificationResponse": {
         "type": "object",
@@ -19268,6 +23400,105 @@
           "tenant_id": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "KpiFormat": {
+        "type": "string",
+        "description": "KPI value formatting type",
+        "enum": [
+          "Currency",
+          "Percentage",
+          "Number",
+          "Decimal"
+        ]
+      },
+      "KpiName": {
+        "type": "string",
+        "description": "KPI names for single KPI endpoint",
+        "enum": [
+          "Revenue",
+          "Profit",
+          "CashFlow",
+          "ArAging",
+          "ApAging",
+          "StockValue",
+          "CustomerCount",
+          "TopProducts"
+        ]
+      },
+      "KpiResponse": {
+        "type": "object",
+        "description": "All KPIs response wrapper",
+        "required": [
+          "revenue",
+          "profit",
+          "cash_flow",
+          "ar_aging",
+          "ap_aging",
+          "stock_value",
+          "customer_count"
+        ],
+        "properties": {
+          "ap_aging": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgingBucket"
+            }
+          },
+          "ar_aging": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgingBucket"
+            }
+          },
+          "cash_flow": {
+            "$ref": "#/components/schemas/KpiWidget"
+          },
+          "customer_count": {
+            "$ref": "#/components/schemas/KpiWidget"
+          },
+          "profit": {
+            "$ref": "#/components/schemas/KpiWidget"
+          },
+          "revenue": {
+            "$ref": "#/components/schemas/KpiWidget"
+          },
+          "stock_value": {
+            "$ref": "#/components/schemas/KpiWidget"
+          }
+        }
+      },
+      "KpiWidget": {
+        "type": "object",
+        "description": "KPI widget data",
+        "required": [
+          "id",
+          "name",
+          "value",
+          "previous_value",
+          "change_percent",
+          "format"
+        ],
+        "properties": {
+          "change_percent": {
+            "type": "number",
+            "format": "double"
+          },
+          "format": {
+            "$ref": "#/components/schemas/KpiFormat"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "previous_value": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Decimal"
           }
         }
       },
@@ -19441,6 +23672,40 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0
+          }
+        }
+      },
+      "MatchField": {
+        "type": "string",
+        "description": "Match field for reconciliation rules",
+        "enum": [
+          "description",
+          "amount",
+          "reference"
+        ]
+      },
+      "MatchStatus": {
+        "type": "string",
+        "description": "Transaction match status",
+        "enum": [
+          "unmatched",
+          "matched",
+          "manual"
+        ]
+      },
+      "MatchTransaction": {
+        "type": "object",
+        "description": "Data for manually matching a transaction",
+        "properties": {
+          "invoice_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "payment_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           }
         }
       },
@@ -19690,6 +23955,86 @@
           }
         }
       },
+      "ProfitabilityQuery": {
+        "type": "object",
+        "description": "Query parameters for profitability report",
+        "properties": {
+          "period_end": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "period_start": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "ProfitabilityReport": {
+        "type": "object",
+        "description": "Profitability report entry for a cost center",
+        "required": [
+          "cost_center_id",
+          "cost_center_code",
+          "cost_center_name",
+          "center_type",
+          "total_income",
+          "total_expense",
+          "net_profit",
+          "allocation_count"
+        ],
+        "properties": {
+          "allocation_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "center_type": {
+            "$ref": "#/components/schemas/CostCenterType"
+          },
+          "cost_center_code": {
+            "type": "string"
+          },
+          "cost_center_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cost_center_name": {
+            "type": "string"
+          },
+          "net_profit": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "period_end": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "period_start": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "total_expense": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_income": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
       "PublishEventRequest": {
         "type": "object",
         "description": "Publish event request",
@@ -19778,6 +24123,114 @@
           }
         }
       },
+      "ReconciliationReport": {
+        "type": "object",
+        "description": "Reconciliation report summary",
+        "required": [
+          "tenant_id",
+          "total_transactions",
+          "matched_count",
+          "unmatched_count",
+          "manual_count",
+          "total_amount",
+          "matched_amount",
+          "unmatched_amount"
+        ],
+        "properties": {
+          "manual_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "matched_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "matched_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_transactions": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "unmatched_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "unmatched_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ReconciliationRule": {
+        "type": "object",
+        "description": "Reconciliation rule entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "rule_name",
+          "match_field",
+          "match_pattern",
+          "auto_match",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "auto_match": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "match_field": {
+            "$ref": "#/components/schemas/MatchField"
+          },
+          "match_pattern": {
+            "type": "string"
+          },
+          "rule_name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
       "RefreshTokenRequest": {
         "type": "object",
         "description": "Token refresh request",
@@ -19828,6 +24281,16 @@
           }
         }
       },
+      "RejectStep": {
+        "type": "object",
+        "description": "Reject the current step",
+        "properties": {
+          "comment": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "ReportMetaResponse": {
         "type": "object",
         "description": "Report metadata response",
@@ -19873,6 +24336,124 @@
           },
           "title": {
             "type": "string"
+          }
+        }
+      },
+      "RetryConfig": {
+        "type": "object",
+        "description": "Retry policy configuration",
+        "required": [
+          "max_retries",
+          "base_delay_ms",
+          "max_delay_ms",
+          "jitter_factor"
+        ],
+        "properties": {
+          "base_delay_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Base delay between retries in milliseconds",
+            "minimum": 0
+          },
+          "jitter_factor": {
+            "type": "number",
+            "format": "double",
+            "description": "Jitter factor (0.0-1.0) to add randomness to delays"
+          },
+          "max_delay_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Maximum delay between retries in milliseconds",
+            "minimum": 0
+          },
+          "max_retries": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Maximum number of retry attempts",
+            "minimum": 0
+          }
+        }
+      },
+      "RetryStatsResponse": {
+        "type": "object",
+        "description": "Response for retry statistics",
+        "required": [
+          "retry_stats"
+        ],
+        "properties": {
+          "retry_stats": {
+            "$ref": "#/components/schemas/RetryStatsSnapshot"
+          }
+        }
+      },
+      "RetryStatsSnapshot": {
+        "type": "object",
+        "description": "Snapshot of retry statistics",
+        "required": [
+          "total_attempts",
+          "total_successes",
+          "total_exhausted"
+        ],
+        "properties": {
+          "total_attempts": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "total_exhausted": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "total_successes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "RevenueByCategory": {
+        "type": "object",
+        "description": "Revenue by category entry",
+        "required": [
+          "category_id",
+          "category_name",
+          "revenue"
+        ],
+        "properties": {
+          "category_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "category_name": {
+            "type": "string"
+          },
+          "revenue": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "SalesPeriod": {
+        "type": "object",
+        "description": "Sales period entry for time-series charts",
+        "required": [
+          "period",
+          "total_sales",
+          "total_cost",
+          "profit"
+        ],
+        "properties": {
+          "period": {
+            "type": "string"
+          },
+          "profit": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_cost": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_sales": {
+            "$ref": "#/components/schemas/Decimal"
           }
         }
       },
@@ -19968,6 +24549,456 @@
             "nullable": true
           }
         }
+      },
+      "ServicePath": {
+        "type": "object",
+        "description": "Path parameter for service name",
+        "required": [
+          "service"
+        ],
+        "properties": {
+          "service": {
+            "type": "string"
+          }
+        }
+      },
+      "StartWorkflowRequest": {
+        "type": "object",
+        "description": "Request body to start a workflow instance",
+        "required": [
+          "template_id",
+          "entity_id",
+          "entity_type"
+        ],
+        "properties": {
+          "entity_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "StatementFormat": {
+        "type": "string",
+        "description": "Statement format",
+        "enum": [
+          "mt940",
+          "xml",
+          "camt053"
+        ]
+      },
+      "Subscription": {
+        "type": "object",
+        "description": "Subscription entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "customer_id",
+          "plan_id",
+          "start_date",
+          "status",
+          "auto_renew",
+          "created_at"
+        ],
+        "properties": {
+          "auto_renew": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "customer_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "end_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_billed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "next_billing_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "start_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubscriptionStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "SubscriptionInvoice": {
+        "type": "object",
+        "description": "Subscription invoice entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "subscription_id",
+          "billing_period_start",
+          "billing_period_end",
+          "amount",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "billing_period_end": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "billing_period_start": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invoice_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubscriptionInvoiceStatus"
+          },
+          "subscription_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SubscriptionInvoiceResponse": {
+        "type": "object",
+        "description": "Subscription invoice response",
+        "required": [
+          "id",
+          "tenant_id",
+          "subscription_id",
+          "billing_period_start",
+          "billing_period_end",
+          "amount",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "billing_period_end": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "billing_period_start": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invoice_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubscriptionInvoiceStatus"
+          },
+          "subscription_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SubscriptionInvoiceStatus": {
+        "type": "string",
+        "description": "Subscription invoice status",
+        "enum": [
+          "pending",
+          "paid",
+          "failed"
+        ]
+      },
+      "SubscriptionPlan": {
+        "type": "object",
+        "description": "Subscription plan entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "billing_cycle",
+          "base_amount",
+          "currency",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "base_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "billing_cycle": {
+            "$ref": "#/components/schemas/BillingCycle"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "features": {
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "SubscriptionPlanResponse": {
+        "type": "object",
+        "description": "Subscription plan response",
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "billing_cycle",
+          "base_amount",
+          "currency",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "base_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "billing_cycle": {
+            "$ref": "#/components/schemas/BillingCycle"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "features": {
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "SubscriptionResponse": {
+        "type": "object",
+        "description": "Subscription response",
+        "required": [
+          "id",
+          "tenant_id",
+          "customer_id",
+          "plan_id",
+          "start_date",
+          "status",
+          "auto_renew",
+          "created_at"
+        ],
+        "properties": {
+          "auto_renew": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "customer_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "end_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_billed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "next_billing_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "start_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SubscriptionStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "SubscriptionStatus": {
+        "type": "string",
+        "description": "Subscription status",
+        "enum": [
+          "active",
+          "cancelled",
+          "expired",
+          "trial"
+        ]
       },
       "TaxCalculationResult": {
         "type": "object",
@@ -20331,6 +25362,31 @@
           "GV"
         ]
       },
+      "TopProduct": {
+        "type": "object",
+        "description": "Top selling product entry",
+        "required": [
+          "product_id",
+          "product_name",
+          "total_quantity",
+          "total_revenue"
+        ],
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "total_quantity": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_revenue": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
       "TrialBalanceEntry": {
         "type": "object",
         "description": "Trial balance entry",
@@ -20398,6 +25454,41 @@
           }
         }
       },
+      "UpdateBankAccount": {
+        "type": "object",
+        "description": "Data for updating an existing bank account",
+        "properties": {
+          "account_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "account_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "branch_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "company_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "iban": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
       "UpdateChartAccount": {
         "type": "object",
         "description": "Data for updating an existing chart account",
@@ -20420,6 +25511,41 @@
           },
           "name": {
             "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateCostCenter": {
+        "type": "object",
+        "description": "Update an existing cost center",
+        "properties": {
+          "center_type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CostCenterType"
+              }
+            ],
+            "nullable": true
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "parent_id": {
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           }
         }
@@ -20492,6 +25618,47 @@
           }
         }
       },
+      "UpdatePlan": {
+        "type": "object",
+        "description": "Data for updating a subscription plan",
+        "properties": {
+          "base_amount": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
+          },
+          "billing_cycle": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/BillingCycle"
+              }
+            ],
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "features": {
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "UpdateReceiptStatusRequest": {
         "type": "object",
         "description": "Request body for updating goods receipt status",
@@ -20501,6 +25668,83 @@
         "properties": {
           "status": {
             "$ref": "#/components/schemas/GoodsReceiptStatus"
+          }
+        }
+      },
+      "UpdateReconciliationRule": {
+        "type": "object",
+        "description": "Data for updating a reconciliation rule",
+        "properties": {
+          "auto_match": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "match_field": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MatchField"
+              }
+            ],
+            "nullable": true
+          },
+          "match_pattern": {
+            "type": "string",
+            "nullable": true
+          },
+          "rule_name": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "UpdateSubscription": {
+        "type": "object",
+        "description": "Data for updating a subscription",
+        "properties": {
+          "auto_renew": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "end_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "next_billing_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "plan_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "start_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SubscriptionStatus"
+              }
+            ],
+            "nullable": true
           }
         }
       },
@@ -20786,6 +26030,516 @@
           "failed"
         ]
       },
+      "WidgetPosition": {
+        "type": "object",
+        "description": "Widget position in dashboard grid",
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ],
+        "properties": {
+          "h": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "w": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "x": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "y": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "WidgetType": {
+        "type": "string",
+        "description": "Widget type enumeration for dashboard configuration",
+        "enum": [
+          "Kpi",
+          "LineChart",
+          "BarChart",
+          "PieChart",
+          "Table",
+          "Gauge"
+        ]
+      },
+      "WorkflowAuditLog": {
+        "type": "object",
+        "description": "Immutable audit trail entry for workflow actions",
+        "required": [
+          "id",
+          "instance_id",
+          "action",
+          "user_id",
+          "timestamp"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "instance_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "step_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "timestamp": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "WorkflowAuditLogResponse": {
+        "type": "object",
+        "description": "Workflow audit log response",
+        "required": [
+          "id",
+          "instance_id",
+          "action",
+          "user_id",
+          "timestamp"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "instance_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "step_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "timestamp": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "WorkflowEntityType": {
+        "type": "string",
+        "description": "Entity types that can have workflow approval processes",
+        "enum": [
+          "Invoice",
+          "PurchaseOrder",
+          "Expense",
+          "StockTransfer"
+        ]
+      },
+      "WorkflowInstance": {
+        "type": "object",
+        "description": "Running instance of a workflow attached to a specific entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "template_id",
+          "entity_id",
+          "entity_type",
+          "status",
+          "current_step",
+          "created_by",
+          "created_at"
+        ],
+        "properties": {
+          "assigned_user_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "completed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "created_by": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "current_step": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "entity_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/WorkflowEntityType"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowStatus"
+          },
+          "template_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "WorkflowInstanceDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WorkflowInstanceResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "steps",
+              "audit_log"
+            ],
+            "properties": {
+              "audit_log": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WorkflowAuditLogResponse"
+                }
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WorkflowStepResponse"
+                }
+              }
+            }
+          }
+        ],
+        "description": "Detailed workflow instance with steps and audit log"
+      },
+      "WorkflowInstanceResponse": {
+        "type": "object",
+        "description": "Workflow instance response",
+        "required": [
+          "id",
+          "tenant_id",
+          "template_id",
+          "entity_id",
+          "entity_type",
+          "status",
+          "current_step",
+          "created_by",
+          "created_at"
+        ],
+        "properties": {
+          "assigned_user_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "completed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "created_by": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "current_step": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "entity_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/WorkflowEntityType"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowStatus"
+          },
+          "template_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "WorkflowStatus": {
+        "type": "string",
+        "description": "Overall status of a workflow instance",
+        "enum": [
+          "Draft",
+          "Pending",
+          "Approved",
+          "Rejected",
+          "Completed"
+        ]
+      },
+      "WorkflowStep": {
+        "type": "object",
+        "description": "Individual step within a workflow instance",
+        "required": [
+          "id",
+          "instance_id",
+          "step_number",
+          "step_name",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "approver_role": {
+            "type": "string",
+            "nullable": true
+          },
+          "approver_user_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "completed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "instance_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowStepStatus"
+          },
+          "step_name": {
+            "type": "string"
+          },
+          "step_number": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "WorkflowStepResponse": {
+        "type": "object",
+        "description": "Workflow step response",
+        "required": [
+          "id",
+          "instance_id",
+          "step_number",
+          "step_name",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "approver_role": {
+            "type": "string",
+            "nullable": true
+          },
+          "approver_user_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "comment": {
+            "type": "string",
+            "nullable": true
+          },
+          "completed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "instance_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowStepStatus"
+          },
+          "step_name": {
+            "type": "string"
+          },
+          "step_number": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "WorkflowStepStatus": {
+        "type": "string",
+        "description": "Status of an individual workflow step",
+        "enum": [
+          "Pending",
+          "Approved",
+          "Rejected"
+        ]
+      },
+      "WorkflowTemplate": {
+        "type": "object",
+        "description": "Reusable workflow template defining steps for an entity type",
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "description",
+          "entity_type",
+          "config_json",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "config_json": {},
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "description": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/WorkflowEntityType"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "WorkflowTemplateResponse": {
+        "type": "object",
+        "description": "Workflow template response",
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "description",
+          "entity_type",
+          "config_json",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "config_json": {},
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "description": {
+            "type": "string"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/WorkflowEntityType"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "XmlResponse": {
         "type": "object",
         "description": "Response for XML generation endpoints",
@@ -20895,6 +26649,10 @@
       "description": "Authentication endpoints (login, register, token refresh)"
     },
     {
+      "name": "Bank",
+      "description": "Turkish bank integration, statements, transactions and reconciliation"
+    },
+    {
       "name": "Users",
       "description": "User management endpoints (CRUD operations)"
     },
@@ -20909,6 +26667,10 @@
     {
       "name": "Stock",
       "description": "Warehouses, stock movements and inventory"
+    },
+    {
+      "name": "Subscriptions",
+      "description": "Subscription plans, subscriptions, and SaaS billing"
     },
     {
       "name": "Invoice",
@@ -20963,6 +26725,10 @@
       "description": "Chart of accounts, account tree and trial balance"
     },
     {
+      "name": "Cost Centers",
+      "description": "Cost center and profit center management with allocations and profitability reports"
+    },
+    {
       "name": "Feature Flags",
       "description": "Feature flag management endpoints"
     },
@@ -21007,6 +26773,10 @@
       "description": "Multi-currency support, exchange rates and conversion"
     },
     {
+      "name": "Dashboard",
+      "description": "BI dashboard KPIs, charts and widget management"
+    },
+    {
       "name": "e-Fatura",
       "description": "Turkish e-Fatura (electronic invoicing) integration with GIB"
     },
@@ -21021,6 +26791,14 @@
     {
       "name": "Webhooks",
       "description": "Webhook endpoints and delivery management"
+    },
+    {
+      "name": "Resilience",
+      "description": "Circuit breaker and retry monitoring"
+    },
+    {
+      "name": "Workflows",
+      "description": "Configurable approval workflows for documents and business processes"
     }
   ]
 }

@@ -328,7 +328,8 @@ async fn test_stock_warehouse_soft_delete_and_restore() {
         .set_json(json!({
             "code": format!("WH-SD-{}", unique),
             "name": "Soft Delete Warehouse",
-            "tenant_id": 1
+            "tenant_id": 1,
+            "company_id": 1
         }))
         .to_request();
 
@@ -1292,7 +1293,8 @@ async fn test_multiple_domains_support_soft_delete() {
         .set_json(json!({
             "code": format!("MULTI-WH-{}", unique),
             "name": "Multi Domain Warehouse",
-            "tenant_id": 1
+            "tenant_id": 1,
+            "company_id": 1
         }))
         .to_request();
 
@@ -1630,7 +1632,7 @@ async fn test_employee_soft_delete_and_restore() {
         .to_request();
 
     let resp = test::call_service(&app, delete_req).await;
-    assert_eq!(resp.status(), StatusCode::OK);
+    assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
     // Verify not found
     let get_req = test::TestRequest::get()

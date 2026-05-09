@@ -425,7 +425,7 @@ pub async fn delete_tax_rate(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    let deleted_by = admin_user.0.user_id()?;
     match tax_service
         .delete_tax_rate(id, admin_user.0.tenant_id, deleted_by)
         .await
@@ -527,7 +527,7 @@ pub async fn delete_tax_period(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    let deleted_by = admin_user.0.user_id()?;
     match tax_service
         .delete_tax_period(id, admin_user.0.tenant_id, deleted_by)
         .await

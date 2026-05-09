@@ -89,6 +89,58 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "015_mfa",
             sql: include_str!("../../migrations/015_mfa.sql"),
         },
+        Migration {
+            version: "016_full_text_search",
+            sql: include_str!("../../migrations/016_full_text_search.sql"),
+        },
+        Migration {
+            version: "017_notifications",
+            sql: include_str!("../../migrations/017_notifications.sql"),
+        },
+        Migration {
+            version: "018_jobs",
+            sql: include_str!("../../migrations/018_jobs.sql"),
+        },
+        Migration {
+            version: "019_soft_delete_users_tenants",
+            sql: include_str!("../../migrations/019_soft_delete_users_tenants.sql"),
+        },
+        Migration {
+            version: "020_soft_delete_complete",
+            sql: include_str!("../../migrations/020_soft_delete_complete.sql"),
+        },
+        Migration {
+            version: "021_files_table",
+            sql: include_str!("../../migrations/021_files_table.sql"),
+        },
+        Migration {
+            version: "021_outbox",
+            sql: include_str!("../../migrations/021_outbox.sql"),
+        },
+        Migration {
+            version: "022_cdc_triggers",
+            sql: include_str!("../../migrations/022_cdc_triggers.sql"),
+        },
+        Migration {
+            version: "023_companies",
+            sql: include_str!("../../migrations/023_companies.sql"),
+        },
+        Migration {
+            version: "023_cost_centers",
+            sql: include_str!("../../migrations/023_cost_centers.sql"),
+        },
+        Migration {
+            version: "024_workflows",
+            sql: include_str!("../../migrations/024_workflows.sql"),
+        },
+        Migration {
+            version: "025_bank_integration",
+            sql: include_str!("../../migrations/025_bank_integration.sql"),
+        },
+        Migration {
+            version: "026_subscriptions",
+            sql: include_str!("../../migrations/026_subscriptions.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).

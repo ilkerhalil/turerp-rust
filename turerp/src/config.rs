@@ -316,6 +316,41 @@ impl LocalizationConfig {
     }
 }
 
+/// CDC configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct CdcConfig {
+    pub enabled: bool,
+    pub channels: Vec<String>,
+}
+
+impl Default for CdcConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            channels: vec![
+                "invoice_changes".to_string(),
+                "cari_changes".to_string(),
+                "stock_changes".to_string(),
+                "payment_changes".to_string(),
+            ],
+        }
+    }
+}
+
+impl CdcConfig {
+    pub fn from_env() -> Self {
+        let enabled = std::env::var("TURERP_CDC_ENABLED")
+            .ok()
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+        let channels = std::env::var("TURERP_CDC_CHANNELS")
+            .ok()
+            .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+            .unwrap_or_else(|| Self::default().channels);
+        Self { enabled, channels }
+    }
+}
+
 pub struct Config {
     pub environment: Environment,
     pub server: ServerConfig,
@@ -326,6 +361,7 @@ pub struct Config {
     pub rate_limit: RateLimitConfig,
     pub metrics: MetricsConfig,
     pub localization: LocalizationConfig,
+    pub cdc: CdcConfig,
 }
 
 impl Default for Config {
@@ -334,13 +370,13 @@ impl Default for Config {
             environment: Environment::Development,
             server: ServerConfig::default(),
             database: DatabaseConfig {
-                url: "postgres://postgres:postgres@localhost:5432/turerp".to_string(),
+                url: String::new(),
                 max_connections: 10,
                 min_connections: 5,
             },
             redis: RedisConfig::default(),
             jwt: JwtConfig {
-                secret: "dev-secret-do-not-use-in-production".to_string(),
+                secret: String::new(),
                 access_token_expiration: 3600,
                 refresh_token_expiration: 604800,
             },
@@ -348,6 +384,7 @@ impl Default for Config {
             rate_limit: RateLimitConfig::default(),
             metrics: MetricsConfig::default(),
             localization: LocalizationConfig::default(),
+            cdc: CdcConfig::default(),
         }
     }
 }
@@ -404,6 +441,7 @@ impl Config {
         let rate_limit = RateLimitConfig::from_env();
         let metrics = MetricsConfig::from_env();
         let localization = LocalizationConfig::from_env();
+        let cdc = CdcConfig::from_env();
 
         Ok(Self {
             environment,
@@ -415,6 +453,7 @@ impl Config {
             rate_limit,
             metrics,
             localization,
+            cdc,
         })
     }
 
@@ -502,7 +541,14 @@ mod tests {
 
     #[test]
     fn test_tenant_database_url() {
-        let config = Config::default();
+        let config = Config {
+            database: DatabaseConfig {
+                url: "postgres://postgres:postgres@localhost:5432/turerp".to_string(),
+                max_connections: 10,
+                min_connections: 5,
+            },
+            ..Default::default()
+        };
         let tenant_url = config.tenant_database_url("tenant_abc");
         assert!(tenant_url.contains("tenant_abc"));
         assert!(tenant_url.contains("turerp") || tenant_url.contains("postgres"));
@@ -667,7 +713,14 @@ mod tests {
 
     #[test]
     fn test_config_master_database_url() {
-        let config = Config::default();
+        let config = Config {
+            database: DatabaseConfig {
+                url: "postgres://user:pass@host/db".to_string(),
+                max_connections: 10,
+                min_connections: 5,
+            },
+            ..Default::default()
+        };
         let url = config.master_database_url();
         assert!(!url.is_empty());
     }

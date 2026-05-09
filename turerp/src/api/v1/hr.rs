@@ -129,7 +129,7 @@ pub async fn terminate_employee(
 #[utoipa::path(
     delete, path = "/api/v1/hr/employees/{id}/soft-delete", tag = "HR",
     params(("id" = i64, Path, description = "Employee ID")),
-    responses((status = 200, description = "Employee soft-deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    responses((status = 204, description = "Employee soft-deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
     security(("bearer_auth" = []))
 )]
 pub async fn soft_delete_employee(
@@ -141,7 +141,7 @@ pub async fn soft_delete_employee(
     hr_service
         .soft_delete_employee(*path, admin_user.0.tenant_id, user_id)
         .await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Employee soft-deleted"})))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Restore a soft-deleted employee (requires admin role)
@@ -245,7 +245,7 @@ pub async fn get_attendance_by_employee(
 #[utoipa::path(
     delete, path = "/api/v1/hr/attendance/{id}/soft-delete", tag = "HR",
     params(("id" = i64, Path, description = "Attendance ID")),
-    responses((status = 200, description = "Attendance soft-deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    responses((status = 204, description = "Attendance soft-deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
     security(("bearer_auth" = []))
 )]
 pub async fn soft_delete_attendance(
@@ -255,7 +255,7 @@ pub async fn soft_delete_attendance(
 ) -> ApiResult<HttpResponse> {
     let user_id: i64 = admin_user.0.user_id()?;
     hr_service.soft_delete_attendance(*path, user_id).await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Attendance soft-deleted"})))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Restore a soft-deleted attendance (requires admin role)
@@ -394,7 +394,7 @@ pub async fn reject_leave_request(
 #[utoipa::path(
     delete, path = "/api/v1/hr/leave-requests/{id}/soft-delete", tag = "HR",
     params(("id" = i64, Path, description = "Leave request ID")),
-    responses((status = 200, description = "Leave request soft-deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    responses((status = 204, description = "Leave request soft-deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
     security(("bearer_auth" = []))
 )]
 pub async fn soft_delete_leave_request(
@@ -404,7 +404,7 @@ pub async fn soft_delete_leave_request(
 ) -> ApiResult<HttpResponse> {
     let user_id: i64 = admin_user.0.user_id()?;
     hr_service.soft_delete_leave_request(*path, user_id).await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Leave request soft-deleted"})))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Restore a soft-deleted leave request (requires admin role)
@@ -476,7 +476,7 @@ pub async fn get_leave_types(
 #[utoipa::path(
     delete, path = "/api/v1/hr/leave-types/{id}/soft-delete", tag = "HR",
     params(("id" = i64, Path, description = "Leave type ID")),
-    responses((status = 200, description = "Leave type soft-deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    responses((status = 204, description = "Leave type soft-deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
     security(("bearer_auth" = []))
 )]
 pub async fn soft_delete_leave_type(
@@ -488,7 +488,7 @@ pub async fn soft_delete_leave_type(
     hr_service
         .soft_delete_leave_type(*path, admin_user.0.tenant_id, user_id)
         .await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Leave type soft-deleted"})))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Restore a soft-deleted leave type (requires admin role)
@@ -618,7 +618,7 @@ pub async fn mark_payroll_paid(
 #[utoipa::path(
     delete, path = "/api/v1/hr/payroll/{id}/soft-delete", tag = "HR",
     params(("id" = i64, Path, description = "Payroll ID")),
-    responses((status = 200, description = "Payroll soft-deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
+    responses((status = 204, description = "Payroll soft-deleted"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
     security(("bearer_auth" = []))
 )]
 pub async fn soft_delete_payroll(
@@ -630,7 +630,7 @@ pub async fn soft_delete_payroll(
     hr_service
         .soft_delete_payroll(*path, admin_user.0.tenant_id, user_id)
         .await?;
-    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Payroll soft-deleted"})))
+    Ok(HttpResponse::NoContent().finish())
 }
 
 /// Restore a soft-deleted payroll (requires admin role)

@@ -193,7 +193,7 @@ async fn soft_delete_api_key(
     path: web::Path<(i64, i64)>,
 ) -> Result<HttpResponse, ApiError> {
     let (id, tenant_id) = path.into_inner();
-    let deleted_by = _admin.0.sub.parse::<i64>().unwrap_or(0);
+    let deleted_by = _admin.0.user_id()?;
     service
         .soft_delete_api_key(id, tenant_id, deleted_by)
         .await?;

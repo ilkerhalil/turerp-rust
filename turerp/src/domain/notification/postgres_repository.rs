@@ -85,6 +85,35 @@ impl From<NotificationRow> for Notification {
 }
 
 #[cfg(feature = "postgres")]
+impl From<NotificationRowWithTotal> for Notification {
+    fn from(row: NotificationRowWithTotal) -> Self {
+        Self {
+            id: row.id,
+            tenant_id: row.tenant_id,
+            user_id: row.user_id,
+            channel: row.channel.parse().unwrap_or(NotificationChannel::Email),
+            priority: row.priority.parse().unwrap_or_default(),
+            status: row.status.parse().unwrap_or(NotificationStatus::Queued),
+            notification_type: row.notification_type,
+            subject: row.subject.unwrap_or_default(),
+            body: row.body.unwrap_or_default(),
+            recipient: row.recipient,
+            template_key: row.template_key,
+            template_vars: row.template_vars,
+            provider_message_id: row.provider_message_id,
+            created_at: row.created_at,
+            sent_at: row.sent_at,
+            read_at: row.read_at,
+            last_error: row.last_error,
+            attempts: row.attempts as u32,
+            job_id: row.job_id,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
+        }
+    }
+}
+
+#[cfg(feature = "postgres")]
 #[derive(Debug, FromRow)]
 struct NotificationRowWithTotal {
     id: i64,
@@ -735,10 +764,10 @@ impl NotificationPreferenceRepository for PostgresNotificationPreferenceReposito
         let mut results = Vec::new();
 
         for pref in prefs {
-            let channel = pref
-                .channel
-                .parse()
-                .map_err(|e: String| ApiError::Validation(format!("Invalid channel: {}", e)))?;
+            let channel: crate::common::notifications::NotificationChannel =
+                pref.channel
+                    .parse()
+                    .map_err(|e: String| ApiError::Validation(format!("Invalid channel: {}", e)))?;
 
             let row: NotificationPreferenceRow = sqlx::query_as(
                 r#"

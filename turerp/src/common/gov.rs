@@ -7,7 +7,10 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use crate::common::circuit_breaker::{CircuitBreaker, SERVICE_GIB};
+use crate::common::retry::RetryPolicy;
 use crate::domain::efatura::model::EFaturaProfile;
 use crate::error::ApiError;
 
@@ -129,6 +132,122 @@ impl GibGateway for InMemoryGibGateway {
                 uuid
             )))
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ResilientGibGateway
+// ---------------------------------------------------------------------------
+
+/// GIB gateway wrapper with circuit breaker and retry protection
+pub struct ResilientGibGateway {
+    inner: BoxGibGateway,
+    circuit_breaker: Arc<CircuitBreaker>,
+    retry_policy: RetryPolicy,
+}
+
+impl ResilientGibGateway {
+    /// Wrap an existing GIB gateway with resilience
+    pub fn new(
+        inner: BoxGibGateway,
+        registry: &crate::common::circuit_breaker::CircuitBreakerRegistry,
+    ) -> Self {
+        let cb = registry.get(SERVICE_GIB).unwrap_or_else(|| {
+            Arc::new(CircuitBreaker::new(
+                SERVICE_GIB,
+                crate::common::circuit_breaker::CircuitBreakerConfig::gib_default(),
+            ))
+        });
+        Self {
+            inner,
+            circuit_breaker: cb,
+            retry_policy: RetryPolicy::new(
+                "gib_send",
+                crate::common::retry::RetryConfig::gib_default(),
+            ),
+        }
+    }
+}
+
+#[async_trait]
+impl GibGateway for ResilientGibGateway {
+    async fn send_invoice(
+        &self,
+        xml: &str,
+        profile: EFaturaProfile,
+    ) -> Result<GibSendResult, ApiError> {
+        let inner = self.inner.clone();
+        let xml = xml.to_string();
+        self.circuit_breaker
+            .call(|| async {
+                let inner = inner.clone();
+                let xml = xml.clone();
+                self.retry_policy
+                    .execute(move || {
+                        let inner = inner.clone();
+                        let xml = xml.clone();
+                        {
+                            let profile = profile.clone();
+                            async move { inner.send_invoice(&xml, profile).await }
+                        }
+                    })
+                    .await
+            })
+            .await
+    }
+
+    async fn check_status(&self, uuid: &str) -> Result<GibStatusResult, ApiError> {
+        let inner = self.inner.clone();
+        let uuid = uuid.to_string();
+        self.circuit_breaker
+            .call(|| async {
+                let inner = inner.clone();
+                let uuid = uuid.clone();
+                self.retry_policy
+                    .execute(move || {
+                        let inner = inner.clone();
+                        let uuid = uuid.clone();
+                        async move { inner.check_status(&uuid).await }
+                    })
+                    .await
+            })
+            .await
+    }
+
+    async fn get_incoming(&self, since: DateTime<Utc>) -> Result<Vec<String>, ApiError> {
+        let inner = self.inner.clone();
+        self.circuit_breaker
+            .call(|| async {
+                let inner = inner.clone();
+                self.retry_policy
+                    .execute(move || {
+                        let inner = inner.clone();
+                        async move { inner.get_incoming(since).await }
+                    })
+                    .await
+            })
+            .await
+    }
+
+    async fn cancel(&self, uuid: &str, reason: &str) -> Result<(), ApiError> {
+        let inner = self.inner.clone();
+        let uuid = uuid.to_string();
+        let reason = reason.to_string();
+        self.circuit_breaker
+            .call(|| async {
+                let inner = inner.clone();
+                let uuid = uuid.clone();
+                let reason = reason.clone();
+                self.retry_policy
+                    .execute(move || {
+                        let inner = inner.clone();
+                        let uuid = uuid.clone();
+                        let reason = reason.clone();
+                        async move { inner.cancel(&uuid, &reason).await }
+                    })
+                    .await
+            })
+            .await
     }
 }
 

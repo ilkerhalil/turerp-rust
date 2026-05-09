@@ -842,7 +842,8 @@ async fn test_stock_warehouse_crud() {
             "code": "WH001",
             "name": "Main Warehouse",
             "address": "123 Storage St",
-            "tenant_id": 1
+            "tenant_id": 1,
+            "company_id": 1
         }))
         .to_request();
 
@@ -911,7 +912,8 @@ async fn test_stock_movement_create() {
         .set_json(json!({
             "code": "WH002",
             "name": "Movement Warehouse",
-            "tenant_id": 1
+            "tenant_id": 1,
+            "company_id": 1
         }))
         .to_request();
 
@@ -929,7 +931,8 @@ async fn test_stock_movement_create() {
             "product_id": 1,
             "movement_type": "Purchase",
             "quantity": "100.00",
-            "created_by": user_id
+            "created_by": user_id,
+            "company_id": 1
         }))
         .to_request();
 
@@ -1189,6 +1192,7 @@ async fn test_sales_quotation_crud() {
             "cari_id": cari_id,
             "valid_until": (chrono::Utc::now() + chrono::Duration::days(30)).to_rfc3339(),
             "tenant_id": 1,
+            "company_id": 1,
             "lines": [{
                 "description": "Quoted product",
                 "quantity": "5.00",
@@ -1312,7 +1316,8 @@ async fn test_accounting_account_crud() {
             "account_type": "Asset",
             "sub_type": "CurrentAsset",
             "allow_transaction": true,
-            "tenant_id": 1
+            "tenant_id": 1,
+            "company_id": 1
         }))
         .to_request();
 
@@ -1361,7 +1366,8 @@ async fn test_accounting_journal_entry() {
             "account_type": "Asset",
             "sub_type": "CurrentAsset",
             "allow_transaction": true,
-            "tenant_id": 1
+            "tenant_id": 1,
+            "company_id": 1
         }))
         .to_request();
 
@@ -1379,7 +1385,8 @@ async fn test_accounting_journal_entry() {
             "account_type": "Revenue",
             "sub_type": "OperatingRevenue",
             "allow_transaction": true,
-            "tenant_id": 1
+            "tenant_id": 1,
+            "company_id": 1
         }))
         .to_request();
 
@@ -1398,6 +1405,7 @@ async fn test_accounting_journal_entry() {
             "description": "Test journal entry",
             "reference": "JE-001",
             "tenant_id": 1,
+            "company_id": 1,
             "created_by": user_id,
             "lines": [
                 {

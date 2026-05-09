@@ -19,6 +19,10 @@ use crate::domain::hr::repository::{
 };
 use crate::error::ApiError;
 
+fn default_company_id() -> i64 {
+    1
+}
+
 // ---------------------------------------------------------------------------
 // Employee row and repository
 // ---------------------------------------------------------------------------
@@ -28,6 +32,7 @@ use crate::error::ApiError;
 struct EmployeeRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     user_id: Option<i64>,
     employee_number: String,
     first_name: String,
@@ -61,6 +66,7 @@ impl From<EmployeeRow> for Employee {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             user_id: row.user_id,
             employee_number: row.employee_number,
             first_name: row.first_name,
@@ -106,16 +112,17 @@ impl EmployeeRepository for PostgresEmployeeRepository {
 
         let row: EmployeeRow = sqlx::query_as(
             r#"
-            INSERT INTO employees (tenant_id, user_id, employee_number, first_name, last_name,
+            INSERT INTO employees (tenant_id, company_id, user_id, employee_number, first_name, last_name,
                                    email, phone, department, position, hire_date, termination_date,
                                    status, salary, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())
-            RETURNING id, tenant_id, user_id, employee_number, first_name, last_name,
+            RETURNING id, tenant_id, company_id, user_id, employee_number, first_name, last_name,
                       email, phone, department, position, hire_date, termination_date,
                       status, salary, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(create.user_id)
         .bind(&create.employee_number)
         .bind(&create.first_name)
@@ -138,7 +145,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Employee>, ApiError> {
         let result: Option<EmployeeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
+            SELECT id, tenant_id, company_id, user_id, employee_number, first_name, last_name,
                    email, phone, department, position, hire_date, termination_date,
                    status, salary, created_at, updated_at, deleted_at, deleted_by
             FROM employees
@@ -157,7 +164,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Employee>, ApiError> {
         let rows: Vec<EmployeeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
+            SELECT id, tenant_id, company_id, user_id, employee_number, first_name, last_name,
                    email, phone, department, position, hire_date, termination_date,
                    status, salary, created_at, updated_at, deleted_at, deleted_by
             FROM employees
@@ -182,7 +189,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<EmployeeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
+            SELECT id, tenant_id, company_id, user_id, employee_number, first_name, last_name,
                    email, phone, department, position, hire_date, termination_date,
                    status, salary, created_at, updated_at, deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
@@ -207,7 +214,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
     async fn find_by_user(&self, user_id: i64) -> Result<Option<Employee>, ApiError> {
         let result: Option<EmployeeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
+            SELECT id, tenant_id, company_id, user_id, employee_number, first_name, last_name,
                    email, phone, department, position, hire_date, termination_date,
                    status, salary, created_at, updated_at, deleted_at, deleted_by
             FROM employees
@@ -237,7 +244,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
                 termination_date = COALESCE($2, termination_date),
                 updated_at = NOW()
             WHERE id = $3
-            RETURNING id, tenant_id, user_id, employee_number, first_name, last_name,
+            RETURNING id, tenant_id, company_id, user_id, employee_number, first_name, last_name,
                       email, phone, department, position, hire_date, termination_date,
                       status, salary, created_at, updated_at, deleted_at, deleted_by
             "#,
@@ -254,7 +261,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
 
     async fn delete(&self, id: i64) -> Result<(), ApiError> {
         // Note: This is a hard delete without tenant_id check.
-        // Prefer soft_delete(id, tenant_id, deleted_by) for tenant-scoped operations.
+        // Prefer soft_delete(id, tenant_id, company_id, deleted_by) for tenant-scoped operations.
         let result = sqlx::query(
             r#"
             DELETE FROM employees
@@ -323,7 +330,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Employee>, ApiError> {
         let rows: Vec<EmployeeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, user_id, employee_number, first_name, last_name,
+            SELECT id, tenant_id, company_id, user_id, employee_number, first_name, last_name,
                    email, phone, department, position, hire_date, termination_date,
                    status, salary, created_at, updated_at, deleted_at, deleted_by
             FROM employees
@@ -624,6 +631,7 @@ impl AttendanceRepository for PostgresAttendanceRepository {
 struct LeaveTypeRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     name: String,
     description: Option<String>,
     max_days_per_year: Decimal,
@@ -669,9 +677,9 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
     async fn create(&self, leave_type: LeaveType) -> Result<LeaveType, ApiError> {
         let row: LeaveTypeRow = sqlx::query_as(
             r#"
-            INSERT INTO leave_types (tenant_id, name, description, max_days_per_year, requires_approval)
+            INSERT INTO leave_types (tenant_id, company_id, name, description, max_days_per_year, requires_approval)
             VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, tenant_id, name, description, max_days_per_year, requires_approval,
+            RETURNING id, tenant_id, company_id, name, description, max_days_per_year, requires_approval,
                       deleted_at, deleted_by
             "#,
         )
@@ -690,7 +698,7 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<LeaveType>, ApiError> {
         let result: Option<LeaveTypeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval,
+            SELECT id, tenant_id, company_id, name, description, max_days_per_year, requires_approval,
                    deleted_at, deleted_by
             FROM leave_types
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -708,7 +716,7 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<LeaveType>, ApiError> {
         let rows: Vec<LeaveTypeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval,
+            SELECT id, tenant_id, company_id, name, description, max_days_per_year, requires_approval,
                    deleted_at, deleted_by
             FROM leave_types
             WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -792,7 +800,7 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<LeaveType>, ApiError> {
         let rows: Vec<LeaveTypeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval,
+            SELECT id, tenant_id, company_id, name, description, max_days_per_year, requires_approval,
                    deleted_at, deleted_by
             FROM leave_types
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
@@ -1110,6 +1118,7 @@ impl LeaveRequestRepository for PostgresLeaveRequestRepository {
 struct PayrollRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     employee_id: i64,
     period_start: DateTime<Utc>,
     period_end: DateTime<Utc>,
@@ -1182,11 +1191,11 @@ impl PayrollRepository for PostgresPayrollRepository {
 
         let row: PayrollRow = sqlx::query_as(
             r#"
-            INSERT INTO payrolls (tenant_id, employee_id, period_start, period_end,
+            INSERT INTO payrolls (tenant_id, company_id, employee_id, period_start, period_end,
                                   basic_salary, overtime_hours, overtime_pay, bonuses,
                                   deductions, net_salary, status, paid_at, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
-            RETURNING id, tenant_id, employee_id, period_start, period_end,
+            RETURNING id, tenant_id, company_id, employee_id, period_start, period_end,
                       basic_salary, overtime_hours, overtime_pay, bonuses,
                       deductions, net_salary, status, paid_at, created_at,
                       deleted_at, deleted_by
@@ -1214,7 +1223,7 @@ impl PayrollRepository for PostgresPayrollRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Payroll>, ApiError> {
         let result: Option<PayrollRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, employee_id, period_start, period_end,
+            SELECT id, tenant_id, company_id, employee_id, period_start, period_end,
                    basic_salary, overtime_hours, overtime_pay, bonuses,
                    deductions, net_salary, status, paid_at, created_at,
                    deleted_at, deleted_by
@@ -1234,7 +1243,7 @@ impl PayrollRepository for PostgresPayrollRepository {
     async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<Payroll>, ApiError> {
         let rows: Vec<PayrollRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, employee_id, period_start, period_end,
+            SELECT id, tenant_id, company_id, employee_id, period_start, period_end,
                    basic_salary, overtime_hours, overtime_pay, bonuses,
                    deductions, net_salary, status, paid_at, created_at,
                    deleted_at, deleted_by
@@ -1259,7 +1268,7 @@ impl PayrollRepository for PostgresPayrollRepository {
     ) -> Result<Vec<Payroll>, ApiError> {
         let rows: Vec<PayrollRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, employee_id, period_start, period_end,
+            SELECT id, tenant_id, company_id, employee_id, period_start, period_end,
                    basic_salary, overtime_hours, overtime_pay, bonuses,
                    deductions, net_salary, status, paid_at, created_at,
                    deleted_at, deleted_by
@@ -1287,7 +1296,7 @@ impl PayrollRepository for PostgresPayrollRepository {
             UPDATE payrolls
             SET status = $1
             WHERE id = $2
-            RETURNING id, tenant_id, employee_id, period_start, period_end,
+            RETURNING id, tenant_id, company_id, employee_id, period_start, period_end,
                       basic_salary, overtime_hours, overtime_pay, bonuses,
                       deductions, net_salary, status, paid_at, created_at,
                       deleted_at, deleted_by
@@ -1309,7 +1318,7 @@ impl PayrollRepository for PostgresPayrollRepository {
             SET status = 'Paid',
                 paid_at = NOW()
             WHERE id = $1
-            RETURNING id, tenant_id, employee_id, period_start, period_end,
+            RETURNING id, tenant_id, company_id, employee_id, period_start, period_end,
                       basic_salary, overtime_hours, overtime_pay, bonuses,
                       deductions, net_salary, status, paid_at, created_at,
                       deleted_at, deleted_by
@@ -1373,7 +1382,7 @@ impl PayrollRepository for PostgresPayrollRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Payroll>, ApiError> {
         let rows: Vec<PayrollRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, employee_id, period_start, period_end,
+            SELECT id, tenant_id, company_id, employee_id, period_start, period_end,
                    basic_salary, overtime_hours, overtime_pay, bonuses,
                    deductions, net_salary, status, paid_at, created_at,
                    deleted_at, deleted_by

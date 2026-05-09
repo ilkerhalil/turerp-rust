@@ -16,17 +16,23 @@ pub use v1::api_keys_configure as v1_api_keys_configure;
 pub use v1::assets_configure as v1_assets_configure;
 pub use v1::audit_configure as v1_audit_configure;
 pub use v1::auth_configure as v1_auth_configure;
+pub use v1::bank_configure as v1_bank_configure;
 pub use v1::cari_configure as v1_cari_configure;
 pub use v1::chart_of_accounts_configure as v1_chart_of_accounts_configure;
+pub use v1::companies_configure as v1_companies_configure;
+pub use v1::cost_centers_configure as v1_cost_centers_configure;
 pub use v1::crm_configure as v1_crm_configure;
 pub use v1::currency_configure as v1_currency_configure;
 pub use v1::custom_fields_configure as v1_custom_fields_configure;
+pub use v1::dashboard_configure as v1_dashboard_configure;
 pub use v1::edefter_configure as v1_edefter_configure;
 pub use v1::efatura_configure as v1_efatura_configure;
 pub use v1::events_configure as v1_events_configure;
 pub use v1::feature_flags_configure as v1_feature_flags_configure;
+pub use v1::files_configure as v1_files_configure;
 pub use v1::goods_receipts_configure as v1_goods_receipts_configure;
 pub use v1::hr_configure as v1_hr_configure;
+pub use v1::import_configure as v1_import_configure;
 pub use v1::invoice_configure as v1_invoice_configure;
 pub use v1::jobs_configure as v1_jobs_configure;
 pub use v1::manufacturing_configure as v1_manufacturing_configure;
@@ -38,14 +44,17 @@ pub use v1::purchase_orders_configure as v1_purchase_orders_configure;
 pub use v1::purchase_requests_configure as v1_purchase_requests_configure;
 pub use v1::rate_limits_configure as v1_rate_limits_configure;
 pub use v1::reports_configure as v1_reports_configure;
+pub use v1::resilience_configure as v1_resilience_configure;
 pub use v1::sales_configure as v1_sales_configure;
 pub use v1::search_configure as v1_search_configure;
 pub use v1::settings_configure as v1_settings_configure;
 pub use v1::stock_configure as v1_stock_configure;
+pub use v1::subscriptions_configure as v1_subscriptions_configure;
 pub use v1::tax_configure as v1_tax_configure;
 pub use v1::tenant_configure as v1_tenant_configure;
 pub use v1::users_configure as v1_users_configure;
 pub use v1::webhooks_configure as v1_webhooks_configure;
+pub use v1::workflows_configure as v1_workflows_configure;
 
 use crate::common::MessageResponse;
 use crate::domain::auth::{LoginRequest, LoginResponse, RefreshTokenRequest, RegisterRequest};
@@ -82,6 +91,26 @@ use utoipa::OpenApi;
         crate::api::v1::mfa::mfa_status,
         crate::api::v1::mfa::mfa_verify,
         crate::api::v1::mfa::mfa_regenerate_backup_codes,
+        // Bank
+        crate::api::v1::bank::create_account,
+        crate::api::v1::bank::get_accounts,
+        crate::api::v1::bank::get_account,
+        crate::api::v1::bank::update_account,
+        crate::api::v1::bank::delete_account,
+        crate::api::v1::bank::restore_account,
+        crate::api::v1::bank::destroy_account,
+        crate::api::v1::bank::upload_statement,
+        crate::api::v1::bank::get_transactions,
+        crate::api::v1::bank::get_unmatched_transactions,
+        crate::api::v1::bank::match_transaction,
+        crate::api::v1::bank::unmatch_transaction,
+        crate::api::v1::bank::get_reconciliation_report,
+        crate::api::v1::bank::auto_reconcile,
+        crate::api::v1::bank::create_rule,
+        crate::api::v1::bank::get_rules,
+        crate::api::v1::bank::get_rule,
+        crate::api::v1::bank::update_rule,
+        crate::api::v1::bank::delete_rule,
         // Users
         crate::api::v1::users::create_user,
         crate::api::v1::users::get_user,
@@ -405,6 +434,19 @@ use utoipa::OpenApi;
         crate::api::v1::chart_of_accounts::get_chart_account_children,
         crate::api::v1::chart_of_accounts::recalculate_chart_account_balance,
         crate::api::v1::chart_of_accounts::get_trial_balance,
+        // Cost Centers
+        crate::api::v1::cost_centers::create_cost_center,
+        crate::api::v1::cost_centers::list_cost_centers,
+        crate::api::v1::cost_centers::get_cost_center,
+        crate::api::v1::cost_centers::update_cost_center,
+        crate::api::v1::cost_centers::delete_cost_center,
+        crate::api::v1::cost_centers::restore_cost_center,
+        crate::api::v1::cost_centers::list_deleted_cost_centers,
+        crate::api::v1::cost_centers::destroy_cost_center,
+        crate::api::v1::cost_centers::bulk_restore_cost_centers,
+        crate::api::v1::cost_centers::create_allocation,
+        crate::api::v1::cost_centers::get_allocations,
+        crate::api::v1::cost_centers::get_profitability,
         // Products
         crate::api::v1::product_variants::get_products,
         crate::api::v1::product_variants::create_product,
@@ -517,13 +559,31 @@ use utoipa::OpenApi;
         crate::api::v1::events::publish_event,
         crate::api::v1::events::process_outbox,
         crate::api::v1::events::get_pending_events,
+        crate::api::v1::events::retry_outbox_event,
         crate::api::v1::events::get_dead_letters,
         crate::api::v1::events::retry_dead_letter,
+        crate::api::v1::events::get_dlq,
+        crate::api::v1::events::retry_dlq,
+        crate::api::v1::events::get_cdc_status,
         // Search
         crate::api::v1::search::search,
         crate::api::v1::search::index_document,
         crate::api::v1::search::remove_document,
         crate::api::v1::search::reindex,
+        // Subscriptions
+        crate::api::v1::subscriptions::create_plan,
+        crate::api::v1::subscriptions::get_plan,
+        crate::api::v1::subscriptions::list_plans,
+        crate::api::v1::subscriptions::update_plan,
+        crate::api::v1::subscriptions::delete_plan,
+        crate::api::v1::subscriptions::create_subscription,
+        crate::api::v1::subscriptions::get_subscription,
+        crate::api::v1::subscriptions::list_subscriptions,
+        crate::api::v1::subscriptions::update_subscription,
+        crate::api::v1::subscriptions::delete_subscription,
+        crate::api::v1::subscriptions::renew_subscription,
+        crate::api::v1::subscriptions::due_for_billing,
+        crate::api::v1::subscriptions::get_subscription_invoices,
         // Tax
         crate::api::v1::tax::create_tax_rate,
         crate::api::v1::tax::list_tax_rates,
@@ -583,6 +643,29 @@ use utoipa::OpenApi;
         crate::api::v1::edefter::sign_berat,
         crate::api::v1::edefter::send_to_saklayici,
         crate::api::v1::edefter::check_status,
+        // Dashboard
+        crate::api::v1::dashboard::get_all_kpis,
+        crate::api::v1::dashboard::get_single_kpi,
+        crate::api::v1::dashboard::get_sales_chart,
+        crate::api::v1::dashboard::get_revenue_by_category_chart,
+        crate::api::v1::dashboard::get_top_products_chart,
+        crate::api::v1::dashboard::create_widget,
+        crate::api::v1::dashboard::list_widgets,
+        crate::api::v1::dashboard::delete_widget,
+        // Resilience
+        crate::api::v1::resilience::list_circuit_breakers,
+        crate::api::v1::resilience::reset_circuit_breaker,
+        crate::api::v1::resilience::get_retry_stats,
+        // Workflows
+        crate::api::v1::workflows::create_template,
+        crate::api::v1::workflows::list_templates,
+        crate::api::v1::workflows::start_workflow,
+        crate::api::v1::workflows::approve_step,
+        crate::api::v1::workflows::reject_step,
+        crate::api::v1::workflows::resubmit_workflow,
+        crate::api::v1::workflows::get_pending_approvals,
+        crate::api::v1::workflows::get_instance,
+        crate::api::v1::workflows::get_instance_audit,
     ),
     components(
         schemas(
@@ -634,6 +717,7 @@ use utoipa::OpenApi;
             crate::api::v1::events::OutboxEventResponse,
             crate::api::v1::events::DeadLetterResponse,
             crate::api::v1::events::ProcessOutboxResponse,
+            crate::api::v1::events::CdcStatusResponse,
             // Chart of Accounts
             crate::domain::chart_of_accounts::model::AccountGroup,
             crate::domain::chart_of_accounts::model::ChartAccount,
@@ -642,6 +726,20 @@ use utoipa::OpenApi;
             crate::domain::chart_of_accounts::model::UpdateChartAccount,
             crate::domain::chart_of_accounts::model::AccountTreeNode,
             crate::domain::chart_of_accounts::model::TrialBalanceEntry,
+            // Cost Centers
+            crate::domain::cost_center::model::CostCenter,
+            crate::domain::cost_center::model::CostCenterType,
+            crate::domain::cost_center::model::CostCenterResponse,
+            crate::domain::cost_center::model::CreateCostCenter,
+            crate::domain::cost_center::model::UpdateCostCenter,
+            crate::domain::cost_center::model::CostCenterAllocation,
+            crate::domain::cost_center::model::AllocationResponse,
+            crate::domain::cost_center::model::CreateAllocation,
+            crate::domain::cost_center::model::ProfitabilityReport,
+            crate::domain::cost_center::model::BulkRestoreResponse<crate::domain::cost_center::model::CostCenterResponse>,
+            crate::domain::cost_center::model::BulkRestoreFailed,
+            crate::api::v1::cost_centers::BulkRestoreRequest,
+            crate::api::v1::cost_centers::ProfitabilityQuery,
             // Search
             crate::api::v1::search::SearchRequest,
             crate::api::v1::search::SearchResultResponse,
@@ -698,6 +796,57 @@ use utoipa::OpenApi;
             crate::domain::edefter::model::BalanceCheckResult,
             crate::domain::edefter::model::BeratInfo,
             crate::api::v1::edefter::XmlResponse,
+            // Dashboard
+            crate::domain::dashboard::model::KpiWidget,
+            crate::domain::dashboard::model::KpiFormat,
+            crate::domain::dashboard::model::ChartData,
+            crate::domain::dashboard::model::ChartDataset,
+            crate::domain::dashboard::model::DashboardFilter,
+            crate::domain::dashboard::model::DashboardWidgetConfig,
+            crate::domain::dashboard::model::CreateWidgetConfig,
+            crate::domain::dashboard::model::WidgetType,
+            crate::domain::dashboard::model::WidgetPosition,
+            crate::domain::dashboard::model::KpiResponse,
+            crate::domain::dashboard::model::AgingBucket,
+            crate::domain::dashboard::model::TopProduct,
+            crate::domain::dashboard::model::SalesPeriod,
+            crate::domain::dashboard::model::RevenueByCategory,
+            crate::domain::dashboard::model::ExpenseSummary,
+            crate::domain::dashboard::model::KpiName,
+            crate::api::v1::dashboard::ChartPeriodQuery,
+            // Bank
+            crate::domain::bank::model::BankCode,
+            crate::domain::bank::model::BankAccount,
+            crate::domain::bank::model::BankAccountResponse,
+            crate::domain::bank::model::CreateBankAccount,
+            crate::domain::bank::model::UpdateBankAccount,
+            crate::domain::bank::model::BankStatement,
+            crate::domain::bank::model::ImportBankStatement,
+            crate::domain::bank::model::StatementFormat,
+            crate::domain::bank::model::BankTransaction,
+            crate::domain::bank::model::BankTransactionResponse,
+            crate::domain::bank::model::MatchStatus,
+            crate::domain::bank::model::MatchTransaction,
+            crate::domain::bank::model::ReconciliationRule,
+            crate::domain::bank::model::CreateReconciliationRule,
+            crate::domain::bank::model::UpdateReconciliationRule,
+            crate::domain::bank::model::MatchField,
+            crate::domain::bank::model::ReconciliationReport,
+            // Subscriptions
+            crate::domain::subscription::model::BillingCycle,
+            crate::domain::subscription::model::SubscriptionStatus,
+            crate::domain::subscription::model::SubscriptionInvoiceStatus,
+            crate::domain::subscription::model::SubscriptionPlan,
+            crate::domain::subscription::model::SubscriptionPlanResponse,
+            crate::domain::subscription::model::CreatePlan,
+            crate::domain::subscription::model::UpdatePlan,
+            crate::domain::subscription::model::Subscription,
+            crate::domain::subscription::model::SubscriptionResponse,
+            crate::domain::subscription::model::CreateSubscription,
+            crate::domain::subscription::model::UpdateSubscription,
+            crate::domain::subscription::model::SubscriptionInvoice,
+            crate::domain::subscription::model::SubscriptionInvoiceResponse,
+            crate::api::v1::subscriptions::DueForBillingQuery,
             // Webhooks
             crate::domain::webhook::model::WebhookStatus,
             crate::domain::webhook::model::DeliveryStatus,
@@ -705,6 +854,33 @@ use utoipa::OpenApi;
             crate::domain::webhook::model::UpdateWebhook,
             crate::domain::webhook::model::WebhookResponse,
             crate::domain::webhook::model::WebhookDeliveryResponse,
+            // Resilience
+            crate::common::circuit_breaker::CircuitBreakerStats,
+            crate::common::circuit_breaker::CircuitState,
+            crate::common::circuit_breaker::CircuitBreakerConfig,
+            crate::common::retry::RetryStatsSnapshot,
+            crate::common::retry::RetryConfig,
+            crate::api::v1::resilience::CircuitBreakerListResponse,
+            crate::api::v1::resilience::CircuitBreakerResetResponse,
+            crate::api::v1::resilience::RetryStatsResponse,
+            crate::api::v1::resilience::ServicePath,
+            // Workflows
+            crate::domain::workflow::model::WorkflowTemplate,
+            crate::domain::workflow::model::CreateWorkflowTemplate,
+            crate::domain::workflow::model::WorkflowTemplateResponse,
+            crate::domain::workflow::model::WorkflowInstance,
+            crate::domain::workflow::model::WorkflowInstanceResponse,
+            crate::domain::workflow::model::WorkflowInstanceDetailResponse,
+            crate::domain::workflow::model::WorkflowStep,
+            crate::domain::workflow::model::WorkflowStepResponse,
+            crate::domain::workflow::model::WorkflowAuditLog,
+            crate::domain::workflow::model::WorkflowAuditLogResponse,
+            crate::domain::workflow::model::ApproveStep,
+            crate::domain::workflow::model::RejectStep,
+            crate::domain::workflow::model::WorkflowStatus,
+            crate::domain::workflow::model::WorkflowStepStatus,
+            crate::domain::workflow::model::WorkflowEntityType,
+            crate::api::v1::workflows::StartWorkflowRequest,
         )
     ),
     security(
@@ -714,10 +890,12 @@ use utoipa::OpenApi;
     tags(
         (name = "Admin", description = "Administrative endpoints (rate limits, system status)"),
         (name = "Auth", description = "Authentication endpoints (login, register, token refresh)"),
+        (name = "Bank", description = "Turkish bank integration, statements, transactions and reconciliation"),
         (name = "Users", description = "User management endpoints (CRUD operations)"),
         (name = "Tenant", description = "Tenant management and configuration"),
         (name = "Cari", description = "Customer / Vendor accounts"),
         (name = "Stock", description = "Warehouses, stock movements and inventory"),
+        (name = "Subscriptions", description = "Subscription plans, subscriptions, and SaaS billing"),
         (name = "Invoice", description = "Invoices and payments"),
         (name = "Sales", description = "Sales orders and quotations"),
         (name = "Purchase Orders", description = "Purchase orders and vendor management"),
@@ -731,6 +909,7 @@ use utoipa::OpenApi;
         (name = "CRM", description = "Leads, opportunities, campaigns and tickets"),
         (name = "Products", description = "Product catalog, categories and variants"),
         (name = "Chart of Accounts", description = "Chart of accounts, account tree and trial balance"),
+        (name = "Cost Centers", description = "Cost center and profit center management with allocations and profitability reports"),
         (name = "Feature Flags", description = "Feature flag management endpoints"),
         (name = "Custom Fields", description = "Custom field definitions for dynamic module attributes"),
         (name = "Settings", description = "Configuration management endpoints"),
@@ -742,10 +921,13 @@ use utoipa::OpenApi;
         (name = "Search", description = "Full-text search across entities"),
         (name = "Tax", description = "Turkish tax rate management, calculation, and KVB period tracking"),
         (name = "Currency", description = "Multi-currency support, exchange rates and conversion"),
+        (name = "Dashboard", description = "BI dashboard KPIs, charts and widget management"),
         (name = "e-Fatura", description = "Turkish e-Fatura (electronic invoicing) integration with GIB"),
         (name = "e-Defter", description = "Turkish e-Defter (electronic ledger) integration with GIB"),
         (name = "Audit", description = "Audit log retrieval"),
-        (name = "Webhooks", description = "Webhook endpoints and delivery management")
+        (name = "Webhooks", description = "Webhook endpoints and delivery management"),
+        (name = "Resilience", description = "Circuit breaker and retry monitoring"),
+        (name = "Workflows", description = "Configurable approval workflows for documents and business processes")
     )
 )]
 pub struct ApiDoc;

@@ -5,11 +5,16 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::cache::{cache_get, cache_set, CacheService};
 use crate::common::pagination::PaginatedResult;
 use crate::db::error::map_sqlx_error;
 use crate::domain::cari::model::{Cari, CariStatus, CariType, CreateCari, UpdateCari};
 use crate::domain::cari::repository::{BoxCariRepository, CariRepository};
 use crate::error::ApiError;
+
+fn default_company_id() -> i64 {
+    1
+}
 
 /// Convert sqlx errors to ApiError with proper detection of error types
 
@@ -34,6 +39,7 @@ struct CariRow {
     default_currency: String,
     status: String,
     tenant_id: i64,
+    company_id: i64,
     created_by: i64,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -82,6 +88,7 @@ impl From<CariRow> for Cari {
             default_currency: row.default_currency,
             status,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             created_by: row.created_by,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -112,6 +119,7 @@ struct CariRowWithTotal {
     default_currency: String,
     status: String,
     tenant_id: i64,
+    company_id: i64,
     created_by: i64,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -159,6 +167,7 @@ impl From<CariRowWithTotal> for (Cari, i64) {
             default_currency: row.default_currency,
             status,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             created_by: row.created_by,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -172,17 +181,24 @@ impl From<CariRowWithTotal> for (Cari, i64) {
 /// PostgreSQL cari repository
 pub struct PostgresCariRepository {
     pool: Arc<PgPool>,
+    cache: Arc<dyn CacheService>,
 }
 
 impl PostgresCariRepository {
     /// Create a new PostgreSQL cari repository
-    pub fn new(pool: Arc<PgPool>) -> Self {
-        Self { pool }
+    pub fn new(pool: Arc<PgPool>, cache: Arc<dyn CacheService>) -> Self {
+        Self { pool, cache }
     }
 
     /// Convert to boxed trait object
     pub fn into_boxed(self) -> BoxCariRepository {
         Arc::new(self) as BoxCariRepository
+    }
+
+    /// Invalidate cari list cache entries for a tenant
+    async fn invalidate_cari_lists(&self, tenant_id: i64) {
+        let pattern = format!("turerp:t{}:cari:*", tenant_id);
+        self.cache.delete_pattern(&pattern).await.ok();
     }
 }
 
@@ -196,11 +212,11 @@ impl CariRepository for PostgresCariRepository {
             r#"
             INSERT INTO cari (code, name, cari_type, tax_number, tax_office, identity_number,
                               email, phone, address, city, country, postal_code,
-                              credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at)
+                              credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
             RETURNING id, code, name, cari_type, tax_number, tax_office, identity_number,
                       email, phone, address, city, country, postal_code,
-                      credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
+                      credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at, updated_at,
                       deleted_at, deleted_by
             "#,
         )
@@ -221,12 +237,15 @@ impl CariRepository for PostgresCariRepository {
         .bind("TRY")
         .bind(&status)
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(create.created_by)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Cari"))?;
 
-        Ok(row.into())
+        let cari: Cari = row.into();
+        self.invalidate_cari_lists(create.tenant_id).await;
+        Ok(cari)
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Cari>, ApiError> {
@@ -234,7 +253,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -254,7 +273,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE code = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -270,11 +289,22 @@ impl CariRepository for PostgresCariRepository {
     }
 
     async fn find_all(&self, tenant_id: i64) -> Result<Vec<Cari>, ApiError> {
+        let cache_key = format!("turerp:t{}:cari:all", tenant_id);
+        if let Some(cached) = cache_get::<Vec<Cari>>(&*self.cache, &cache_key).await? {
+            if self.cache.is_enabled() {
+                metrics::counter!("cache_hits_total", "cache" => "cari").increment(1);
+            }
+            return Ok(cached);
+        }
+        if self.cache.is_enabled() {
+            metrics::counter!("cache_misses_total", "cache" => "cari").increment(1);
+        }
+
         let rows: Vec<CariRow> = sqlx::query_as(
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -286,7 +316,11 @@ impl CariRepository for PostgresCariRepository {
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find all cari: {}", e)))?;
 
-        Ok(rows.into_iter().map(|r| r.into()).collect())
+        let items: Vec<Cari> = rows.into_iter().map(|r| r.into()).collect();
+        cache_set(&*self.cache, &cache_key, &items, Some(30))
+            .await
+            .ok();
+        Ok(items)
     }
 
     async fn find_by_type(
@@ -300,7 +334,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE tenant_id = $1 AND cari_type = $2 AND deleted_at IS NULL
@@ -321,7 +355,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -358,7 +392,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM cari
@@ -397,7 +431,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM cari
@@ -436,7 +470,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM cari
@@ -498,7 +532,7 @@ impl CariRepository for PostgresCariRepository {
             WHERE id = $16 AND tenant_id = $17 AND deleted_at IS NULL
             RETURNING id, code, name, cari_type, tax_number, tax_office, identity_number,
                       email, phone, address, city, country, postal_code,
-                      credit_limit, current_balance, status, tenant_id, created_by, created_at, updated_at,
+                      credit_limit, current_balance, status, tenant_id, company_id, created_by, created_at, updated_at,
                       deleted_at, deleted_by
             "#,
         )
@@ -523,6 +557,7 @@ impl CariRepository for PostgresCariRepository {
         .await
         .map_err(|e| map_sqlx_error(e, "Cari"))?;
 
+        self.invalidate_cari_lists(tenant_id).await;
         Ok(row.into())
     }
 
@@ -545,6 +580,7 @@ impl CariRepository for PostgresCariRepository {
             return Err(ApiError::NotFound("Cari not found".to_string()));
         }
 
+        self.invalidate_cari_lists(tenant_id).await;
         Ok(())
     }
 
@@ -569,6 +605,7 @@ impl CariRepository for PostgresCariRepository {
         }
 
         // After restore, find_by_id will work because deleted_at is now NULL
+        self.invalidate_cari_lists(tenant_id).await;
         self.find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Cari not found".to_string()))
@@ -579,7 +616,7 @@ impl CariRepository for PostgresCariRepository {
             r#"
             SELECT id, code, name, cari_type, tax_number, tax_office, identity_number,
                    email, phone, address, city, country, postal_code,
-                   credit_limit, current_balance, default_currency, status, tenant_id, created_by, created_at, updated_at,
+                   credit_limit, current_balance, default_currency, status, tenant_id, company_id, created_by, created_at, updated_at,
                    deleted_at, deleted_by
             FROM cari
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
@@ -611,6 +648,7 @@ impl CariRepository for PostgresCariRepository {
             return Err(ApiError::NotFound("Cari not found".to_string()));
         }
 
+        self.invalidate_cari_lists(tenant_id).await;
         Ok(())
     }
 

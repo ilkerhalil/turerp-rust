@@ -16,6 +16,10 @@ use crate::domain::assets::repository::{
 };
 use crate::error::ApiError;
 
+fn default_company_id() -> i64 {
+    1
+}
+
 /// Convert sqlx errors to ApiError with proper detection of error types
 
 /// Parse AssetStatus from database string representation
@@ -62,6 +66,7 @@ fn parse_depreciation_method(s: &str) -> DepreciationMethod {
 struct AssetCategoryRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     name: String,
     description: Option<String>,
     default_useful_life_years: i32,
@@ -109,9 +114,9 @@ impl AssetCategoryRepository for PostgresAssetCategoryRepository {
 
         let row: AssetCategoryRow = sqlx::query_as(
             r#"
-            INSERT INTO asset_categories (tenant_id, name, description, default_useful_life_years, default_depreciation_method, created_at)
+            INSERT INTO asset_categories (tenant_id, company_id, name, description, default_useful_life_years, default_depreciation_method, created_at)
             VALUES ($1, $2, $3, $4, $5, NOW())
-            RETURNING id, tenant_id, name, description, default_useful_life_years, default_depreciation_method, created_at
+            RETURNING id, tenant_id, company_id, name, description, default_useful_life_years, default_depreciation_method, created_at
             "#,
         )
         .bind(category.tenant_id)
@@ -129,7 +134,7 @@ impl AssetCategoryRepository for PostgresAssetCategoryRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<AssetCategory>, ApiError> {
         let result: Option<AssetCategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, default_useful_life_years, default_depreciation_method, created_at
+            SELECT id, tenant_id, company_id, name, description, default_useful_life_years, default_depreciation_method, created_at
             FROM asset_categories
             WHERE id = $1 AND tenant_id = $2
             "#,
@@ -146,7 +151,7 @@ impl AssetCategoryRepository for PostgresAssetCategoryRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<AssetCategory>, ApiError> {
         let rows: Vec<AssetCategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, default_useful_life_years, default_depreciation_method, created_at
+            SELECT id, tenant_id, company_id, name, description, default_useful_life_years, default_depreciation_method, created_at
             FROM asset_categories
             WHERE tenant_id = $1
             ORDER BY created_at DESC
@@ -190,6 +195,7 @@ impl AssetCategoryRepository for PostgresAssetCategoryRepository {
 struct AssetRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     asset_code: String,
     name: String,
     category_id: Option<i64>,
@@ -220,6 +226,7 @@ impl From<AssetRow> for Asset {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             asset_code: row.asset_code,
             name: row.name,
             category_id: row.category_id,
@@ -252,6 +259,7 @@ impl From<AssetRow> for Asset {
 struct AssetRowWithTotal {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     asset_code: String,
     name: String,
     category_id: Option<i64>,
@@ -283,6 +291,7 @@ impl From<AssetRowWithTotal> for (Asset, i64) {
         let asset = Asset {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             asset_code: row.asset_code,
             name: row.name,
             category_id: row.category_id,
@@ -340,7 +349,7 @@ impl AssetsRepository for PostgresAssetsRepository {
 
         let row: AssetRow = sqlx::query_as(
             r#"
-            INSERT INTO assets (tenant_id, asset_code, name, category_id, description,
+            INSERT INTO assets (tenant_id, company_id, asset_code, name, category_id, description,
                                 serial_number, location, status, acquisition_date,
                                 acquisition_cost, salvage_value, useful_life_years,
                                 depreciation_method, accumulated_depreciation, book_value,
@@ -348,7 +357,7 @@ impl AssetsRepository for PostgresAssetsRepository {
                                 responsible_person_id, notes, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
                     $16, $17, $18, $19, $20, NOW(), NOW())
-            RETURNING id, tenant_id, asset_code, name, category_id, description,
+            RETURNING id, tenant_id, company_id, asset_code, name, category_id, description,
                       serial_number, location, status, acquisition_date,
                       acquisition_cost, salvage_value, useful_life_years,
                       depreciation_method, accumulated_depreciation, book_value,
@@ -357,6 +366,7 @@ impl AssetsRepository for PostgresAssetsRepository {
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(&asset_code)
         .bind(&create.name)
         .bind(create.category_id)
@@ -386,7 +396,7 @@ impl AssetsRepository for PostgresAssetsRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Asset>, ApiError> {
         let result: Option<AssetRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, asset_code, name, category_id, description,
+            SELECT id, tenant_id, company_id, asset_code, name, category_id, description,
                    serial_number, location, status, acquisition_date,
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,
@@ -408,7 +418,7 @@ impl AssetsRepository for PostgresAssetsRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError> {
         let rows: Vec<AssetRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, asset_code, name, category_id, description,
+            SELECT id, tenant_id, company_id, asset_code, name, category_id, description,
                    serial_number, location, status, acquisition_date,
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,
@@ -437,7 +447,7 @@ impl AssetsRepository for PostgresAssetsRepository {
 
         let rows: Vec<AssetRowWithTotal> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, asset_code, name, category_id, description,
+            SELECT id, tenant_id, company_id, asset_code, name, category_id, description,
                    serial_number, location, status, acquisition_date,
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,
@@ -478,7 +488,7 @@ impl AssetsRepository for PostgresAssetsRepository {
 
         let rows: Vec<AssetRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, asset_code, name, category_id, description,
+            SELECT id, tenant_id, company_id, asset_code, name, category_id, description,
                    serial_number, location, status, acquisition_date,
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,
@@ -505,7 +515,7 @@ impl AssetsRepository for PostgresAssetsRepository {
     ) -> Result<Vec<Asset>, ApiError> {
         let rows: Vec<AssetRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, asset_code, name, category_id, description,
+            SELECT id, tenant_id, company_id, asset_code, name, category_id, description,
                    serial_number, location, status, acquisition_date,
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,
@@ -546,7 +556,7 @@ impl AssetsRepository for PostgresAssetsRepository {
                 notes = COALESCE($7, notes),
                 updated_at = NOW()
             WHERE id = $8 AND tenant_id = $9 AND deleted_at IS NULL
-            RETURNING id, tenant_id, asset_code, name, category_id, description,
+            RETURNING id, tenant_id, company_id, asset_code, name, category_id, description,
                       serial_number, location, status, acquisition_date,
                       acquisition_cost, salvage_value, useful_life_years,
                       depreciation_method, accumulated_depreciation, book_value,
@@ -583,7 +593,7 @@ impl AssetsRepository for PostgresAssetsRepository {
             UPDATE assets
             SET status = $1, updated_at = NOW()
             WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
-            RETURNING id, tenant_id, asset_code, name, category_id, description,
+            RETURNING id, tenant_id, company_id, asset_code, name, category_id, description,
                       serial_number, location, status, acquisition_date,
                       acquisition_cost, salvage_value, useful_life_years,
                       depreciation_method, accumulated_depreciation, book_value,
@@ -614,7 +624,7 @@ impl AssetsRepository for PostgresAssetsRepository {
                 book_value = book_value - $1,
                 updated_at = NOW()
             WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
-            RETURNING id, tenant_id, asset_code, name, category_id, description,
+            RETURNING id, tenant_id, company_id, asset_code, name, category_id, description,
                       serial_number, location, status, acquisition_date,
                       acquisition_cost, salvage_value, useful_life_years,
                       depreciation_method, accumulated_depreciation, book_value,
@@ -660,7 +670,7 @@ impl AssetsRepository for PostgresAssetsRepository {
             UPDATE assets
             SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
-            RETURNING id, tenant_id, asset_code, name, category_id, description,
+            RETURNING id, tenant_id, company_id, asset_code, name, category_id, description,
                       serial_number, location, status, acquisition_date,
                       acquisition_cost, salvage_value, useful_life_years,
                       depreciation_method, accumulated_depreciation, book_value,
@@ -680,7 +690,7 @@ impl AssetsRepository for PostgresAssetsRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError> {
         let rows: Vec<AssetRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, asset_code, name, category_id, description,
+            SELECT id, tenant_id, company_id, asset_code, name, category_id, description,
                    serial_number, location, status, acquisition_date,
                    acquisition_cost, salvage_value, useful_life_years,
                    depreciation_method, accumulated_depreciation, book_value,

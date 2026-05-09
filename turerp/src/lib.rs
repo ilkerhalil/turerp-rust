@@ -53,6 +53,8 @@ pub mod app {
     use crate::domain::cari::service::CariService;
     use crate::domain::chart_of_accounts::repository::BoxChartAccountRepository;
     use crate::domain::chart_of_accounts::service::ChartOfAccountsService;
+    use crate::domain::company::repository::BoxCompanyRepository;
+    use crate::domain::company::service::CompanyService;
     use crate::domain::crm::repository::{
         BoxCampaignRepository, BoxLeadRepository, BoxOpportunityRepository, BoxTicketRepository,
     };
@@ -118,6 +120,7 @@ pub mod app {
     use crate::domain::audit::repository::InMemoryAuditLogRepository;
     use crate::domain::cari::repository::InMemoryCariRepository;
     use crate::domain::chart_of_accounts::repository::InMemoryChartAccountRepository;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
     use crate::domain::crm::repository::{
         InMemoryCampaignRepository, InMemoryLeadRepository, InMemoryOpportunityRepository,
         InMemoryTicketRepository,
@@ -185,6 +188,8 @@ pub mod app {
     use crate::domain::audit::postgres_repository::PostgresAuditLogRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::cari::postgres_repository::PostgresCariRepository;
+    #[cfg(feature = "postgres")]
+    use crate::domain::company::postgres_repository::PostgresCompanyRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::crm::postgres_repository::{
         PostgresCampaignRepository, PostgresLeadRepository, PostgresOpportunityRepository,
@@ -261,6 +266,7 @@ pub mod app {
         pub user_service: web::Data<UserService>,
         pub jwt_service: web::Data<JwtService>,
         pub cari_service: web::Data<CariService>,
+        pub company_service: web::Data<CompanyService>,
         pub stock_service: web::Data<StockService>,
         pub invoice_service: web::Data<InvoiceService>,
         pub sales_service: web::Data<SalesService>,
@@ -298,6 +304,7 @@ pub mod app {
         pub rate_limit_stats: web::Data<crate::middleware::rate_limit::RateLimitStatsStore>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
+        pub cdc_listener: Option<Arc<crate::common::cdc::CdcListener>>,
     }
 
     /// Create all in-memory services
@@ -324,6 +331,10 @@ pub mod app {
             // Cari
             let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
             let cari_service = CariService::new(cari_repo);
+
+            // Company
+            let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+            let company_service = CompanyService::new(company_repo);
 
             // Stock
             let warehouse_repo =
@@ -579,6 +590,7 @@ pub mod app {
                 user_service,
                 jwt_service,
                 cari_service,
+                company_service,
                 stock_service,
                 invoice_service,
                 sales_service,
@@ -625,6 +637,7 @@ pub mod app {
             user_service,
             jwt_service,
             cari_service,
+            company_service,
             stock_service,
             invoice_service,
             sales_service,
@@ -668,6 +681,7 @@ pub mod app {
             user_service: web::Data::new(user_service),
             jwt_service: web::Data::new(jwt_service),
             cari_service: web::Data::new(cari_service),
+            company_service: web::Data::new(company_service),
             stock_service: web::Data::new(stock_service),
             invoice_service: web::Data::new(invoice_service),
             sales_service: web::Data::new(sales_service),
@@ -694,6 +708,7 @@ pub mod app {
             report_engine: web::Data::from(report_engine),
             tracing_service: web::Data::from(tracing_service),
             db_router: web::Data::from(db_router),
+            cdc_listener: None,
             i18n: web::Data::new(i18n),
             tax_service: web::Data::new(tax_service),
             currency_service: web::Data::new(currency_service),
@@ -715,6 +730,24 @@ pub mod app {
                 .await
                 .expect("Failed to create database pool"),
         );
+
+        let cache_service: Arc<dyn crate::cache::CacheService> = if config.redis.enabled {
+            match crate::cache::RedisCacheService::new(&config.redis.url, config.redis.ttl_seconds)
+                .await
+            {
+                Ok(redis_cache) => {
+                    tracing::info!("Redis cache connected at {}", config.redis.url);
+                    redis_cache.into_arc()
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to connect to Redis ({}), using no-op cache", e);
+                    Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>
+                }
+            }
+        } else {
+            tracing::info!("Redis caching disabled");
+            Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>
+        };
 
         // Run migrations
         db::run_migrations(&pool)
@@ -738,8 +771,13 @@ pub mod app {
         );
 
         // Cari - PostgreSQL
-        let cari_repo = PostgresCariRepository::new(pool.clone()).into_boxed();
+        let cari_repo =
+            PostgresCariRepository::new(pool.clone(), cache_service.clone()).into_boxed();
         let cari_service = CariService::new(cari_repo);
+
+        // Company - PostgreSQL
+        let company_repo = PostgresCompanyRepository::new(pool.clone()).into_boxed();
+        let company_service = CompanyService::new(company_repo);
 
         // Stock - PostgreSQL
         let warehouse_repo = PostgresWarehouseRepository::new(pool.clone()).into_boxed();
@@ -846,7 +884,8 @@ pub mod app {
         let settings_service = crate::domain::settings::SettingsService::new(settings_repo);
 
         // Product - PostgreSQL
-        let product_repo = PostgresProductRepository::new(pool.clone()).into_boxed();
+        let product_repo =
+            PostgresProductRepository::new(pool.clone(), cache_service.clone()).into_boxed();
         let category_repo = PostgresCategoryRepository::new(pool.clone()).into_boxed();
         let unit_repo = PostgresUnitRepository::new(pool.clone()).into_boxed();
         let variant_repo = PostgresProductVariantRepository::new(pool.clone()).into_boxed();
@@ -952,24 +991,6 @@ pub mod app {
             .await
             .ok();
 
-        let cache_service: Arc<dyn crate::cache::CacheService> = if config.redis.enabled {
-            match crate::cache::RedisCacheService::new(&config.redis.url, config.redis.ttl_seconds)
-                .await
-            {
-                Ok(redis_cache) => {
-                    tracing::info!("Redis cache connected at {}", config.redis.url);
-                    redis_cache.into_arc()
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to connect to Redis ({}), using no-op cache", e);
-                    Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>
-                }
-            }
-        } else {
-            tracing::info!("Redis caching disabled");
-            Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>
-        };
-
         // Search
         #[cfg(feature = "postgres")]
         let search_service: Arc<dyn SearchService> =
@@ -987,6 +1008,7 @@ pub mod app {
             user_service: web::Data::new(user_service),
             jwt_service: web::Data::new(jwt_service),
             cari_service: web::Data::new(cari_service),
+            company_service: web::Data::new(company_service),
             stock_service: web::Data::new(stock_service),
             invoice_service: web::Data::new(invoice_service),
             sales_service: web::Data::new(sales_service),
@@ -1022,6 +1044,7 @@ pub mod app {
             search_service: web::Data::from(search_service),
             rate_limit_stats: web::Data::new(rate_limit_stats),
             db_pool: web::Data::new(pool),
+            cdc_listener: None,
             i18n: web::Data::new(i18n),
         }
     }
@@ -1040,6 +1063,7 @@ pub mod app {
             user_service,
             jwt_service,
             cari_service,
+            company_service,
             stock_service,
             invoice_service,
             sales_service,
@@ -1084,7 +1108,7 @@ pub mod app {
         let db_pool = web::Data::new(Arc::new(pool));
 
         // Register webhook subscriber on event bus
-        futures::executor::block_on(async {
+        tokio::runtime::Handle::current().block_on(async {
             event_bus
                 .subscribe(Arc::new(
                     crate::domain::webhook::subscriber::WebhookSubscriber::new(Arc::new(
@@ -1102,6 +1126,7 @@ pub mod app {
             user_service: web::Data::new(user_service),
             jwt_service: web::Data::new(jwt_service),
             cari_service: web::Data::new(cari_service),
+            company_service: web::Data::new(company_service),
             stock_service: web::Data::new(stock_service),
             invoice_service: web::Data::new(invoice_service),
             sales_service: web::Data::new(sales_service),
@@ -1137,6 +1162,7 @@ pub mod app {
             search_service: web::Data::from(search_service),
             rate_limit_stats: web::Data::new(rate_limit_stats),
             db_pool,
+            cdc_listener: None,
             i18n: web::Data::new(i18n),
         }
     }

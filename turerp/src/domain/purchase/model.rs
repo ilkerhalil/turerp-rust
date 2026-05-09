@@ -97,6 +97,8 @@ pub enum GoodsReceiptStatus {
 pub struct PurchaseOrder {
     pub id: i64,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub order_number: String,
     pub cari_id: i64,
     pub status: PurchaseOrderStatus,
@@ -142,6 +144,7 @@ impl_soft_deletable!(PurchaseOrderLine);
 pub struct PurchaseRequest {
     pub id: i64,
     pub tenant_id: i64,
+    pub company_id: i64,
     pub request_number: String,
     pub status: PurchaseRequestStatus,
     pub requested_by: i64,
@@ -177,6 +180,7 @@ impl_soft_deletable!(PurchaseRequestLine);
 pub struct GoodsReceipt {
     pub id: i64,
     pub tenant_id: i64,
+    pub company_id: i64,
     pub receipt_number: String,
     pub purchase_order_id: i64,
     pub status: GoodsReceiptStatus,
@@ -209,6 +213,7 @@ impl_soft_deletable!(GoodsReceiptLine);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreatePurchaseRequest {
     pub tenant_id: i64,
+    pub company_id: i64,
     pub requested_by: i64,
     pub department: Option<String>,
     pub priority: String,
@@ -281,6 +286,7 @@ pub struct UpdatePurchaseRequestLine {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PurchaseRequestResponse {
     pub id: i64,
+    pub company_id: i64,
     pub request_number: String,
     pub status: PurchaseRequestStatus,
     pub requested_by: i64,
@@ -296,6 +302,7 @@ impl From<(PurchaseRequest, Vec<PurchaseRequestLine>)> for PurchaseRequestRespon
     fn from((request, lines): (PurchaseRequest, Vec<PurchaseRequestLine>)) -> Self {
         Self {
             id: request.id,
+            company_id: request.company_id,
             request_number: request.request_number,
             status: request.status,
             requested_by: request.requested_by,
@@ -313,6 +320,8 @@ impl From<(PurchaseRequest, Vec<PurchaseRequestLine>)> for PurchaseRequestRespon
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreatePurchaseOrder {
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub cari_id: i64,
     pub order_date: DateTime<Utc>,
     pub expected_delivery_date: Option<DateTime<Utc>>,
@@ -389,6 +398,7 @@ impl CreatePurchaseOrderLine {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateGoodsReceipt {
     pub tenant_id: i64,
+    pub company_id: i64,
     pub purchase_order_id: i64,
     pub receipt_date: DateTime<Utc>,
     pub notes: Option<String>,
@@ -451,12 +461,14 @@ pub struct PurchaseOrderResponse {
     pub total_amount: Decimal,
     pub notes: Option<String>,
     pub lines: Vec<PurchaseOrderLine>,
+    pub company_id: i64,
 }
 
 impl From<(PurchaseOrder, Vec<PurchaseOrderLine>)> for PurchaseOrderResponse {
     fn from((order, lines): (PurchaseOrder, Vec<PurchaseOrderLine>)) -> Self {
         Self {
             id: order.id,
+            company_id: order.company_id,
             order_number: order.order_number,
             cari_id: order.cari_id,
             status: order.status,
@@ -476,6 +488,7 @@ impl From<(PurchaseOrder, Vec<PurchaseOrderLine>)> for PurchaseOrderResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct GoodsReceiptResponse {
     pub id: i64,
+    pub company_id: i64,
     pub receipt_number: String,
     pub purchase_order_id: i64,
     pub status: GoodsReceiptStatus,
@@ -494,6 +507,7 @@ impl From<(GoodsReceipt, Vec<GoodsReceiptLine>)> for GoodsReceiptResponse {
             receipt_date: receipt.receipt_date,
             notes: receipt.notes,
             lines,
+            company_id: 0,
         }
     }
 }
@@ -508,6 +522,7 @@ mod tests {
 
         let valid = CreatePurchaseOrder {
             tenant_id: 1,
+            company_id: 1,
             cari_id: 1,
             order_date: Utc::now(),
             expected_delivery_date: Some(Utc::now() + chrono::Duration::days(7)),
@@ -527,6 +542,7 @@ mod tests {
 
         let invalid = CreatePurchaseOrder {
             tenant_id: 1,
+            company_id: 1,
             cari_id: 1,
             order_date: Utc::now(),
             expected_delivery_date: None,
@@ -544,6 +560,7 @@ mod tests {
 
         let valid = CreateGoodsReceipt {
             tenant_id: 1,
+            company_id: 1,
             purchase_order_id: 1,
             receipt_date: Utc::now(),
             notes: None,
@@ -557,4 +574,8 @@ mod tests {
         };
         assert!(valid.validate().is_ok());
     }
+}
+
+fn default_company_id() -> i64 {
+    1
 }

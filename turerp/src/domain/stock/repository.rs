@@ -171,6 +171,7 @@ impl WarehouseRepository for InMemoryWarehouseRepository {
         let warehouse = Warehouse {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             code: create.code,
             name: create.name,
             address: create.address,
@@ -584,6 +585,7 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
 
         let movement = StockMovement {
             id,
+            company_id: 0,
             warehouse_id: create.warehouse_id,
             product_id: create.product_id,
             movement_type: create.movement_type,

@@ -663,6 +663,7 @@ mod tests {
 
         let create = CreatePurchaseOrder {
             tenant_id: 1,
+            company_id: 1,
             cari_id: 1,
             order_date: chrono::Utc::now(),
             currency: "TRY".to_string(),
@@ -692,6 +693,7 @@ mod tests {
         // Create purchase order first
         let order_create = CreatePurchaseOrder {
             tenant_id: 1,
+            company_id: 1,
             cari_id: 1,
             order_date: chrono::Utc::now(),
             currency: "TRY".to_string(),
@@ -719,6 +721,7 @@ mod tests {
         // Create goods receipt
         let receipt_create = CreateGoodsReceipt {
             tenant_id: 1,
+            company_id: 1,
             purchase_order_id: order.id,
             receipt_date: chrono::Utc::now(),
             notes: None,
@@ -741,6 +744,7 @@ mod tests {
 
         let create = CreatePurchaseRequest {
             tenant_id: 1,
+            company_id: 1,
             requested_by: 1,
             department: Some("IT".to_string()),
             priority: "High".to_string(),
@@ -767,6 +771,7 @@ mod tests {
         // Create request
         let create = CreatePurchaseRequest {
             tenant_id: 1,
+            company_id: 1,
             requested_by: 1,
             department: None,
             priority: "Medium".to_string(),
@@ -799,6 +804,7 @@ mod tests {
 
         let create = CreatePurchaseRequest {
             tenant_id: 1,
+            company_id: 1,
             requested_by: 1,
             department: None,
             priority: "Low".to_string(),

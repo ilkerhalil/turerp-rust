@@ -60,6 +60,9 @@ This documentation covers all modules in the Turerp ERP system. Each module is d
 | **BOM** | Bill of Materials management | [bom.md](modules/manufacturing/bom.md) |
 | **Quality Control** | Inspections, NCRs, checklists | [quality-control.md](modules/manufacturing/quality-control.md) |
 | **Shop Floor** | QR codes, real-time data capture | [shop-floor.md](modules/manufacturing/shop-floor.md) |
+| **Bank Integration** | Bank accounts, statements, MT940/CAMT.053/XML parsers, auto-reconciliation | [bank.md](modules/finance/bank.md) |
+| **Cost Center** | Cost centers, profit centers, allocations, profitability reporting | [cost-center.md](modules/finance/cost-center.md) |
+| **Subscription Billing** | Subscription plans, recurring subscriptions, billing cycles, subscription invoices | [subscription.md](modules/finance/subscription.md) |
 
 ---
 
@@ -76,6 +79,30 @@ This documentation covers all modules in the Turerp ERP system. Each module is d
 | Module | Description | Documentation |
 |--------|-------------|----------------|
 | **Admin** | Tenants, users, feature flags, config | [admin.md](modules/system/admin.md) |
+| **Workflow Engine** | Approval workflows, templates, instances, steps | [workflow.md](modules/system/workflow.md) |
+
+---
+
+## Infrastructure & Operations
+
+| Module | Description | Documentation |
+|--------|-------------|---------------|
+| **Event Bus** | Outbox pattern, Redis Streams, DLQ, background processing | [event-bus.md](modules/infrastructure/event-bus.md) |
+| **Redis Cache** | Repository-level caching with TTL and invalidation | [redis-cache.md](modules/infrastructure/redis-cache.md) |
+| **File Storage** | S3/MinIO + local backends, presigned URLs | [file-storage.md](modules/infrastructure/file-storage.md) |
+| **CDC** | PostgreSQL LISTEN/NOTIFY triggers, real-time streaming | [cdc.md](modules/infrastructure/cdc.md) |
+| **Job Scheduler** | Background jobs with priority, retry, cron scheduling | [jobs.md](modules/infrastructure/jobs.md) |
+| **Circuit Breaker** | Per-service circuit breaker registry with state monitoring | [resilience.md](modules/infrastructure/resilience.md) |
+| **Retry** | Exponential backoff retry with jitter and statistics | [retry.md](modules/infrastructure/retry.md) |
+
+---
+
+## Analytics & Reporting
+
+| Module | Description | Documentation |
+|--------|-------------|---------------|
+| **BI Dashboard** | KPI widgets, chart data, time-series aggregation | [dashboard.md](modules/analytics/dashboard.md) |
+| **Import/Export** | Bulk CSV/JSON import with validation and background processing | [import-export.md](modules/analytics/import-export.md) |
 
 ---
 
@@ -89,26 +116,58 @@ User Request → Subdomain Detection → Tenant Lookup → Database Routing → 
   JWT Token → User Authentication → Role-Based Access
 ```
 
-### Module Dependencies
+### Layered Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
+│                        API Layer                               │
+│  REST  │  GraphQL  │  WebSocket  │  gRPC                      │
+├─────────────────────────────────────────────────────────────┤
+│                      Event Bus                                 │
+│  Outbox  │  Redis Streams  │  DLQ  │  Background Workers      │
+├─────────────────────────────────────────────────────────────┤
 │                    Authentication (Auth)                       │
 ├─────────────────────────────────────────────────────────────┤
-│  Users  │  Tenants  │  Feature Flags  │  Configuration     │
-├─────────┴───────────┴──────────────────┴──────────────────┤
-│                      Core Modules                             │
-│  Cari  │  Products  │  Stock  │  Invoices                  │
-├─────────┴───────────┴─────────┴───────────────────────────┤
-│                   Business Modules                            │
-│  Sales  │  Purchase  │  HR  │  Accounting  │  Assets       │
-├─────────┴───────────┴──────┴──────────────┴──────────────┤
+│  Users  │  Tenants  │  Feature Flags  │  Configuration       │
+├─────────┴───────────┴──────────────────┴────────────────────┤
+│                      Core Modules                              │
+│  Cari  │  Products  │  Stock  │  Invoices                   │
+├─────────┴───────────┴─────────┴─────────────────────────────┤
+│                   Business Modules                             │
+│  Sales  │  Purchase  │  HR  │  Accounting  │  Assets        │
+├─────────┴───────────┴──────┴──────────────┴───────────────┤
 │                   Extended Modules                             │
-│  Projects  │  Manufacturing  │  BOM  │  QC  │  Shop Floor  │
-├───────────┴─────────────────┴───────┴──────┴──────────────┤
-│                         CRM                                   │
-│     Leads  │  Opportunities  │  Campaigns  │  Tickets       │
+│  Projects  │  Manufacturing  │  BOM  │  QC  │  Shop Floor   │
+├───────────┴─────────────────┴───────┴──────┴───────────────┤
+│                         CRM                                    │
+│     Leads  │  Opportunities  │  Campaigns  │  Tickets        │
+├───────────┴─────────────────┴─────────────┴──────────────────┤
+│                   Finance & Billing                            │
+│  Bank  │  Cost Center  │  Subscription  │  Workflow           │
+├───────────┴─────────────────┴─────────────┴──────────────────┤
+│                   Analytics & Reporting                        │
+│  BI Dashboard  │  Import/Export  │  KPIs  │  Time-Series     │
+├─────────────────────────────────────────────────────────────┤
+│                      Domain Layer                              │
+│  Services  │  Repositories  │  Validators  │  Domain Events   │
+├─────────────────────────────────────────────────────────────┤
+│                      Cache Layer                               │
+│  Redis  │  TTL  │  Invalidation  │  Distributed Locks       │
+├─────────────────────────────────────────────────────────────┤
+│                     Database Layer                               │
+│  PostgreSQL  │  CDC  │  LISTEN/NOTIFY  │  Triggers          │
+├─────────────────────────────────────────────────────────────┤
+│                  Infrastructure Layer                          │
+│  File Storage (S3/MinIO)  │  Job Scheduler  │  Email/SMS   │
+├─────────────────────────────────────────────────────────────┤
+│                   Resilience Layer                             │
+│  Circuit Breaker  │  Retry  │  Health Checks  │  Metrics      │
 └─────────────────────────────────────────────────────────────┘
+
+Data Flow:
+  API → Event Bus → Domain Services → Cache → Database
+                          ↓                ↑
+                    File Storage       CDC (DB → Event Bus)
 ```
 
 ---

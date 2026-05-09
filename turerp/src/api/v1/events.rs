@@ -167,6 +167,133 @@ pub async fn retry_dead_letter(
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Event queued for retry"})))
 }
 
+/// Retry a failed outbox event
+#[utoipa::path(
+    post,
+    path = "/api/v1/events/outbox/retry/{id}",
+    tag = "Events",
+    params(("id" = i64, Path, description = "Outbox event ID")),
+    responses(
+        (status = 200, description = "Event queued for retry"),
+        (status = 404, description = "Event not found or not retryable"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn retry_outbox_event(
+    _admin_user: AdminUser,
+    path: web::Path<i64>,
+    bus: web::Data<dyn EventBus>,
+) -> Result<HttpResponse, ApiError> {
+    let id = path.into_inner();
+    bus.retry_outbox(id).await.map_err(ApiError::Internal)?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Event queued for retry"})))
+}
+
+/// Get dead letter queue (admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/events/dlq",
+    tag = "Events",
+    responses((status = 200, description = "List of dead letter entries")),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_dlq(
+    admin_user: AdminUser,
+    bus: web::Data<dyn EventBus>,
+) -> Result<HttpResponse, ApiError> {
+    let entries = bus
+        .get_dead_letters(admin_user.0.tenant_id)
+        .await
+        .map_err(ApiError::Internal)?;
+    let responses: Vec<DeadLetterResponse> = entries
+        .iter()
+        .map(|e| DeadLetterResponse {
+            id: e.id,
+            original_event_id: e.aggregate_id,
+            event_type: e.original_event.event_type().to_string(),
+            tenant_id: e.tenant_id,
+            error: e.error.clone(),
+            attempts: e.original_attempts,
+            created_at: e.dead_lettered_at.to_rfc3339(),
+        })
+        .collect();
+    Ok(HttpResponse::Ok().json(responses))
+}
+
+/// Retry a dead letter event via DLQ endpoint (admin only)
+#[utoipa::path(
+    post,
+    path = "/api/v1/events/dlq/retry/{id}",
+    tag = "Events",
+    params(("id" = i64, Path, description = "Dead letter entry ID")),
+    responses(
+        (status = 200, description = "Event retried"),
+        (status = 404, description = "Entry not found"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn retry_dlq(
+    _admin_user: AdminUser,
+    path: web::Path<i64>,
+    bus: web::Data<dyn EventBus>,
+) -> Result<HttpResponse, ApiError> {
+    let id = path.into_inner();
+    bus.retry_dead_letter(id)
+        .await
+        .map_err(ApiError::Internal)?;
+    Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Event queued for retry"})))
+}
+
+/// CDC status response
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CdcStatusResponse {
+    pub active: bool,
+    pub channels: Vec<String>,
+    pub last_event_time: Option<String>,
+}
+
+/// Get CDC listener status (admin only)
+#[utoipa::path(
+    get,
+    path = "/api/v1/cdc/status",
+    tag = "Events",
+    responses((status = 200, description = "CDC status", body = CdcStatusResponse)),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_cdc_status(
+    _admin_user: AdminUser,
+    app_state: web::Data<crate::app::AppState>,
+) -> Result<HttpResponse, ApiError> {
+    let _ = &app_state;
+    #[cfg(feature = "postgres")]
+    {
+        if let Some(ref listener) = app_state.cdc_listener {
+            let active = listener.is_active();
+            let channels = listener.active_channels();
+            let last_event_time = listener.last_event_time().map(|t| t.to_rfc3339());
+            Ok(HttpResponse::Ok().json(CdcStatusResponse {
+                active,
+                channels,
+                last_event_time,
+            }))
+        } else {
+            Ok(HttpResponse::Ok().json(CdcStatusResponse {
+                active: false,
+                channels: vec![],
+                last_event_time: None,
+            }))
+        }
+    }
+    #[cfg(not(feature = "postgres"))]
+    {
+        Ok(HttpResponse::Ok().json(CdcStatusResponse {
+            active: false,
+            channels: vec![],
+            last_event_time: None,
+        }))
+    }
+}
+
 /// Configure event routes
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -174,10 +301,14 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/publish", web::post().to(publish_event))
             .route("/outbox/process", web::post().to(process_outbox))
             .route("/outbox/pending", web::get().to(get_pending_events))
+            .route("/outbox/retry/{id}", web::post().to(retry_outbox_event))
             .route("/dead-letters", web::get().to(get_dead_letters))
             .route(
                 "/dead-letters/{id}/retry",
                 web::post().to(retry_dead_letter),
-            ),
+            )
+            .route("/dlq", web::get().to(get_dlq))
+            .route("/dlq/retry/{id}", web::post().to(retry_dlq))
+            .route("/cdc/status", web::get().to(get_cdc_status)),
     );
 }

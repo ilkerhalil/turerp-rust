@@ -10,6 +10,8 @@ use utoipa::ToSchema;
 pub struct Employee {
     pub id: i64,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub user_id: Option<i64>,
     pub employee_number: String,
     pub first_name: String,
@@ -338,6 +340,8 @@ impl std::str::FromStr for PayrollStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateEmployee {
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub user_id: Option<i64>,
     pub employee_number: String,
     pub first_name: String,
@@ -459,6 +463,7 @@ pub struct EmployeeResponse {
     pub tenant_id: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub company_id: i64,
 }
 
 impl From<Employee> for EmployeeResponse {
@@ -479,6 +484,7 @@ impl From<Employee> for EmployeeResponse {
             status: e.status,
             salary: e.salary,
             tenant_id: e.tenant_id,
+            company_id: e.company_id,
             created_at: e.created_at,
             updated_at: e.updated_at,
         }
@@ -494,6 +500,7 @@ mod tests {
     fn test_create_employee_validation() {
         let valid = CreateEmployee {
             tenant_id: 1,
+            company_id: 1,
             user_id: None,
             employee_number: "EMP001".to_string(),
             first_name: "John".to_string(),
@@ -509,6 +516,7 @@ mod tests {
 
         let invalid = CreateEmployee {
             tenant_id: 1,
+            company_id: 1,
             user_id: None,
             employee_number: "".to_string(),
             first_name: "".to_string(),
@@ -539,4 +547,8 @@ mod tests {
         // 8 hours with small tolerance for test timing
         assert!(hours >= dec!(7.9) && hours <= dec!(8.1));
     }
+}
+
+fn default_company_id() -> i64 {
+    1
 }

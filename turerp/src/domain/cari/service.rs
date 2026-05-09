@@ -269,6 +269,7 @@ mod tests {
             postal_code: None,
             credit_limit: dec!(1000),
             tenant_id: 1,
+            company_id: 1,
             created_by: 1,
             default_currency: "TRY".to_string(),
         };
@@ -299,6 +300,7 @@ mod tests {
             postal_code: None,
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
+            company_id: 1,
             created_by: 1,
             default_currency: "TRY".to_string(),
         };
@@ -329,6 +331,7 @@ mod tests {
             postal_code: None,
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
+            company_id: 1,
             created_by: 1,
             default_currency: "TRY".to_string(),
         };
@@ -369,6 +372,7 @@ mod tests {
             postal_code: None,
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
+            company_id: 1,
             created_by: 1,
             default_currency: "TRY".to_string(),
         };
@@ -388,6 +392,7 @@ mod tests {
             postal_code: None,
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
+            company_id: 1,
             created_by: 1,
             default_currency: "TRY".to_string(),
         };
@@ -420,6 +425,7 @@ mod tests {
             postal_code: None,
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
+            company_id: 1,
             created_by: 1,
             default_currency: "TRY".to_string(),
         };
@@ -456,6 +462,7 @@ mod tests {
             postal_code: None,
             credit_limit: Decimal::ZERO,
             tenant_id: 1,
+            company_id: 1,
             created_by: 1,
             default_currency: "TRY".to_string(),
         };

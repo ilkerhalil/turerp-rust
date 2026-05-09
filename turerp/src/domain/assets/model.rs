@@ -69,6 +69,8 @@ pub struct AssetCategory {
 pub struct Asset {
     pub id: i64,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub asset_code: String,
     pub name: String,
     pub category_id: Option<i64>,
@@ -167,6 +169,8 @@ pub struct MaintenanceRecord {
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
 pub struct CreateAsset {
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     #[validate(length(min = 1, max = 50, message = "Name must be 1-50 characters"))]
     pub name: String,
     pub category_id: Option<i64>,
@@ -233,6 +237,8 @@ pub struct UpdateAsset {
     pub location_id: Option<i64>,
     pub responsible_person_id: Option<i64>,
     pub notes: Option<String>,
+    #[serde(default)]
+    pub company_id: Option<i64>,
 }
 
 /// Create maintenance record request
@@ -300,6 +306,7 @@ pub struct AssetResponse {
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub company_id: i64,
 }
 
 impl From<Asset> for AssetResponse {
@@ -308,6 +315,7 @@ impl From<Asset> for AssetResponse {
         let book_value = asset.calculate_book_value();
         Self {
             id: asset.id,
+            company_id: asset.company_id,
             asset_code: asset.asset_code,
             name: asset.name,
             category_id: asset.category_id,
@@ -355,6 +363,7 @@ mod tests {
         let asset = Asset {
             id: 1,
             tenant_id: 1,
+            company_id: 1,
             asset_code: "AST-001".to_string(),
             name: "Test Asset".to_string(),
             category_id: None,
@@ -389,6 +398,7 @@ mod tests {
     fn test_create_asset_validation() {
         let valid = CreateAsset {
             tenant_id: 1,
+            company_id: 1,
             name: "Test Asset".to_string(),
             category_id: None,
             description: None,
@@ -409,6 +419,7 @@ mod tests {
 
         let invalid = CreateAsset {
             tenant_id: 1,
+            company_id: 1,
             name: "".to_string(),
             category_id: None,
             description: None,
@@ -433,6 +444,7 @@ mod tests {
         let asset = Asset {
             id: 1,
             tenant_id: 1,
+            company_id: 1,
             asset_code: "AST-002".to_string(),
             name: "Test Asset".to_string(),
             category_id: None,
@@ -467,6 +479,7 @@ mod tests {
     fn test_negative_values_rejected() {
         let invalid_cost = CreateAsset {
             tenant_id: 1,
+            company_id: 1,
             name: "Test Asset".to_string(),
             category_id: None,
             description: None,
@@ -487,6 +500,7 @@ mod tests {
 
         let invalid_salvage = CreateAsset {
             tenant_id: 1,
+            company_id: 1,
             name: "Test Asset".to_string(),
             category_id: None,
             description: None,
@@ -505,4 +519,8 @@ mod tests {
         };
         assert!(invalid_salvage.validate().is_err());
     }
+}
+
+fn default_company_id() -> i64 {
+    1
 }

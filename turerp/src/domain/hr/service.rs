@@ -383,6 +383,7 @@ mod tests {
         let service = create_service();
         let create = CreateEmployee {
             tenant_id: 1,
+            company_id: 1,
             user_id: None,
             employee_number: "EMP001".to_string(),
             first_name: "John".to_string(),

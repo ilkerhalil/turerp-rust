@@ -29,6 +29,7 @@ use crate::error::ApiError;
 struct AccountRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     code: String,
     name: String,
     account_type: String,
@@ -65,6 +66,7 @@ impl From<AccountRow> for Account {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             code: row.code,
             name: row.name,
             account_type,
@@ -88,6 +90,7 @@ impl From<AccountRow> for Account {
 struct JournalEntryRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     entry_number: String,
     date: DateTime<Utc>,
     description: String,
@@ -117,6 +120,7 @@ impl From<JournalEntryRow> for JournalEntry {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             entry_number: row.entry_number,
             date: row.date,
             description: row.description,

@@ -96,6 +96,8 @@ impl std::str::FromStr for InvoiceType {
 pub struct Invoice {
     pub id: i64,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub invoice_number: String,
     pub invoice_type: InvoiceType,
     pub status: InvoiceStatus,
@@ -142,6 +144,7 @@ impl_soft_deletable!(InvoiceLine);
 pub struct Payment {
     pub id: i64,
     pub tenant_id: i64,
+    pub company_id: i64,
     pub invoice_id: i64,
     pub amount: Decimal,
     pub currency: String,
@@ -160,6 +163,8 @@ impl_soft_deletable!(Payment);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateInvoice {
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub invoice_type: InvoiceType,
     pub cari_id: i64,
     pub issue_date: DateTime<Utc>,
@@ -248,6 +253,7 @@ impl CreateInvoiceLine {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreatePayment {
     pub tenant_id: i64,
+    pub company_id: i64,
     pub invoice_id: i64,
     pub amount: Decimal,
     #[serde(default = "default_currency")]
@@ -302,12 +308,14 @@ pub struct InvoiceResponse {
     pub lines: Vec<InvoiceLine>,
     pub deleted_at: Option<DateTime<Utc>>,
     pub deleted_by: Option<i64>,
+    pub company_id: i64,
 }
 
 impl From<(Invoice, Vec<InvoiceLine>)> for InvoiceResponse {
     fn from((invoice, lines): (Invoice, Vec<InvoiceLine>)) -> Self {
         Self {
             id: invoice.id,
+            company_id: invoice.company_id,
             invoice_number: invoice.invoice_number,
             invoice_type: invoice.invoice_type,
             status: invoice.status,
@@ -341,6 +349,7 @@ mod tests {
         let now = Utc::now();
         let valid = CreateInvoice {
             tenant_id: 1,
+            company_id: 1,
             invoice_type: InvoiceType::SalesInvoice,
             cari_id: 1,
             issue_date: now,
@@ -361,6 +370,7 @@ mod tests {
 
         let invalid = CreateInvoice {
             tenant_id: 1,
+            company_id: 1,
             invoice_type: InvoiceType::SalesInvoice,
             cari_id: 1,
             issue_date: now,
@@ -390,4 +400,8 @@ mod tests {
         // Total = 212.4
         assert_eq!(line.calculate_line_total(), dec!(212.4));
     }
+}
+
+fn default_company_id() -> i64 {
+    1
 }

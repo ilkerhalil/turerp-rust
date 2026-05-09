@@ -5,6 +5,7 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
+use crate::cache::{cache_get, cache_set, CacheService};
 use crate::common::pagination::PaginatedResult;
 use crate::db::error::map_sqlx_error;
 use crate::domain::product::model::{
@@ -17,6 +18,10 @@ use crate::domain::product::repository::{
 };
 use crate::error::ApiError;
 
+fn default_company_id() -> i64 {
+    1
+}
+
 // ---------------------------------------------------------------------------
 // Product
 // ---------------------------------------------------------------------------
@@ -26,6 +31,7 @@ use crate::error::ApiError;
 struct ProductRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     code: String,
     name: String,
     description: Option<String>,
@@ -48,6 +54,7 @@ impl From<ProductRow> for Product {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             code: row.code,
             name: row.name,
             description: row.description,
@@ -69,12 +76,19 @@ impl From<ProductRow> for Product {
 /// PostgreSQL product repository
 pub struct PostgresProductRepository {
     pool: Arc<PgPool>,
+    cache: Arc<dyn CacheService>,
 }
 
 impl PostgresProductRepository {
     /// Create a new PostgreSQL product repository
-    pub fn new(pool: Arc<PgPool>) -> Self {
-        Self { pool }
+    pub fn new(pool: Arc<PgPool>, cache: Arc<dyn CacheService>) -> Self {
+        Self { pool, cache }
+    }
+
+    /// Invalidate product list cache entries for a tenant
+    async fn invalidate_product_lists(&self, tenant_id: i64) {
+        let pattern = format!("turerp:t{}:products:*", tenant_id);
+        self.cache.delete_pattern(&pattern).await.ok();
     }
 
     /// Convert to boxed trait object
@@ -88,16 +102,17 @@ impl ProductRepository for PostgresProductRepository {
     async fn create(&self, create: CreateProduct) -> Result<Product, ApiError> {
         let row: ProductRow = sqlx::query_as(
             r#"
-            INSERT INTO products (tenant_id, code, name, description, category_id, unit_id,
+            INSERT INTO products (tenant_id, company_id, code, name, description, category_id, unit_id,
                                   barcode, purchase_price, sale_price, tax_rate, is_active,
                                   created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, NOW(), NOW())
-            RETURNING id, tenant_id, code, name, description, category_id, unit_id,
+            RETURNING id, tenant_id, company_id, code, name, description, category_id, unit_id,
                       barcode, purchase_price, sale_price, tax_rate, is_active,
                       created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(&create.code)
         .bind(&create.name)
         .bind(&create.description)
@@ -111,13 +126,14 @@ impl ProductRepository for PostgresProductRepository {
         .await
         .map_err(|e| map_sqlx_error(e, "Product"))?;
 
+        self.invalidate_product_lists(create.tenant_id).await;
         Ok(row.into())
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Product>, ApiError> {
         let result: Option<ProductRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, description, category_id, unit_id,
+            SELECT id, tenant_id, company_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
                    created_at, updated_at, deleted_at, deleted_by
             FROM products
@@ -134,9 +150,20 @@ impl ProductRepository for PostgresProductRepository {
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
+        let cache_key = format!("turerp:t{}:products:all", tenant_id);
+        if let Some(cached) = cache_get::<Vec<Product>>(&*self.cache, &cache_key).await? {
+            if self.cache.is_enabled() {
+                metrics::counter!("cache_hits_total", "cache" => "products").increment(1);
+            }
+            return Ok(cached);
+        }
+        if self.cache.is_enabled() {
+            metrics::counter!("cache_misses_total", "cache" => "products").increment(1);
+        }
+
         let rows: Vec<ProductRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, description, category_id, unit_id,
+            SELECT id, tenant_id, company_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
                    created_at, updated_at, deleted_at, deleted_by
             FROM products
@@ -149,7 +176,11 @@ impl ProductRepository for PostgresProductRepository {
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find products by tenant: {}", e)))?;
 
-        Ok(rows.into_iter().map(|r| r.into()).collect())
+        let items: Vec<Product> = rows.into_iter().map(|r| r.into()).collect();
+        cache_set(&*self.cache, &cache_key, &items, Some(30))
+            .await
+            .ok();
+        Ok(items)
     }
 
     async fn find_by_tenant_paginated(
@@ -161,7 +192,7 @@ impl ProductRepository for PostgresProductRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<ProductRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, description, category_id, unit_id,
+            SELECT id, tenant_id, company_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
                    created_at, updated_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
             FROM products
@@ -185,7 +216,7 @@ impl ProductRepository for PostgresProductRepository {
     async fn find_by_code(&self, tenant_id: i64, code: &str) -> Result<Option<Product>, ApiError> {
         let result: Option<ProductRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, description, category_id, unit_id,
+            SELECT id, tenant_id, company_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
                    created_at, updated_at, deleted_at, deleted_by
             FROM products
@@ -204,7 +235,7 @@ impl ProductRepository for PostgresProductRepository {
     async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Product>, ApiError> {
         let rows: Vec<ProductRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, description, category_id, unit_id,
+            SELECT id, tenant_id, company_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
                    created_at, updated_at, deleted_at, deleted_by
             FROM products
@@ -252,7 +283,7 @@ impl ProductRepository for PostgresProductRepository {
                 is_active = COALESCE($10, is_active),
                 updated_at = NOW()
             WHERE id = $11 AND tenant_id = $12 AND deleted_at IS NULL
-            RETURNING id, tenant_id, code, name, description, category_id, unit_id,
+            RETURNING id, tenant_id, company_id, code, name, description, category_id, unit_id,
                       barcode, purchase_price, sale_price, tax_rate, is_active,
                       created_at, updated_at, deleted_at, deleted_by
             "#,
@@ -273,6 +304,7 @@ impl ProductRepository for PostgresProductRepository {
         .await
         .map_err(|e| map_sqlx_error(e, "Product"))?;
 
+        self.invalidate_product_lists(tenant_id).await;
         Ok(row.into())
     }
 
@@ -293,6 +325,7 @@ impl ProductRepository for PostgresProductRepository {
             return Err(ApiError::NotFound("Product not found".to_string()));
         }
 
+        self.invalidate_product_lists(tenant_id).await;
         Ok(())
     }
 
@@ -315,6 +348,7 @@ impl ProductRepository for PostgresProductRepository {
             return Err(ApiError::NotFound("Product not found".to_string()));
         }
 
+        self.invalidate_product_lists(tenant_id).await;
         Ok(())
     }
 
@@ -338,6 +372,7 @@ impl ProductRepository for PostgresProductRepository {
             ));
         }
 
+        self.invalidate_product_lists(tenant_id).await;
         self.find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Product not found".to_string()))
@@ -346,7 +381,7 @@ impl ProductRepository for PostgresProductRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
         let rows: Vec<ProductRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, description, category_id, unit_id,
+            SELECT id, tenant_id, company_id, code, name, description, category_id, unit_id,
                    barcode, purchase_price, sale_price, tax_rate, is_active,
                    created_at, updated_at, deleted_at, deleted_by
             FROM products
@@ -379,6 +414,7 @@ impl ProductRepository for PostgresProductRepository {
             return Err(ApiError::NotFound("Product not found".to_string()));
         }
 
+        self.invalidate_product_lists(tenant_id).await;
         Ok(())
     }
 }
@@ -392,6 +428,7 @@ impl ProductRepository for PostgresProductRepository {
 struct CategoryRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     name: String,
     parent_id: Option<i64>,
     created_at: chrono::DateTime<chrono::Utc>,
@@ -405,6 +442,7 @@ impl From<CategoryRow> for Category {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             name: row.name,
             parent_id: row.parent_id,
             created_at: row.created_at,
@@ -436,12 +474,13 @@ impl CategoryRepository for PostgresCategoryRepository {
     async fn create(&self, create: CreateCategory) -> Result<Category, ApiError> {
         let row: CategoryRow = sqlx::query_as(
             r#"
-            INSERT INTO categories (tenant_id, name, parent_id, created_at)
+            INSERT INTO categories (tenant_id, company_id, name, parent_id, created_at)
             VALUES ($1, $2, $3, NOW())
-            RETURNING id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(&create.name)
         .bind(create.parent_id)
         .fetch_one(&*self.pool)
@@ -454,7 +493,7 @@ impl CategoryRepository for PostgresCategoryRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Category>, ApiError> {
         let result: Option<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by
             FROM categories
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
@@ -471,7 +510,7 @@ impl CategoryRepository for PostgresCategoryRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
         let rows: Vec<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by
             FROM categories
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
@@ -494,7 +533,7 @@ impl CategoryRepository for PostgresCategoryRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
+            SELECT id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
             FROM categories
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
@@ -525,7 +564,7 @@ impl CategoryRepository for PostgresCategoryRepository {
             SET name = COALESCE($1, name),
                 parent_id = COALESCE($2, parent_id)
             WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL
-            RETURNING id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.name)
@@ -609,7 +648,7 @@ impl CategoryRepository for PostgresCategoryRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
         let rows: Vec<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by
             FROM categories
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
@@ -653,6 +692,7 @@ impl CategoryRepository for PostgresCategoryRepository {
 struct UnitRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     code: String,
     name: String,
     is_integer: bool,
@@ -667,6 +707,7 @@ impl From<UnitRow> for Unit {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             code: row.code,
             name: row.name,
             is_integer: row.is_integer,
@@ -699,12 +740,13 @@ impl UnitRepository for PostgresUnitRepository {
     async fn create(&self, create: CreateUnit) -> Result<Unit, ApiError> {
         let row: UnitRow = sqlx::query_as(
             r#"
-            INSERT INTO units (tenant_id, code, name, is_integer, created_at)
+            INSERT INTO units (tenant_id, company_id, code, name, is_integer, created_at)
             VALUES ($1, $2, $3, $4, NOW())
-            RETURNING id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(&create.code)
         .bind(&create.name)
         .bind(create.is_integer)
@@ -718,7 +760,7 @@ impl UnitRepository for PostgresUnitRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Unit>, ApiError> {
         let result: Option<UnitRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by
             FROM units
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
@@ -735,7 +777,7 @@ impl UnitRepository for PostgresUnitRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
         let rows: Vec<UnitRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by
             FROM units
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
@@ -758,7 +800,7 @@ impl UnitRepository for PostgresUnitRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<UnitRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
+            SELECT id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
             FROM units
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
@@ -790,7 +832,7 @@ impl UnitRepository for PostgresUnitRepository {
                 name = COALESCE($2, name),
                 is_integer = COALESCE($3, is_integer)
             WHERE id = $4 AND tenant_id = $5 AND deleted_at IS NULL
-            RETURNING id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.code)
@@ -875,7 +917,7 @@ impl UnitRepository for PostgresUnitRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
         let rows: Vec<UnitRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by
             FROM units
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC

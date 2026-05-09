@@ -329,6 +329,7 @@ impl SalesService {
         let order_lines_clone = order_lines.clone();
         let create = CreateSalesOrder {
             tenant_id: quotation.tenant_id,
+            company_id: 0,
             cari_id: quotation.cari_id,
             order_date: chrono::Utc::now(),
             delivery_date: None,
@@ -547,6 +548,7 @@ mod tests {
 
         let create = CreateSalesOrder {
             tenant_id: 1,
+            company_id: 1,
             cari_id: 1,
             order_date: chrono::Utc::now(),
             delivery_date: Some(chrono::Utc::now() + Duration::days(7)),
@@ -577,6 +579,7 @@ mod tests {
 
         let create = CreateQuotation {
             tenant_id: 1,
+            company_id: 1,
             cari_id: 1,
             valid_until: chrono::Utc::now() + Duration::days(30),
             notes: None,
@@ -602,6 +605,7 @@ mod tests {
         // Create quotation
         let quote_create = CreateQuotation {
             tenant_id: 1,
+            company_id: 1,
             cari_id: 1,
             valid_until: chrono::Utc::now() + Duration::days(30),
             notes: None,

@@ -48,7 +48,7 @@ impl AuthClaims {
     pub fn user_id(&self) -> Result<i64, ApiError> {
         self.sub
             .parse()
-            .map_err(|_| ApiError::InvalidToken("Invalid user ID in token".to_string()))
+            .map_err(|_| ApiError::Unauthorized("Invalid user ID in token".to_string()))
     }
 }
 

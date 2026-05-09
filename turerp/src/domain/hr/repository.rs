@@ -171,6 +171,7 @@ impl EmployeeRepository for InMemoryEmployeeRepository {
         let employee = Employee {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             user_id: create.user_id,
             employee_number: create.employee_number,
             first_name: create.first_name,

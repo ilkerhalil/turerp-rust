@@ -1,7 +1,7 @@
 # Turerp ERP
 
 [![CI](https://github.com/turerp/turerp-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/turerp/turerp-rust/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-314%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-701%20passing-brightgreen)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 
 **Multi-tenant SaaS ERP system** - Built with Rust, Actix-web, and SQLx.
@@ -29,12 +29,18 @@
 - **Quality Control**: Inspections, non-conformance reports (NCR)
 - **CRM**: Leads, opportunities, campaign management
 - **Audit**: Request audit trail, batch persistence, admin query API
+- **BI Dashboard**: KPI aggregation, chart data endpoints
+- **Bulk Import/Export**: CSV/JSON parsers, row validation, background processing
 
 ### Infrastructure
 - **Prometheus Metrics**: Request counters, latency histograms, `/metrics` endpoint
 - **Health Checks**: Liveness (`/health/live`) and readiness (`/health/ready`) probes
 - **Pagination**: All list endpoints return `PaginatedResult<T>`
 - **Trusted Proxy**: Configurable trusted proxies for rate limiting behind load balancers
+- **Event Bus**: Production-ready with PostgreSQL outbox + Redis Streams, DLQ with retry, background processing
+- **Redis Cache**: Wired into repositories, TTL per namespace
+- **File Upload**: S3/MinIO backend, presigned URLs, metadata tracking
+- **CDC**: PostgreSQL LISTEN/NOTIFY, trigger-based change capture
 
 ## Tech Stack
 
@@ -138,6 +144,44 @@ PUT    /api/tenants/{id}   - Update tenant
 DELETE /api/tenants/{id}   - Delete tenant
 ```
 
+### Dashboard
+```
+GET /api/v1/dashboard/kpis              - All KPIs
+GET /api/v1/dashboard/kpis/{name}       - Single KPI
+GET /api/v1/dashboard/charts/sales      - Sales time-series
+GET /api/v1/dashboard/charts/revenue-by-category - Category breakdown
+GET /api/v1/dashboard/charts/top-products - Top products
+POST /api/v1/dashboard/widgets        - Save widget config
+GET /api/v1/dashboard/widgets           - List saved widgets
+```
+
+### Import/Export
+```
+POST /api/v1/import/{entity}            - Upload import file
+GET /api/v1/import/{job_id}/status      - Import progress
+GET /api/v1/import/{job_id}/errors      - Validation errors
+GET /api/v1/import/templates/{entity}   - Download template
+GET /api/v1/export/{entity}?format=csv  - Export data
+```
+
+### Events (Admin)
+```
+POST /api/v1/events/outbox/retry/{id}   - Retry outbox event
+GET /api/v1/events/dlq                  - Dead letter queue
+POST /api/v1/events/dlq/retry/{id}      - Retry DLQ entry
+GET /api/v1/cdc/status                  - CDC listener status
+```
+
+### Files
+```
+POST /api/v1/files                      - Upload file
+GET /api/v1/files/{id}                  - File metadata
+GET /api/v1/files/{id}/download         - Download file
+GET /api/v1/files/{id}/presigned      - Presigned URL
+DELETE /api/v1/files/{id}             - Soft delete file
+GET /api/v1/files                     - List files
+```
+
 ### Swagger UI
 - **Swagger UI**: `http://localhost:8000/swagger-ui/`
 - **OpenAPI Spec**: `http://localhost:8000/api-docs/openapi.json`
@@ -192,7 +236,14 @@ turerp/
 │   │   ├── accounting/   # Accounting module
 │   │   ├── project/      # Project management
 │   │   ├── manufacturing/# Manufacturing module
-│   │   └── crm/          # CRM module
+│   │   ├── crm/          # CRM module
+│   │   ├── dashboard/    # BI dashboard backend
+│   │   └── file/         # File metadata repository
+│   ├── common/
+│   │   ├── import/       # Import/export service
+│   │   ├── cdc.rs        # CDC listener
+│   │   ├── events_postgres.rs # Production event bus
+│   │   └── s3_storage.rs # S3 backend
 │   ├── error/            # Error handling
 │   ├── middleware/       # HTTP middleware
 │   ├── utils/            # Utility functions
@@ -241,6 +292,14 @@ Automated via GitHub Actions:
 | `TURERP_METRICS_ENABLED` | Enable Prometheus metrics | `true` |
 | `TURERP_METRICS_PATH` | Metrics endpoint path | `/metrics` |
 | `RUST_LOG` | Log level | `info` |
+| `TURERP_REDIS_ENABLED` | Enable Redis cache | `false` |
+| `TURERP_REDIS_URL` | Redis connection URL | `redis://localhost:6379` |
+| `TURERP_REDIS_TTL` | Redis TTL per namespace (seconds) | `3600` |
+| `S3_ENDPOINT` | S3/MinIO endpoint URL | (none) |
+| `S3_BUCKET` | S3 bucket name | (none) |
+| `S3_ACCESS_KEY` | S3 access key | (none) |
+| `S3_SECRET_KEY` | S3 secret key | (none) |
+| `TURERP_CDC_ENABLED` | Enable CDC listener | `false` |
 
 ## Contributing
 

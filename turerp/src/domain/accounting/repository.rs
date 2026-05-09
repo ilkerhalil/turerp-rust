@@ -212,6 +212,7 @@ impl InMemoryAccountRepository {
                 Account {
                     id,
                     tenant_id: 1,
+                    company_id: 1,
                     code: code.to_string(),
                     name: name.to_string(),
                     account_type: at,
@@ -249,6 +250,7 @@ impl AccountRepository for InMemoryAccountRepository {
         let account = Account {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             code: create.code,
             name: create.name,
             account_type: create.account_type,
@@ -473,6 +475,7 @@ impl JournalEntryRepository for InMemoryJournalEntryRepository {
         let entry = JournalEntry {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             entry_number: generate_entry_number(id),
             date: create.date,
             description: create.description,

@@ -17,6 +17,10 @@ use crate::domain::invoice::repository::{
 };
 use crate::error::ApiError;
 
+fn default_company_id() -> i64 {
+    1
+}
+
 /// Convert sqlx errors to ApiError with proper detection of error types
 
 /// Database row representation for Invoice
@@ -24,6 +28,7 @@ use crate::error::ApiError;
 struct InvoiceRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     invoice_number: String,
     invoice_type: String,
     status: String,
@@ -67,6 +72,7 @@ impl From<InvoiceRow> for Invoice {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             invoice_number: row.invoice_number,
             invoice_type,
             status,
@@ -94,6 +100,7 @@ impl From<InvoiceRow> for Invoice {
 struct InvoiceRowWithTotal {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     invoice_number: String,
     invoice_type: String,
     status: String,
@@ -138,6 +145,7 @@ impl From<InvoiceRowWithTotal> for (Invoice, i64) {
         let invoice = Invoice {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             invoice_number: row.invoice_number,
             invoice_type,
             status,
@@ -202,6 +210,7 @@ impl From<InvoiceLineRow> for InvoiceLine {
 struct PaymentRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     invoice_id: i64,
     amount: Decimal,
     currency: String,
@@ -219,6 +228,7 @@ impl From<PaymentRow> for Payment {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             invoice_id: row.invoice_id,
             amount: row.amount,
             currency: row.currency,
@@ -277,17 +287,18 @@ impl InvoiceRepository for PostgresInvoiceRepository {
 
         let row: InvoiceRow = sqlx::query_as(
             r#"
-            INSERT INTO invoices (tenant_id, invoice_number, invoice_type, status, cari_id,
+            INSERT INTO invoices (tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                                   issue_date, due_date, subtotal, tax_amount, discount_amount,
                                   total_amount, paid_amount, currency, notes, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
-            RETURNING id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            RETURNING id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
                       total_amount, paid_amount, currency, notes, created_at, updated_at,
                       deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(&invoice_number)
         .bind(&invoice_type_str)
         .bind(&status_str)
@@ -311,7 +322,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Invoice>, ApiError> {
         let result: Option<InvoiceRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by
@@ -331,7 +342,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
         let rows: Vec<InvoiceRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by
@@ -355,7 +366,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
     ) -> Result<Option<Invoice>, ApiError> {
         let result: Option<InvoiceRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by
@@ -375,7 +386,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Invoice>, ApiError> {
         let rows: Vec<InvoiceRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by
@@ -401,7 +412,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
 
         let rows: Vec<InvoiceRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by
@@ -429,7 +440,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
 
         let rows: Vec<InvoiceRowWithTotal> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by,
@@ -468,7 +479,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
 
         let rows: Vec<InvoiceRowWithTotal> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by,
@@ -509,7 +520,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             UPDATE invoices
             SET status = $1, updated_at = NOW()
             WHERE id = $2 AND tenant_id = $3
-            RETURNING id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            RETURNING id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
                       total_amount, paid_amount, currency, notes, created_at, updated_at,
                       deleted_at, deleted_by
@@ -536,7 +547,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             UPDATE invoices
             SET paid_amount = $1, updated_at = NOW()
             WHERE id = $2 AND tenant_id = $3
-            RETURNING id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            RETURNING id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
                       total_amount, paid_amount, currency, notes, created_at, updated_at,
                       deleted_at, deleted_by
@@ -623,7 +634,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
     async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Invoice>, ApiError> {
         let rows: Vec<InvoiceRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by
@@ -661,7 +672,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
 
         let rows: Vec<InvoiceRowWithTotal> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by,
@@ -701,7 +712,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
         let rows: Vec<InvoiceRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_number, invoice_type, status, cari_id,
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by
@@ -954,15 +965,16 @@ impl PaymentRepository for PostgresPaymentRepository {
     async fn create(&self, create: CreatePayment) -> Result<Payment, ApiError> {
         let row: PaymentRow = sqlx::query_as(
             r#"
-            INSERT INTO payments (tenant_id, invoice_id, amount, payment_date,
+            INSERT INTO payments (tenant_id, company_id, invoice_id, amount, payment_date,
                                   payment_method, reference_number, notes, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-            RETURNING id, tenant_id, invoice_id, amount, payment_date,
+            RETURNING id, tenant_id, company_id, invoice_id, amount, payment_date,
                       payment_method, reference_number, notes, created_at,
                       deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(create.invoice_id)
         .bind(create.amount)
         .bind(create.payment_date)
@@ -979,7 +991,7 @@ impl PaymentRepository for PostgresPaymentRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Payment>, ApiError> {
         let result: Option<PaymentRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_id, amount, payment_date,
+            SELECT id, tenant_id, company_id, invoice_id, amount, payment_date,
                    payment_method, reference_number, notes, created_at,
                    deleted_at, deleted_by
             FROM payments
@@ -998,7 +1010,7 @@ impl PaymentRepository for PostgresPaymentRepository {
     async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<Payment>, ApiError> {
         let rows: Vec<PaymentRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_id, amount, payment_date,
+            SELECT id, tenant_id, company_id, invoice_id, amount, payment_date,
                    payment_method, reference_number, notes, created_at,
                    deleted_at, deleted_by
             FROM payments
@@ -1078,7 +1090,7 @@ impl PaymentRepository for PostgresPaymentRepository {
 
         let row: PaymentRow = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_id, amount, payment_date,
+            SELECT id, tenant_id, company_id, invoice_id, amount, payment_date,
                    payment_method, reference_number, notes, created_at,
                    deleted_at, deleted_by
             FROM payments
@@ -1097,7 +1109,7 @@ impl PaymentRepository for PostgresPaymentRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Payment>, ApiError> {
         let rows: Vec<PaymentRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, invoice_id, amount, payment_date,
+            SELECT id, tenant_id, company_id, invoice_id, amount, payment_date,
                    payment_method, reference_number, notes, created_at,
                    deleted_at, deleted_by
             FROM payments

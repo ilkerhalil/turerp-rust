@@ -258,6 +258,7 @@ mod tests {
         let asset = service
             .create_asset(CreateAsset {
                 tenant_id: 1,
+                company_id: 1,
                 name: "Test Computer".to_string(),
                 category_id: None,
                 description: None,
@@ -289,6 +290,7 @@ mod tests {
         let asset = service
             .create_asset(CreateAsset {
                 tenant_id: 1,
+                company_id: 1,
                 name: "Test Machine".to_string(),
                 category_id: None,
                 description: None,
@@ -322,6 +324,7 @@ mod tests {
         let asset = service
             .create_asset(CreateAsset {
                 tenant_id: 1,
+                company_id: 1,
                 name: "Test Asset".to_string(),
                 category_id: None,
                 description: None,
@@ -361,6 +364,7 @@ mod tests {
         let asset = service
             .create_asset(CreateAsset {
                 tenant_id: 1,
+                company_id: 1,
                 name: "Test Machine".to_string(),
                 category_id: None,
                 description: None,

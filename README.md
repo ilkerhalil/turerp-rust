@@ -1,7 +1,7 @@
 # Turerp ERP
 
 [![CI](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/ilkerhalil/turerp-rust/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-675%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-780%20passing-brightgreen)]()
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 
 **Modern, multi-tenant SaaS ERP system** - Built with Rust, Actix-web, and SQLx.
@@ -41,17 +41,32 @@
 | **CRM** | Leads, opportunities, campaigns, support tickets |
 | **Custom Fields** | Dynamic field definitions per module (String/Number/Date/Boolean/Select), JSONB values |
 | **Webhook System** | Event-driven webhook subscriptions, delivery tracking, retry logic |
-| **Event Bus** | Domain events with outbox pattern, dead letter queue, batch processing |
+| **Workflow Engine** | Approval workflows with templates, instances, steps, approval/rejection/resubmit logic |
+| **Bank Integration** | Bank accounts, statements, transactions, MT940/CAMT.053/XML parsers, auto-reconciliation |
+| **Cost Center** | Cost centers, profit centers, allocation rules, profitability reporting |
+| **Subscription Billing** | Subscription plans, recurring subscriptions, billing cycles, subscription invoices |
+| **Event Bus** | Production-ready domain events: PostgreSQL outbox table, Redis Streams backend, dead letter queue (DLQ) with retry endpoints, background job scheduler integration (processes outbox every 10s). Subscribers: StockDecrement, AccountingEntry, EDefterAccounting, EFaturaIntegration, TaxPeriod |
 | **Notifications** | Email/SMS/InApp notifications with template engine and retry support |
 | **Job Scheduler** | Background jobs with priority, retry, exponential backoff, scheduled execution |
 | **Search** | Full-text search with fuzzy matching, reindexing, tenant-isolated |
 | **Reports** | PDF/Excel/XML/CSV/JSON report generation with tenant isolation |
 | **Idempotency** | Per-endpoint idempotency keys with 24h TTL cache |
 | **API Keys** | Scoped API key authentication with SHA-256 hashing |
-| **File Upload** | Document management with metadata, checksums, soft delete |
+| **File Upload** | S3/MinIO backend via rust-s3, presigned URL generation for secure downloads, PostgreSQL files table for metadata tracking, document attachment to any entity (invoice, customer, product, employee), soft delete, tenant isolation, version history |
+| **Circuit Breaker** | Per-service circuit breaker registry with configurable thresholds, state monitoring via `/resilience/circuit-breakers` endpoint, manual reset capability |
+| **Retry** | Resilient call wrapper with exponential backoff, jitter, per-policy configuration, statistics tracking |
 | **Tracing** | OpenTelemetry-compatible distributed tracing with W3C propagation |
 | **DB Router** | Read replica routing with session tracking and health checks |
-| **Cache** | In-memory caching with TTL, eviction, namespace isolation |
+| **Redis Cache** | Cache-aside pattern in tenant, user, feature flag, cari, product repositories. TTL per namespace (300s for config, 30s for lists), cache invalidation on writes, cache hit/miss metrics |
+| **CDC** | PostgreSQL LISTEN/NOTIFY triggers on key tables, CdcListener with reconnection and exponential backoff, CDC-to-DomainEvent bridge feeding into Event Bus, real-time database change streaming |
+| **Multi-Company** | Multi-company support with `company_id` isolation across all domains, inter-company invoices and stock transfers, company-specific reporting |
+| **Workflow Engine** | Approval workflows with templates, instances, steps, approval/rejection/resubmit logic, status tracking |
+| **Bank Integration** | Bank accounts, statements, transactions, MT940/CAMT.053/XML parsers, auto-reconciliation with invoices and cari accounts |
+| **Cost Center** | Cost centers, profit centers, allocation rules, profitability reporting |
+| **Subscription Billing** | Subscription plans, recurring subscriptions, billing cycles, subscription invoices with proration |
+| **Resilience** | Circuit breaker pattern for external services (GIB, email, SMS, bank, webhook, file storage), automatic state transitions (Closed/Open/Half-Open), retry with exponential backoff and jitter |
+| **BI Dashboard** | 11 KPI aggregation queries (revenue, profit, cash flow, AR/AP aging, stock value, etc.), time-series chart data (sales, revenue by category, top products), PostgreSQL CTEs and window functions, 30-second cache TTL, customizable widget configs |
+| **Bulk Import/Export** | CSV/JSON import for products, cari, chart of accounts, stock movements. Row-level validation with error collection, duplicate detection by code/name, background async import processing. Export with filters and date ranges, import template downloads |
 
 ### Infrastructure & Operations
 | Feature | Description |
@@ -79,6 +94,9 @@
 | **Metrics** | metrics + metrics-exporter-prometheus | 0.24/0.16 |
 | **API Docs** | utoipa (OpenAPI/Swagger) | 4.x |
 | **Logging** | tracing | 0.1 |
+| **Redis** | redis | - |
+| **S3 Storage** | rust-s3 | - |
+| **Job Scheduler** | cron | - |
 
 ## Contributing
 
@@ -211,11 +229,19 @@ turerp-rust/
 │   │   │   ├── webhook/       # Webhook subscriptions & deliveries
 │   │   │   ├── tax/           # Tax engine module
 │   │   │   ├── edefter/       # e-Defter (electronic ledger)
-│   │   │   └── efatura/       # e-Fatura (electronic invoice)
+│   │   │   ├── efatura/       # e-Fatura (electronic invoice)
+│   │   │   ├── bank/           # Bank integration (accounts, statements, transactions)
+│   │   │   ├── workflow/       # Workflow engine (templates, instances, approvals)
+│   │   │   ├── cost_center/   # Cost centers and profit centers
+│   │   │   └── subscription/  # Subscription billing and plans
 │   │   ├── common/
 │   │   │   ├── mod.rs          # Common exports
 │   │   │   ├── pagination.rs   # Pagination helpers
-│   │   │   └── soft_delete.rs # Soft delete trait and types
+│   │   │   ├── soft_delete.rs # Soft delete trait and types
+│   │   │   ├── circuit_breaker.rs # Circuit breaker registry
+│   │   │   ├── retry.rs         # Retry with exponential backoff
+│   │   │   ├── bank_parsers.rs  # MT940/CAMT.053/XML parsers
+│   │   │   └── inter_company.rs # Inter-company transfers
 │   │   ├── middleware/       # HTTP middleware
 │   │   │   ├── auth.rs        # JWT authentication + AdminUser/AuthUser extractors
 │   │   │   ├── rate_limit.rs  # Rate limiting (governor 0.8, trusted proxy)
@@ -242,7 +268,15 @@ turerp-rust/
 │   │   ├── 009_webhooks.sql          # Webhook subscriptions & deliveries
 │   │   ├── 010_edefter.sql           # e-Defter module tables
 │   │   ├── 011_tax_engine.sql        # Tax engine (KDV, OIV, etc.)
-│   │   └── 012_efatura.sql           # e-Fatura module tables
+│   │   ├── 012_efatura.sql           # e-Fatura module tables
+│   │   ├── 021_outbox.sql            # Event outbox pattern
+│   │   ├── 021_files_table.sql       # File storage metadata
+│   │   ├── 022_cdc_triggers.sql      # CDC PostgreSQL triggers
+│   │   ├── 023_companies.sql         # Multi-company support
+│   │   ├── 024_workflows.sql         # Workflow engine
+│   │   ├── 025_bank_integration.sql  # Bank accounts and statements
+│   │   ├── 026_subscriptions.sql     # Subscription billing
+│   │   └── 027_cost_centers.sql      # Cost centers and allocations
 │   ├── tests/                 # Integration tests
 │   └── Cargo.toml             # Dependencies
 ├── docs/                      # Project documentation
@@ -354,7 +388,7 @@ JWT Token → User Authentication → Role-Based Access
 ## Testing
 
 ```bash
-# All tests (315 tests)
+# All tests (780 tests)
 cargo test
 
 # Security tests
@@ -405,6 +439,16 @@ Automated via GitHub Actions:
 | `TURERP_METRICS_ENABLED` | Enable Prometheus metrics | `true` |
 | `TURERP_METRICS_PATH` | Metrics endpoint path | `/metrics` |
 | `RUST_LOG` | Log level | `info` |
+| `TURERP_REDIS_ENABLED` | Enable Redis caching | `false` |
+| `TURERP_REDIS_URL` | Redis connection string | `redis://127.0.0.1:6379` |
+| `TURERP_REDIS_TTL` | Default cache TTL (seconds) | `300` |
+| `S3_ENDPOINT` | S3/MinIO endpoint | (optional) |
+| `S3_BUCKET` | S3 bucket name | (optional) |
+| `S3_ACCESS_KEY` | S3 access key | (optional) |
+| `S3_SECRET_KEY` | S3 secret key | (optional) |
+| `S3_REGION` | S3 region | `us-east-1` |
+| `TURERP_CDC_ENABLED` | Enable CDC triggers | `false` |
+| `TURERP_CDC_CHANNELS` | CDC channels to listen | `invoice_changes,stock_changes` |
 
 ## Security
 
