@@ -29,10 +29,13 @@ impl SubscriptionService {
         &self,
         create: CreatePlan,
     ) -> Result<SubscriptionPlanResponse, ApiError> {
-        create
-            .validate()
-            .map_err(|e| ApiError::Validation(e.to_string()))?;
+        create.validate().map_err(|e| {
+            tracing::warn!(tenant_id = create.tenant_id, error = %e, "Plan validation failed");
+            ApiError::Validation(e.to_string())
+        })?;
+        let tenant_id = create.tenant_id;
         let plan = self.repo.create_plan(create).await?;
+        tracing::info!(tenant_id, "Created subscription plan");
         Ok(plan.into())
     }
 
@@ -46,7 +49,10 @@ impl SubscriptionService {
             .repo
             .find_plan_by_id(id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Plan {} not found", id)))?;
+            .ok_or_else(|| {
+                tracing::warn!(tenant_id, plan_id = id, "Subscription plan not found");
+                ApiError::NotFound(format!("Plan {} not found", id))
+            })?;
         Ok(plan.into())
     }
 
@@ -70,12 +76,15 @@ impl SubscriptionService {
             .validate()
             .map_err(|e| ApiError::Validation(e.to_string()))?;
         let plan = self.repo.update_plan(id, tenant_id, update).await?;
+        tracing::info!(tenant_id, plan_id = id, "Updated subscription plan");
         Ok(plan.into())
     }
 
     /// Delete a plan
     pub async fn delete_plan(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.repo.delete_plan(id, tenant_id).await
+        self.repo.delete_plan(id, tenant_id).await?;
+        tracing::info!(tenant_id, plan_id = id, "Deleted subscription plan");
+        Ok(())
     }
 
     // --- Subscriptions ---
@@ -85,10 +94,13 @@ impl SubscriptionService {
         &self,
         create: CreateSubscription,
     ) -> Result<SubscriptionResponse, ApiError> {
-        create
-            .validate()
-            .map_err(|e| ApiError::Validation(e.to_string()))?;
+        create.validate().map_err(|e| {
+            tracing::warn!(tenant_id = create.tenant_id, error = %e, "Plan validation failed");
+            ApiError::Validation(e.to_string())
+        })?;
+        let tenant_id = create.tenant_id;
         let sub = self.repo.create_subscription(create).await?;
+        tracing::info!(tenant_id, "Created subscription");
         Ok(sub.into())
     }
 
@@ -102,7 +114,10 @@ impl SubscriptionService {
             .repo
             .find_subscription_by_id(id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Subscription {} not found", id)))?;
+            .ok_or_else(|| {
+                tracing::warn!(tenant_id, subscription_id = id, "Subscription not found");
+                ApiError::NotFound(format!("Subscription {} not found", id))
+            })?;
         Ok(sub.into())
     }
 
@@ -139,12 +154,15 @@ impl SubscriptionService {
             .validate()
             .map_err(|e| ApiError::Validation(e.to_string()))?;
         let sub = self.repo.update_subscription(id, tenant_id, update).await?;
+        tracing::info!(tenant_id, subscription_id = id, "Updated subscription");
         Ok(sub.into())
     }
 
     /// Delete a subscription
     pub async fn delete_subscription(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.repo.delete_subscription(id, tenant_id).await
+        self.repo.delete_subscription(id, tenant_id).await?;
+        tracing::info!(tenant_id, subscription_id = id, "Deleted subscription");
+        Ok(())
     }
 
     // --- Billing ---
@@ -181,6 +199,7 @@ impl SubscriptionService {
                 crate::domain::subscription::model::SubscriptionInvoiceStatus::Pending,
             )
             .await?;
+        tracing::info!(tenant_id, subscription_id = id, "Renewed subscription");
 
         Ok(sub.into())
     }

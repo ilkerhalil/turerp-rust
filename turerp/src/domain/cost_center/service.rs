@@ -30,20 +30,24 @@ impl CostCenterService {
         tenant_id: i64,
     ) -> Result<CostCenter, ApiError> {
         if create.code.trim().is_empty() {
+            tracing::warn!(tenant_id, "Cost center code is empty");
             return Err(ApiError::Validation("Code is required".to_string()));
         }
         if create.name.trim().is_empty() {
+            tracing::warn!(tenant_id, "Cost center name is empty");
             return Err(ApiError::Validation("Name is required".to_string()));
         }
-        self.repo.create(create, tenant_id).await
+        let center = self.repo.create(create, tenant_id).await?;
+        tracing::info!(tenant_id, cost_center_id = center.id, "Created cost center");
+        Ok(center)
     }
 
     /// Get a cost center by ID
     pub async fn get_cost_center(&self, id: i64, tenant_id: i64) -> Result<CostCenter, ApiError> {
-        self.repo
-            .find_by_id(id, tenant_id)
-            .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Cost center {} not found", id)))
+        self.repo.find_by_id(id, tenant_id).await?.ok_or_else(|| {
+            tracing::warn!(tenant_id, cost_center_id = id, "Cost center not found");
+            ApiError::NotFound(format!("Cost center {} not found", id))
+        })
     }
 
     /// List cost centers with optional type filter and pagination
@@ -72,7 +76,9 @@ impl CostCenterService {
         tenant_id: i64,
         update: UpdateCostCenter,
     ) -> Result<CostCenter, ApiError> {
-        self.repo.update(id, tenant_id, update).await
+        let center = self.repo.update(id, tenant_id, update).await?;
+        tracing::info!(tenant_id, cost_center_id = id, "Updated cost center");
+        Ok(center)
     }
 
     /// Soft delete a cost center
@@ -82,7 +88,9 @@ impl CostCenterService {
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
-        self.repo.soft_delete(id, tenant_id, deleted_by).await
+        self.repo.soft_delete(id, tenant_id, deleted_by).await?;
+        tracing::info!(tenant_id, cost_center_id = id, "Deleted cost center");
+        Ok(())
     }
 
     /// Restore a soft-deleted cost center
@@ -91,7 +99,9 @@ impl CostCenterService {
         id: i64,
         tenant_id: i64,
     ) -> Result<CostCenter, ApiError> {
-        self.repo.restore(id, tenant_id).await
+        let center = self.repo.restore(id, tenant_id).await?;
+        tracing::info!(tenant_id, cost_center_id = id, "Restored cost center");
+        Ok(center)
     }
 
     /// Bulk restore soft-deleted cost centers
@@ -114,6 +124,12 @@ impl CostCenterService {
                 }
             }
         }
+        tracing::info!(
+            tenant_id,
+            restored = restored.len(),
+            failed = failed.len(),
+            "Bulk restored cost centers"
+        );
         Ok(BulkRestoreResponse {
             restored: restored.len(),
             items: restored,
@@ -131,7 +147,9 @@ impl CostCenterService {
 
     /// Permanently destroy a soft-deleted cost center
     pub async fn destroy_cost_center(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.repo.destroy(id, tenant_id).await
+        self.repo.destroy(id, tenant_id).await?;
+        tracing::info!(tenant_id, cost_center_id = id, "Destroyed cost center");
+        Ok(())
     }
 
     // ---- Allocation Operations ----
@@ -147,6 +165,7 @@ impl CostCenterService {
             .await?;
 
         if allocation.amount < rust_decimal::Decimal::ZERO {
+            tracing::warn!(tenant_id, "Allocation amount is negative");
             return Err(ApiError::Validation(
                 "Amount cannot be negative".to_string(),
             ));
@@ -154,12 +173,16 @@ impl CostCenterService {
         if allocation.percentage <= rust_decimal::Decimal::ZERO
             || allocation.percentage > rust_decimal::Decimal::new(100, 0)
         {
+            tracing::warn!(tenant_id, "Allocation percentage is invalid");
             return Err(ApiError::Validation(
                 "Percentage must be between 0 and 100".to_string(),
             ));
         }
 
-        self.repo.create_allocation(allocation, tenant_id).await
+        let cost_center_id = allocation.cost_center_id;
+        let alloc = self.repo.create_allocation(allocation, tenant_id).await?;
+        tracing::info!(tenant_id, cost_center_id, "Created cost center allocation");
+        Ok(alloc)
     }
 
     /// Get allocations for a cost center

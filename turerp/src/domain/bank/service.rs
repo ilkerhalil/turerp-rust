@@ -52,15 +52,23 @@ impl BankService {
     ) -> Result<BankAccountResponse, ApiError> {
         create
             .validate()
-            .map_err(|e| ApiError::Validation(e.to_string()))?;
+            .map_err(|e| {
+                tracing::warn!(tenant_id = create.tenant_id, error = %e, "Bank account validation failed");
+                ApiError::Validation(e.to_string())
+            })?;
 
         // Validate bank code
         create
             .bank_code
             .parse::<crate::domain::bank::model::BankCode>()
-            .map_err(|e| ApiError::Validation(format!("Invalid bank code: {}", e)))?;
+            .map_err(|e| {
+                tracing::warn!(tenant_id = create.tenant_id, bank_code = %create.bank_code, "Invalid bank code");
+                ApiError::Validation(format!("Invalid bank code: {}", e))
+            })?;
 
+        let tenant_id = create.tenant_id;
         let account = self.repo.create_account(create).await?;
+        tracing::info!(tenant_id, "Created bank account");
         Ok(account.into())
     }
 
@@ -74,7 +82,10 @@ impl BankService {
             .repo
             .find_account_by_id(id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Bank account {} not found", id)))?;
+            .ok_or_else(|| {
+                tracing::warn!(tenant_id, account_id = id, "Bank account not found");
+                ApiError::NotFound(format!("Bank account {} not found", id))
+            })?;
 
         Ok(account.into())
     }
@@ -97,6 +108,7 @@ impl BankService {
             .map_err(|e| ApiError::Validation(e.to_string()))?;
 
         let account = self.repo.update_account(id, tenant_id, update).await?;
+        tracing::info!(tenant_id, account_id = id, "Updated bank account");
         Ok(account.into())
     }
 
@@ -109,7 +121,9 @@ impl BankService {
     ) -> Result<(), ApiError> {
         self.repo
             .soft_delete_account(id, tenant_id, deleted_by)
-            .await
+            .await?;
+        tracing::info!(tenant_id, account_id = id, "Deleted bank account");
+        Ok(())
     }
 
     /// Restore a soft-deleted bank account
@@ -119,12 +133,15 @@ impl BankService {
         tenant_id: i64,
     ) -> Result<BankAccountResponse, ApiError> {
         let account = self.repo.restore_account(id, tenant_id).await?;
+        tracing::info!(tenant_id, account_id = id, "Restored bank account");
         Ok(account.into())
     }
 
     /// Permanently delete a bank account
     pub async fn destroy_account(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.repo.destroy_account(id, tenant_id).await
+        self.repo.destroy_account(id, tenant_id).await?;
+        tracing::info!(tenant_id, account_id = id, "Destroyed bank account");
+        Ok(())
     }
 
     /// Import a bank statement
@@ -144,6 +161,7 @@ impl BankService {
             .repo
             .create_statement(tenant_id, account_id, import)
             .await?;
+        tracing::info!(tenant_id, account_id, "Imported bank statement");
         Ok(statement)
     }
 
@@ -183,6 +201,12 @@ impl BankService {
             .mark_statement_processed(statement_id, tenant_id)
             .await
             .ok();
+        tracing::info!(
+            tenant_id,
+            statement_id,
+            transaction_count = created.len(),
+            "Processed bank statement"
+        );
         Ok(created)
     }
 
@@ -224,6 +248,11 @@ impl BankService {
             .find_transaction_by_id(transaction_id, tenant_id)
             .await?
             .ok_or_else(|| {
+                tracing::warn!(
+                    tenant_id,
+                    transaction_id,
+                    "Transaction not found for manual match"
+                );
                 ApiError::NotFound(format!("Transaction {} not found", transaction_id))
             })?;
 
@@ -243,6 +272,7 @@ impl BankService {
                 MatchStatus::Manual,
             )
             .await?;
+        tracing::info!(tenant_id, transaction_id, "Manually matched transaction");
 
         Ok(updated.into())
     }
@@ -271,6 +301,7 @@ impl BankService {
             .repo
             .unmatch_transaction(transaction_id, tenant_id)
             .await?;
+        tracing::info!(tenant_id, transaction_id, "Unmatched transaction");
         Ok(updated.into())
     }
 
@@ -305,6 +336,13 @@ impl BankService {
 
         let (total, matched, unmatched_count, total_amount, matched_amount) =
             self.repo.get_reconciliation_summary(tenant_id).await?;
+        tracing::info!(
+            tenant_id,
+            total_transactions = total,
+            matched,
+            unmatched_count,
+            "Auto-reconciled transactions"
+        );
 
         Ok(ReconciliationReport {
             tenant_id,
@@ -345,8 +383,13 @@ impl BankService {
     ) -> Result<ReconciliationRule, ApiError> {
         create
             .validate()
-            .map_err(|e| ApiError::Validation(e.to_string()))?;
+            .map_err(|e| {
+                tracing::warn!(tenant_id = create.tenant_id, error = %e, "Reconciliation rule validation failed");
+                ApiError::Validation(e.to_string())
+            })?;
+        let tenant_id = create.tenant_id;
         let rule = self.repo.create_rule(create).await?;
+        tracing::info!(tenant_id, "Created reconciliation rule");
         Ok(rule)
     }
 
@@ -374,12 +417,15 @@ impl BankService {
             .validate()
             .map_err(|e| ApiError::Validation(e.to_string()))?;
         let rule = self.repo.update_rule(id, tenant_id, update).await?;
+        tracing::info!(tenant_id, rule_id = id, "Updated reconciliation rule");
         Ok(rule)
     }
 
     /// Delete a reconciliation rule
     pub async fn delete_rule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.repo.delete_rule(id, tenant_id).await
+        self.repo.delete_rule(id, tenant_id).await?;
+        tracing::info!(tenant_id, rule_id = id, "Deleted reconciliation rule");
+        Ok(())
     }
 
     // --- Private matching helpers ---

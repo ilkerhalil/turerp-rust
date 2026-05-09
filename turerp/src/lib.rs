@@ -639,7 +639,10 @@ pub mod app {
 
             // File Storage
             let file_storage: Arc<dyn crate::common::file_storage::FileStorage> =
-                Arc::new(crate::common::file_storage::LocalFileStorage::new("/tmp/turerp-test-files"))
+                Arc::new(crate::common::file_storage::LocalFileStorage::new(format!(
+                    "/tmp/turerp-test-files-{}",
+                    std::process::id()
+                )))
                     as Arc<dyn crate::common::file_storage::FileStorage>;
 
             // Rate limit stats
@@ -1133,7 +1136,10 @@ pub mod app {
             cost_center_service: web::Data::new(cost_center_service),
             dashboard_service: web::Data::new(dashboard_service),
             file_storage: web::Data::from(Arc::new(
-                crate::common::file_storage::LocalFileStorage::new("/tmp/turerp-test-files"),
+                crate::common::file_storage::LocalFileStorage::new(format!(
+                    "/tmp/turerp-test-files-{}",
+                    std::process::id()
+                )),
             )
                 as Arc<dyn crate::common::file_storage::FileStorage>),
             qc_service: web::Data::new(qc_service),

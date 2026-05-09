@@ -1,0 +1,8 @@
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071: Marvin Attack on rsa 0.9.10
+    # NOT EXPLOITABLE: Project uses PostgreSQL only (sqlx features do NOT include "mysql").
+    # sqlx-mysql is a dead dependency in Cargo.lock but never compiled into the binary.
+    # No direct RSA usage in the codebase.
+    "RUSTSEC-2023-0071",
+]

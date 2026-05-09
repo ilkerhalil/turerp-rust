@@ -159,9 +159,13 @@ impl WorkflowService {
             .repo
             .find_template_by_id(template_id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Template {} not found", template_id)))?;
+            .ok_or_else(|| {
+                tracing::warn!(tenant_id, template_id, "Workflow template not found");
+                ApiError::NotFound(format!("Template {} not found", template_id))
+            })?;
 
         if template.entity_type != entity_type {
+            tracing::warn!(tenant_id, template_id, "Workflow entity type mismatch");
             return Err(ApiError::Validation(format!(
                 "Template entity type {:?} does not match requested {:?}",
                 template.entity_type, entity_type
@@ -253,6 +257,7 @@ impl WorkflowService {
 
             // Schedule escalation check job
             let _ = self.schedule_escalation_job(instance.id, tenant_id).await;
+            tracing::info!(tenant_id, instance_id = instance.id, "Started workflow");
 
             return Ok(instance);
         }
@@ -273,9 +278,17 @@ impl WorkflowService {
             .repo
             .find_instance_by_id(instance_id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Instance {} not found", instance_id)))?;
+            .ok_or_else(|| {
+                tracing::warn!(tenant_id, instance_id, "Workflow instance not found");
+                ApiError::NotFound(format!("Instance {} not found", instance_id))
+            })?;
 
         if instance.status != WorkflowStatus::Pending {
+            tracing::warn!(
+                tenant_id,
+                instance_id,
+                "Workflow instance not pending for approval"
+            );
             return Err(ApiError::BadRequest(format!(
                 "Instance {} is not pending",
                 instance_id
@@ -379,7 +392,9 @@ impl WorkflowService {
             }
         }
 
-        self.repo.update_instance(instance.clone()).await
+        let instance = self.repo.update_instance(instance.clone()).await?;
+        tracing::info!(tenant_id, instance_id, step_id, "Approved workflow step");
+        Ok(instance)
     }
 
     /// Reject the current step and mark instance as rejected
@@ -395,9 +410,17 @@ impl WorkflowService {
             .repo
             .find_instance_by_id(instance_id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Instance {} not found", instance_id)))?;
+            .ok_or_else(|| {
+                tracing::warn!(tenant_id, instance_id, "Workflow instance not found");
+                ApiError::NotFound(format!("Instance {} not found", instance_id))
+            })?;
 
         if instance.status != WorkflowStatus::Pending {
+            tracing::warn!(
+                tenant_id,
+                instance_id,
+                "Workflow instance not pending for rejection"
+            );
             return Err(ApiError::BadRequest(format!(
                 "Instance {} is not pending",
                 instance_id
@@ -410,9 +433,17 @@ impl WorkflowService {
             .await?
             .into_iter()
             .find(|s| s.id == step_id)
-            .ok_or_else(|| ApiError::NotFound(format!("Step {} not found", step_id)))?;
+            .ok_or_else(|| {
+                tracing::warn!(tenant_id, step_id, "Workflow step not found");
+                ApiError::NotFound(format!("Step {} not found", step_id))
+            })?;
 
         if step.status != WorkflowStepStatus::Pending {
+            tracing::warn!(
+                tenant_id,
+                step_id,
+                "Workflow step not pending for rejection"
+            );
             return Err(ApiError::BadRequest(format!(
                 "Step {} is not pending",
                 step_id
@@ -455,7 +486,9 @@ impl WorkflowService {
         let mut instance = instance;
         instance.status = WorkflowStatus::Rejected;
         instance.assigned_user_id = None;
-        self.repo.update_instance(instance.clone()).await
+        let instance = self.repo.update_instance(instance.clone()).await?;
+        tracing::info!(tenant_id, instance_id, step_id, "Rejected workflow step");
+        Ok(instance)
     }
 
     /// Resubmit a rejected workflow back to pending
@@ -469,9 +502,17 @@ impl WorkflowService {
             .repo
             .find_instance_by_id(instance_id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Instance {} not found", instance_id)))?;
+            .ok_or_else(|| {
+                tracing::warn!(tenant_id, instance_id, "Workflow instance not found");
+                ApiError::NotFound(format!("Instance {} not found", instance_id))
+            })?;
 
         if instance.status != WorkflowStatus::Rejected {
+            tracing::warn!(
+                tenant_id,
+                instance_id,
+                "Workflow instance not rejected for resubmit"
+            );
             return Err(ApiError::BadRequest(format!(
                 "Instance {} is not rejected",
                 instance_id
@@ -514,6 +555,7 @@ impl WorkflowService {
         instance.assigned_user_id = first_step.as_ref().and_then(|s| s.approver_user_id);
 
         let instance = self.repo.update_instance(instance.clone()).await?;
+        tracing::info!(tenant_id, instance_id, "Resubmitted workflow");
 
         // Notify first approver
         if let Some(step) = first_step {
@@ -552,6 +594,10 @@ impl WorkflowService {
     pub async fn escalate_overdue(&self) -> Result<Vec<WorkflowInstance>, ApiError> {
         let overdue = self.repo.find_overdue_steps(24).await?;
         let mut escalated = Vec::new();
+        tracing::info!(
+            overdue_count = overdue.len(),
+            "Escalating overdue workflows"
+        );
         for (instance, step) in overdue {
             // Audit log escalation
             let _ = self
@@ -599,7 +645,10 @@ impl WorkflowService {
             .repo
             .find_instance_by_id(id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Instance {} not found", id)))?;
+            .ok_or_else(|| {
+                tracing::warn!(tenant_id, instance_id = id, "Workflow instance not found");
+                ApiError::NotFound(format!("Instance {} not found", id))
+            })?;
         let steps = self
             .repo
             .find_steps_by_instance(id)
