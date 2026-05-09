@@ -616,6 +616,7 @@ async fn test_chart_of_accounts_to_accounting_flow() {
     accounting_service
         .create_account(CreateAccount {
             tenant_id: 1,
+            company_id: 1,
             code: "100.01".to_string(),
             name: "Kasa".to_string(),
             account_type: AccountType::Asset,
@@ -629,6 +630,7 @@ async fn test_chart_of_accounts_to_accounting_flow() {
     accounting_service
         .create_account(CreateAccount {
             tenant_id: 1,
+            company_id: 1,
             code: "600.01".to_string(),
             name: "Satis Geliri".to_string(),
             account_type: AccountType::Revenue,
@@ -643,6 +645,7 @@ async fn test_chart_of_accounts_to_accounting_flow() {
     let entry = accounting_service
         .create_journal_entry(CreateJournalEntry {
             tenant_id: 1,
+            company_id: 1,
             date: chrono::Utc::now(),
             description: "Satis kaydi".to_string(),
             reference: Some("INV-001".to_string()),
