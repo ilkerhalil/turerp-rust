@@ -266,7 +266,7 @@ pub async fn get_cdc_status(
 ) -> Result<HttpResponse, ApiError> {
     #[cfg(feature = "postgres")]
     {
-        if let Some(ref listener) = app_state.cdc_listener {
+        if let Some(ref listener) = _app_state.cdc_listener {
             let active = listener.is_active();
             let channels = listener.active_channels();
             let last_event_time = listener.last_event_time().map(|t| t.to_rfc3339());

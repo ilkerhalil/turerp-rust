@@ -121,6 +121,26 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "022_cdc_triggers",
             sql: include_str!("../../migrations/022_cdc_triggers.sql"),
         },
+        Migration {
+            version: "023_companies",
+            sql: include_str!("../../migrations/023_companies.sql"),
+        },
+        Migration {
+            version: "023_cost_centers",
+            sql: include_str!("../../migrations/023_cost_centers.sql"),
+        },
+        Migration {
+            version: "024_workflows",
+            sql: include_str!("../../migrations/024_workflows.sql"),
+        },
+        Migration {
+            version: "025_bank_integration",
+            sql: include_str!("../../migrations/025_bank_integration.sql"),
+        },
+        Migration {
+            version: "026_subscriptions",
+            sql: include_str!("../../migrations/026_subscriptions.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).

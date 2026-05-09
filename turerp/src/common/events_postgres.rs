@@ -197,19 +197,24 @@ impl PostgresEventBus {
     }
 
     /// Dispatch an event to in-memory subscribers
-    fn dispatch_to_subscribers(&self, event: &DomainEvent) -> Result<(), String> {
-        let subscribers = self.subscribers.read();
+    async fn dispatch_to_subscribers(&self, event: &DomainEvent) -> Result<(), String> {
         let event_type = event.event_type();
+        let to_notify: Vec<Arc<dyn EventSubscriber>> = {
+            let subscribers = self.subscribers.read();
+            subscribers
+                .iter()
+                .filter(|s| {
+                    let interested = s.subscribed_to();
+                    interested.is_empty() || interested.iter().any(|t| t == event_type || t == "*")
+                })
+                .cloned()
+                .collect()
+        };
 
-        for subscriber in subscribers.iter() {
-            let interested = subscriber.subscribed_to();
-            if interested.is_empty() || interested.iter().any(|t| t == event_type || t == "*") {
-                // In production this would use tokio::spawn, but for now we call directly
-                // to keep error handling synchronous at this layer.
-                let name = subscriber.name().to_string();
-                if let Err(e) = futures::executor::block_on(subscriber.handle(event)) {
-                    tracing::warn!("Subscriber {} failed for event {}: {}", name, event_type, e);
-                }
+        for subscriber in to_notify {
+            let name = subscriber.name().to_string();
+            if let Err(e) = subscriber.handle(event).await {
+                tracing::warn!("Subscriber {} failed for event {}: {}", name, event_type, e);
             }
         }
         Ok(())
@@ -252,7 +257,7 @@ impl EventBus for PostgresEventBus {
         .map_err(|e| Self::map_err(map_sqlx_error(e, "OutboxEvent")))?;
 
         // Dispatch to in-memory subscribers for backward compatibility
-        self.dispatch_to_subscribers(&event)?;
+        self.dispatch_to_subscribers(&event).await?;
 
         Ok(row.id)
     }
@@ -311,7 +316,7 @@ impl EventBus for PostgresEventBus {
             }
 
             // Dispatch to in-memory subscribers
-            if let Err(e) = self.dispatch_to_subscribers(&event) {
+            if let Err(e) = self.dispatch_to_subscribers(&event).await {
                 tracing::warn!("Failed to dispatch event {} to subscribers: {}", row.id, e);
             }
 
