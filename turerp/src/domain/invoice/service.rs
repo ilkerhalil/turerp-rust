@@ -302,6 +302,7 @@ mod tests {
 
         let create = CreateInvoice {
             tenant_id: 1,
+            company_id: 1,
             invoice_type: InvoiceType::SalesInvoice,
             cari_id: 1,
             issue_date: now,
@@ -335,6 +336,7 @@ mod tests {
         // Create invoice
         let create = CreateInvoice {
             tenant_id: 1,
+            company_id: 1,
             invoice_type: InvoiceType::SalesInvoice,
             cari_id: 1,
             issue_date: now,
@@ -357,6 +359,7 @@ mod tests {
         // Create payment
         let payment_create = CreatePayment {
             tenant_id: 1,
+            company_id: 1,
             invoice_id: invoice.id,
             amount: dec!(50),
             payment_date: now,
@@ -381,6 +384,7 @@ mod tests {
 
         let create = CreateInvoice {
             tenant_id: 1,
+            company_id: 1,
             invoice_type: InvoiceType::SalesInvoice,
             cari_id: 1,
             issue_date: now,
@@ -403,6 +407,7 @@ mod tests {
 
         let payment_create = CreatePayment {
             tenant_id: 1,
+            company_id: 1,
             invoice_id: invoice.id,
             amount: total,
             payment_date: now,

@@ -172,6 +172,7 @@ impl AssetsRepository for InMemoryAssetsRepository {
         let asset = Asset {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             asset_code,
             name: create.name,
             category_id: create.category_id,
@@ -519,6 +520,7 @@ mod tests {
         let asset = repo
             .create(CreateAsset {
                 tenant_id: 1,
+                company_id: 1,
                 name: "Test Computer".to_string(),
                 category_id: None,
                 description: None,
@@ -550,6 +552,7 @@ mod tests {
         let asset = repo
             .create(CreateAsset {
                 tenant_id: 1,
+                company_id: 1,
                 name: "Test Asset".to_string(),
                 category_id: None,
                 description: None,
@@ -584,6 +587,7 @@ mod tests {
         let asset = repo
             .create(CreateAsset {
                 tenant_id: 1,
+                company_id: 1,
                 name: "Test Machine".to_string(),
                 category_id: None,
                 description: None,

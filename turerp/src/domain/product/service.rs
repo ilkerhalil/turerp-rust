@@ -447,6 +447,7 @@ mod tests {
 
         let create = CreateProduct {
             tenant_id: 1,
+            company_id: 1,
             code: "P001".to_string(),
             name: "Test Product".to_string(),
             description: None,
@@ -469,6 +470,7 @@ mod tests {
 
         let create = CreateProduct {
             tenant_id: 1,
+            company_id: 1,
             code: "P001".to_string(),
             name: "Test Product".to_string(),
             description: None,
@@ -492,6 +494,7 @@ mod tests {
 
         let create = CreateProduct {
             tenant_id: 1,
+            company_id: 1,
             code: "P001".to_string(),
             name: "Test Product".to_string(),
             description: None,
@@ -518,6 +521,7 @@ mod tests {
 
         let create = CreateCategory {
             tenant_id: 1,
+            company_id: 1,
             name: "Electronics".to_string(),
             parent_id: None,
         };
@@ -533,6 +537,7 @@ mod tests {
 
         let create = CreateUnit {
             tenant_id: 1,
+            company_id: 1,
             code: "PCS".to_string(),
             name: "Piece".to_string(),
             is_integer: true,
@@ -549,6 +554,7 @@ mod tests {
         // Create product first
         let product_create = CreateProduct {
             tenant_id: 1,
+            company_id: 1,
             code: "P001".to_string(),
             name: "Test Product".to_string(),
             description: None,
@@ -584,6 +590,7 @@ mod tests {
         // Create product first
         let product_create = CreateProduct {
             tenant_id: 1,
+            company_id: 1,
             code: "P001".to_string(),
             name: "Test Product".to_string(),
             description: None,
@@ -629,6 +636,7 @@ mod tests {
         // Create product first
         let product_create = CreateProduct {
             tenant_id: 1,
+            company_id: 1,
             code: "P001".to_string(),
             name: "Test Product".to_string(),
             description: None,
@@ -673,6 +681,7 @@ mod tests {
         // Create product first
         let product_create = CreateProduct {
             tenant_id: 1,
+            company_id: 1,
             code: "P001".to_string(),
             name: "Test Product".to_string(),
             description: None,
@@ -709,6 +718,7 @@ mod tests {
 
         let create = CreateProduct {
             tenant_id: 1,
+            company_id: 1,
             code: "P-SOFT".to_string(),
             name: "Soft Delete Test".to_string(),
             description: None,
@@ -747,6 +757,7 @@ mod tests {
 
         let create = CreateCategory {
             tenant_id: 1,
+            company_id: 1,
             name: "Test Category".to_string(),
             parent_id: None,
         };
@@ -771,6 +782,7 @@ mod tests {
 
         let create = CreateUnit {
             tenant_id: 1,
+            company_id: 1,
             code: "KG".to_string(),
             name: "Kilogram".to_string(),
             is_integer: false,

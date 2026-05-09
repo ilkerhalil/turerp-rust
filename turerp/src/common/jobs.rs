@@ -65,6 +65,19 @@ pub enum JobType {
         notification_id: i64,
         tenant_id: i64,
     },
+    /// Process pending outbox events for a tenant
+    ProcessOutbox { tenant_id: i64 },
+    /// Bulk import from uploaded file
+    Import {
+        file_id: i64,
+        entity_type: String,
+        tenant_id: i64,
+        format: String,
+    },
+    /// Import bank statement for an account
+    ImportBankStatement { account_id: i64, file_id: i64 },
+    /// Auto-reconcile bank transactions for a tenant
+    AutoReconcile { tenant_id: i64 },
 }
 
 /// A scheduled job

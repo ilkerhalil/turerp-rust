@@ -22,8 +22,11 @@ pub struct FileMetadata {
     pub storage_backend: StorageBackend,
     pub checksum: String,
     pub uploaded_by: Option<i64>,
+    pub entity_type: Option<String>,
+    pub entity_id: Option<i64>,
     pub created_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
+    pub deleted_by: Option<i64>,
 }
 
 /// Storage backend type
@@ -41,6 +44,8 @@ pub struct FileUpload {
     pub content_type: String,
     pub data: Vec<u8>,
     pub uploaded_by: Option<i64>,
+    pub entity_type: Option<String>,
+    pub entity_id: Option<i64>,
 }
 
 /// Presigned URL result
@@ -158,8 +163,11 @@ impl FileStorage for LocalFileStorage {
             storage_backend: StorageBackend::Local,
             checksum,
             uploaded_by: upload.uploaded_by,
+            entity_type: upload.entity_type,
+            entity_id: upload.entity_id,
             created_at: Utc::now(),
             deleted_at: None,
+            deleted_by: None,
         };
 
         self.metadata.write().push(metadata.clone());
@@ -261,6 +269,8 @@ mod tests {
 
         let upload = FileUpload {
             tenant_id: 1,
+            entity_id: None,
+            entity_type: None,
             filename: "test.txt".to_string(),
             content_type: "text/plain".to_string(),
             data: b"Hello, World!".to_vec(),
@@ -283,6 +293,8 @@ mod tests {
 
         let upload = FileUpload {
             tenant_id: 1,
+            entity_id: None,
+            entity_type: None,
             filename: "doc.pdf".to_string(),
             content_type: "application/pdf".to_string(),
             data: vec![1, 2, 3, 4],
@@ -301,6 +313,8 @@ mod tests {
 
         let upload = FileUpload {
             tenant_id: 1,
+            entity_id: None,
+            entity_type: None,
             filename: "delete_me.txt".to_string(),
             content_type: "text/plain".to_string(),
             data: b"delete me".to_vec(),
@@ -327,6 +341,8 @@ mod tests {
             storage
                 .upload(FileUpload {
                     tenant_id: 1,
+                    entity_id: None,
+                    entity_type: None,
                     filename: format!("file_{}.txt", i),
                     content_type: "text/plain".to_string(),
                     data: format!("content {}", i).into_bytes(),
@@ -350,6 +366,8 @@ mod tests {
         storage
             .upload(FileUpload {
                 tenant_id: 1,
+                entity_id: None,
+                entity_type: None,
                 filename: "tenant1.txt".to_string(),
                 content_type: "text/plain".to_string(),
                 data: b"tenant 1 data".to_vec(),
@@ -361,6 +379,8 @@ mod tests {
         storage
             .upload(FileUpload {
                 tenant_id: 2,
+                entity_id: None,
+                entity_type: None,
                 filename: "tenant2.txt".to_string(),
                 content_type: "text/plain".to_string(),
                 data: b"tenant 2 data".to_vec(),
@@ -382,6 +402,8 @@ mod tests {
         storage
             .upload(FileUpload {
                 tenant_id: 1,
+                entity_id: None,
+                entity_type: None,
                 filename: "file1.txt".to_string(),
                 content_type: "text/plain".to_string(),
                 data: vec![0; 100],
@@ -393,6 +415,8 @@ mod tests {
         storage
             .upload(FileUpload {
                 tenant_id: 1,
+                entity_id: None,
+                entity_type: None,
                 filename: "file2.txt".to_string(),
                 content_type: "text/plain".to_string(),
                 data: vec![0; 200],

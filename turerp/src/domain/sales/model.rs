@@ -101,6 +101,8 @@ impl std::str::FromStr for QuotationStatus {
 pub struct SalesOrder {
     pub id: i64,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub order_number: String,
     pub cari_id: i64,
     pub status: SalesOrderStatus,
@@ -147,6 +149,7 @@ impl_soft_deletable!(SalesOrderLine);
 pub struct Quotation {
     pub id: i64,
     pub tenant_id: i64,
+    pub company_id: i64,
     pub quotation_number: String,
     pub cari_id: i64,
     pub status: QuotationStatus,
@@ -189,6 +192,8 @@ impl_soft_deletable!(QuotationLine);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateSalesOrder {
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub cari_id: i64,
     pub order_date: DateTime<Utc>,
     pub delivery_date: Option<DateTime<Utc>>,
@@ -267,6 +272,7 @@ impl CreateSalesOrderLine {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateQuotation {
     pub tenant_id: i64,
+    pub company_id: i64,
     pub cari_id: i64,
     pub valid_until: DateTime<Utc>,
     pub notes: Option<String>,
@@ -347,12 +353,14 @@ pub struct SalesOrderResponse {
     pub shipping_address: Option<String>,
     pub billing_address: Option<String>,
     pub lines: Vec<SalesOrderLine>,
+    pub company_id: i64,
 }
 
 impl From<(SalesOrder, Vec<SalesOrderLine>)> for SalesOrderResponse {
     fn from((order, lines): (SalesOrder, Vec<SalesOrderLine>)) -> Self {
         Self {
             id: order.id,
+            company_id: order.company_id,
             order_number: order.order_number,
             cari_id: order.cari_id,
             status: order.status,
@@ -374,6 +382,7 @@ impl From<(SalesOrder, Vec<SalesOrderLine>)> for SalesOrderResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct QuotationResponse {
     pub id: i64,
+    pub company_id: i64,
     pub quotation_number: String,
     pub cari_id: i64,
     pub status: QuotationStatus,
@@ -392,6 +401,7 @@ impl From<(Quotation, Vec<QuotationLine>)> for QuotationResponse {
     fn from((quotation, lines): (Quotation, Vec<QuotationLine>)) -> Self {
         Self {
             id: quotation.id,
+            company_id: quotation.company_id,
             quotation_number: quotation.quotation_number,
             cari_id: quotation.cari_id,
             status: quotation.status,
@@ -419,6 +429,7 @@ mod tests {
     fn test_create_sales_order_validation() {
         let valid = CreateSalesOrder {
             tenant_id: 1,
+            company_id: 1,
             cari_id: 1,
             order_date: Utc::now(),
             delivery_date: Some(Utc::now() + Duration::days(7)),
@@ -440,6 +451,7 @@ mod tests {
 
         let invalid = CreateSalesOrder {
             tenant_id: 1,
+            company_id: 1,
             cari_id: 1,
             order_date: Utc::now(),
             delivery_date: None,
@@ -457,6 +469,7 @@ mod tests {
     fn test_create_quotation_validation() {
         let valid = CreateQuotation {
             tenant_id: 1,
+            company_id: 1,
             cari_id: 1,
             valid_until: Utc::now() + Duration::days(30),
             notes: None,
@@ -472,4 +485,8 @@ mod tests {
         };
         assert!(valid.validate().is_ok());
     }
+}
+
+fn default_company_id() -> i64 {
+    1
 }

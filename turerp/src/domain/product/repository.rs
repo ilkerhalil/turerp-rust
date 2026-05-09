@@ -167,6 +167,7 @@ impl ProductRepository for InMemoryProductRepository {
         let product = Product {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             code: create.code,
             name: create.name,
             description: create.description,
@@ -439,6 +440,7 @@ impl CategoryRepository for InMemoryCategoryRepository {
         let category = Category {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             name: create.name,
             parent_id: create.parent_id,
             created_at: chrono::Utc::now(),
@@ -629,6 +631,7 @@ impl InMemoryUnitRepository {
                 Unit {
                     id,
                     tenant_id: tid,
+                    company_id: 0,
                     code: code.to_string(),
                     name: name.to_string(),
                     is_integer: is_int,
@@ -660,6 +663,7 @@ impl UnitRepository for InMemoryUnitRepository {
         let unit = Unit {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             code: create.code,
             name: create.name,
             is_integer: create.is_integer,

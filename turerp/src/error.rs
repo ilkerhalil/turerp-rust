@@ -44,6 +44,9 @@ pub enum ApiError {
 
     #[error("Multi-factor authentication required")]
     MfaRequired(String),
+
+    #[error("Service unavailable: {0}")]
+    ServiceUnavailable(String),
 }
 
 /// Error response structure for JSON API responses
@@ -92,6 +95,10 @@ impl ResponseError for ApiError {
                 "error": "Multi-factor authentication required",
                 "mfa_token": token,
             })),
+            ApiError::ServiceUnavailable(msg) => {
+                tracing::warn!("Service unavailable: {}", msg);
+                HttpResponse::ServiceUnavailable().json(ErrorResponse { error: msg.clone() })
+            }
             ApiError::Database(msg) => {
                 tracing::error!("Database error: {}", msg);
                 HttpResponse::InternalServerError().json(ErrorResponse {
@@ -139,6 +146,7 @@ impl ApiError {
                 i18n.t_args(locale, "errors.invalid_token", &[("detail", msg)])
             }
             ApiError::MfaRequired(_) => i18n.t(locale, "errors.mfa_required"),
+            ApiError::ServiceUnavailable(_) => i18n.t(locale, "errors.service_unavailable"),
         }
     }
 
@@ -163,6 +171,7 @@ impl ApiError {
             ApiError::BadRequest(_) | ApiError::Validation(_) => HttpResponse::BadRequest(),
             ApiError::Conflict(_) => HttpResponse::Conflict(),
             ApiError::Database(_) | ApiError::Internal(_) => HttpResponse::InternalServerError(),
+            ApiError::ServiceUnavailable(_) => HttpResponse::ServiceUnavailable(),
         }
         .json(body)
     }

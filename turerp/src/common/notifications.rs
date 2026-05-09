@@ -1014,6 +1014,183 @@ impl NotificationService for crate::domain::notification::service::NotificationS
     }
 }
 
+// ---------------------------------------------------------------------------
+// ResilientNotificationService
+// ---------------------------------------------------------------------------
+
+use crate::common::circuit_breaker::{CircuitBreaker, SERVICE_EMAIL, SERVICE_SMS};
+use crate::common::retry::RetryPolicy;
+
+/// Notification service wrapper with circuit breaker and retry protection
+pub struct ResilientNotificationService {
+    inner: BoxNotificationService,
+    email_cb: Arc<CircuitBreaker>,
+    sms_cb: Arc<CircuitBreaker>,
+    email_retry: RetryPolicy,
+    sms_retry: RetryPolicy,
+}
+
+impl ResilientNotificationService {
+    /// Wrap an existing notification service with resilience
+    pub fn new(
+        inner: BoxNotificationService,
+        registry: &crate::common::circuit_breaker::CircuitBreakerRegistry,
+    ) -> Self {
+        let email_cb = registry.get(SERVICE_EMAIL).unwrap_or_else(|| {
+            Arc::new(CircuitBreaker::new(
+                SERVICE_EMAIL,
+                crate::common::circuit_breaker::CircuitBreakerConfig::email_default(),
+            ))
+        });
+        let sms_cb = registry.get(SERVICE_SMS).unwrap_or_else(|| {
+            Arc::new(CircuitBreaker::new(
+                SERVICE_SMS,
+                crate::common::circuit_breaker::CircuitBreakerConfig::sms_default(),
+            ))
+        });
+        Self {
+            inner,
+            email_cb,
+            sms_cb,
+            email_retry: RetryPolicy::new(
+                "email_send",
+                crate::common::retry::RetryConfig::email_default(),
+            ),
+            sms_retry: RetryPolicy::new(
+                "sms_send",
+                crate::common::retry::RetryConfig::sms_default(),
+            ),
+        }
+    }
+
+    fn channel_cb(&self, channel: NotificationChannel) -> &Arc<CircuitBreaker> {
+        match channel {
+            NotificationChannel::Email => &self.email_cb,
+            NotificationChannel::Sms => &self.sms_cb,
+            NotificationChannel::InApp => &self.email_cb, // In-app doesn't need CB
+        }
+    }
+
+    fn channel_retry(&self, channel: NotificationChannel) -> &RetryPolicy {
+        match channel {
+            NotificationChannel::Email => &self.email_retry,
+            NotificationChannel::Sms => &self.sms_retry,
+            NotificationChannel::InApp => &self.email_retry, // In-app doesn't need retry
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl NotificationService for ResilientNotificationService {
+    async fn send(&self, request: NotificationRequest) -> Result<Notification, ApiError> {
+        let inner = self.inner.clone();
+        let channel = request.channel;
+        let cb = self.channel_cb(channel).clone();
+        let retry = self.channel_retry(channel).clone();
+        let req = request.clone();
+
+        cb.call(|| async {
+            let inner = inner.clone();
+            let req = req.clone();
+            retry
+                .execute(move || {
+                    let inner = inner.clone();
+                    let req = req.clone();
+                    async move { inner.send(req).await }
+                })
+                .await
+        })
+        .await
+    }
+
+    async fn get_notification(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<Notification>, ApiError> {
+        self.inner.get_notification(id, tenant_id).await
+    }
+
+    async fn get_history(
+        &self,
+        tenant_id: i64,
+        user_id: Option<i64>,
+        channel: Option<NotificationChannel>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<PaginatedResult<Notification>, ApiError> {
+        self.inner
+            .get_history(tenant_id, user_id, channel, limit, offset)
+            .await
+    }
+
+    async fn get_in_app_notifications(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        unread_only: bool,
+    ) -> Result<Vec<InAppNotification>, ApiError> {
+        self.inner
+            .get_in_app_notifications(tenant_id, user_id, unread_only)
+            .await
+    }
+
+    async fn mark_as_read(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.inner.mark_as_read(id, tenant_id).await
+    }
+
+    async fn mark_all_as_read(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError> {
+        self.inner.mark_all_as_read(tenant_id, user_id).await
+    }
+
+    async fn unread_count(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError> {
+        self.inner.unread_count(tenant_id, user_id).await
+    }
+
+    async fn get_preferences(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+    ) -> Result<Vec<NotificationPreference>, ApiError> {
+        self.inner.get_preferences(tenant_id, user_id).await
+    }
+
+    async fn update_preferences(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        prefs: Vec<UpdatePreference>,
+    ) -> Result<Vec<NotificationPreference>, ApiError> {
+        self.inner
+            .update_preferences(tenant_id, user_id, prefs)
+            .await
+    }
+
+    fn register_template(&self, template: EmailTemplate) {
+        self.inner.register_template(template);
+    }
+
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.inner.retry(id, tenant_id).await
+    }
+
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        self.inner.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.inner.restore(id, tenant_id).await
+    }
+
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Notification>, ApiError> {
+        self.inner.find_deleted(tenant_id).await
+    }
+
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.inner.destroy(id, tenant_id).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

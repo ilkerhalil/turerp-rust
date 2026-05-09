@@ -295,6 +295,7 @@ mod tests {
         let service = create_service();
         let create = CreateAccount {
             tenant_id: 1,
+            company_id: 1,
             code: "1200".to_string(),
             name: "Inventory".to_string(),
             account_type: AccountType::Asset,
@@ -311,6 +312,7 @@ mod tests {
         let service = create_service();
         let create = CreateJournalEntry {
             tenant_id: 1,
+            company_id: 1,
             date: Utc::now(),
             description: "Record sale".to_string(),
             reference: Some("INV001".to_string()),
@@ -341,6 +343,7 @@ mod tests {
         let service = create_service();
         let create = CreateJournalEntry {
             tenant_id: 1,
+            company_id: 1,
             date: Utc::now(),
             description: "Test".to_string(),
             reference: None,

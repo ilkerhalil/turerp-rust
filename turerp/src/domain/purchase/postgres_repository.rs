@@ -21,6 +21,10 @@ use crate::domain::purchase::repository::{
 };
 use crate::error::ApiError;
 
+fn default_company_id() -> i64 {
+    1
+}
+
 /// Convert sqlx errors to ApiError with proper detection of error types
 
 /// Parse a string into PurchaseOrderStatus, defaulting to Draft on failure
@@ -88,6 +92,7 @@ fn parse_goods_receipt_status(s: &str) -> GoodsReceiptStatus {
 struct PurchaseOrderRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     order_number: String,
     cari_id: i64,
     status: String,
@@ -113,6 +118,7 @@ impl From<PurchaseOrderRow> for PurchaseOrder {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             order_number: row.order_number,
             cari_id: row.cari_id,
             status,
@@ -176,16 +182,17 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
 
         let row: PurchaseOrderRow = sqlx::query_as(
             r#"
-            INSERT INTO purchase_orders (tenant_id, order_number, cari_id, status, order_date,
+            INSERT INTO purchase_orders (tenant_id, company_id, order_number, cari_id, status, order_date,
                                           expected_delivery_date, subtotal, tax_amount, discount_amount,
                                           total_amount, notes, created_at, updated_at, deleted_at, deleted_by)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW(), NULL, NULL)
-            RETURNING id, tenant_id, order_number, cari_id, status, order_date,
+            RETURNING id, tenant_id, company_id, order_number, cari_id, status, order_date,
                       expected_delivery_date, subtotal, tax_amount, discount_amount,
                       total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(&order_number)
         .bind(create.cari_id)
         .bind(&status_str)
@@ -206,7 +213,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<PurchaseOrder>, ApiError> {
         let result: Option<PurchaseOrderRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    expected_delivery_date, subtotal, tax_amount, discount_amount,
                    total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_orders
@@ -225,7 +232,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseOrder>, ApiError> {
         let rows: Vec<PurchaseOrderRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    expected_delivery_date, subtotal, tax_amount, discount_amount,
                    total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_orders
@@ -246,7 +253,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<PurchaseOrder>, ApiError> {
         let rows: Vec<PurchaseOrderRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    expected_delivery_date, subtotal, tax_amount, discount_amount,
                    total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_orders
@@ -273,7 +280,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
 
         let rows: Vec<PurchaseOrderRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    expected_delivery_date, subtotal, tax_amount, discount_amount,
                    total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_orders
@@ -304,7 +311,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             UPDATE purchase_orders
             SET status = $1, updated_at = NOW()
             WHERE id = $2 AND deleted_at IS NULL
-            RETURNING id, tenant_id, order_number, cari_id, status, order_date,
+            RETURNING id, tenant_id, company_id, order_number, cari_id, status, order_date,
                       expected_delivery_date, subtotal, tax_amount, discount_amount,
                       total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             "#,
@@ -370,7 +377,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<PurchaseOrder>, ApiError> {
         let rows: Vec<PurchaseOrderRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    expected_delivery_date, subtotal, tax_amount, discount_amount,
                    total_amount, notes, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_orders
@@ -668,6 +675,7 @@ impl PurchaseOrderLineRepository for PostgresPurchaseOrderLineRepository {
 struct GoodsReceiptRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     receipt_number: String,
     purchase_order_id: i64,
     status: String,
@@ -685,6 +693,7 @@ impl From<GoodsReceiptRow> for GoodsReceipt {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             receipt_number: row.receipt_number,
             purchase_order_id: row.purchase_order_id,
             status,
@@ -722,14 +731,15 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
 
         let row: GoodsReceiptRow = sqlx::query_as(
             r#"
-            INSERT INTO goods_receipts (tenant_id, receipt_number, purchase_order_id, status,
+            INSERT INTO goods_receipts (tenant_id, company_id, receipt_number, purchase_order_id, status,
                                           receipt_date, notes, created_at, deleted_at, deleted_by)
             VALUES ($1, $2, $3, $4, $5, $6, NOW(), NULL, NULL)
-            RETURNING id, tenant_id, receipt_number, purchase_order_id, status,
+            RETURNING id, tenant_id, company_id, receipt_number, purchase_order_id, status,
                       receipt_date, notes, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(&receipt_number)
         .bind(create.purchase_order_id)
         .bind(status_str)
@@ -745,7 +755,7 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<GoodsReceipt>, ApiError> {
         let result: Option<GoodsReceiptRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, receipt_number, purchase_order_id, status,
+            SELECT id, tenant_id, company_id, receipt_number, purchase_order_id, status,
                    receipt_date, notes, created_at, deleted_at, deleted_by
             FROM goods_receipts
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -763,7 +773,7 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
     async fn find_by_order(&self, order_id: i64) -> Result<Vec<GoodsReceipt>, ApiError> {
         let rows: Vec<GoodsReceiptRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, receipt_number, purchase_order_id, status,
+            SELECT id, tenant_id, company_id, receipt_number, purchase_order_id, status,
                    receipt_date, notes, created_at, deleted_at, deleted_by
             FROM goods_receipts
             WHERE purchase_order_id = $1 AND deleted_at IS NULL
@@ -797,7 +807,7 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
             UPDATE goods_receipts
             SET status = $1
             WHERE id = $2 AND deleted_at IS NULL
-            RETURNING id, tenant_id, receipt_number, purchase_order_id, status,
+            RETURNING id, tenant_id, company_id, receipt_number, purchase_order_id, status,
                       receipt_date, notes, created_at, deleted_at, deleted_by
             "#,
         )
@@ -862,7 +872,7 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<GoodsReceipt>, ApiError> {
         let rows: Vec<GoodsReceiptRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, receipt_number, purchase_order_id, status,
+            SELECT id, tenant_id, company_id, receipt_number, purchase_order_id, status,
                    receipt_date, notes, created_at, deleted_at, deleted_by
             FROM goods_receipts
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
@@ -1094,6 +1104,7 @@ impl GoodsReceiptLineRepository for PostgresGoodsReceiptLineRepository {
 struct PurchaseRequestRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     request_number: String,
     status: String,
     requested_by: i64,
@@ -1113,6 +1124,7 @@ impl From<PurchaseRequestRow> for PurchaseRequest {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             request_number: row.request_number,
             status,
             requested_by: row.requested_by,
@@ -1132,6 +1144,7 @@ impl From<PurchaseRequestRow> for PurchaseRequest {
 struct PurchaseRequestRowWithCount {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     request_number: String,
     status: String,
     requested_by: i64,
@@ -1170,15 +1183,16 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
 
         let row: PurchaseRequestRow = sqlx::query_as(
             r#"
-            INSERT INTO purchase_requests (tenant_id, request_number, status, requested_by,
+            INSERT INTO purchase_requests (tenant_id, company_id, request_number, status, requested_by,
                                             department, priority, reason, created_at, updated_at,
                                             deleted_at, deleted_by)
             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW(), NULL, NULL)
-            RETURNING id, tenant_id, request_number, status, requested_by,
+            RETURNING id, tenant_id, company_id, request_number, status, requested_by,
                       department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(&request_number)
         .bind(&status_str)
         .bind(create.requested_by)
@@ -1199,7 +1213,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
     ) -> Result<Option<PurchaseRequest>, ApiError> {
         let result: Option<PurchaseRequestRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, request_number, status, requested_by,
+            SELECT id, tenant_id, company_id, request_number, status, requested_by,
                    department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_requests
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -1217,7 +1231,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
         let rows: Vec<PurchaseRequestRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, request_number, status, requested_by,
+            SELECT id, tenant_id, company_id, request_number, status, requested_by,
                    department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_requests
             WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -1244,7 +1258,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
 
         let rows: Vec<PurchaseRequestRowWithCount> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, request_number, status, requested_by,
+            SELECT id, tenant_id, company_id, request_number, status, requested_by,
                    department, priority, reason, created_at, updated_at, deleted_at, deleted_by,
                    COUNT(*) OVER() AS total_count
             FROM purchase_requests
@@ -1272,6 +1286,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
                 PurchaseRequestRow {
                     id: r.id,
                     tenant_id: r.tenant_id,
+                    company_id: r.company_id,
                     request_number: r.request_number,
                     status: r.status,
                     requested_by: r.requested_by,
@@ -1299,7 +1314,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
 
         let rows: Vec<PurchaseRequestRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, request_number, status, requested_by,
+            SELECT id, tenant_id, company_id, request_number, status, requested_by,
                    department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_requests
             WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
@@ -1329,7 +1344,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
 
         let rows: Vec<PurchaseRequestRowWithCount> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, request_number, status, requested_by,
+            SELECT id, tenant_id, company_id, request_number, status, requested_by,
                    department, priority, reason, created_at, updated_at, deleted_at, deleted_by,
                    COUNT(*) OVER() AS total_count
             FROM purchase_requests
@@ -1358,6 +1373,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
                 PurchaseRequestRow {
                     id: r.id,
                     tenant_id: r.tenant_id,
+                    company_id: r.company_id,
                     request_number: r.request_number,
                     status: r.status,
                     requested_by: r.requested_by,
@@ -1379,7 +1395,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
     async fn find_by_requester(&self, requested_by: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
         let rows: Vec<PurchaseRequestRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, request_number, status, requested_by,
+            SELECT id, tenant_id, company_id, request_number, status, requested_by,
                    department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_requests
             WHERE requested_by = $1 AND deleted_at IS NULL
@@ -1464,7 +1480,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
                 status = COALESCE($4, status),
                 updated_at = NOW()
             WHERE id = $5 AND deleted_at IS NULL
-            RETURNING id, tenant_id, request_number, status, requested_by,
+            RETURNING id, tenant_id, company_id, request_number, status, requested_by,
                       department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
@@ -1492,7 +1508,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
             UPDATE purchase_requests
             SET status = $1, updated_at = NOW()
             WHERE id = $2 AND deleted_at IS NULL
-            RETURNING id, tenant_id, request_number, status, requested_by,
+            RETURNING id, tenant_id, company_id, request_number, status, requested_by,
                       department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
@@ -1559,7 +1575,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<PurchaseRequest>, ApiError> {
         let rows: Vec<PurchaseRequestRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, request_number, status, requested_by,
+            SELECT id, tenant_id, company_id, request_number, status, requested_by,
                    department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             FROM purchase_requests
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL

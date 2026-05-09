@@ -88,6 +88,9 @@ impl From<JobRow> for Job {
                     .unwrap_or(0),
                 tenant_id: row.tenant_id,
             },
+            "ProcessOutbox" => JobType::ProcessOutbox {
+                tenant_id: row.tenant_id,
+            },
             _ => JobType::Custom {
                 name: row.job_type,
                 payload: row.payload.0.to_string(),
@@ -178,6 +181,7 @@ fn job_payload_json(job_type: &JobType) -> serde_json::Value {
         } => {
             serde_json::json!({"notification_id": notification_id})
         }
+        JobType::ProcessOutbox { .. } => serde_json::json!({}),
         JobType::Custom { payload, .. } => serde_json::from_str(payload)
             .unwrap_or_else(|_| serde_json::json!({"payload": payload})),
         _ => serde_json::json!({}),
@@ -192,7 +196,11 @@ fn job_type_name(job_type: &JobType) -> String {
         JobType::ArchiveLogs { .. } => "ArchiveLogs".to_string(),
         JobType::GenerateReport { .. } => "GenerateReport".to_string(),
         JobType::SendNotification { .. } => "SendNotification".to_string(),
+        JobType::ProcessOutbox { .. } => "ProcessOutbox".to_string(),
+        JobType::Import { .. } => "Import".to_string(),
         JobType::Custom { name, .. } => name.clone(),
+        JobType::ImportBankStatement { .. } => "ImportBankStatement".to_string(),
+        JobType::AutoReconcile { .. } => "AutoReconcile".to_string(),
     }
 }
 

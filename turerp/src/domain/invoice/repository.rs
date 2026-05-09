@@ -211,6 +211,7 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
         let invoice = Invoice {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             invoice_number,
             invoice_type: create.invoice_type,
             status: InvoiceStatus::Draft,
@@ -726,6 +727,7 @@ impl PaymentRepository for InMemoryPaymentRepository {
         let payment = Payment {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             invoice_id: create.invoice_id,
             amount: create.amount,
             currency: create.currency,

@@ -12,6 +12,7 @@ use utoipa::ToSchema;
 pub struct Warehouse {
     pub id: i64,
     pub tenant_id: i64,
+    pub company_id: i64,
     pub code: String,
     pub name: String,
     pub address: Option<String>,
@@ -28,6 +29,7 @@ impl_soft_deletable!(Warehouse);
 pub struct WarehouseResponse {
     pub id: i64,
     pub tenant_id: i64,
+    pub company_id: i64,
     pub code: String,
     pub name: String,
     pub address: Option<String>,
@@ -40,6 +42,7 @@ impl From<Warehouse> for WarehouseResponse {
         Self {
             id: w.id,
             tenant_id: w.tenant_id,
+            company_id: w.company_id,
             code: w.code,
             name: w.name,
             address: w.address,
@@ -138,6 +141,7 @@ impl std::str::FromStr for MovementType {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StockMovement {
     pub id: i64,
+    pub company_id: i64,
     pub warehouse_id: i64,
     pub product_id: i64,
     pub movement_type: MovementType,
@@ -166,12 +170,14 @@ pub struct StockMovementResponse {
     pub notes: Option<String>,
     pub created_at: DateTime<Utc>,
     pub created_by: i64,
+    pub company_id: i64,
 }
 
 impl From<StockMovement> for StockMovementResponse {
     fn from(m: StockMovement) -> Self {
         Self {
             id: m.id,
+            company_id: m.company_id,
             warehouse_id: m.warehouse_id,
             product_id: m.product_id,
             movement_type: m.movement_type,
@@ -199,6 +205,7 @@ pub struct StockValuation {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateWarehouse {
     pub tenant_id: i64,
+    pub company_id: i64,
     pub code: String,
     pub name: String,
     pub address: Option<String>,
@@ -225,6 +232,7 @@ impl CreateWarehouse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateStockMovement {
     pub warehouse_id: i64,
+    pub company_id: i64,
     pub product_id: i64,
     pub movement_type: MovementType,
     pub quantity: Decimal,
@@ -277,6 +285,7 @@ mod tests {
     fn test_create_warehouse_validation() {
         let valid = CreateWarehouse {
             tenant_id: 1,
+            company_id: 1,
             code: "WH001".to_string(),
             name: "Main Warehouse".to_string(),
             address: Some("Address".to_string()),
@@ -285,6 +294,7 @@ mod tests {
 
         let invalid = CreateWarehouse {
             tenant_id: 1,
+            company_id: 1,
             code: "".to_string(),
             name: "".to_string(),
             address: None,
@@ -296,6 +306,7 @@ mod tests {
     fn test_create_stock_movement_validation() {
         let valid = CreateStockMovement {
             warehouse_id: 1,
+            company_id: 1,
             product_id: 1,
             movement_type: MovementType::Purchase,
             quantity: dec!(100),
@@ -308,6 +319,7 @@ mod tests {
 
         let invalid = CreateStockMovement {
             warehouse_id: 1,
+            company_id: 1,
             product_id: 1,
             movement_type: MovementType::Sale,
             quantity: dec!(-10),
@@ -324,6 +336,7 @@ mod tests {
         let mut warehouse = Warehouse {
             id: 1,
             tenant_id: 1,
+            company_id: 1,
             code: "WH001".to_string(),
             name: "Main".to_string(),
             address: None,
@@ -339,4 +352,9 @@ mod tests {
         warehouse.restore();
         assert!(!warehouse.is_deleted());
     }
+}
+
+#[allow(dead_code)]
+fn default_company_id() -> i64 {
+    1
 }

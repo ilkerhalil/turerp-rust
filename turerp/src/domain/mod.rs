@@ -5,14 +5,19 @@ pub mod api_key;
 pub mod assets;
 pub mod audit;
 pub mod auth;
+pub mod bank;
 pub mod cari;
 pub mod chart_of_accounts;
+pub mod company;
+pub mod cost_center;
 pub mod crm;
 pub mod currency;
 pub mod custom_field;
+pub mod dashboard;
 pub mod edefter;
 pub mod efatura;
 pub mod feature;
+pub mod file;
 pub mod hr;
 pub mod invoice;
 pub mod manufacturing;
@@ -24,10 +29,12 @@ pub mod purchase;
 pub mod sales;
 pub mod settings;
 pub mod stock;
+pub mod subscription;
 pub mod tax;
 pub mod tenant;
 pub mod user;
 pub mod webhook;
+pub mod workflow;
 
 // Re-exports with explicit naming to avoid ambiguity
 pub use auth::AuthService;
@@ -284,3 +291,6 @@ pub use mfa::model::{
 };
 pub use mfa::repository::{BoxMfaRepository, InMemoryMfaRepository, MfaRepository};
 pub use mfa::service::MfaService;
+
+// Test: is file module visible?
+pub type __TestFileVisibility = crate::domain::file::model::FileRecord;

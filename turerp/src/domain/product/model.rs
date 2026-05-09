@@ -12,6 +12,8 @@ use crate::impl_soft_deletable;
 pub struct Product {
     pub id: i64,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub code: String,
     pub name: String,
     pub description: Option<String>,
@@ -35,6 +37,7 @@ impl_soft_deletable!(Product);
 pub struct Category {
     pub id: i64,
     pub tenant_id: i64,
+    pub company_id: i64,
     pub name: String,
     pub parent_id: Option<i64>,
     pub created_at: DateTime<Utc>,
@@ -49,6 +52,7 @@ impl_soft_deletable!(Category);
 pub struct Unit {
     pub id: i64,
     pub tenant_id: i64,
+    pub company_id: i64,
     pub code: String,
     pub name: String,
     pub is_integer: bool,
@@ -144,6 +148,8 @@ impl From<ProductVariant> for ProductVariantResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateProduct {
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub code: String,
     pub name: String,
     pub description: Option<String>,
@@ -196,12 +202,15 @@ pub struct UpdateProduct {
     pub sale_price: Option<Decimal>,
     pub tax_rate: Option<Decimal>,
     pub is_active: Option<bool>,
+    #[serde(default)]
+    pub company_id: Option<i64>,
 }
 
 /// Create category request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateCategory {
     pub tenant_id: i64,
+    pub company_id: i64,
     pub name: String,
     pub parent_id: Option<i64>,
 }
@@ -225,12 +234,14 @@ impl CreateCategory {
 pub struct UpdateCategory {
     pub name: Option<String>,
     pub parent_id: Option<i64>,
+    pub company_id: i64,
 }
 
 /// Create unit request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateUnit {
     pub tenant_id: i64,
+    pub company_id: i64,
     pub code: String,
     pub name: String,
     pub is_integer: bool,
@@ -259,6 +270,7 @@ pub struct UpdateUnit {
     pub code: Option<String>,
     pub name: Option<String>,
     pub is_integer: Option<bool>,
+    pub company_id: i64,
 }
 
 /// Product response (without tenant_id/deleted fields for external API)
@@ -276,12 +288,14 @@ pub struct ProductResponse {
     pub tax_rate: Decimal,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
+    pub company_id: i64,
 }
 
 impl From<Product> for ProductResponse {
     fn from(p: Product) -> Self {
         Self {
             id: p.id,
+            company_id: p.company_id,
             code: p.code,
             name: p.name,
             description: p.description,
@@ -301,6 +315,7 @@ impl From<Product> for ProductResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CategoryResponse {
     pub id: i64,
+    pub company_id: i64,
     pub name: String,
     pub parent_id: Option<i64>,
     pub created_at: DateTime<Utc>,
@@ -313,6 +328,7 @@ impl From<Category> for CategoryResponse {
             name: c.name,
             parent_id: c.parent_id,
             created_at: c.created_at,
+            company_id: 0,
         }
     }
 }
@@ -321,6 +337,7 @@ impl From<Category> for CategoryResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct UnitResponse {
     pub id: i64,
+    pub company_id: i64,
     pub code: String,
     pub name: String,
     pub is_integer: bool,
@@ -335,6 +352,7 @@ impl From<Unit> for UnitResponse {
             name: u.name,
             is_integer: u.is_integer,
             created_at: u.created_at,
+            company_id: 0,
         }
     }
 }
@@ -349,6 +367,7 @@ mod tests {
     fn test_create_product_validation() {
         let valid = CreateProduct {
             tenant_id: 1,
+            company_id: 1,
             code: "P001".to_string(),
             name: "Test Product".to_string(),
             description: None,
@@ -363,6 +382,7 @@ mod tests {
 
         let invalid = CreateProduct {
             tenant_id: 1,
+            company_id: 1,
             code: "".to_string(),
             name: "".to_string(),
             description: None,
@@ -380,6 +400,7 @@ mod tests {
     fn test_create_category_validation() {
         let valid = CreateCategory {
             tenant_id: 1,
+            company_id: 1,
             name: "Electronics".to_string(),
             parent_id: None,
         };
@@ -387,6 +408,7 @@ mod tests {
 
         let invalid = CreateCategory {
             tenant_id: 1,
+            company_id: 1,
             name: "".to_string(),
             parent_id: None,
         };
@@ -397,10 +419,15 @@ mod tests {
     fn test_create_unit_validation() {
         let valid = CreateUnit {
             tenant_id: 1,
+            company_id: 1,
             code: "PCS".to_string(),
             name: "Piece".to_string(),
             is_integer: true,
         };
         assert!(valid.validate().is_ok());
     }
+}
+
+fn default_company_id() -> i64 {
+    1
 }

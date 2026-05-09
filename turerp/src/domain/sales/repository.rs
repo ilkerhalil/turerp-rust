@@ -241,6 +241,7 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
         let order = SalesOrder {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             order_number,
             cari_id: create.cari_id,
             status: SalesOrderStatus::Draft,
@@ -613,6 +614,7 @@ impl QuotationRepository for InMemoryQuotationRepository {
         let quotation = Quotation {
             id,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             quotation_number,
             cari_id: create.cari_id,
             status: QuotationStatus::Draft,

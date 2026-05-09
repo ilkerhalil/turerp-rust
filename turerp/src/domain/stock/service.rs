@@ -413,6 +413,7 @@ mod tests {
 
         let create = CreateWarehouse {
             tenant_id: 1,
+            company_id: 1,
             code: "WH001".to_string(),
             name: "Main Warehouse".to_string(),
             address: Some("Address".to_string()),
@@ -431,6 +432,7 @@ mod tests {
         let warehouse = service
             .create_warehouse(CreateWarehouse {
                 tenant_id: 1,
+                company_id: 1,
                 code: "WH001".to_string(),
                 name: "Main".to_string(),
                 address: None,
@@ -442,6 +444,7 @@ mod tests {
         let movement = service
             .create_stock_movement(
                 CreateStockMovement {
+                    company_id: 1,
                     warehouse_id: warehouse.id,
                     product_id: 1,
                     movement_type: MovementType::Purchase,
@@ -470,6 +473,7 @@ mod tests {
         let warehouse = service
             .create_warehouse(CreateWarehouse {
                 tenant_id: 1,
+                company_id: 1,
                 code: "WH001".to_string(),
                 name: "Main".to_string(),
                 address: None,
@@ -481,6 +485,7 @@ mod tests {
         service
             .create_stock_movement(
                 CreateStockMovement {
+                    company_id: 1,
                     warehouse_id: warehouse.id,
                     product_id: 1,
                     movement_type: MovementType::Purchase,
@@ -499,6 +504,7 @@ mod tests {
         let result = service
             .create_stock_movement(
                 CreateStockMovement {
+                    company_id: 1,
                     warehouse_id: warehouse.id,
                     product_id: 1,
                     movement_type: MovementType::Sale,
@@ -524,6 +530,7 @@ mod tests {
         let warehouse = service
             .create_warehouse(CreateWarehouse {
                 tenant_id: 1,
+                company_id: 1,
                 code: "WH001".to_string(),
                 name: "Main".to_string(),
                 address: None,
@@ -535,6 +542,7 @@ mod tests {
         let result = service
             .create_stock_movement(
                 CreateStockMovement {
+                    company_id: 1,
                     warehouse_id: warehouse.id,
                     product_id: 1,
                     movement_type: MovementType::Sale,

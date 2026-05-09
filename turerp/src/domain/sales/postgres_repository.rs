@@ -19,6 +19,10 @@ use crate::domain::sales::repository::{
 };
 use crate::error::ApiError;
 
+fn default_company_id() -> i64 {
+    1
+}
+
 /// Convert sqlx errors to ApiError with proper detection of error types
 
 // ---------------------------------------------------------------------------
@@ -30,6 +34,7 @@ use crate::error::ApiError;
 struct SalesOrderRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     order_number: String,
     cari_id: i64,
     status: String,
@@ -64,6 +69,7 @@ impl From<SalesOrderRow> for SalesOrder {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             order_number: row.order_number,
             cari_id: row.cari_id,
             status,
@@ -91,6 +97,7 @@ impl From<SalesOrderRow> for SalesOrder {
 struct SalesOrderRowWithTotal {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     order_number: String,
     cari_id: i64,
     status: String,
@@ -126,6 +133,7 @@ impl From<SalesOrderRowWithTotal> for (SalesOrder, i64) {
         let order = SalesOrder {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             order_number: row.order_number,
             cari_id: row.cari_id,
             status,
@@ -190,6 +198,7 @@ impl From<SalesOrderLineRow> for SalesOrderLine {
 struct QuotationRow {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     quotation_number: String,
     cari_id: i64,
     status: String,
@@ -221,6 +230,7 @@ impl From<QuotationRow> for Quotation {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             quotation_number: row.quotation_number,
             cari_id: row.cari_id,
             status,
@@ -245,6 +255,7 @@ impl From<QuotationRow> for Quotation {
 struct QuotationRowWithTotal {
     id: i64,
     tenant_id: i64,
+    company_id: i64,
     quotation_number: String,
     cari_id: i64,
     status: String,
@@ -277,6 +288,7 @@ impl From<QuotationRowWithTotal> for (Quotation, i64) {
         let quotation = Quotation {
             id: row.id,
             tenant_id: row.tenant_id,
+            company_id: row.company_id,
             quotation_number: row.quotation_number,
             cari_id: row.cari_id,
             status,
@@ -410,17 +422,18 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
 
         let row: SalesOrderRow = sqlx::query_as(
             r#"
-            INSERT INTO sales_orders (tenant_id, order_number, cari_id, status, order_date,
+            INSERT INTO sales_orders (tenant_id, company_id, order_number, cari_id, status, order_date,
                                       delivery_date, subtotal, tax_amount, discount_amount,
                                       total_amount, notes, shipping_address, billing_address, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
-            RETURNING id, tenant_id, order_number, cari_id, status, order_date,
+            RETURNING id, tenant_id, company_id, order_number, cari_id, status, order_date,
                       delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                       notes, shipping_address, billing_address, created_at, updated_at,
                       deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(&order_number)
         .bind(create.cari_id)
         .bind(&status_str)
@@ -443,7 +456,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<SalesOrder>, ApiError> {
         let result: Option<SalesOrderRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                    notes, shipping_address, billing_address, created_at, updated_at,
                    deleted_at, deleted_by
@@ -463,7 +476,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
         let rows: Vec<SalesOrderRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                    notes, shipping_address, billing_address, created_at, updated_at,
                    deleted_at, deleted_by
@@ -483,7 +496,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
         let rows: Vec<SalesOrderRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                    notes, shipping_address, billing_address, created_at, updated_at,
                    deleted_at, deleted_by
@@ -509,7 +522,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
 
         let rows: Vec<SalesOrderRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                    notes, shipping_address, billing_address, created_at, updated_at,
                    deleted_at, deleted_by
@@ -537,7 +550,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
 
         let rows: Vec<SalesOrderRowWithTotal> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                    notes, shipping_address, billing_address, created_at, updated_at,
                    deleted_at, deleted_by,
@@ -576,7 +589,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
 
         let rows: Vec<SalesOrderRowWithTotal> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                    notes, shipping_address, billing_address, created_at, updated_at,
                    deleted_at, deleted_by,
@@ -616,7 +629,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
             UPDATE sales_orders
             SET status = $1, updated_at = NOW()
             WHERE id = $2 AND deleted_at IS NULL
-            RETURNING id, tenant_id, order_number, cari_id, status, order_date,
+            RETURNING id, tenant_id, company_id, order_number, cari_id, status, order_date,
                       delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                       notes, shipping_address, billing_address, created_at, updated_at,
                       deleted_at, deleted_by
@@ -681,7 +694,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
         let rows: Vec<SalesOrderRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, order_number, cari_id, status, order_date,
+            SELECT id, tenant_id, company_id, order_number, cari_id, status, order_date,
                    delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                    notes, shipping_address, billing_address, created_at, updated_at,
                    deleted_at, deleted_by
@@ -976,17 +989,18 @@ impl QuotationRepository for PostgresQuotationRepository {
 
         let row: QuotationRow = sqlx::query_as(
             r#"
-            INSERT INTO quotations (tenant_id, quotation_number, cari_id, status, valid_until,
+            INSERT INTO quotations (tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                                     subtotal, tax_amount, discount_amount, total_amount,
                                     notes, terms, sales_order_id, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NULL, NOW())
-            RETURNING id, tenant_id, quotation_number, cari_id, status, valid_until,
+            RETURNING id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                       subtotal, tax_amount, discount_amount, total_amount,
                       notes, terms, sales_order_id, created_at, updated_at,
                       deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
+        .bind(create.company_id)
         .bind(&quotation_number)
         .bind(create.cari_id)
         .bind(&status_str)
@@ -1007,7 +1021,7 @@ impl QuotationRepository for PostgresQuotationRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Quotation>, ApiError> {
         let result: Option<QuotationRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
+            SELECT id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
                    notes, terms, sales_order_id, created_at, updated_at,
                    deleted_at, deleted_by
@@ -1027,7 +1041,7 @@ impl QuotationRepository for PostgresQuotationRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Quotation>, ApiError> {
         let rows: Vec<QuotationRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
+            SELECT id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
                    notes, terms, sales_order_id, created_at, updated_at,
                    deleted_at, deleted_by
@@ -1047,7 +1061,7 @@ impl QuotationRepository for PostgresQuotationRepository {
     async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Quotation>, ApiError> {
         let rows: Vec<QuotationRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
+            SELECT id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
                    notes, terms, sales_order_id, created_at, updated_at,
                    deleted_at, deleted_by
@@ -1073,7 +1087,7 @@ impl QuotationRepository for PostgresQuotationRepository {
 
         let rows: Vec<QuotationRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
+            SELECT id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
                    notes, terms, sales_order_id, created_at, updated_at,
                    deleted_at, deleted_by
@@ -1101,7 +1115,7 @@ impl QuotationRepository for PostgresQuotationRepository {
 
         let rows: Vec<QuotationRowWithTotal> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
+            SELECT id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
                    notes, terms, sales_order_id, created_at, updated_at,
                    deleted_at, deleted_by,
@@ -1140,7 +1154,7 @@ impl QuotationRepository for PostgresQuotationRepository {
 
         let rows: Vec<QuotationRowWithTotal> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
+            SELECT id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
                    notes, terms, sales_order_id, created_at, updated_at,
                    deleted_at, deleted_by,
@@ -1176,7 +1190,7 @@ impl QuotationRepository for PostgresQuotationRepository {
             UPDATE quotations
             SET status = $1, updated_at = NOW()
             WHERE id = $2 AND deleted_at IS NULL
-            RETURNING id, tenant_id, quotation_number, cari_id, status, valid_until,
+            RETURNING id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                       subtotal, tax_amount, discount_amount, total_amount,
                       notes, terms, sales_order_id, created_at, updated_at,
                       deleted_at, deleted_by
@@ -1199,7 +1213,7 @@ impl QuotationRepository for PostgresQuotationRepository {
             UPDATE quotations
             SET sales_order_id = $1, status = $2, updated_at = NOW()
             WHERE id = $3 AND deleted_at IS NULL
-            RETURNING id, tenant_id, quotation_number, cari_id, status, valid_until,
+            RETURNING id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                       subtotal, tax_amount, discount_amount, total_amount,
                       notes, terms, sales_order_id, created_at, updated_at,
                       deleted_at, deleted_by
@@ -1265,7 +1279,7 @@ impl QuotationRepository for PostgresQuotationRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Quotation>, ApiError> {
         let rows: Vec<QuotationRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, quotation_number, cari_id, status, valid_until,
+            SELECT id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                    subtotal, tax_amount, discount_amount, total_amount,
                    notes, terms, sales_order_id, created_at, updated_at,
                    deleted_at, deleted_by

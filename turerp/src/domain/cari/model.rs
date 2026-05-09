@@ -95,6 +95,8 @@ pub struct Cari {
     pub default_currency: String,
     pub status: CariStatus,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
     pub created_by: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
@@ -151,6 +153,7 @@ impl Cari {
             default_currency: "TRY".to_string(),
             status: CariStatus::Active,
             tenant_id,
+            company_id: 0,
             created_by,
             created_at: Utc::now(),
             updated_at: None,
@@ -215,6 +218,8 @@ pub struct CreateCari {
     pub default_currency: String,
 
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
+    pub company_id: i64,
 
     pub created_by: i64,
 }
@@ -285,6 +290,8 @@ pub struct UpdateCari {
 
     #[serde(default)]
     pub default_currency: Option<String>,
+    #[serde(default)]
+    pub company_id: Option<i64>,
 }
 
 /// Cari response (without sensitive internal data)
@@ -310,6 +317,7 @@ pub struct CariResponse {
     pub tenant_id: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
+    pub company_id: i64,
 }
 
 impl From<Cari> for CariResponse {
@@ -333,6 +341,7 @@ impl From<Cari> for CariResponse {
             default_currency: cari.default_currency,
             status: cari.status,
             tenant_id: cari.tenant_id,
+            company_id: cari.company_id,
             created_at: cari.created_at,
             updated_at: cari.updated_at,
         }
@@ -395,6 +404,7 @@ mod tests {
             credit_limit: dec!(1000),
             default_currency: "TRY".to_string(),
             tenant_id: 1,
+            company_id: 1,
             created_by: 1,
         };
 
@@ -419,9 +429,14 @@ mod tests {
             credit_limit: Decimal::ZERO,
             default_currency: "TRY".to_string(),
             tenant_id: 1,
+            company_id: 1,
             created_by: 1,
         };
 
         assert!(create.validate().is_err());
     }
+}
+
+fn default_company_id() -> i64 {
+    1
 }

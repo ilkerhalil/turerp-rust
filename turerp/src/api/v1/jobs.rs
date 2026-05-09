@@ -38,6 +38,10 @@ impl JobResponse {
                 JobType::ArchiveLogs { .. } => "archive_logs".to_string(),
                 JobType::GenerateReport { .. } => "generate_report".to_string(),
                 JobType::SendNotification { .. } => "send_notification".to_string(),
+                JobType::ProcessOutbox { .. } => "process_outbox".to_string(),
+                JobType::Import { .. } => "import".to_string(),
+                JobType::ImportBankStatement { .. } => "import_bank_statement".to_string(),
+                JobType::AutoReconcile { .. } => "auto_reconcile".to_string(),
                 JobType::Custom { .. } => "custom".to_string(),
             },
             status: match job.status {

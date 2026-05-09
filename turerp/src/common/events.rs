@@ -162,7 +162,8 @@ pub struct OutboxEvent {
 }
 
 /// Status of an outbox event
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(rename_all = "snake_case")]
 pub enum EventStatus {
     Pending,
     Published,
@@ -225,6 +226,9 @@ pub trait EventBus: Send + Sync {
 
     /// Retry a dead-lettered event
     async fn retry_dead_letter(&self, entry_id: i64) -> Result<(), String>;
+
+    /// Retry a failed or dead-lettered outbox event
+    async fn retry_outbox(&self, event_id: i64) -> Result<(), String>;
 }
 
 /// Type alias for boxed event bus
@@ -463,6 +467,21 @@ impl EventBus for InMemoryEventBus {
         // Remove from DLQ
         self.dead_letters.write().retain(|e| e.id != entry_id);
 
+        Ok(())
+    }
+
+    async fn retry_outbox(&self, event_id: i64) -> Result<(), String> {
+        let mut outbox = self.outbox.write();
+        let event = outbox
+            .iter_mut()
+            .find(|e| {
+                e.id == event_id
+                    && (e.status == EventStatus::Failed || e.status == EventStatus::DeadLettered)
+            })
+            .ok_or_else(|| format!("Retryable outbox event {} not found", event_id))?;
+        event.status = EventStatus::Pending;
+        event.attempts = 0;
+        event.last_error = None;
         Ok(())
     }
 }

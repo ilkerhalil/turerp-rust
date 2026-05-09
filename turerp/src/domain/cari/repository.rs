@@ -147,6 +147,7 @@ impl CariRepository for InMemoryCariRepository {
             default_currency: "TRY".to_string(),
             status: crate::domain::cari::model::CariStatus::Active,
             tenant_id: create.tenant_id,
+            company_id: create.company_id,
             created_by: create.created_by,
             created_at: now,
             updated_at: None,

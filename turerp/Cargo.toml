@@ -97,6 +97,14 @@ metrics-exporter-prometheus = "0.16"
 # Precise decimal for financial calculations
 rust_decimal = { version = "1.36", features = ["serde"] }
 rust_decimal_macros = "1.36"
+num-traits = "0.2"
+
+# S3 / File storage
+rust-s3 = { version = "0.35", features = ["tokio"] }
+
+# Multipart form data (file uploads)
+actix-multipart = "0.7"
+mime = "0.3"
 
 # Report generation
 rust_xlsxwriter = "0.94"
