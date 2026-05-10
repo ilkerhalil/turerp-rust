@@ -173,6 +173,7 @@ pub struct CreateInvoice {
     #[serde(default = "default_exchange_rate")]
     pub exchange_rate: Decimal,
     pub notes: Option<String>,
+    pub cost_center_id: Option<i64>,
     pub lines: Vec<CreateInvoiceLine>,
 }
 
@@ -357,6 +358,7 @@ mod tests {
             currency: "USD".to_string(),
             exchange_rate: Decimal::ONE,
             notes: None,
+            cost_center_id: None,
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
                 description: "Test Product".to_string(),
@@ -378,6 +380,7 @@ mod tests {
             currency: "USD".to_string(),
             exchange_rate: Decimal::ONE,
             notes: None,
+            cost_center_id: None,
             lines: vec![],
         };
         assert!(invalid.validate().is_err());

@@ -310,6 +310,7 @@ mod tests {
             currency: "USD".to_string(),
             exchange_rate: Decimal::ONE,
             notes: None,
+            cost_center_id: None,
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
                 description: "Test Product".to_string(),
@@ -344,6 +345,7 @@ mod tests {
             currency: "USD".to_string(),
             exchange_rate: Decimal::ONE,
             notes: None,
+            cost_center_id: None,
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
                 description: "Test Product".to_string(),
@@ -392,6 +394,7 @@ mod tests {
             currency: "USD".to_string(),
             exchange_rate: Decimal::ONE,
             notes: None,
+            cost_center_id: None,
             lines: vec![CreateInvoiceLine {
                 product_id: Some(1),
                 description: "Test".to_string(),

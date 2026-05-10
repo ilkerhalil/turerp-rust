@@ -1,7 +1,7 @@
 //! Subscription repository
 
 use async_trait::async_trait;
-use chrono::{NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use parking_lot::Mutex;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -9,9 +9,9 @@ use std::sync::Arc;
 
 use crate::common::SoftDeletable;
 use crate::domain::subscription::model::{
-    BillingCycle, CreatePlan, CreateSubscription, Subscription, SubscriptionInvoice,
-    SubscriptionInvoiceStatus, SubscriptionPlan, SubscriptionStatus, UpdatePlan,
-    UpdateSubscription,
+    BillingCycle, CreatePlan, CreateSubscription, DunningEntry, DunningStatus, Subscription,
+    SubscriptionInvoice, SubscriptionInvoiceStatus, SubscriptionPlan, SubscriptionStatus,
+    UpdatePlan, UpdateSubscription, UsageRecord,
 };
 use crate::error::ApiError;
 
@@ -87,6 +87,59 @@ pub trait SubscriptionRepository: Send + Sync {
         subscription_id: i64,
         tenant_id: i64,
     ) -> Result<Vec<SubscriptionInvoice>, ApiError>;
+
+    // --- Dunning ---
+    async fn create_dunning_entry(
+        &self,
+        tenant_id: i64,
+        subscription_id: i64,
+        invoice_id: i64,
+        attempt_number: i32,
+    ) -> Result<DunningEntry, ApiError>;
+    async fn find_dunning_by_subscription(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<DunningEntry>, ApiError>;
+    async fn update_dunning_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: DunningStatus,
+        attempt_number: i32,
+        retry_at: Option<DateTime<Utc>>,
+    ) -> Result<DunningEntry, ApiError>;
+    async fn find_subscriptions_for_dunning(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Subscription>, ApiError>;
+
+    // --- Usage ---
+    async fn create_usage_record(
+        &self,
+        tenant_id: i64,
+        subscription_id: i64,
+        quantity: i64,
+        unit: String,
+        billing_period_start: NaiveDate,
+        billing_period_end: NaiveDate,
+    ) -> Result<UsageRecord, ApiError>;
+    async fn find_usage_by_subscription(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<UsageRecord>, ApiError>;
+    async fn find_usage_by_period(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+        period_start: NaiveDate,
+        period_end: NaiveDate,
+    ) -> Result<Vec<UsageRecord>, ApiError>;
+
+    // --- Trial ---
+    async fn find_trial_subscriptions(&self, tenant_id: i64)
+        -> Result<Vec<Subscription>, ApiError>;
 }
 
 /// Type alias for boxed repository
@@ -96,9 +149,13 @@ struct InMemorySubscriptionInner {
     plans: HashMap<i64, SubscriptionPlan>,
     subscriptions: HashMap<i64, Subscription>,
     invoices: HashMap<i64, SubscriptionInvoice>,
+    dunning_entries: HashMap<i64, DunningEntry>,
+    usage_records: HashMap<i64, UsageRecord>,
     next_plan_id: i64,
     next_subscription_id: i64,
     next_invoice_id: i64,
+    next_dunning_id: i64,
+    next_usage_id: i64,
 }
 
 /// In-memory subscription repository for testing
@@ -113,9 +170,13 @@ impl InMemorySubscriptionRepository {
                 plans: HashMap::new(),
                 subscriptions: HashMap::new(),
                 invoices: HashMap::new(),
+                dunning_entries: HashMap::new(),
+                usage_records: HashMap::new(),
                 next_plan_id: 1,
                 next_subscription_id: 1,
                 next_invoice_id: 1,
+                next_dunning_id: 1,
+                next_usage_id: 1,
             }),
         }
     }
@@ -144,6 +205,8 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
             currency: create.currency,
             features: create.features,
             is_active: create.is_active,
+            included_quantity: create.included_quantity,
+            overage_rate: create.overage_rate,
             created_at: Utc::now(),
             updated_at: None,
             deleted_at: None,
@@ -215,6 +278,12 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
         if let Some(is_active) = update.is_active {
             plan.is_active = is_active;
         }
+        if let Some(included_quantity) = update.included_quantity {
+            plan.included_quantity = Some(included_quantity);
+        }
+        if let Some(overage_rate) = update.overage_rate {
+            plan.overage_rate = Some(overage_rate);
+        }
 
         plan.updated_at = Some(Utc::now());
         Ok(plan.clone())
@@ -264,6 +333,8 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
             auto_renew: create.auto_renew,
             last_billed_at: None,
             next_billing_date: create.next_billing_date,
+            trial_start_date: create.trial_start_date,
+            trial_end_date: create.trial_end_date,
             created_at: Utc::now(),
             updated_at: None,
             deleted_at: None,
@@ -350,6 +421,12 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
         }
         if let Some(next_billing_date) = update.next_billing_date {
             sub.next_billing_date = Some(next_billing_date);
+        }
+        if let Some(trial_start_date) = update.trial_start_date {
+            sub.trial_start_date = Some(trial_start_date);
+        }
+        if let Some(trial_end_date) = update.trial_end_date {
+            sub.trial_end_date = Some(trial_end_date);
         }
 
         sub.updated_at = Some(Utc::now());
@@ -488,6 +565,172 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
             .invoices
             .values()
             .filter(|inv| inv.subscription_id == subscription_id && inv.tenant_id == tenant_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn create_dunning_entry(
+        &self,
+        tenant_id: i64,
+        subscription_id: i64,
+        invoice_id: i64,
+        attempt_number: i32,
+    ) -> Result<DunningEntry, ApiError> {
+        let mut inner = self.inner.lock();
+        let id = inner.next_dunning_id;
+        inner.next_dunning_id += 1;
+
+        let entry = DunningEntry {
+            id,
+            tenant_id,
+            subscription_id,
+            invoice_id,
+            attempt_number,
+            status: DunningStatus::Active,
+            retry_at: None,
+            created_at: Utc::now(),
+            resolved_at: None,
+        };
+
+        inner.dunning_entries.insert(id, entry.clone());
+        Ok(entry)
+    }
+
+    async fn find_dunning_by_subscription(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<DunningEntry>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .dunning_entries
+            .values()
+            .filter(|d| d.subscription_id == subscription_id && d.tenant_id == tenant_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn update_dunning_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: DunningStatus,
+        attempt_number: i32,
+        retry_at: Option<DateTime<Utc>>,
+    ) -> Result<DunningEntry, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let entry = inner
+            .dunning_entries
+            .get_mut(&id)
+            .filter(|d| d.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Dunning entry {} not found", id)))?;
+
+        entry.status = status;
+        entry.attempt_number = attempt_number;
+        if let Some(retry) = retry_at {
+            entry.retry_at = Some(retry);
+        }
+        if status == DunningStatus::Resolved || status == DunningStatus::Failed {
+            entry.resolved_at = Some(Utc::now());
+        }
+
+        Ok(entry.clone())
+    }
+
+    async fn find_subscriptions_for_dunning(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Subscription>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .subscriptions
+            .values()
+            .filter(|s| {
+                s.tenant_id == tenant_id
+                    && (s.status == SubscriptionStatus::PastDue
+                        || s.status == SubscriptionStatus::Active)
+                    && !s.is_deleted()
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn create_usage_record(
+        &self,
+        tenant_id: i64,
+        subscription_id: i64,
+        quantity: i64,
+        unit: String,
+        billing_period_start: NaiveDate,
+        billing_period_end: NaiveDate,
+    ) -> Result<UsageRecord, ApiError> {
+        let mut inner = self.inner.lock();
+        let id = inner.next_usage_id;
+        inner.next_usage_id += 1;
+
+        let record = UsageRecord {
+            id,
+            tenant_id,
+            subscription_id,
+            record_type: crate::domain::subscription::model::UsageRecordType::Metered,
+            quantity,
+            unit,
+            recorded_at: Utc::now(),
+            billing_period_start,
+            billing_period_end,
+        };
+
+        inner.usage_records.insert(id, record.clone());
+        Ok(record)
+    }
+
+    async fn find_usage_by_subscription(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<UsageRecord>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .usage_records
+            .values()
+            .filter(|u| u.subscription_id == subscription_id && u.tenant_id == tenant_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn find_usage_by_period(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+        period_start: NaiveDate,
+        period_end: NaiveDate,
+    ) -> Result<Vec<UsageRecord>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .usage_records
+            .values()
+            .filter(|u| {
+                u.subscription_id == subscription_id
+                    && u.tenant_id == tenant_id
+                    && u.billing_period_start == period_start
+                    && u.billing_period_end == period_end
+            })
+            .cloned()
+            .collect())
+    }
+
+    async fn find_trial_subscriptions(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Subscription>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .subscriptions
+            .values()
+            .filter(|s| {
+                s.tenant_id == tenant_id && s.status == SubscriptionStatus::Trial && !s.is_deleted()
+            })
             .cloned()
             .collect())
     }

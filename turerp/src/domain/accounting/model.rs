@@ -215,6 +215,7 @@ pub struct JournalLine {
     pub id: i64,
     pub entry_id: i64,
     pub account_id: i64,
+    pub cost_center_id: Option<i64>,
     pub debit: Decimal,
     pub credit: Decimal,
     pub description: Option<String>,
@@ -309,6 +310,7 @@ impl CreateJournalEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateJournalLine {
     pub account_id: i64,
+    pub cost_center_id: Option<i64>,
     pub debit: Decimal,
     pub credit: Decimal,
     pub description: Option<String>,
@@ -380,6 +382,7 @@ mod tests {
             lines: vec![
                 CreateJournalLine {
                     account_id: 1,
+                    cost_center_id: None,
                     debit: dec!(100.0),
                     credit: Decimal::ZERO,
                     description: None,
@@ -387,6 +390,7 @@ mod tests {
                 },
                 CreateJournalLine {
                     account_id: 2,
+                    cost_center_id: None,
                     debit: Decimal::ZERO,
                     credit: dec!(100.0),
                     description: None,

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::db::error::map_sqlx_error;
 use crate::domain::workflow::model::{
     CreateWorkflowTemplate, WorkflowAuditLog, WorkflowEntityType, WorkflowInstance, WorkflowStatus,
-    WorkflowStep, WorkflowStepStatus, WorkflowTemplate,
+    WorkflowStep, WorkflowStepApproval, WorkflowStepStatus, WorkflowTemplate,
 };
 use crate::domain::workflow::repository::{BoxWorkflowRepository, WorkflowRepository};
 use crate::error::ApiError;
@@ -574,5 +574,35 @@ impl WorkflowRepository for PostgresWorkflowRepository {
                 (instance, step)
             })
             .collect())
+    }
+
+    async fn find_users_by_role(&self, _tenant_id: i64, _role: &str) -> Result<Vec<i64>, ApiError> {
+        // Stub: user/role domain not integrated in this repository
+        Ok(Vec::new())
+    }
+
+    async fn find_pending_approvals_by_role(
+        &self,
+        _role: String,
+        _tenant_id: i64,
+    ) -> Result<Vec<WorkflowInstance>, ApiError> {
+        // Stub: would need join with workflow_steps on approver_role
+        Ok(Vec::new())
+    }
+
+    async fn create_step_approval(
+        &self,
+        _approval: WorkflowStepApproval,
+    ) -> Result<WorkflowStepApproval, ApiError> {
+        Err(ApiError::Internal(
+            "Step approvals require a dedicated table; not yet migrated".to_string(),
+        ))
+    }
+
+    async fn find_step_approvals(
+        &self,
+        _step_id: i64,
+    ) -> Result<Vec<WorkflowStepApproval>, ApiError> {
+        Ok(Vec::new())
     }
 }

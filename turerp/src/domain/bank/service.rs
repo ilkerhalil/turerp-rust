@@ -5,10 +5,13 @@ use rust_decimal::Decimal;
 use std::sync::LazyLock;
 use validator::Validate;
 
+use crate::domain::bank::adapter::{BankAdapterFactory, BoxBankAdapter};
+use crate::domain::bank::camt_parser::parse_camt053;
 use crate::domain::bank::model::{
-    BankAccountResponse, BankStatement, BankTransaction, BankTransactionResponse,
-    CreateBankAccount, CreateReconciliationRule, ImportBankStatement, MatchStatus,
-    MatchTransaction, ParsedBankTransaction, ReconciliationReport, ReconciliationRule,
+    BankAccountResponse, BankApiCredentials, BankConnectionStatus, BankStatement, BankTransaction,
+    BankTransactionResponse, CamtStatement, CreateBankAccount, CreateReconciliationRule,
+    ImportBankStatement, MatchStatus, MatchTransaction, ParsedBankTransaction, PaymentInitiation,
+    PaymentInitiationResponse, PaymentStatus, ReconciliationReport, ReconciliationRule,
     UpdateBankAccount, UpdateReconciliationRule,
 };
 use crate::domain::bank::repository::BoxBankRepository;
@@ -142,6 +145,55 @@ impl BankService {
         self.repo.destroy_account(id, tenant_id).await?;
         tracing::info!(tenant_id, account_id = id, "Destroyed bank account");
         Ok(())
+    }
+
+    /// Test connectivity to a bank API
+    pub async fn connect_bank_api(
+        &self,
+        credentials: BankApiCredentials,
+    ) -> Result<BankConnectionStatus, ApiError> {
+        let adapter = self.create_adapter(credentials)?;
+        adapter.test_connection().await
+    }
+
+    /// Initiate a payment (havale / EFT) through bank API
+    pub async fn initiate_payment(
+        &self,
+        credentials: BankApiCredentials,
+        payment: PaymentInitiation,
+    ) -> Result<PaymentInitiationResponse, ApiError> {
+        payment
+            .validate()
+            .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+        let adapter = self.create_adapter(credentials)?;
+        adapter.initiate_payment(payment).await
+    }
+
+    /// Check the status of a previously initiated payment
+    pub async fn check_payment_status(
+        &self,
+        credentials: BankApiCredentials,
+        tracking_id: String,
+    ) -> Result<PaymentStatus, ApiError> {
+        let adapter = self.create_adapter(credentials)?;
+        adapter.check_payment_status(&tracking_id).await
+    }
+
+    /// Parse a CAMT.053 XML statement
+    pub async fn parse_camt_statement(
+        &self,
+        _tenant_id: i64,
+        data: String,
+    ) -> Result<CamtStatement, ApiError> {
+        parse_camt053(&data)
+    }
+
+    fn create_adapter(&self, credentials: BankApiCredentials) -> Result<BoxBankAdapter, ApiError> {
+        Ok(BankAdapterFactory::create_mock(
+            credentials.bank_code,
+            credentials,
+        ))
     }
 
     /// Import a bank statement
@@ -806,5 +858,142 @@ mod tests {
         service.delete_rule(rule.id, 1).await.unwrap();
         let rules = service.get_rules(1).await.unwrap();
         assert!(rules.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_connect_bank_api_success() {
+        let service = create_service();
+        let creds = BankApiCredentials {
+            bank_code: BankCode::Halkbank,
+            api_key: "test-key".to_string(),
+            api_secret: "test-secret".to_string(),
+            base_url: "https://api.halkbank.com".to_string(),
+            client_id: Some("client-1".to_string()),
+        };
+
+        let status = service.connect_bank_api(creds).await.unwrap();
+        assert_eq!(status, BankConnectionStatus::Connected);
+    }
+
+    #[tokio::test]
+    async fn test_connect_bank_api_failure() {
+        let service = create_service();
+        let creds = BankApiCredentials {
+            bank_code: BankCode::Halkbank,
+            api_key: "".to_string(),
+            api_secret: "test-secret".to_string(),
+            base_url: "https://api.halkbank.com".to_string(),
+            client_id: None,
+        };
+
+        let status = service.connect_bank_api(creds).await.unwrap();
+        assert_eq!(status, BankConnectionStatus::Error);
+    }
+
+    #[tokio::test]
+    async fn test_initiate_payment_success() {
+        let service = create_service();
+        let creds = BankApiCredentials {
+            bank_code: BankCode::Ziraat,
+            api_key: "test-key".to_string(),
+            api_secret: "test-secret-123".to_string(),
+            base_url: "https://api.ziraat.com".to_string(),
+            client_id: None,
+        };
+
+        let payment = PaymentInitiation {
+            source_account_id: 1,
+            destination_iban: Some("TR000123456789012345678901".to_string()),
+            destination_account_no: None,
+            beneficiary_name: "Test Recipient".to_string(),
+            amount: dec!(5000.00),
+            currency: "TRY".to_string(),
+            description: Some("Salary payment".to_string()),
+            payment_type: crate::domain::bank::model::PaymentType::Eft,
+            tenant_id: 1,
+        };
+
+        let response = service.initiate_payment(creds, payment).await.unwrap();
+        assert!(response.tracking_id.starts_with("ZRT-"));
+        assert_eq!(response.status, PaymentStatus::Processing);
+        assert!(response.bank_reference.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_check_payment_status() {
+        let service = create_service();
+        let creds = BankApiCredentials {
+            bank_code: BankCode::IsBankasi,
+            api_key: "test-key".to_string(),
+            api_secret: "test-secret".to_string(),
+            base_url: "https://api.isbankasi.com".to_string(),
+            client_id: None,
+        };
+
+        let payment = PaymentInitiation {
+            source_account_id: 1,
+            destination_iban: Some("TR000123456789012345678901".to_string()),
+            destination_account_no: None,
+            beneficiary_name: "Test Recipient".to_string(),
+            amount: dec!(1000.00),
+            currency: "TRY".to_string(),
+            description: None,
+            payment_type: crate::domain::bank::model::PaymentType::Havale,
+            tenant_id: 1,
+        };
+
+        let response = service
+            .initiate_payment(creds.clone(), payment)
+            .await
+            .unwrap();
+        let status = service
+            .check_payment_status(creds, response.tracking_id)
+            .await
+            .unwrap();
+        assert_eq!(status, PaymentStatus::Pending);
+    }
+
+    #[tokio::test]
+    async fn test_parse_camt_statement() {
+        let service = create_service();
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <BkToCstmrStmt>
+    <Stmt>
+      <Id>STMT-TEST-001</Id>
+      <CreDtTm>2024-01-15T10:30:00Z</CreDtTm>
+      <Acct>
+        <Id>
+          <IBAN>TR000123456789012345678901</IBAN>
+        </Id>
+      </Acct>
+      <Ntry>
+        <Amt Ccy="TRY">1500.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <ValDt>
+          <Dt>2024-01-15</Dt>
+        </ValDt>
+        <NtryRef>REF-001</NtryRef>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>"#;
+
+        let stmt = service
+            .parse_camt_statement(1, xml.to_string())
+            .await
+            .unwrap();
+        assert_eq!(stmt.statement_id, "STMT-TEST-001");
+        assert_eq!(stmt.account_iban, "TR000123456789012345678901");
+        assert_eq!(stmt.entries.len(), 1);
+        assert_eq!(stmt.entries[0].amount, dec!(1500.00));
+        assert_eq!(stmt.entries[0].credit_debit, "CRDT");
+    }
+
+    #[tokio::test]
+    async fn test_parse_camt_statement_invalid_xml() {
+        let service = create_service();
+        let result = service.parse_camt_statement(1, "not xml".to_string()).await;
+        assert!(result.is_err());
     }
 }

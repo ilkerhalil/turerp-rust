@@ -9,10 +9,11 @@ pub mod repository;
 pub mod service;
 
 pub use model::{
-    ApproveStep, CreateWorkflowInstance, CreateWorkflowTemplate, RejectStep, WorkflowAuditLog,
+    ApproveStep, Condition, CreateWorkflowInstance, CreateWorkflowTemplate, EscalationRule,
+    ParallelConfig, ParallelMode, RejectStep, RoleAssignment, WorkflowAuditLog,
     WorkflowAuditLogResponse, WorkflowEntityType, WorkflowInstance, WorkflowInstanceDetailResponse,
-    WorkflowInstanceResponse, WorkflowStatus, WorkflowStep, WorkflowStepResponse,
-    WorkflowStepStatus, WorkflowTemplate, WorkflowTemplateResponse,
+    WorkflowInstanceResponse, WorkflowStatus, WorkflowStep, WorkflowStepApproval,
+    WorkflowStepResponse, WorkflowStepStatus, WorkflowTemplate, WorkflowTemplateResponse,
 };
 #[cfg(feature = "postgres")]
 pub use postgres_repository::PostgresWorkflowRepository;

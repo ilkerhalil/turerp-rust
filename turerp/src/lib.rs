@@ -43,6 +43,10 @@ pub mod app {
         BoxAccountRepository, BoxJournalEntryRepository, BoxJournalLineRepository,
     };
     use crate::domain::accounting::service::AccountingService;
+    use crate::domain::archive::repository::{
+        BoxArchiveJobRepository, BoxArchivePolicyRepository, BoxArchiveRecordRepository,
+    };
+    use crate::domain::archive::service::ArchiveService;
     use crate::domain::assets::repository::BoxAssetsRepository;
     use crate::domain::assets::service::AssetsService;
     use crate::domain::assets::AssetsRepository;
@@ -67,8 +71,12 @@ pub mod app {
     use crate::domain::custom_field::service::CustomFieldService;
     use crate::domain::dashboard::repository::BoxDashboardRepository;
     use crate::domain::dashboard::service::DashboardService;
+    use crate::domain::document::repository::BoxDocumentRepository;
+    use crate::domain::document::service::DocumentService;
     use crate::domain::feature::service::FeatureFlagService;
     use crate::domain::feature::FeatureFlagRepository;
+    use crate::domain::forecasting::repository::BoxForecastingRepository;
+    use crate::domain::forecasting::service::ForecastingService;
     use crate::domain::hr::repository::{
         BoxAttendanceRepository, BoxEmployeeRepository, BoxLeaveRequestRepository,
         BoxLeaveTypeRepository, BoxPayrollRepository,
@@ -100,6 +108,10 @@ pub mod app {
         BoxSalesOrderRepository,
     };
     use crate::domain::sales::service::SalesService;
+    use crate::domain::shift::repository::{
+        BoxAttendanceRecordRepository, BoxShiftAssignmentRepository, BoxShiftRepository,
+    };
+    use crate::domain::shift::service::ShiftService;
     use crate::domain::stock::repository::{
         BoxStockLevelRepository, BoxStockMovementRepository, BoxWarehouseRepository,
     };
@@ -126,6 +138,10 @@ pub mod app {
     use crate::domain::accounting::repository::{
         InMemoryAccountRepository, InMemoryJournalEntryRepository, InMemoryJournalLineRepository,
     };
+    use crate::domain::archive::repository::{
+        InMemoryArchiveJobRepository, InMemoryArchivePolicyRepository,
+        InMemoryArchiveRecordRepository,
+    };
     use crate::domain::assets::repository::InMemoryAssetsRepository;
     use crate::domain::audit::repository::InMemoryAuditLogRepository;
     use crate::domain::bank::repository::InMemoryBankRepository;
@@ -144,7 +160,9 @@ pub mod app {
     use crate::domain::currency::service::CurrencyService;
     use crate::domain::custom_field::repository::InMemoryCustomFieldRepository;
     use crate::domain::dashboard::repository::InMemoryDashboardRepository;
+    use crate::domain::document::repository::InMemoryDocumentRepository;
     use crate::domain::feature::repository::InMemoryFeatureFlagRepository;
+    use crate::domain::forecasting::repository::InMemoryForecastingRepository;
     use crate::domain::hr::repository::{
         InMemoryAttendanceRepository, InMemoryEmployeeRepository, InMemoryLeaveRequestRepository,
         InMemoryLeaveTypeRepository, InMemoryPayrollRepository,
@@ -173,6 +191,10 @@ pub mod app {
         InMemoryQuotationLineRepository, InMemoryQuotationRepository,
         InMemorySalesOrderLineRepository, InMemorySalesOrderRepository,
     };
+    use crate::domain::shift::repository::{
+        InMemoryAttendanceRecordRepository, InMemoryShiftAssignmentRepository,
+        InMemoryShiftRepository,
+    };
     use crate::domain::stock::repository::{
         InMemoryStockLevelRepository, InMemoryStockMovementRepository, InMemoryWarehouseRepository,
     };
@@ -195,6 +217,11 @@ pub mod app {
     };
     #[cfg(feature = "postgres")]
     use crate::domain::api_key::PostgresApiKeyRepository;
+    #[cfg(feature = "postgres")]
+    use crate::domain::archive::postgres_repository::{
+        PostgresArchiveJobRepository, PostgresArchivePolicyRepository,
+        PostgresArchiveRecordRepository,
+    };
     #[cfg(feature = "postgres")]
     use crate::domain::assets::postgres_repository::{
         PostgresAssetCategoryRepository, PostgresAssetsRepository,
@@ -221,9 +248,13 @@ pub mod app {
     #[cfg(feature = "postgres")]
     use crate::domain::dashboard::postgres_repository::PostgresDashboardRepository;
     #[cfg(feature = "postgres")]
+    use crate::domain::document::postgres_repository::PostgresDocumentRepository;
+    #[cfg(feature = "postgres")]
     use crate::domain::efatura::postgres_repository::PostgresEFaturaRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::feature::postgres_repository::PostgresFeatureFlagRepository;
+    #[cfg(feature = "postgres")]
+    use crate::domain::forecasting::postgres_repository::PostgresForecastingRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::hr::postgres_repository::{
         PostgresAttendanceRepository, PostgresEmployeeRepository, PostgresLeaveRequestRepository,
@@ -261,6 +292,11 @@ pub mod app {
     };
     #[cfg(feature = "postgres")]
     use crate::domain::settings::postgres_repository::PostgresSettingsRepository;
+    #[cfg(feature = "postgres")]
+    use crate::domain::shift::postgres_repository::{
+        PostgresAttendanceRecordRepository, PostgresShiftAssignmentRepository,
+        PostgresShiftRepository,
+    };
     #[cfg(feature = "postgres")]
     use crate::domain::stock::postgres_repository::{
         PostgresStockLevelRepository, PostgresStockMovementRepository, PostgresWarehouseRepository,
@@ -309,12 +345,16 @@ pub mod app {
         pub product_service: web::Data<ProductService>,
         pub purchase_service: web::Data<PurchaseService>,
         pub audit_service: web::Data<AuditService>,
+        pub archive_service: web::Data<ArchiveService>,
         pub bank_service: web::Data<BankService>,
         pub cost_center_service: web::Data<CostCenterService>,
         pub dashboard_service: web::Data<DashboardService>,
+        pub document_service: web::Data<DocumentService>,
         pub file_storage: web::Data<dyn crate::common::file_storage::FileStorage>,
         pub qc_service: web::Data<crate::domain::manufacturing::QualityControlService>,
         pub subscription_service: web::Data<SubscriptionService>,
+        pub forecasting_service: web::Data<ForecastingService>,
+        pub shift_service: web::Data<ShiftService>,
         pub workflow_service: web::Data<WorkflowService>,
         pub settings_service: web::Data<crate::domain::settings::SettingsService>,
         pub api_key_service: web::Data<crate::domain::api_key::ApiKeyService>,
@@ -516,6 +556,12 @@ pub mod app {
             let audit_repo = Arc::new(InMemoryAuditLogRepository::new()) as BoxAuditLogRepository;
             let audit_service = AuditService::new(audit_repo);
 
+            // Archive
+            let archive_policy_repo = Arc::new(InMemoryArchivePolicyRepository::new()) as BoxArchivePolicyRepository;
+            let archive_job_repo = Arc::new(InMemoryArchiveJobRepository::new()) as BoxArchiveJobRepository;
+            let archive_record_repo = Arc::new(InMemoryArchiveRecordRepository::new()) as BoxArchiveRecordRepository;
+            let archive_service = ArchiveService::new(archive_policy_repo, archive_job_repo, archive_record_repo);
+
             // Quality Control
             let inspection_repo =
                 Arc::new(crate::domain::manufacturing::InMemoryInspectionRepository::new())
@@ -627,10 +673,28 @@ pub mod app {
                 Arc::new(InMemoryDashboardRepository::new()) as BoxDashboardRepository;
             let dashboard_service = DashboardService::new(dashboard_repo, cache_service.clone());
 
+            // Documents
+            let document_repo =
+                Arc::new(InMemoryDocumentRepository::new()) as BoxDocumentRepository;
+            let document_service = DocumentService::new(document_repo);
+
             // Subscriptions
             let subscription_repo =
                 Arc::new(InMemorySubscriptionRepository::new()) as BoxSubscriptionRepository;
             let subscription_service = SubscriptionService::new(subscription_repo);
+
+            // Forecasting
+            let forecasting_repo =
+                Arc::new(InMemoryForecastingRepository::new()) as BoxForecastingRepository;
+            let forecasting_service = ForecastingService::new(forecasting_repo);
+
+            // Shift Planning
+            let shift_repo = Arc::new(InMemoryShiftRepository::new()) as BoxShiftRepository;
+            let assignment_repo =
+                Arc::new(InMemoryShiftAssignmentRepository::new()) as BoxShiftAssignmentRepository;
+            let attendance_repo =
+                Arc::new(InMemoryAttendanceRecordRepository::new()) as BoxAttendanceRecordRepository;
+            let shift_service = ShiftService::new(shift_repo, assignment_repo, attendance_repo);
 
             // Workflows
             let workflow_repo =
@@ -671,9 +735,11 @@ pub mod app {
                 product_service,
                 purchase_service,
                 audit_service,
+                archive_service,
                 bank_service,
                 cost_center_service,
                 dashboard_service,
+                document_service,
                 file_storage,
                 qc_service,
                 settings_service,
@@ -683,6 +749,8 @@ pub mod app {
                 notification_service,
                 report_engine,
                 subscription_service,
+                forecasting_service,
+                shift_service,
                 tracing_service,
                 workflow_service,
                 db_router,
@@ -724,9 +792,11 @@ pub mod app {
             product_service,
             purchase_service,
             audit_service,
+            archive_service,
             bank_service,
             cost_center_service,
             dashboard_service,
+            document_service,
             file_storage,
             qc_service,
             settings_service,
@@ -736,6 +806,8 @@ pub mod app {
             notification_service,
             report_engine,
             subscription_service,
+            forecasting_service,
+            shift_service,
             tracing_service,
             workflow_service,
             db_router,
@@ -774,9 +846,11 @@ pub mod app {
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
+            archive_service: web::Data::new(archive_service),
             bank_service: web::Data::new(bank_service),
             cost_center_service: web::Data::new(cost_center_service),
             dashboard_service: web::Data::new(dashboard_service),
+            document_service: web::Data::new(document_service),
             file_storage: web::Data::from(file_storage),
             qc_service: web::Data::new(qc_service),
             settings_service: web::Data::new(settings_service),
@@ -786,6 +860,8 @@ pub mod app {
             notification_service: web::Data::from(notification_service),
             report_engine: web::Data::from(report_engine),
             subscription_service: web::Data::new(subscription_service),
+            forecasting_service: web::Data::new(forecasting_service),
+            shift_service: web::Data::new(shift_service),
             tracing_service: web::Data::from(tracing_service),
             workflow_service: web::Data::new(workflow_service),
             db_router: web::Data::from(db_router),
@@ -994,6 +1070,13 @@ pub mod app {
         let audit_repo = PostgresAuditLogRepository::new(pool.clone()).into_boxed();
         let audit_service = AuditService::new(audit_repo);
 
+        // Archive - PostgreSQL
+        let archive_policy_repo = PostgresArchivePolicyRepository::new(pool.clone()).into_boxed();
+        let archive_job_repo = PostgresArchiveJobRepository::new(pool.clone()).into_boxed();
+        let archive_record_repo = PostgresArchiveRecordRepository::new(pool.clone()).into_boxed();
+        let archive_service =
+            ArchiveService::new(archive_policy_repo, archive_job_repo, archive_record_repo);
+
         // Bank - PostgreSQL
         let bank_repo = PostgresBankRepository::new(pool.clone()).into_boxed();
         let bank_service = BankService::new(bank_repo);
@@ -1006,9 +1089,23 @@ pub mod app {
         let dashboard_repo = PostgresDashboardRepository::new(pool.clone()).into_boxed();
         let dashboard_service = DashboardService::new(dashboard_repo, cache_service.clone());
 
+        // Documents - PostgreSQL
+        let document_repo = PostgresDocumentRepository::new(pool.clone()).into_boxed();
+        let document_service = DocumentService::new(document_repo);
+
         // Subscriptions - PostgreSQL
         let subscription_repo = PostgresSubscriptionRepository::new(pool.clone()).into_boxed();
         let subscription_service = SubscriptionService::new(subscription_repo);
+
+        // Forecasting - PostgreSQL
+        let forecasting_repo = PostgresForecastingRepository::new(pool.clone()).into_boxed();
+        let forecasting_service = ForecastingService::new(forecasting_repo);
+
+        // Shift Planning - PostgreSQL
+        let shift_repo = PostgresShiftRepository::new(pool.clone()).into_boxed();
+        let assignment_repo = PostgresShiftAssignmentRepository::new(pool.clone()).into_boxed();
+        let attendance_repo = PostgresAttendanceRecordRepository::new(pool.clone()).into_boxed();
+        let shift_service = ShiftService::new(shift_repo, assignment_repo, attendance_repo);
 
         // Workflows - PostgreSQL
         let workflow_repo = PostgresWorkflowRepository::new(pool.clone()).into_boxed();
@@ -1132,6 +1229,7 @@ pub mod app {
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
+            archive_service: web::Data::new(archive_service),
             bank_service: web::Data::new(bank_service),
             cost_center_service: web::Data::new(cost_center_service),
             dashboard_service: web::Data::new(dashboard_service),
@@ -1150,6 +1248,8 @@ pub mod app {
             notification_service: web::Data::from(notification_service),
             report_engine: web::Data::from(report_engine),
             subscription_service: web::Data::new(subscription_service),
+            forecasting_service: web::Data::new(forecasting_service),
+            shift_service: web::Data::new(shift_service),
             tracing_service: web::Data::from(tracing_service),
             workflow_service: web::Data::new(workflow_service),
             db_router: web::Data::from(db_router),
@@ -1199,9 +1299,11 @@ pub mod app {
             product_service,
             purchase_service,
             audit_service,
+            archive_service,
             bank_service,
             cost_center_service,
             dashboard_service,
+            document_service,
             file_storage,
             qc_service,
             settings_service,
@@ -1211,6 +1313,7 @@ pub mod app {
             notification_service,
             report_engine,
             subscription_service,
+            forecasting_service,
             tracing_service,
             workflow_service,
             db_router,
@@ -1268,9 +1371,11 @@ pub mod app {
             product_service: web::Data::new(product_service),
             purchase_service: web::Data::new(purchase_service),
             audit_service: web::Data::new(audit_service),
+            archive_service: web::Data::new(archive_service),
             bank_service: web::Data::new(bank_service),
             cost_center_service: web::Data::new(cost_center_service),
             dashboard_service: web::Data::new(dashboard_service),
+            document_service: web::Data::new(document_service),
             file_storage: web::Data::from(file_storage),
             qc_service: web::Data::new(qc_service),
             settings_service: web::Data::new(settings_service),
@@ -1280,6 +1385,8 @@ pub mod app {
             notification_service: web::Data::from(notification_service),
             report_engine: web::Data::from(report_engine),
             subscription_service: web::Data::new(subscription_service),
+            forecasting_service: web::Data::new(forecasting_service),
+            shift_service: web::Data::new(shift_service),
             tracing_service: web::Data::from(tracing_service),
             workflow_service: web::Data::new(workflow_service),
             db_router: web::Data::from(db_router),

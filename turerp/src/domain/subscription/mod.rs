@@ -8,10 +8,12 @@ pub mod service;
 
 // Re-exports
 pub use model::{
-    BillingCycle, CreatePlan, CreateSubscription, Subscription, SubscriptionInvoice,
+    BillingCycle, CalculateProrationRequest, CancelSubscriptionRequest, CancellationResult,
+    CreatePlan, CreateSubscription, DunningEntry, DunningEntryResponse, DunningStatus,
+    ProrationDirection, ProrationResult, RecordUsageRequest, Subscription, SubscriptionInvoice,
     SubscriptionInvoiceResponse, SubscriptionInvoiceStatus, SubscriptionPlan,
-    SubscriptionPlanResponse, SubscriptionResponse, SubscriptionStatus, UpdatePlan,
-    UpdateSubscription,
+    SubscriptionPlanResponse, SubscriptionResponse, SubscriptionStatus, TrialConversionResult,
+    UpdatePlan, UpdateSubscription, UsageRecord, UsageRecordResponse, UsageRecordType,
 };
 #[cfg(feature = "postgres")]
 pub use postgres_repository::PostgresSubscriptionRepository;

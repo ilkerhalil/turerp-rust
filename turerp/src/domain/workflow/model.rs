@@ -189,6 +189,104 @@ pub struct WorkflowAuditLog {
     pub timestamp: DateTime<Utc>,
 }
 
+// ---- Conditional routing ----
+
+/// Condition evaluated at runtime to determine if a step should be activated
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct Condition {
+    pub field: String,
+    pub operator: String,
+    pub value: serde_json::Value,
+}
+
+impl Condition {
+    /// Evaluate this condition against entity data
+    pub fn evaluate(&self, entity_data: &serde_json::Value) -> bool {
+        let field_value = entity_data.get(&self.field);
+        match self.operator.as_str() {
+            "eq" => field_value == Some(&self.value),
+            "ne" => field_value != Some(&self.value),
+            "gt" => compare_numeric(field_value, &self.value, |a, b| a > b),
+            "gte" => compare_numeric(field_value, &self.value, |a, b| a >= b),
+            "lt" => compare_numeric(field_value, &self.value, |a, b| a < b),
+            "lte" => compare_numeric(field_value, &self.value, |a, b| a <= b),
+            "contains" => match (field_value, &self.value) {
+                (Some(serde_json::Value::String(haystack)), serde_json::Value::String(needle)) => {
+                    haystack.contains(needle)
+                }
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+}
+
+fn compare_numeric<F>(left: Option<&serde_json::Value>, right: &serde_json::Value, cmp: F) -> bool
+where
+    F: FnOnce(f64, f64) -> bool,
+{
+    match (left, right) {
+        (Some(serde_json::Value::Number(l)), serde_json::Value::Number(r)) => {
+            match (l.as_f64(), r.as_f64()) {
+                (Some(lf), Some(rf)) => cmp(lf, rf),
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+// ---- Parallel approval ----
+
+/// Mode for parallel step approvals
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ParallelMode {
+    AllRequired,
+    AnyOne,
+}
+
+/// Configuration for a parallel approval step
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ParallelConfig {
+    pub mode: ParallelMode,
+    pub assignee_user_ids: Vec<i64>,
+    pub assignee_roles: Vec<String>,
+}
+
+/// Individual approval record for a parallel step
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct WorkflowStepApproval {
+    pub id: i64,
+    pub step_id: i64,
+    pub user_id: i64,
+    pub status: WorkflowStepStatus,
+    pub comment: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+// ---- Role-based assignment ----
+
+/// Assignment of a workflow step to a role rather than a specific user
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct RoleAssignment {
+    pub role: String,
+    pub permission: Option<String>,
+    pub tenant_id: i64,
+}
+
+// ---- Escalation rules ----
+
+/// Escalation configuration for overdue workflow steps
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EscalationRule {
+    pub timeout_hours: i64,
+    pub reminder_hours: i64,
+    pub escalate_to_role: Option<String>,
+    pub escalate_to_manager: bool,
+}
+
 // ---- DTOs ----
 
 /// Create a new workflow template

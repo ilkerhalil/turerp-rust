@@ -49,6 +49,7 @@ pub enum SubscriptionStatus {
     Cancelled,
     Expired,
     Trial,
+    PastDue,
 }
 
 impl std::fmt::Display for SubscriptionStatus {
@@ -58,6 +59,7 @@ impl std::fmt::Display for SubscriptionStatus {
             SubscriptionStatus::Cancelled => write!(f, "cancelled"),
             SubscriptionStatus::Expired => write!(f, "expired"),
             SubscriptionStatus::Trial => write!(f, "trial"),
+            SubscriptionStatus::PastDue => write!(f, "past_due"),
         }
     }
 }
@@ -71,6 +73,7 @@ impl std::str::FromStr for SubscriptionStatus {
             "cancelled" => Ok(SubscriptionStatus::Cancelled),
             "expired" => Ok(SubscriptionStatus::Expired),
             "trial" => Ok(SubscriptionStatus::Trial),
+            "past_due" => Ok(SubscriptionStatus::PastDue),
             _ => Err(format!("Invalid subscription status: {}", s)),
         }
     }
@@ -109,6 +112,136 @@ impl std::str::FromStr for SubscriptionInvoiceStatus {
     }
 }
 
+/// Dunning status for payment retry workflow
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DunningStatus {
+    #[default]
+    Active,
+    Resolved,
+    Failed,
+}
+
+impl std::fmt::Display for DunningStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DunningStatus::Active => write!(f, "active"),
+            DunningStatus::Resolved => write!(f, "resolved"),
+            DunningStatus::Failed => write!(f, "failed"),
+        }
+    }
+}
+
+impl std::str::FromStr for DunningStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "active" => Ok(DunningStatus::Active),
+            "resolved" => Ok(DunningStatus::Resolved),
+            "failed" => Ok(DunningStatus::Failed),
+            _ => Err(format!("Invalid dunning status: {}", s)),
+        }
+    }
+}
+
+/// Usage record type for metered billing
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum UsageRecordType {
+    #[default]
+    Metered,
+    Overage,
+}
+
+impl std::fmt::Display for UsageRecordType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UsageRecordType::Metered => write!(f, "metered"),
+            UsageRecordType::Overage => write!(f, "overage"),
+        }
+    }
+}
+
+impl std::str::FromStr for UsageRecordType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "metered" => Ok(UsageRecordType::Metered),
+            "overage" => Ok(UsageRecordType::Overage),
+            _ => Err(format!("Invalid usage record type: {}", s)),
+        }
+    }
+}
+
+/// Dunning entry for failed payment retry tracking
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DunningEntry {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub subscription_id: i64,
+    pub invoice_id: i64,
+    pub attempt_number: i32,
+    pub status: DunningStatus,
+    pub retry_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub resolved_at: Option<DateTime<Utc>>,
+}
+
+/// Usage record for metered billing
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct UsageRecord {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub subscription_id: i64,
+    pub record_type: UsageRecordType,
+    pub quantity: i64,
+    pub unit: String,
+    pub recorded_at: DateTime<Utc>,
+    pub billing_period_start: NaiveDate,
+    pub billing_period_end: NaiveDate,
+}
+
+/// Result of a proration calculation
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ProrationResult {
+    pub original_amount: Decimal,
+    pub prorated_amount: Decimal,
+    pub unused_days: i64,
+    pub total_days: i64,
+    pub refund_or_charge: Decimal,
+    pub direction: ProrationDirection,
+}
+
+/// Direction of proration charge
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ProrationDirection {
+    Refund,
+    Charge,
+}
+
+/// Result of subscription cancellation with refund logic
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CancellationResult {
+    pub subscription_id: i64,
+    pub status: SubscriptionStatus,
+    pub refund_amount: Decimal,
+    pub unused_days: i64,
+    pub cancelled_at: DateTime<Utc>,
+}
+
+/// Result of trial to paid conversion
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct TrialConversionResult {
+    pub subscription_id: i64,
+    pub previous_status: SubscriptionStatus,
+    pub new_status: SubscriptionStatus,
+    pub billing_start_date: NaiveDate,
+    pub next_billing_date: NaiveDate,
+}
+
 /// Subscription plan entity
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SubscriptionPlan {
@@ -121,6 +254,8 @@ pub struct SubscriptionPlan {
     pub currency: String,
     pub features: Option<Value>,
     pub is_active: bool,
+    pub included_quantity: Option<i64>,
+    pub overage_rate: Option<Decimal>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -169,6 +304,10 @@ pub struct CreatePlan {
     #[serde(default = "default_true")]
     pub is_active: bool,
 
+    pub included_quantity: Option<i64>,
+
+    pub overage_rate: Option<Decimal>,
+
     pub tenant_id: i64,
 }
 
@@ -191,6 +330,10 @@ pub struct UpdatePlan {
     pub features: Option<Value>,
 
     pub is_active: Option<bool>,
+
+    pub included_quantity: Option<i64>,
+
+    pub overage_rate: Option<Decimal>,
 }
 
 /// Subscription entity
@@ -206,6 +349,8 @@ pub struct Subscription {
     pub auto_renew: bool,
     pub last_billed_at: Option<DateTime<Utc>>,
     pub next_billing_date: Option<NaiveDate>,
+    pub trial_start_date: Option<NaiveDate>,
+    pub trial_end_date: Option<NaiveDate>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -251,6 +396,10 @@ pub struct CreateSubscription {
 
     pub next_billing_date: Option<NaiveDate>,
 
+    pub trial_start_date: Option<NaiveDate>,
+
+    pub trial_end_date: Option<NaiveDate>,
+
     pub tenant_id: i64,
 }
 
@@ -268,6 +417,10 @@ pub struct UpdateSubscription {
     pub auto_renew: Option<bool>,
 
     pub next_billing_date: Option<NaiveDate>,
+
+    pub trial_start_date: Option<NaiveDate>,
+
+    pub trial_end_date: Option<NaiveDate>,
 }
 
 /// Subscription invoice entity
@@ -296,6 +449,8 @@ pub struct SubscriptionPlanResponse {
     pub currency: String,
     pub features: Option<Value>,
     pub is_active: bool,
+    pub included_quantity: Option<i64>,
+    pub overage_rate: Option<Decimal>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
@@ -312,6 +467,8 @@ impl From<SubscriptionPlan> for SubscriptionPlanResponse {
             currency: plan.currency,
             features: plan.features,
             is_active: plan.is_active,
+            included_quantity: plan.included_quantity,
+            overage_rate: plan.overage_rate,
             created_at: plan.created_at,
             updated_at: plan.updated_at,
         }
@@ -331,6 +488,8 @@ pub struct SubscriptionResponse {
     pub auto_renew: bool,
     pub last_billed_at: Option<DateTime<Utc>>,
     pub next_billing_date: Option<NaiveDate>,
+    pub trial_start_date: Option<NaiveDate>,
+    pub trial_end_date: Option<NaiveDate>,
     pub created_at: DateTime<Utc>,
     pub updated_at: Option<DateTime<Utc>>,
 }
@@ -348,6 +507,8 @@ impl From<Subscription> for SubscriptionResponse {
             auto_renew: sub.auto_renew,
             last_billed_at: sub.last_billed_at,
             next_billing_date: sub.next_billing_date,
+            trial_start_date: sub.trial_start_date,
+            trial_end_date: sub.trial_end_date,
             created_at: sub.created_at,
             updated_at: sub.updated_at,
         }
@@ -382,6 +543,89 @@ impl From<SubscriptionInvoice> for SubscriptionInvoiceResponse {
             created_at: inv.created_at,
         }
     }
+}
+
+/// Dunning entry response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DunningEntryResponse {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub subscription_id: i64,
+    pub invoice_id: i64,
+    pub attempt_number: i32,
+    pub status: DunningStatus,
+    pub retry_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+    pub resolved_at: Option<DateTime<Utc>>,
+}
+
+impl From<DunningEntry> for DunningEntryResponse {
+    fn from(entry: DunningEntry) -> Self {
+        Self {
+            id: entry.id,
+            tenant_id: entry.tenant_id,
+            subscription_id: entry.subscription_id,
+            invoice_id: entry.invoice_id,
+            attempt_number: entry.attempt_number,
+            status: entry.status,
+            retry_at: entry.retry_at,
+            created_at: entry.created_at,
+            resolved_at: entry.resolved_at,
+        }
+    }
+}
+
+/// Usage record response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct UsageRecordResponse {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub subscription_id: i64,
+    pub record_type: UsageRecordType,
+    pub quantity: i64,
+    pub unit: String,
+    pub recorded_at: DateTime<Utc>,
+    pub billing_period_start: NaiveDate,
+    pub billing_period_end: NaiveDate,
+}
+
+impl From<UsageRecord> for UsageRecordResponse {
+    fn from(record: UsageRecord) -> Self {
+        Self {
+            id: record.id,
+            tenant_id: record.tenant_id,
+            subscription_id: record.subscription_id,
+            record_type: record.record_type,
+            quantity: record.quantity,
+            unit: record.unit,
+            recorded_at: record.recorded_at,
+            billing_period_start: record.billing_period_start,
+            billing_period_end: record.billing_period_end,
+        }
+    }
+}
+
+/// Request to record usage for metered billing
+#[derive(Debug, Clone, Deserialize, Serialize, Validate, ToSchema)]
+pub struct RecordUsageRequest {
+    pub quantity: i64,
+    pub unit: String,
+    pub billing_period_start: NaiveDate,
+    pub billing_period_end: NaiveDate,
+}
+
+/// Request to calculate proration for plan change
+#[derive(Debug, Clone, Deserialize, Serialize, Validate, ToSchema)]
+pub struct CalculateProrationRequest {
+    pub new_plan_id: i64,
+    pub effective_date: NaiveDate,
+}
+
+/// Request to cancel a subscription
+#[derive(Debug, Clone, Deserialize, Serialize, Validate, ToSchema)]
+pub struct CancelSubscriptionRequest {
+    pub cancel_immediately: bool,
+    pub reason: Option<String>,
 }
 
 fn default_currency() -> String {

@@ -5,9 +5,9 @@ use crate::common::{
     NotificationPriority, NotificationRequest,
 };
 use crate::domain::workflow::model::{
-    CreateWorkflowTemplate, WorkflowAuditLog, WorkflowEntityType, WorkflowInstance,
-    WorkflowInstanceDetailResponse, WorkflowStatus, WorkflowStep, WorkflowStepStatus,
-    WorkflowTemplate,
+    Condition, CreateWorkflowTemplate, EscalationRule, ParallelConfig, ParallelMode,
+    WorkflowAuditLog, WorkflowEntityType, WorkflowInstance, WorkflowInstanceDetailResponse,
+    WorkflowStatus, WorkflowStep, WorkflowStepApproval, WorkflowStepStatus, WorkflowTemplate,
 };
 use crate::domain::workflow::repository::BoxWorkflowRepository;
 use crate::error::ApiError;
@@ -199,7 +199,18 @@ impl WorkflowService {
                     .get("approver_role")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
-                let approver_user_id = step_def.get("approver_user_id").and_then(|v| v.as_i64());
+                let mut approver_user_id =
+                    step_def.get("approver_user_id").and_then(|v| v.as_i64());
+
+                // Role-based assignment: resolve role to user if no explicit user assigned
+                if approver_user_id.is_none() {
+                    if let Some(ref role) = approver_role {
+                        let users = self.assign_by_role(tenant_id, role).await?;
+                        if users.len() == 1 {
+                            approver_user_id = Some(users[0]);
+                        }
+                    }
+                }
 
                 self.repo
                     .create_step(WorkflowStep {
@@ -295,7 +306,7 @@ impl WorkflowService {
             )));
         }
 
-        let mut step = self
+        let step = self
             .repo
             .find_steps_by_instance(instance_id)
             .await?
@@ -310,12 +321,45 @@ impl WorkflowService {
             )));
         }
 
+        // Check if this step has parallel configuration from template
+        let template = self
+            .repo
+            .find_template_by_id(instance.template_id, tenant_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Template {} not found", instance.template_id))
+            })?;
+
+        let parallel_config = template
+            .config_json
+            .get("steps")
+            .and_then(|s| s.as_array())
+            .and_then(|steps| {
+                steps
+                    .iter()
+                    .find(|def| {
+                        def.get("step_number")
+                            .and_then(|v| v.as_i64())
+                            .map(|n| n as i32 == step.step_number)
+                            .unwrap_or(false)
+                    })
+                    .and_then(|def| def.get("parallel"))
+                    .and_then(|p| serde_json::from_value::<ParallelConfig>(p.clone()).ok())
+            });
+
+        if let Some(ref config) = parallel_config {
+            return self
+                .process_parallel_approval(instance, step, user_id, comment, tenant_id, config)
+                .await;
+        }
+
+        // Sequential approval path
+        let mut step = step;
         step.status = WorkflowStepStatus::Approved;
         step.comment = comment.clone();
         step.completed_at = Some(chrono::Utc::now());
         self.repo.update_step(step.clone()).await?;
 
-        // Audit log
         self.repo
             .create_audit_log(WorkflowAuditLog {
                 id: 0,
@@ -328,7 +372,6 @@ impl WorkflowService {
             })
             .await?;
 
-        // Notify initiator
         let _ = self
             .send_notification(
                 tenant_id,
@@ -342,59 +385,7 @@ impl WorkflowService {
             )
             .await;
 
-        // Advance or complete
-        let steps = self.repo.find_steps_by_instance(instance_id).await?;
-        let max_step = steps.iter().map(|s| s.step_number).max().unwrap_or(1);
-
-        let mut instance = instance;
-        if instance.current_step >= max_step {
-            instance.status = WorkflowStatus::Completed;
-            instance.completed_at = Some(chrono::Utc::now());
-            instance.assigned_user_id = None;
-
-            // Notify initiator of completion
-            let _ = self
-                .send_notification(
-                    tenant_id,
-                    instance.created_by,
-                    "workflow_completed",
-                    serde_json::json!({
-                        "workflow_id": instance_id,
-                        "entity_type": instance.entity_type.to_string(),
-                        "entity_id": instance.entity_id
-                    }),
-                )
-                .await;
-        } else {
-            instance.current_step += 1;
-            let next_step = steps
-                .iter()
-                .find(|s| s.step_number == instance.current_step);
-            instance.assigned_user_id = next_step.and_then(|s| s.approver_user_id);
-
-            // Notify next approver
-            if let Some(next) = next_step {
-                if let Some(approver_id) = next.approver_user_id {
-                    let _ = self
-                        .send_notification(
-                            tenant_id,
-                            approver_id,
-                            "workflow_step_assigned",
-                            serde_json::json!({
-                                "workflow_id": instance_id,
-                                "step_name": next.step_name,
-                                "entity_type": instance.entity_type.to_string(),
-                                "entity_id": instance.entity_id
-                            }),
-                        )
-                        .await;
-                }
-            }
-        }
-
-        let instance = self.repo.update_instance(instance.clone()).await?;
-        tracing::info!(tenant_id, instance_id, step_id, "Approved workflow step");
-        Ok(instance)
+        self.advance_workflow(instance, step, tenant_id).await
     }
 
     /// Reject the current step and mark instance as rejected
@@ -599,21 +590,251 @@ impl WorkflowService {
             "Escalating overdue workflows"
         );
         for (instance, step) in overdue {
-            // Audit log escalation
-            let _ = self
+            // Try to read escalation rules from template config
+            let template = self
                 .repo
+                .find_template_by_id(instance.template_id, instance.tenant_id)
+                .await
+                .ok()
+                .flatten();
+
+            let escalation = template.and_then(|t| {
+                t.config_json
+                    .get("steps")
+                    .and_then(|s| s.as_array())
+                    .and_then(|steps| {
+                        steps
+                            .iter()
+                            .find(|def| {
+                                def.get("step_number")
+                                    .and_then(|v| v.as_i64())
+                                    .map(|n| n as i32 == step.step_number)
+                                    .unwrap_or(false)
+                            })
+                            .and_then(|def| def.get("escalation"))
+                            .and_then(|e| serde_json::from_value::<EscalationRule>(e.clone()).ok())
+                    })
+            });
+
+            if let Some(ref rule) = escalation {
+                let _ = self.check_escalation(&instance, &step, rule).await;
+            } else {
+                // Default escalation behavior
+                let _ = self
+                    .repo
+                    .create_audit_log(WorkflowAuditLog {
+                        id: 0,
+                        instance_id: instance.id,
+                        step_id: Some(step.id),
+                        action: "escalate".to_string(),
+                        user_id: 0,
+                        comment: Some(format!("Step '{}' pending for >24h", step.step_name)),
+                        timestamp: chrono::Utc::now(),
+                    })
+                    .await;
+
+                let _ = self
+                    .send_notification(
+                        instance.tenant_id,
+                        instance.created_by,
+                        "workflow_escalated",
+                        serde_json::json!({
+                            "workflow_id": instance.id,
+                            "step_name": step.step_name,
+                            "entity_type": instance.entity_type.to_string(),
+                            "entity_id": instance.entity_id
+                        }),
+                    )
+                    .await;
+            }
+
+            escalated.push(instance);
+        }
+        Ok(escalated)
+    }
+
+    // ---- Conditional routing ----
+
+    /// Evaluate a list of conditions against entity data
+    pub fn evaluate_conditions(conditions: &[Condition], entity_data: &serde_json::Value) -> bool {
+        if conditions.is_empty() {
+            return true;
+        }
+        conditions.iter().all(|c| c.evaluate(entity_data))
+    }
+
+    // ---- Role-based assignment ----
+
+    /// Resolve a role to user IDs within a tenant
+    pub async fn assign_by_role(&self, tenant_id: i64, role: &str) -> Result<Vec<i64>, ApiError> {
+        self.repo.find_users_by_role(tenant_id, role).await
+    }
+
+    /// Get pending workflow instances for users with a given role
+    pub async fn get_pending_approvals_by_role(
+        &self,
+        role: String,
+        tenant_id: i64,
+    ) -> Result<Vec<WorkflowInstance>, ApiError> {
+        self.repo
+            .find_pending_approvals_by_role(role, tenant_id)
+            .await
+    }
+
+    // ---- Parallel approval ----
+
+    /// Process an approval for a parallel step
+    async fn process_parallel_approval(
+        &self,
+        instance: WorkflowInstance,
+        step: WorkflowStep,
+        user_id: i64,
+        comment: Option<String>,
+        tenant_id: i64,
+        parallel_config: &ParallelConfig,
+    ) -> Result<WorkflowInstance, ApiError> {
+        // Check if user already responded
+        let approvals = self.repo.find_step_approvals(step.id).await?;
+        if approvals.iter().any(|a| a.user_id == user_id) {
+            return Err(ApiError::BadRequest(format!(
+                "User {} already responded to step {}",
+                user_id, step.id
+            )));
+        }
+
+        // Validate user is an assignee
+        if !parallel_config.assignee_user_ids.is_empty()
+            && !parallel_config.assignee_user_ids.contains(&user_id)
+        {
+            return Err(ApiError::Unauthorized(format!(
+                "User {} is not an assignee for step {}",
+                user_id, step.id
+            )));
+        }
+
+        // Record approval
+        let approval = WorkflowStepApproval {
+            id: 0,
+            step_id: step.id,
+            user_id,
+            status: WorkflowStepStatus::Approved,
+            comment: comment.clone(),
+            created_at: chrono::Utc::now(),
+            completed_at: Some(chrono::Utc::now()),
+        };
+        self.repo.create_step_approval(approval).await?;
+
+        // Re-fetch approvals
+        let approvals = self.repo.find_step_approvals(step.id).await?;
+
+        let approved_users: std::collections::HashSet<i64> = approvals
+            .iter()
+            .filter(|a| a.status == WorkflowStepStatus::Approved)
+            .map(|a| a.user_id)
+            .collect();
+
+        let step_complete = match parallel_config.mode {
+            ParallelMode::AllRequired => {
+                let required = &parallel_config.assignee_user_ids;
+                if required.is_empty() {
+                    false
+                } else {
+                    required.iter().all(|id| approved_users.contains(id))
+                }
+            }
+            ParallelMode::AnyOne => !approved_users.is_empty(),
+        };
+
+        if step_complete {
+            let mut step = step;
+            step.status = WorkflowStepStatus::Approved;
+            step.comment = comment.clone();
+            step.completed_at = Some(chrono::Utc::now());
+            self.repo.update_step(step.clone()).await?;
+
+            self.repo
+                .create_audit_log(WorkflowAuditLog {
+                    id: 0,
+                    instance_id: instance.id,
+                    step_id: Some(step.id),
+                    action: "approve".to_string(),
+                    user_id,
+                    comment: comment.clone(),
+                    timestamp: chrono::Utc::now(),
+                })
+                .await?;
+
+            let _ = self
+                .send_notification(
+                    tenant_id,
+                    instance.created_by,
+                    "workflow_step_approved",
+                    serde_json::json!({
+                        "workflow_id": instance.id,
+                        "step_name": step.step_name,
+                        "approved_by": user_id
+                    }),
+                )
+                .await;
+
+            self.advance_workflow(instance, step, tenant_id).await
+        } else {
+            self.repo
+                .create_audit_log(WorkflowAuditLog {
+                    id: 0,
+                    instance_id: instance.id,
+                    step_id: Some(step.id),
+                    action: "partial_approve".to_string(),
+                    user_id,
+                    comment: comment.clone(),
+                    timestamp: chrono::Utc::now(),
+                })
+                .await?;
+
+            let _ = self
+                .send_notification(
+                    tenant_id,
+                    instance.created_by,
+                    "workflow_partial_approval",
+                    serde_json::json!({
+                        "workflow_id": instance.id,
+                        "step_name": step.step_name,
+                        "approved_by": user_id
+                    }),
+                )
+                .await;
+
+            Ok(instance)
+        }
+    }
+
+    // ---- Escalation ----
+
+    /// Check and execute escalation for a step
+    pub async fn check_escalation(
+        &self,
+        instance: &WorkflowInstance,
+        step: &WorkflowStep,
+        escalation: &EscalationRule,
+    ) -> Result<(), ApiError> {
+        let elapsed_hours = (chrono::Utc::now() - step.created_at).num_hours();
+
+        if elapsed_hours >= escalation.timeout_hours {
+            self.repo
                 .create_audit_log(WorkflowAuditLog {
                     id: 0,
                     instance_id: instance.id,
                     step_id: Some(step.id),
                     action: "escalate".to_string(),
                     user_id: 0,
-                    comment: Some(format!("Step '{}' pending for >24h", step.step_name)),
+                    comment: Some(format!(
+                        "Step '{}' auto-escalated after {} hours",
+                        step.step_name, escalation.timeout_hours
+                    )),
                     timestamp: chrono::Utc::now(),
                 })
-                .await;
+                .await?;
 
-            // Notify admin about escalation
             let _ = self
                 .send_notification(
                     instance.tenant_id,
@@ -623,14 +844,124 @@ impl WorkflowService {
                         "workflow_id": instance.id,
                         "step_name": step.step_name,
                         "entity_type": instance.entity_type.to_string(),
-                        "entity_id": instance.entity_id
+                        "entity_id": instance.entity_id,
+                        "escalation_hours": escalation.timeout_hours
                     }),
                 )
                 .await;
 
-            escalated.push(instance);
+            if escalation.escalate_to_manager {
+                let _ = self
+                    .send_notification(
+                        instance.tenant_id,
+                        instance.created_by,
+                        "workflow_escalated_manager",
+                        serde_json::json!({
+                            "workflow_id": instance.id,
+                            "step_name": step.step_name,
+                            "entity_type": instance.entity_type.to_string(),
+                            "entity_id": instance.entity_id
+                        }),
+                    )
+                    .await;
+            }
+
+            if let Some(ref role) = escalation.escalate_to_role {
+                let users = self
+                    .repo
+                    .find_users_by_role(instance.tenant_id, role)
+                    .await?;
+                for uid in users {
+                    let _ = self
+                        .send_notification(
+                            instance.tenant_id,
+                            uid,
+                            "workflow_escalated_role",
+                            serde_json::json!({
+                                "workflow_id": instance.id,
+                                "step_name": step.step_name,
+                                "role": role
+                            }),
+                        )
+                        .await;
+                }
+            }
+        } else if elapsed_hours >= escalation.reminder_hours {
+            if let Some(approver_id) = step.approver_user_id {
+                let _ = self
+                    .send_notification(
+                        instance.tenant_id,
+                        approver_id,
+                        "workflow_reminder",
+                        serde_json::json!({
+                            "workflow_id": instance.id,
+                            "step_name": step.step_name,
+                            "hours_pending": elapsed_hours
+                        }),
+                    )
+                    .await;
+            }
         }
-        Ok(escalated)
+
+        Ok(())
+    }
+
+    // ---- Internal helpers ----
+
+    /// Advance workflow to next step or mark as completed
+    async fn advance_workflow(
+        &self,
+        mut instance: WorkflowInstance,
+        _step: WorkflowStep,
+        tenant_id: i64,
+    ) -> Result<WorkflowInstance, ApiError> {
+        let steps = self.repo.find_steps_by_instance(instance.id).await?;
+        let max_step = steps.iter().map(|s| s.step_number).max().unwrap_or(1);
+
+        if instance.current_step >= max_step {
+            instance.status = WorkflowStatus::Completed;
+            instance.completed_at = Some(chrono::Utc::now());
+            instance.assigned_user_id = None;
+
+            let _ = self
+                .send_notification(
+                    tenant_id,
+                    instance.created_by,
+                    "workflow_completed",
+                    serde_json::json!({
+                        "workflow_id": instance.id,
+                        "entity_type": instance.entity_type.to_string(),
+                        "entity_id": instance.entity_id
+                    }),
+                )
+                .await;
+        } else {
+            instance.current_step += 1;
+            let next_step = steps
+                .iter()
+                .find(|s| s.step_number == instance.current_step);
+            instance.assigned_user_id = next_step.and_then(|s| s.approver_user_id);
+
+            if let Some(next) = next_step {
+                if let Some(approver_id) = next.approver_user_id {
+                    let _ = self
+                        .send_notification(
+                            tenant_id,
+                            approver_id,
+                            "workflow_step_assigned",
+                            serde_json::json!({
+                                "workflow_id": instance.id,
+                                "step_name": next.step_name,
+                                "entity_type": instance.entity_type.to_string(),
+                                "entity_id": instance.entity_id
+                            }),
+                        )
+                        .await;
+                }
+            }
+        }
+
+        self.repo.update_instance(instance.clone()).await
     }
 
     // ---- Read operations ----
@@ -905,5 +1236,230 @@ mod tests {
                 .len()
                 == 2
         );
+    }
+
+    #[test]
+    fn test_evaluate_conditions() {
+        let entity = serde_json::json!({
+            "amount": 1500,
+            "department": "engineering",
+            "tags": ["urgent", "budget"]
+        });
+
+        assert!(Condition {
+            field: "amount".to_string(),
+            operator: "gt".to_string(),
+            value: serde_json::json!(1000),
+        }
+        .evaluate(&entity));
+
+        assert!(!Condition {
+            field: "amount".to_string(),
+            operator: "lt".to_string(),
+            value: serde_json::json!(1000),
+        }
+        .evaluate(&entity));
+
+        assert!(Condition {
+            field: "department".to_string(),
+            operator: "eq".to_string(),
+            value: serde_json::json!("engineering"),
+        }
+        .evaluate(&entity));
+
+        assert!(Condition {
+            field: "department".to_string(),
+            operator: "contains".to_string(),
+            value: serde_json::json!("engine"),
+        }
+        .evaluate(&entity));
+
+        assert!(WorkflowService::evaluate_conditions(
+            &[
+                Condition {
+                    field: "amount".to_string(),
+                    operator: "gte".to_string(),
+                    value: serde_json::json!(1500),
+                },
+                Condition {
+                    field: "department".to_string(),
+                    operator: "eq".to_string(),
+                    value: serde_json::json!("engineering"),
+                },
+            ],
+            &entity
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_parallel_approval_all_required() {
+        let svc = make_service();
+
+        let config = serde_json::json!({
+            "steps": [
+                {
+                    "step_number": 1,
+                    "step_name": "Dual Approval",
+                    "parallel": {
+                        "mode": "all_required",
+                        "assignee_user_ids": [10, 20],
+                        "assignee_roles": []
+                    }
+                }
+            ]
+        });
+
+        let template = svc
+            .create_template(
+                CreateWorkflowTemplate {
+                    name: "Parallel Test".to_string(),
+                    description: "Test".to_string(),
+                    entity_type: WorkflowEntityType::Expense,
+                    config_json: config,
+                },
+                1,
+            )
+            .await
+            .unwrap();
+
+        let instance = svc
+            .start_workflow(template.id, 100, WorkflowEntityType::Expense, 5, 1)
+            .await
+            .unwrap();
+
+        let detail = svc.get_instance(instance.id, 1).await.unwrap();
+        let step = detail.steps.iter().find(|s| s.step_number == 1).unwrap();
+
+        // First approval should not complete the step
+        let inst = svc
+            .approve_step(instance.id, step.id, 10, Some("OK from 10".to_string()), 1)
+            .await
+            .unwrap();
+        assert_eq!(inst.status, WorkflowStatus::Pending);
+        assert_eq!(inst.current_step, 1);
+
+        // Step should still be pending
+        let detail = svc.get_instance(instance.id, 1).await.unwrap();
+        let step_after = detail.steps.iter().find(|s| s.step_number == 1).unwrap();
+        assert_eq!(step_after.status, WorkflowStepStatus::Pending);
+
+        // Second approval should complete the step and workflow
+        let inst = svc
+            .approve_step(instance.id, step.id, 20, Some("OK from 20".to_string()), 1)
+            .await
+            .unwrap();
+        assert_eq!(inst.status, WorkflowStatus::Completed);
+    }
+
+    #[tokio::test]
+    async fn test_parallel_approval_any_one() {
+        let svc = make_service();
+
+        let config = serde_json::json!({
+            "steps": [
+                {
+                    "step_number": 1,
+                    "step_name": "Any Approval",
+                    "parallel": {
+                        "mode": "any_one",
+                        "assignee_user_ids": [30, 40],
+                        "assignee_roles": []
+                    }
+                }
+            ]
+        });
+
+        let template = svc
+            .create_template(
+                CreateWorkflowTemplate {
+                    name: "AnyOne Test".to_string(),
+                    description: "Test".to_string(),
+                    entity_type: WorkflowEntityType::Invoice,
+                    config_json: config,
+                },
+                1,
+            )
+            .await
+            .unwrap();
+
+        let instance = svc
+            .start_workflow(template.id, 200, WorkflowEntityType::Invoice, 5, 1)
+            .await
+            .unwrap();
+
+        let detail = svc.get_instance(instance.id, 1).await.unwrap();
+        let step = detail.steps.iter().find(|s| s.step_number == 1).unwrap();
+
+        // First approval should complete the step
+        let inst = svc
+            .approve_step(instance.id, step.id, 30, None, 1)
+            .await
+            .unwrap();
+        assert_eq!(inst.status, WorkflowStatus::Completed);
+    }
+
+    #[tokio::test]
+    async fn test_pending_approvals_by_role() {
+        let svc = make_service();
+
+        let template = svc
+            .create_purchase_order_approval_template(1)
+            .await
+            .unwrap();
+        let instance = svc
+            .start_workflow(template.id, 100, WorkflowEntityType::PurchaseOrder, 5, 1)
+            .await
+            .unwrap();
+
+        // Steps have approver_role but no user_id, so role-based lookup should find it
+        let pending = svc
+            .get_pending_approvals_by_role("manager".to_string(), 1)
+            .await
+            .unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].id, instance.id);
+    }
+
+    #[tokio::test]
+    async fn test_escalation_rule() {
+        let svc = make_service();
+
+        let rule = EscalationRule {
+            timeout_hours: 24,
+            reminder_hours: 12,
+            escalate_to_role: Some("admin".to_string()),
+            escalate_to_manager: true,
+        };
+
+        let instance = WorkflowInstance {
+            id: 1,
+            tenant_id: 1,
+            template_id: 1,
+            entity_id: 100,
+            entity_type: WorkflowEntityType::Invoice,
+            status: WorkflowStatus::Pending,
+            current_step: 1,
+            assigned_user_id: Some(5),
+            created_by: 10,
+            created_at: chrono::Utc::now() - chrono::Duration::hours(25),
+            completed_at: None,
+        };
+
+        let step = WorkflowStep {
+            id: 1,
+            instance_id: 1,
+            step_number: 1,
+            step_name: "Review".to_string(),
+            approver_role: None,
+            approver_user_id: Some(5),
+            status: WorkflowStepStatus::Pending,
+            comment: None,
+            created_at: chrono::Utc::now() - chrono::Duration::hours(25),
+            completed_at: None,
+        };
+
+        // Should not error even though repo stubs return empty
+        let result = svc.check_escalation(&instance, &step, &rule).await;
+        assert!(result.is_ok());
     }
 }

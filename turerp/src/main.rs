@@ -13,18 +13,19 @@ use turerp::middleware::{
 
 use tokio::sync::mpsc;
 use turerp::api::{
-    v1_accounting_configure, v1_api_keys_configure, v1_assets_configure, v1_audit_configure,
-    v1_auth_configure, v1_bank_configure, v1_cari_configure, v1_chart_of_accounts_configure,
-    v1_companies_configure, v1_cost_centers_configure, v1_crm_configure, v1_currency_configure,
-    v1_custom_fields_configure, v1_dashboard_configure, v1_edefter_configure, v1_efatura_configure,
-    v1_events_configure, v1_feature_flags_configure, v1_files_configure,
+    v1_accounting_configure, v1_api_keys_configure, v1_archive_configure, v1_assets_configure,
+    v1_audit_configure, v1_auth_configure, v1_bank_configure, v1_cari_configure,
+    v1_chart_of_accounts_configure, v1_companies_configure, v1_cost_centers_configure,
+    v1_crm_configure, v1_currency_configure, v1_custom_fields_configure, v1_dashboard_configure,
+    v1_documents_configure, v1_edefter_configure, v1_efatura_configure, v1_events_configure,
+    v1_feature_flags_configure, v1_files_configure, v1_forecasting_configure,
     v1_goods_receipts_configure, v1_hr_configure, v1_import_configure, v1_invoice_configure,
     v1_jobs_configure, v1_manufacturing_configure, v1_mfa_configure, v1_notifications_configure,
     v1_product_variants_configure, v1_project_configure, v1_purchase_orders_configure,
     v1_purchase_requests_configure, v1_rate_limits_configure, v1_reports_configure,
     v1_resilience_configure, v1_sales_configure, v1_search_configure, v1_settings_configure,
-    v1_stock_configure, v1_subscriptions_configure, v1_tax_configure, v1_tenant_configure,
-    v1_users_configure, v1_webhooks_configure, v1_workflows_configure, ApiDoc,
+    v1_shifts_configure, v1_stock_configure, v1_subscriptions_configure, v1_tax_configure,
+    v1_tenant_configure, v1_users_configure, v1_webhooks_configure, v1_workflows_configure, ApiDoc,
 };
 use turerp::middleware::audit::{AuditEvent, AUDIT_CHANNEL_CAPACITY};
 use turerp::setup_logging;
@@ -269,6 +270,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.event_bus.clone())
             .app_data(app_state.notification_service.clone())
             .app_data(app_state.report_engine.clone())
+            .app_data(app_state.forecasting_service.clone())
+            .app_data(app_state.shift_service.clone())
             .app_data(app_state.tracing_service.clone())
             .app_data(app_state.db_router.clone())
             .app_data(app_state.i18n.clone())
@@ -279,6 +282,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.cache_service.clone())
             .app_data(app_state.search_service.clone())
             .app_data(app_state.rate_limit_stats.clone())
+            .app_data(app_state.archive_service.clone())
             .app_data(app_state.db_pool.clone());
 
         #[cfg(not(feature = "postgres"))]
@@ -327,6 +331,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.event_bus.clone())
             .app_data(app_state.notification_service.clone())
             .app_data(app_state.report_engine.clone())
+            .app_data(app_state.forecasting_service.clone())
+            .app_data(app_state.shift_service.clone())
             .app_data(app_state.tracing_service.clone())
             .app_data(app_state.db_router.clone())
             .app_data(app_state.i18n.clone())
@@ -336,7 +342,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.webhook_service.clone())
             .app_data(app_state.cache_service.clone())
             .app_data(app_state.search_service.clone())
-            .app_data(app_state.rate_limit_stats.clone());
+            .app_data(app_state.rate_limit_stats.clone())
+            .app_data(app_state.archive_service.clone());
 
         app // Health check
             .route("/health", web::get().to(health_check))
@@ -352,6 +359,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_cost_centers_configure)
                     .configure(v1_currency_configure)
                     .configure(v1_dashboard_configure)
+                    .configure(v1_documents_configure)
                     .configure(v1_feature_flags_configure)
                     .configure(v1_files_configure)
                     .configure(v1_import_configure)
@@ -361,7 +369,9 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_rate_limits_configure)
                     .configure(v1_purchase_orders_configure)
                     .configure(v1_resilience_configure)
+                    .configure(v1_shifts_configure)
                     .configure(v1_subscriptions_configure)
+                    .configure(v1_forecasting_configure)
                     .configure(v1_workflows_configure)
                     .configure(v1_goods_receipts_configure)
                     .configure(v1_cari_configure)
@@ -389,7 +399,8 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_tax_configure)
                     .configure(v1_efatura_configure)
                     .configure(v1_edefter_configure)
-                    .configure(v1_webhooks_configure),
+                    .configure(v1_webhooks_configure)
+                    .configure(v1_archive_configure),
             )
             // Swagger UI
             .service(

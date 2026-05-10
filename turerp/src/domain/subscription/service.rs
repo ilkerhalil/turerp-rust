@@ -4,8 +4,10 @@ use chrono::{NaiveDate, Utc};
 use validator::Validate;
 
 use crate::domain::subscription::model::{
-    CreatePlan, CreateSubscription, SubscriptionInvoiceResponse, SubscriptionPlanResponse,
-    SubscriptionResponse, UpdatePlan, UpdateSubscription,
+    CancelSubscriptionRequest, CancellationResult, CreatePlan, CreateSubscription,
+    DunningEntryResponse, ProrationDirection, ProrationResult, RecordUsageRequest,
+    SubscriptionInvoiceResponse, SubscriptionPlanResponse, SubscriptionResponse,
+    SubscriptionStatus, TrialConversionResult, UpdatePlan, UpdateSubscription, UsageRecordResponse,
 };
 use crate::domain::subscription::repository::BoxSubscriptionRepository;
 use crate::error::ApiError;
@@ -226,6 +228,434 @@ impl SubscriptionService {
             .await?;
         Ok(invoices.into_iter().map(|inv| inv.into()).collect())
     }
+
+    // --- Proration ---
+
+    /// Calculate proration for a subscription plan change
+    pub async fn calculate_proration(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+        new_plan_id: i64,
+        effective_date: NaiveDate,
+    ) -> Result<ProrationResult, ApiError> {
+        let sub = self
+            .repo
+            .find_subscription_by_id(subscription_id, tenant_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Subscription {} not found", subscription_id))
+            })?;
+
+        let current_plan = self
+            .repo
+            .find_plan_by_id(sub.plan_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Plan {} not found", sub.plan_id)))?;
+
+        let new_plan = self
+            .repo
+            .find_plan_by_id(new_plan_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Plan {} not found", new_plan_id)))?;
+
+        let billing_period_start = sub
+            .last_billed_at
+            .map(|dt| dt.date_naive())
+            .unwrap_or(sub.start_date);
+        let billing_period_end = sub.next_billing_date.unwrap_or(billing_period_start);
+
+        if billing_period_end <= billing_period_start {
+            return Err(ApiError::BadRequest(
+                "Invalid billing period for proration".to_string(),
+            ));
+        }
+
+        let total_days = billing_period_end
+            .signed_duration_since(billing_period_start)
+            .num_days();
+        let unused_days = billing_period_end
+            .signed_duration_since(effective_date)
+            .num_days();
+
+        if unused_days < 0 || total_days <= 0 {
+            return Err(ApiError::BadRequest(
+                "Effective date must be within the current billing period".to_string(),
+            ));
+        }
+
+        let original_amount = current_plan.base_amount;
+        let prorated_refund = (original_amount * rust_decimal::Decimal::from(unused_days))
+            / rust_decimal::Decimal::from(total_days);
+        let prorated_charge = (new_plan.base_amount * rust_decimal::Decimal::from(unused_days))
+            / rust_decimal::Decimal::from(total_days);
+
+        let (direction, refund_or_charge) = if new_plan.base_amount > original_amount {
+            (
+                ProrationDirection::Charge,
+                prorated_charge - prorated_refund,
+            )
+        } else {
+            (
+                ProrationDirection::Refund,
+                prorated_refund - prorated_charge,
+            )
+        };
+
+        Ok(ProrationResult {
+            original_amount,
+            prorated_amount: prorated_charge,
+            unused_days,
+            total_days,
+            refund_or_charge: refund_or_charge.abs(),
+            direction,
+        })
+    }
+
+    // --- Dunning ---
+
+    /// Get dunning entries for a subscription
+    pub async fn get_dunning_status(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<DunningEntryResponse>, ApiError> {
+        let entries = self
+            .repo
+            .find_dunning_by_subscription(subscription_id, tenant_id)
+            .await?;
+        Ok(entries.into_iter().map(|e| e.into()).collect())
+    }
+
+    /// Handle dunning retry for a subscription with failed payment
+    /// Returns the updated dunning entry after retry attempt
+    pub async fn handle_dunning(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+        invoice_id: i64,
+    ) -> Result<DunningEntryResponse, ApiError> {
+        let existing = self
+            .repo
+            .find_dunning_by_subscription(subscription_id, tenant_id)
+            .await?;
+
+        let active_entry = existing
+            .into_iter()
+            .filter(|d| d.invoice_id == invoice_id)
+            .max_by_key(|d| d.attempt_number);
+
+        let attempt_number = active_entry
+            .as_ref()
+            .map(|d| d.attempt_number + 1)
+            .unwrap_or(1);
+
+        if attempt_number > 3 {
+            // Max retries reached - mark as failed and update subscription status
+            if let Some(entry) = active_entry {
+                let updated = self
+                    .repo
+                    .update_dunning_status(
+                        entry.id,
+                        tenant_id,
+                        crate::domain::subscription::model::DunningStatus::Failed,
+                        attempt_number,
+                        None,
+                    )
+                    .await?;
+
+                // Update subscription to past_due
+                let update = UpdateSubscription {
+                    status: Some(SubscriptionStatus::PastDue),
+                    ..Default::default()
+                };
+                self.repo
+                    .update_subscription(subscription_id, tenant_id, update)
+                    .await?;
+
+                return Ok(updated.into());
+            }
+
+            return Err(ApiError::BadRequest(
+                "Maximum dunning retries exceeded".to_string(),
+            ));
+        }
+
+        let retry_at = if attempt_number == 1 {
+            Some(Utc::now() + chrono::Duration::days(1))
+        } else if attempt_number == 2 {
+            Some(Utc::now() + chrono::Duration::days(3))
+        } else {
+            Some(Utc::now() + chrono::Duration::days(7))
+        };
+
+        let entry = if let Some(prev) = active_entry {
+            self.repo
+                .update_dunning_status(
+                    prev.id,
+                    tenant_id,
+                    crate::domain::subscription::model::DunningStatus::Active,
+                    attempt_number,
+                    retry_at,
+                )
+                .await?
+        } else {
+            let created = self
+                .repo
+                .create_dunning_entry(tenant_id, subscription_id, invoice_id, attempt_number)
+                .await?;
+            self.repo
+                .update_dunning_status(
+                    created.id,
+                    tenant_id,
+                    crate::domain::subscription::model::DunningStatus::Active,
+                    attempt_number,
+                    retry_at,
+                )
+                .await?
+        };
+
+        Ok(entry.into())
+    }
+
+    // --- Trial ---
+
+    /// Convert a trial subscription to paid
+    pub async fn process_trial_conversion(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+    ) -> Result<TrialConversionResult, ApiError> {
+        let sub = self
+            .repo
+            .find_subscription_by_id(subscription_id, tenant_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Subscription {} not found", subscription_id))
+            })?;
+
+        if sub.status != SubscriptionStatus::Trial {
+            return Err(ApiError::BadRequest(
+                "Subscription is not in trial status".to_string(),
+            ));
+        }
+
+        let plan = self
+            .repo
+            .find_plan_by_id(sub.plan_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Plan {} not found", sub.plan_id)))?;
+
+        let today = Utc::now().date_naive();
+        let next_billing = match plan.billing_cycle {
+            crate::domain::subscription::model::BillingCycle::Monthly => today
+                .checked_add_months(chrono::Months::new(1))
+                .unwrap_or(today),
+            crate::domain::subscription::model::BillingCycle::Quarterly => today
+                .checked_add_months(chrono::Months::new(3))
+                .unwrap_or(today),
+            crate::domain::subscription::model::BillingCycle::Yearly => today
+                .checked_add_months(chrono::Months::new(12))
+                .unwrap_or(today),
+        };
+
+        let update = UpdateSubscription {
+            status: Some(SubscriptionStatus::Active),
+            next_billing_date: Some(next_billing),
+            trial_end_date: Some(today),
+            ..Default::default()
+        };
+
+        let updated = self
+            .repo
+            .update_subscription(subscription_id, tenant_id, update)
+            .await?;
+
+        Ok(TrialConversionResult {
+            subscription_id: updated.id,
+            previous_status: SubscriptionStatus::Trial,
+            new_status: SubscriptionStatus::Active,
+            billing_start_date: today,
+            next_billing_date: next_billing,
+        })
+    }
+
+    /// List trial subscriptions for a tenant
+    pub async fn list_trial_subscriptions(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<SubscriptionResponse>, ApiError> {
+        let subs = self.repo.find_trial_subscriptions(tenant_id).await?;
+        Ok(subs.into_iter().map(|s| s.into()).collect())
+    }
+
+    // --- Usage ---
+
+    /// Record usage for metered billing
+    pub async fn record_usage(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+        request: RecordUsageRequest,
+    ) -> Result<UsageRecordResponse, ApiError> {
+        let sub = self
+            .repo
+            .find_subscription_by_id(subscription_id, tenant_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Subscription {} not found", subscription_id))
+            })?;
+
+        let plan = self
+            .repo
+            .find_plan_by_id(sub.plan_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Plan {} not found", sub.plan_id)))?;
+
+        // Validate period
+        if request.billing_period_end <= request.billing_period_start {
+            return Err(ApiError::BadRequest(
+                "Billing period end must be after start".to_string(),
+            ));
+        }
+
+        let record = self
+            .repo
+            .create_usage_record(
+                tenant_id,
+                subscription_id,
+                request.quantity,
+                request.unit,
+                request.billing_period_start,
+                request.billing_period_end,
+            )
+            .await?;
+
+        // If plan has metered billing, calculate and record overage if applicable
+        if let (Some(included), Some(overage_rate)) = (plan.included_quantity, plan.overage_rate) {
+            let existing = self
+                .repo
+                .find_usage_by_period(
+                    subscription_id,
+                    tenant_id,
+                    request.billing_period_start,
+                    request.billing_period_end,
+                )
+                .await?;
+
+            let total_usage: i64 = existing.iter().map(|u| u.quantity).sum();
+
+            if total_usage > included {
+                let overage = total_usage - included;
+                tracing::info!(
+                    "Subscription {} exceeded included quantity by {} units at rate {}",
+                    subscription_id,
+                    overage,
+                    overage_rate
+                );
+            }
+        }
+
+        Ok(record.into())
+    }
+
+    /// Get usage records for a subscription
+    pub async fn get_usage_records(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<UsageRecordResponse>, ApiError> {
+        let records = self
+            .repo
+            .find_usage_by_subscription(subscription_id, tenant_id)
+            .await?;
+        Ok(records.into_iter().map(|r| r.into()).collect())
+    }
+
+    // --- Cancellation ---
+
+    /// Cancel a subscription with optional refund calculation
+    pub async fn cancel_subscription(
+        &self,
+        subscription_id: i64,
+        tenant_id: i64,
+        request: CancelSubscriptionRequest,
+    ) -> Result<CancellationResult, ApiError> {
+        let sub = self
+            .repo
+            .find_subscription_by_id(subscription_id, tenant_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Subscription {} not found", subscription_id))
+            })?;
+
+        if sub.status == SubscriptionStatus::Cancelled || sub.status == SubscriptionStatus::Expired
+        {
+            return Err(ApiError::BadRequest(
+                "Subscription is already cancelled or expired".to_string(),
+            ));
+        }
+
+        let plan = self
+            .repo
+            .find_plan_by_id(sub.plan_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Plan {} not found", sub.plan_id)))?;
+
+        let today = Utc::now().date_naive();
+        let mut refund_amount = rust_decimal::Decimal::ZERO;
+        let mut unused_days = 0i64;
+
+        if !request.cancel_immediately {
+            // Cancel at end of period - no refund
+            let update = UpdateSubscription {
+                status: Some(SubscriptionStatus::Cancelled),
+                end_date: sub.next_billing_date,
+                auto_renew: Some(false),
+                ..Default::default()
+            };
+            self.repo
+                .update_subscription(subscription_id, tenant_id, update)
+                .await?;
+        } else {
+            // Immediate cancellation with prorated refund
+            let billing_period_start = sub
+                .last_billed_at
+                .map(|dt| dt.date_naive())
+                .unwrap_or(sub.start_date);
+            let billing_period_end = sub.next_billing_date.unwrap_or(billing_period_start);
+
+            if billing_period_end > today {
+                let total_days = billing_period_end
+                    .signed_duration_since(billing_period_start)
+                    .num_days();
+                unused_days = billing_period_end.signed_duration_since(today).num_days();
+
+                if total_days > 0 {
+                    refund_amount = (plan.base_amount * rust_decimal::Decimal::from(unused_days))
+                        / rust_decimal::Decimal::from(total_days);
+                }
+            }
+
+            let update = UpdateSubscription {
+                status: Some(SubscriptionStatus::Cancelled),
+                end_date: Some(today),
+                auto_renew: Some(false),
+                ..Default::default()
+            };
+            self.repo
+                .update_subscription(subscription_id, tenant_id, update)
+                .await?;
+        }
+
+        Ok(CancellationResult {
+            subscription_id,
+            status: SubscriptionStatus::Cancelled,
+            refund_amount,
+            unused_days,
+            cancelled_at: Utc::now(),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -253,6 +683,8 @@ mod tests {
             currency: "TRY".to_string(),
             features: None,
             is_active: true,
+            included_quantity: None,
+            overage_rate: None,
             tenant_id: 1,
         };
 
@@ -276,6 +708,8 @@ mod tests {
             currency: "TRY".to_string(),
             features: None,
             is_active: true,
+            included_quantity: None,
+            overage_rate: None,
             tenant_id: 1,
         };
         let plan = service.create_plan(plan_create).await.unwrap();
@@ -288,6 +722,8 @@ mod tests {
             status: SubscriptionStatus::Active,
             auto_renew: true,
             next_billing_date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            trial_start_date: None,
+            trial_end_date: None,
             tenant_id: 1,
         };
 
@@ -310,6 +746,8 @@ mod tests {
             currency: "TRY".to_string(),
             features: None,
             is_active: true,
+            included_quantity: None,
+            overage_rate: None,
             tenant_id: 1,
         };
         let plan = service.create_plan(plan_create).await.unwrap();
@@ -322,6 +760,8 @@ mod tests {
             status: SubscriptionStatus::Active,
             auto_renew: true,
             next_billing_date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            trial_start_date: None,
+            trial_end_date: None,
             tenant_id: 1,
         };
         let sub = service.create_subscription(sub_create).await.unwrap();
@@ -344,6 +784,8 @@ mod tests {
             currency: "TRY".to_string(),
             features: None,
             is_active: true,
+            included_quantity: None,
+            overage_rate: None,
             tenant_id: 1,
         };
         let plan = service.create_plan(plan_create).await.unwrap();
@@ -356,6 +798,8 @@ mod tests {
             status: SubscriptionStatus::Active,
             auto_renew: true,
             next_billing_date: Some(NaiveDate::from_ymd_opt(2024, 1, 15).unwrap()),
+            trial_start_date: None,
+            trial_end_date: None,
             tenant_id: 1,
         };
         service.create_subscription(sub_create).await.unwrap();
@@ -365,5 +809,268 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(due.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_calculate_proration_upgrade() {
+        let service = create_service();
+
+        let basic_plan = CreatePlan {
+            name: "Basic".to_string(),
+            description: None,
+            billing_cycle: BillingCycle::Monthly,
+            base_amount: Decimal::new(5000, 2),
+            currency: "TRY".to_string(),
+            features: None,
+            is_active: true,
+            included_quantity: None,
+            overage_rate: None,
+            tenant_id: 1,
+        };
+        let basic = service.create_plan(basic_plan).await.unwrap();
+
+        let pro_plan = CreatePlan {
+            name: "Pro".to_string(),
+            description: None,
+            billing_cycle: BillingCycle::Monthly,
+            base_amount: Decimal::new(10000, 2),
+            currency: "TRY".to_string(),
+            features: None,
+            is_active: true,
+            included_quantity: None,
+            overage_rate: None,
+            tenant_id: 1,
+        };
+        let pro = service.create_plan(pro_plan).await.unwrap();
+
+        let sub_create = CreateSubscription {
+            customer_id: 1,
+            plan_id: basic.id,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: None,
+            status: SubscriptionStatus::Active,
+            auto_renew: true,
+            next_billing_date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            trial_start_date: None,
+            trial_end_date: None,
+            tenant_id: 1,
+        };
+        let sub = service.create_subscription(sub_create).await.unwrap();
+
+        let result = service
+            .calculate_proration(
+                sub.id,
+                1,
+                pro.id,
+                NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+            )
+            .await;
+        assert!(result.is_ok());
+        let proration = result.unwrap();
+        assert_eq!(proration.original_amount, Decimal::new(5000, 2));
+        assert_eq!(proration.direction, ProrationDirection::Charge);
+        assert!(proration.refund_or_charge > Decimal::ZERO);
+    }
+
+    #[tokio::test]
+    async fn test_process_trial_conversion() {
+        let service = create_service();
+
+        let plan_create = CreatePlan {
+            name: "Pro".to_string(),
+            description: None,
+            billing_cycle: BillingCycle::Monthly,
+            base_amount: Decimal::new(10000, 2),
+            currency: "TRY".to_string(),
+            features: None,
+            is_active: true,
+            included_quantity: None,
+            overage_rate: None,
+            tenant_id: 1,
+        };
+        let plan = service.create_plan(plan_create).await.unwrap();
+
+        let sub_create = CreateSubscription {
+            customer_id: 1,
+            plan_id: plan.id,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: None,
+            status: SubscriptionStatus::Trial,
+            auto_renew: true,
+            next_billing_date: None,
+            trial_start_date: Some(NaiveDate::from_ymd_opt(2024, 1, 1).unwrap()),
+            trial_end_date: Some(NaiveDate::from_ymd_opt(2024, 1, 14).unwrap()),
+            tenant_id: 1,
+        };
+        let sub = service.create_subscription(sub_create).await.unwrap();
+
+        let result = service.process_trial_conversion(sub.id, 1).await;
+        assert!(result.is_ok());
+        let conversion = result.unwrap();
+        assert_eq!(conversion.previous_status, SubscriptionStatus::Trial);
+        assert_eq!(conversion.new_status, SubscriptionStatus::Active);
+    }
+
+    #[tokio::test]
+    async fn test_cancel_subscription_immediate() {
+        let service = create_service();
+
+        let plan_create = CreatePlan {
+            name: "Basic".to_string(),
+            description: None,
+            billing_cycle: BillingCycle::Monthly,
+            base_amount: Decimal::new(5000, 2),
+            currency: "TRY".to_string(),
+            features: None,
+            is_active: true,
+            included_quantity: None,
+            overage_rate: None,
+            tenant_id: 1,
+        };
+        let plan = service.create_plan(plan_create).await.unwrap();
+
+        let sub_create = CreateSubscription {
+            customer_id: 1,
+            plan_id: plan.id,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: None,
+            status: SubscriptionStatus::Active,
+            auto_renew: true,
+            next_billing_date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            trial_start_date: None,
+            trial_end_date: None,
+            tenant_id: 1,
+        };
+        let sub = service.create_subscription(sub_create).await.unwrap();
+
+        let request = CancelSubscriptionRequest {
+            cancel_immediately: true,
+            reason: Some("User request".to_string()),
+        };
+        let result = service.cancel_subscription(sub.id, 1, request).await;
+        assert!(result.is_ok());
+        let cancellation = result.unwrap();
+        assert_eq!(cancellation.status, SubscriptionStatus::Cancelled);
+        assert!(cancellation.refund_amount >= Decimal::ZERO);
+    }
+
+    #[tokio::test]
+    async fn test_record_usage() {
+        let service = create_service();
+
+        let plan_create = CreatePlan {
+            name: "Metered".to_string(),
+            description: None,
+            billing_cycle: BillingCycle::Monthly,
+            base_amount: Decimal::new(5000, 2),
+            currency: "TRY".to_string(),
+            features: None,
+            is_active: true,
+            included_quantity: Some(100),
+            overage_rate: Some(Decimal::new(50, 2)),
+            tenant_id: 1,
+        };
+        let plan = service.create_plan(plan_create).await.unwrap();
+
+        let sub_create = CreateSubscription {
+            customer_id: 1,
+            plan_id: plan.id,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: None,
+            status: SubscriptionStatus::Active,
+            auto_renew: true,
+            next_billing_date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            trial_start_date: None,
+            trial_end_date: None,
+            tenant_id: 1,
+        };
+        let sub = service.create_subscription(sub_create).await.unwrap();
+
+        let request = RecordUsageRequest {
+            quantity: 150,
+            unit: "api_calls".to_string(),
+            billing_period_start: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            billing_period_end: NaiveDate::from_ymd_opt(2024, 1, 31).unwrap(),
+        };
+        let result = service.record_usage(sub.id, 1, request).await;
+        assert!(result.is_ok());
+        let record = result.unwrap();
+        assert_eq!(record.quantity, 150);
+        assert_eq!(record.unit, "api_calls");
+    }
+
+    #[tokio::test]
+    async fn test_handle_dunning() {
+        let service = create_service();
+
+        let plan_create = CreatePlan {
+            name: "Basic".to_string(),
+            description: None,
+            billing_cycle: BillingCycle::Monthly,
+            base_amount: Decimal::new(5000, 2),
+            currency: "TRY".to_string(),
+            features: None,
+            is_active: true,
+            included_quantity: None,
+            overage_rate: None,
+            tenant_id: 1,
+        };
+        let plan = service.create_plan(plan_create).await.unwrap();
+
+        let sub_create = CreateSubscription {
+            customer_id: 1,
+            plan_id: plan.id,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: None,
+            status: SubscriptionStatus::Active,
+            auto_renew: true,
+            next_billing_date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            trial_start_date: None,
+            trial_end_date: None,
+            tenant_id: 1,
+        };
+        let sub = service.create_subscription(sub_create).await.unwrap();
+
+        // Create a pending invoice to simulate dunning
+        let invoice = service
+            .repo
+            .create_subscription_invoice(
+                sub.id,
+                1,
+                None,
+                NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+                NaiveDate::from_ymd_opt(2024, 2, 1).unwrap(),
+                plan.base_amount,
+                crate::domain::subscription::model::SubscriptionInvoiceStatus::Failed,
+            )
+            .await
+            .unwrap();
+
+        let result = service.handle_dunning(sub.id, 1, invoice.id).await;
+        assert!(result.is_ok());
+        let entry = result.unwrap();
+        assert_eq!(entry.attempt_number, 1);
+        assert!(entry.retry_at.is_some());
+
+        // Second retry
+        let result = service.handle_dunning(sub.id, 1, invoice.id).await;
+        assert!(result.is_ok());
+        let entry = result.unwrap();
+        assert_eq!(entry.attempt_number, 2);
+
+        // Third retry
+        let result = service.handle_dunning(sub.id, 1, invoice.id).await;
+        assert!(result.is_ok());
+        let entry = result.unwrap();
+        assert_eq!(entry.attempt_number, 3);
+
+        // Fourth retry should fail
+        let result = service.handle_dunning(sub.id, 1, invoice.id).await;
+        assert!(result.is_ok());
+        let entry = result.unwrap();
+        assert_eq!(
+            entry.status,
+            crate::domain::subscription::model::DunningStatus::Failed
+        );
     }
 }

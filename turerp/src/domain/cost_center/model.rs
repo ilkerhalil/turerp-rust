@@ -191,6 +191,261 @@ impl From<CostCenterAllocation> for AllocationResponse {
     }
 }
 
+/// Budget period type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, ToSchema)]
+pub enum BudgetPeriod {
+    #[default]
+    Monthly,
+    Quarterly,
+    Yearly,
+}
+
+impl std::fmt::Display for BudgetPeriod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BudgetPeriod::Monthly => write!(f, "monthly"),
+            BudgetPeriod::Quarterly => write!(f, "quarterly"),
+            BudgetPeriod::Yearly => write!(f, "yearly"),
+        }
+    }
+}
+
+impl std::str::FromStr for BudgetPeriod {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "monthly" => Ok(BudgetPeriod::Monthly),
+            "quarterly" => Ok(BudgetPeriod::Quarterly),
+            "yearly" => Ok(BudgetPeriod::Yearly),
+            _ => Err(format!("Invalid budget period: {}", s)),
+        }
+    }
+}
+
+/// Budget entity for a cost center
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct Budget {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub cost_center_id: i64,
+    pub period: BudgetPeriod,
+    pub period_start: DateTime<Utc>,
+    pub period_end: DateTime<Utc>,
+    pub budgeted_amount: Decimal,
+    pub actual_amount: Decimal,
+    pub variance: Decimal,
+    pub notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+/// Create a new budget
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CreateBudget {
+    pub cost_center_id: i64,
+    pub period: BudgetPeriod,
+    pub period_start: DateTime<Utc>,
+    pub period_end: DateTime<Utc>,
+    pub budgeted_amount: Decimal,
+    pub notes: Option<String>,
+}
+
+/// Update an existing budget
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
+pub struct UpdateBudget {
+    pub period: Option<BudgetPeriod>,
+    pub period_start: Option<DateTime<Utc>>,
+    pub period_end: Option<DateTime<Utc>>,
+    pub budgeted_amount: Option<Decimal>,
+    pub notes: Option<Option<String>>,
+}
+
+/// Budget response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BudgetResponse {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub cost_center_id: i64,
+    pub period: BudgetPeriod,
+    pub period_start: DateTime<Utc>,
+    pub period_end: DateTime<Utc>,
+    pub budgeted_amount: Decimal,
+    pub actual_amount: Decimal,
+    pub variance: Decimal,
+    pub notes: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl From<Budget> for BudgetResponse {
+    fn from(budget: Budget) -> Self {
+        Self {
+            id: budget.id,
+            tenant_id: budget.tenant_id,
+            cost_center_id: budget.cost_center_id,
+            period: budget.period,
+            period_start: budget.period_start,
+            period_end: budget.period_end,
+            budgeted_amount: budget.budgeted_amount,
+            actual_amount: budget.actual_amount,
+            variance: budget.variance,
+            notes: budget.notes,
+            created_at: budget.created_at,
+            updated_at: budget.updated_at,
+        }
+    }
+}
+
+/// Allocation rule type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, ToSchema)]
+pub enum AllocationRuleType {
+    #[default]
+    Percentage,
+    FixedAmount,
+}
+
+impl std::fmt::Display for AllocationRuleType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AllocationRuleType::Percentage => write!(f, "percentage"),
+            AllocationRuleType::FixedAmount => write!(f, "fixed_amount"),
+        }
+    }
+}
+
+impl std::str::FromStr for AllocationRuleType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "percentage" => Ok(AllocationRuleType::Percentage),
+            "fixed_amount" => Ok(AllocationRuleType::FixedAmount),
+            _ => Err(format!("Invalid allocation rule type: {}", s)),
+        }
+    }
+}
+
+/// Allocation rule for auto-generating cost center allocations
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AllocationRule {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub name: String,
+    pub source_type: String,
+    pub account_range_start: Option<String>,
+    pub account_range_end: Option<String>,
+    pub cost_center_id: i64,
+    pub rule_type: AllocationRuleType,
+    pub percentage: Option<Decimal>,
+    pub fixed_amount: Option<Decimal>,
+    pub is_active: bool,
+    pub priority: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+/// Create an allocation rule
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CreateAllocationRule {
+    pub name: String,
+    pub source_type: String,
+    pub account_range_start: Option<String>,
+    pub account_range_end: Option<String>,
+    pub cost_center_id: i64,
+    pub rule_type: AllocationRuleType,
+    pub percentage: Option<Decimal>,
+    pub fixed_amount: Option<Decimal>,
+    #[serde(default = "default_is_active")]
+    pub is_active: bool,
+    #[serde(default = "default_priority")]
+    pub priority: i32,
+}
+
+fn default_priority() -> i32 {
+    0
+}
+
+/// Update an allocation rule
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
+pub struct UpdateAllocationRule {
+    pub name: Option<String>,
+    pub source_type: Option<String>,
+    pub account_range_start: Option<Option<String>>,
+    pub account_range_end: Option<Option<String>>,
+    pub cost_center_id: Option<i64>,
+    pub rule_type: Option<AllocationRuleType>,
+    pub percentage: Option<Option<Decimal>>,
+    pub fixed_amount: Option<Option<Decimal>>,
+    pub is_active: Option<bool>,
+    pub priority: Option<i32>,
+}
+
+/// Allocation rule response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AllocationRuleResponse {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub name: String,
+    pub source_type: String,
+    pub account_range_start: Option<String>,
+    pub account_range_end: Option<String>,
+    pub cost_center_id: i64,
+    pub rule_type: AllocationRuleType,
+    pub percentage: Option<Decimal>,
+    pub fixed_amount: Option<Decimal>,
+    pub is_active: bool,
+    pub priority: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+impl From<AllocationRule> for AllocationRuleResponse {
+    fn from(rule: AllocationRule) -> Self {
+        Self {
+            id: rule.id,
+            tenant_id: rule.tenant_id,
+            name: rule.name,
+            source_type: rule.source_type,
+            account_range_start: rule.account_range_start,
+            account_range_end: rule.account_range_end,
+            cost_center_id: rule.cost_center_id,
+            rule_type: rule.rule_type,
+            percentage: rule.percentage,
+            fixed_amount: rule.fixed_amount,
+            is_active: rule.is_active,
+            priority: rule.priority,
+            created_at: rule.created_at,
+            updated_at: rule.updated_at,
+        }
+    }
+}
+
+/// Variance report line item for a single period / cost center
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct VarianceReportLine {
+    pub cost_center_id: i64,
+    pub cost_center_code: String,
+    pub cost_center_name: String,
+    pub period: BudgetPeriod,
+    pub period_start: DateTime<Utc>,
+    pub period_end: DateTime<Utc>,
+    pub budgeted_amount: Decimal,
+    pub actual_amount: Decimal,
+    pub variance: Decimal,
+    pub variance_percentage: Decimal,
+}
+
+/// Budget vs Actual variance report
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct VarianceReport {
+    pub tenant_id: i64,
+    pub total_budgeted: Decimal,
+    pub total_actual: Decimal,
+    pub total_variance: Decimal,
+    pub lines: Vec<VarianceReportLine>,
+}
+
 /// Failed item in a bulk restore operation
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct BulkRestoreFailed {
@@ -272,5 +527,83 @@ mod tests {
             description: None,
         };
         assert_eq!(alloc.percentage, Decimal::new(100, 0));
+    }
+
+    #[test]
+    fn test_budget_period_display() {
+        assert_eq!(BudgetPeriod::Monthly.to_string(), "monthly");
+        assert_eq!(BudgetPeriod::Quarterly.to_string(), "quarterly");
+        assert_eq!(BudgetPeriod::Yearly.to_string(), "yearly");
+    }
+
+    #[test]
+    fn test_budget_period_from_str() {
+        assert_eq!(
+            "monthly".parse::<BudgetPeriod>().unwrap(),
+            BudgetPeriod::Monthly
+        );
+        assert_eq!(
+            "QUARTERLY".parse::<BudgetPeriod>().unwrap(),
+            BudgetPeriod::Quarterly
+        );
+        assert!("invalid".parse::<BudgetPeriod>().is_err());
+    }
+
+    #[test]
+    fn test_allocation_rule_type_display() {
+        assert_eq!(AllocationRuleType::Percentage.to_string(), "percentage");
+        assert_eq!(AllocationRuleType::FixedAmount.to_string(), "fixed_amount");
+    }
+
+    #[test]
+    fn test_allocation_rule_type_from_str() {
+        assert_eq!(
+            "percentage".parse::<AllocationRuleType>().unwrap(),
+            AllocationRuleType::Percentage
+        );
+        assert_eq!(
+            "FIXED_AMOUNT".parse::<AllocationRuleType>().unwrap(),
+            AllocationRuleType::FixedAmount
+        );
+        assert!("invalid".parse::<AllocationRuleType>().is_err());
+    }
+
+    #[test]
+    fn test_budget_response_from_budget() {
+        let budget = Budget {
+            id: 1,
+            tenant_id: 100,
+            cost_center_id: 5,
+            period: BudgetPeriod::Monthly,
+            period_start: Utc::now(),
+            period_end: Utc::now(),
+            budgeted_amount: Decimal::new(5000, 0),
+            actual_amount: Decimal::new(4500, 0),
+            variance: Decimal::new(500, 0),
+            notes: Some("Q1 budget".to_string()),
+            created_at: Utc::now(),
+            updated_at: None,
+        };
+        let resp = BudgetResponse::from(budget);
+        assert_eq!(resp.id, 1);
+        assert_eq!(resp.budgeted_amount, Decimal::new(5000, 0));
+    }
+
+    #[test]
+    fn test_create_allocation_rule_defaults() {
+        let rule = CreateAllocationRule {
+            name: "Payroll Split".to_string(),
+            source_type: "payroll".to_string(),
+            account_range_start: None,
+            account_range_end: None,
+            cost_center_id: 1,
+            rule_type: AllocationRuleType::Percentage,
+            percentage: Some(Decimal::new(50, 0)),
+            fixed_amount: None,
+            is_active: default_is_active(),
+            priority: default_priority(),
+        };
+        assert!(rule.is_active);
+        assert_eq!(rule.priority, 0);
     }
 }

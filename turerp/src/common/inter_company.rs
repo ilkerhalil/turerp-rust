@@ -77,6 +77,7 @@ impl InterCompanyService {
                     "Cross-company sale to company {}",
                     buyer_company_id
                 )),
+                cost_center_id: None,
                 lines: sales_lines,
             })
             .await?;
@@ -109,6 +110,7 @@ impl InterCompanyService {
                     "Cross-company purchase from company {}",
                     seller_company_id
                 )),
+                cost_center_id: None,
                 lines: purchase_lines,
             })
             .await?;
