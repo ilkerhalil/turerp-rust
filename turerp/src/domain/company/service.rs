@@ -26,21 +26,23 @@ impl CompanyService {
             .code_exists(&create.code, create.tenant_id)
             .await?
         {
+            tracing::warn!(tenant_id = create.tenant_id, code = %create.code, "Company code already exists");
             return Err(ApiError::Conflict(format!(
                 "Company code '{}' already exists",
                 create.code
             )));
         }
+        let tenant_id = create.tenant_id;
         let company = self.repo.create(create).await?;
+        tracing::info!(tenant_id, "Created company");
         Ok(company.into())
     }
 
     pub async fn get_company(&self, id: i64, tenant_id: i64) -> Result<CompanyResponse, ApiError> {
-        let company = self
-            .repo
-            .find_by_id(id, tenant_id)
-            .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Company {} not found", id)))?;
+        let company = self.repo.find_by_id(id, tenant_id).await?.ok_or_else(|| {
+            tracing::warn!(tenant_id, company_id = id, "Company not found");
+            ApiError::NotFound(format!("Company {} not found", id))
+        })?;
         Ok(company.into())
     }
 
@@ -53,7 +55,10 @@ impl CompanyService {
             .repo
             .find_by_code(code, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Company {} not found", code)))?;
+            .ok_or_else(|| {
+                tracing::warn!(tenant_id, code, "Company not found by code");
+                ApiError::NotFound(format!("Company {} not found", code))
+            })?;
         Ok(company.into())
     }
 
@@ -96,6 +101,7 @@ impl CompanyService {
             let existing = self.repo.find_by_code(code, tenant_id).await?;
             if let Some(c) = existing {
                 if c.id != id {
+                    tracing::warn!(tenant_id, code, "Company code already exists");
                     return Err(ApiError::Conflict(format!(
                         "Company code '{}' already exists",
                         code
@@ -104,6 +110,7 @@ impl CompanyService {
             }
         }
         let company = self.repo.update(id, tenant_id, update).await?;
+        tracing::info!(tenant_id, company_id = id, "Updated company");
         Ok(company.into())
     }
 
@@ -113,11 +120,15 @@ impl CompanyService {
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
-        self.repo.soft_delete(id, tenant_id, deleted_by).await
+        self.repo.soft_delete(id, tenant_id, deleted_by).await?;
+        tracing::info!(tenant_id, company_id = id, "Deleted company");
+        Ok(())
     }
 
     pub async fn restore_company(&self, id: i64, tenant_id: i64) -> Result<Company, ApiError> {
-        self.repo.restore(id, tenant_id).await
+        let company = self.repo.restore(id, tenant_id).await?;
+        tracing::info!(tenant_id, company_id = id, "Restored company");
+        Ok(company)
     }
 
     pub async fn list_deleted_companies(&self, tenant_id: i64) -> Result<Vec<Company>, ApiError> {
@@ -125,7 +136,9 @@ impl CompanyService {
     }
 
     pub async fn destroy_company(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.repo.destroy(id, tenant_id).await
+        self.repo.destroy(id, tenant_id).await?;
+        tracing::info!(tenant_id, company_id = id, "Destroyed company");
+        Ok(())
     }
 }
 

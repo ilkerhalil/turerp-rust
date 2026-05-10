@@ -13094,7 +13094,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateProduct"
+                "$ref": "#/components/schemas/crate.domain.product.UpdateProduct"
               }
             }
           },

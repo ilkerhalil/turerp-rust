@@ -108,7 +108,7 @@ mime = "0.3"
 
 # Report generation
 rust_xlsxwriter = "0.94"
-printpdf = "0.3"
+printpdf = "0.9"
 csv = "1.4"
 
 # Email delivery
