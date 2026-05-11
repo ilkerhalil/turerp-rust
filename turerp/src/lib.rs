@@ -233,6 +233,8 @@ pub mod app {
     #[cfg(feature = "postgres")]
     use crate::domain::cari::postgres_repository::PostgresCariRepository;
     #[cfg(feature = "postgres")]
+    use crate::domain::chart_of_accounts::postgres_repository::PostgresChartAccountRepository;
+    #[cfg(feature = "postgres")]
     use crate::domain::company::postgres_repository::PostgresCompanyRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::cost_center::postgres_repository::PostgresCostCenterRepository;
@@ -246,9 +248,13 @@ pub mod app {
         PostgresCurrencyRepository, PostgresExchangeRateRepository,
     };
     #[cfg(feature = "postgres")]
+    use crate::domain::custom_field::postgres_repository::PostgresCustomFieldRepository;
+    #[cfg(feature = "postgres")]
     use crate::domain::dashboard::postgres_repository::PostgresDashboardRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::document::postgres_repository::PostgresDocumentRepository;
+    #[cfg(feature = "postgres")]
+    use crate::domain::edefter::postgres_repository::PostgresEDefterRepository;
     #[cfg(feature = "postgres")]
     use crate::domain::efatura::postgres_repository::PostgresEFaturaRepository;
     #[cfg(feature = "postgres")]
@@ -1002,14 +1008,12 @@ pub mod app {
         let ticket_repo = PostgresTicketRepository::new(pool.clone()).into_boxed();
         let crm_service = CrmService::new(lead_repo, opportunity_repo, campaign_repo, ticket_repo);
 
-        // Chart of Accounts - in-memory (no postgres repo yet)
-        let chart_account_repo =
-            Arc::new(InMemoryChartAccountRepository::new()) as BoxChartAccountRepository;
+        // Chart of Accounts - PostgreSQL
+        let chart_account_repo = PostgresChartAccountRepository::new(pool.clone()).into_boxed();
         let chart_of_accounts_service = ChartOfAccountsService::new(chart_account_repo);
 
-        // Custom Fields - in-memory (no postgres repo yet)
-        let custom_field_repo =
-            Arc::new(InMemoryCustomFieldRepository::new()) as BoxCustomFieldRepository;
+        // Custom Fields - PostgreSQL
+        let custom_field_repo = PostgresCustomFieldRepository::new(pool.clone()).into_boxed();
         let custom_field_service = CustomFieldService::new(custom_field_repo);
 
         // Tenant - PostgreSQL
@@ -1174,9 +1178,8 @@ pub mod app {
         let efatura_service =
             crate::domain::efatura::EFaturaService::new(efatura_repo, gib_gateway);
 
-        // e-Defter - in-memory (no postgres repo yet)
-        let edefter_repo = Arc::new(crate::domain::edefter::InMemoryEDefterRepository::new())
-            as crate::domain::edefter::BoxEDefterRepository;
+        // e-Defter - PostgreSQL
+        let edefter_repo = PostgresEDefterRepository::new(pool.clone()).into_boxed();
         let edefter_service = crate::domain::edefter::EDefterService::new(edefter_repo);
 
         // Webhooks - PostgreSQL
