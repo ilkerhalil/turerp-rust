@@ -72,6 +72,7 @@ pub enum JobType {
         file_id: i64,
         entity_type: String,
         tenant_id: i64,
+        company_id: i64,
         format: String,
     },
     /// Import bank statement for an account

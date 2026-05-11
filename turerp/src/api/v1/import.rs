@@ -41,6 +41,7 @@ pub async fn import_file(
 
     let mut file_data = Vec::new();
     let mut format = ImportFormat::Csv;
+    let mut company_id: i64 = 1; // Default company for backward compatibility
 
     while let Some(item) = payload.next().await {
         let mut field =
@@ -63,6 +64,17 @@ pub async fn import_file(
                     format = f;
                 }
             }
+        } else if name == "company_id" {
+            let mut buf = Vec::new();
+            while let Some(chunk) = field.next().await {
+                let data = chunk.map_err(|e| ApiError::BadRequest(format!("Read error: {}", e)))?;
+                buf.extend_from_slice(&data);
+            }
+            if let Ok(s) = String::from_utf8(buf) {
+                if let Ok(id) = s.trim().parse::<i64>() {
+                    company_id = id;
+                }
+            }
         }
     }
 
@@ -73,6 +85,7 @@ pub async fn import_file(
     let result = import_service
         .import(
             admin_user.0.tenant_id,
+            company_id,
             entity_type,
             format,
             file_data,

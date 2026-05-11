@@ -90,6 +90,35 @@ impl From<JobRow> for Job {
             "ProcessOutbox" => JobType::ProcessOutbox {
                 tenant_id: row.tenant_id,
             },
+            "Import" => JobType::Import {
+                file_id: row
+                    .payload
+                    .0
+                    .get("file_id")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0),
+                entity_type: row
+                    .payload
+                    .0
+                    .get("entity_type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
+                tenant_id: row.tenant_id,
+                company_id: row
+                    .payload
+                    .0
+                    .get("company_id")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(1),
+                format: row
+                    .payload
+                    .0
+                    .get("format")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("csv")
+                    .to_string(),
+            },
             _ => JobType::Custom {
                 name: row.job_type,
                 payload: row.payload.0.to_string(),
@@ -183,6 +212,18 @@ fn job_payload_json(job_type: &JobType) -> serde_json::Value {
         JobType::ProcessOutbox { .. } => serde_json::json!({}),
         JobType::Custom { payload, .. } => serde_json::from_str(payload)
             .unwrap_or_else(|_| serde_json::json!({"payload": payload})),
+        JobType::Import {
+            file_id,
+            entity_type,
+            company_id,
+            format,
+            ..
+        } => serde_json::json!({
+            "file_id": file_id,
+            "entity_type": entity_type,
+            "company_id": company_id,
+            "format": format,
+        }),
         _ => serde_json::json!({}),
     }
 }

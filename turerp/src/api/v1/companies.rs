@@ -387,6 +387,10 @@ pub async fn transfer_stock(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
+    let user_id = match admin_user.0.user_id() {
+        Ok(id) => id,
+        Err(e) => return Ok(e.to_http_response(i18n, locale.as_str())),
+    };
     match inter_company_service
         .transfer_stock_between_companies(
             admin_user.0.tenant_id,
@@ -395,6 +399,7 @@ pub async fn transfer_stock(
             req.product_id,
             req.warehouse_id,
             req.quantity,
+            user_id,
         )
         .await
     {

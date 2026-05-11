@@ -134,7 +134,7 @@ pub fn build_test_app(
         .app_data(state.integration.workflow_service.clone())
         .app_data(state.finance.currency_service.clone())
         .app_data(state.infra.import_service.clone())
-        .app_data(state.integration.inter_company_service.clone())
+        .app_data(state.commerce.inter_company_service.clone())
         .app_data(state.integration.efatura_service.clone())
         .app_data(state.integration.edefter_service.clone())
         .app_data(state.commerce.company_service.clone())

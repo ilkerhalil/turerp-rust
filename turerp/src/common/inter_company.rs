@@ -152,6 +152,7 @@ impl InterCompanyService {
     }
 
     /// Transfer stock between companies within the same tenant.
+    #[allow(clippy::too_many_arguments)]
     pub async fn transfer_stock_between_companies(
         &self,
         tenant_id: i64,
@@ -160,6 +161,7 @@ impl InterCompanyService {
         product_id: i64,
         warehouse_id: i64,
         quantity: Decimal,
+        created_by: i64,
     ) -> Result<InterCompanyStockTransferResult, ApiError> {
         // Validate companies
         let _ = self
@@ -184,7 +186,7 @@ impl InterCompanyService {
                     reference_type: Some("InterCompanyTransfer".to_string()),
                     reference_id: Some(to_company_id),
                     notes: Some(format!("Stock transfer to company {}", to_company_id)),
-                    created_by: 0,
+                    created_by,
                 },
                 tenant_id,
             )
@@ -203,7 +205,7 @@ impl InterCompanyService {
                     reference_type: Some("InterCompanyTransfer".to_string()),
                     reference_id: Some(from_company_id),
                     notes: Some(format!("Stock transfer from company {}", from_company_id)),
-                    created_by: 0,
+                    created_by,
                 },
                 tenant_id,
             )
