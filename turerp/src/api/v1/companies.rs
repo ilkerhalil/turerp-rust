@@ -11,8 +11,6 @@ use crate::common::pagination::PaginationParams;
 use crate::common::MessageResponse;
 use crate::domain::company::model::{CompanyResponse, CreateCompany, UpdateCompany};
 use crate::domain::company::service::CompanyService;
-use crate::domain::invoice::service::InvoiceService;
-use crate::domain::stock::service::StockService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
@@ -321,9 +319,7 @@ pub async fn destroy_company(
 )]
 pub async fn create_cross_company_invoice(
     admin_user: AdminUser,
-    company_service: web::Data<CompanyService>,
-    invoice_service: web::Data<InvoiceService>,
-    stock_service: web::Data<StockService>,
+    inter_company_service: web::Data<InterCompanyService>,
     payload: web::Json<CreateCrossCompanyInvoiceRequest>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
@@ -334,12 +330,7 @@ pub async fn create_cross_company_invoice(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    let inter_company = InterCompanyService::new(
-        company_service.into_inner(),
-        invoice_service.into_inner(),
-        stock_service.into_inner(),
-    );
-    match inter_company
+    match inter_company_service
         .create_cross_company_invoice(
             admin_user.0.tenant_id,
             req.seller_company_id,
@@ -369,9 +360,7 @@ pub async fn create_cross_company_invoice(
 )]
 pub async fn transfer_stock(
     admin_user: AdminUser,
-    company_service: web::Data<CompanyService>,
-    invoice_service: web::Data<InvoiceService>,
-    stock_service: web::Data<StockService>,
+    inter_company_service: web::Data<InterCompanyService>,
     payload: web::Json<TransferStockRequest>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
@@ -382,12 +371,7 @@ pub async fn transfer_stock(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    let inter_company = InterCompanyService::new(
-        company_service.into_inner(),
-        invoice_service.into_inner(),
-        stock_service.into_inner(),
-    );
-    match inter_company
+    match inter_company_service
         .transfer_stock_between_companies(
             admin_user.0.tenant_id,
             req.from_company_id,

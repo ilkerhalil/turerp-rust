@@ -3,12 +3,17 @@
 use crate::domain::company::service::CompanyService;
 use crate::domain::invoice::model::{CreateInvoice, CreateInvoiceLine, InvoiceType};
 use crate::domain::invoice::service::InvoiceService;
+use crate::domain::product::service::ProductService;
 use crate::domain::stock::model::{CreateStockMovement, MovementType};
 use crate::domain::stock::service::StockService;
 use crate::error::ApiError;
+use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+/// Maximum allowed deviation from standard sale price for transfer pricing.
+const TRANSFER_PRICE_TOLERANCE: f64 = 0.20;
 
 /// Service for inter-company transactions.
 #[derive(Clone)]
@@ -16,6 +21,7 @@ pub struct InterCompanyService {
     company_service: Arc<CompanyService>,
     invoice_service: Arc<InvoiceService>,
     stock_service: Arc<StockService>,
+    product_service: Arc<ProductService>,
 }
 
 impl InterCompanyService {
@@ -23,11 +29,13 @@ impl InterCompanyService {
         company_service: Arc<CompanyService>,
         invoice_service: Arc<InvoiceService>,
         stock_service: Arc<StockService>,
+        product_service: Arc<ProductService>,
     ) -> Self {
         Self {
             company_service,
             invoice_service,
             stock_service,
+            product_service,
         }
     }
 
@@ -48,6 +56,28 @@ impl InterCompanyService {
             .company_service
             .get_company(buyer_company_id, tenant_id)
             .await?;
+
+        // Transfer pricing validation: unit price must be within 20% of standard sale price
+        for line in &lines {
+            let product = self
+                .product_service
+                .get_product(line.product_id, tenant_id)
+                .await?;
+            if product.sale_price > Decimal::ZERO {
+                let lower = product.sale_price
+                    * Decimal::from_f64(1.0 - TRANSFER_PRICE_TOLERANCE)
+                        .unwrap_or_else(|| Decimal::from(8) / Decimal::from(10));
+                let upper = product.sale_price
+                    * Decimal::from_f64(1.0 + TRANSFER_PRICE_TOLERANCE)
+                        .unwrap_or_else(|| Decimal::from(12) / Decimal::from(10));
+                if line.unit_price < lower || line.unit_price > upper {
+                    return Err(ApiError::Validation(format!(
+                        "Transfer pricing violation for product {}: unit price {} is outside the acceptable range {} - {} (standard sale price: {})",
+                        product.code, line.unit_price, lower, upper, product.sale_price
+                    )));
+                }
+            }
+        }
 
         // Create sales invoice for seller
         let sales_lines: Vec<CreateInvoiceLine> = lines

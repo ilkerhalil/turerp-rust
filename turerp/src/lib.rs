@@ -377,6 +377,7 @@ pub mod app {
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
         pub cdc_listener: Option<Arc<crate::common::cdc::CdcListener>>,
+        pub import_service: web::Data<dyn crate::common::import::ImportService>,
     }
 
     /// Accounting & Finance domain services
@@ -413,6 +414,7 @@ pub mod app {
         pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
         pub webhook_service: web::Data<WebhookService>,
         pub workflow_service: web::Data<WorkflowService>,
+        pub inter_company_service: web::Data<crate::common::inter_company::InterCompanyService>,
     }
 
     /// Analytics & Reporting domain services
@@ -467,6 +469,7 @@ pub mod app {
 
             // Cari
             let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
+            let cari_repo_import = cari_repo.clone();
             let cari_service = CariService::new(cari_repo);
 
             // Company
@@ -480,6 +483,7 @@ pub mod app {
                 Arc::new(InMemoryStockLevelRepository::new()) as BoxStockLevelRepository;
             let stock_movement_repo =
                 Arc::new(InMemoryStockMovementRepository::new()) as BoxStockMovementRepository;
+            let stock_movement_repo_import = stock_movement_repo.clone();
             let stock_service =
                 StockService::new(warehouse_repo, stock_level_repo, stock_movement_repo);
 
@@ -562,6 +566,7 @@ pub mod app {
             // Chart of Accounts
             let chart_account_repo =
                 Arc::new(InMemoryChartAccountRepository::new()) as BoxChartAccountRepository;
+            let chart_account_repo_import = chart_account_repo.clone();
             let chart_of_accounts_service = ChartOfAccountsService::new(chart_account_repo);
 
             // Custom Fields
@@ -588,6 +593,7 @@ pub mod app {
 
             // Product
             let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+            let product_repo_import = product_repo.clone();
             let category_repo =
                 Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
             let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
@@ -778,6 +784,25 @@ pub mod app {
             // Rate limit stats
             let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
 
+            // Import Service
+            let import_service: Arc<dyn crate::common::import::ImportService> = Arc::new(
+                crate::common::import::CsvImportService::new(
+                    product_repo_import,
+                    cari_repo_import,
+                    chart_account_repo_import,
+                    stock_movement_repo_import,
+                    job_scheduler.clone(),
+                ),
+            );
+
+            // Inter-Company Service
+            let inter_company_service = crate::common::inter_company::InterCompanyService::new(
+                Arc::new(company_service.clone()),
+                Arc::new(invoice_service.clone()),
+                Arc::new(stock_service.clone()),
+                Arc::new(product_service.clone()),
+            );
+
             (
                 AuthState {
                     auth_service: web::Data::new(auth_service),
@@ -816,6 +841,7 @@ pub mod app {
                     #[cfg(feature = "postgres")]
                     db_pool: web::Data::new(Arc::new(sqlx::PgPool::connect_lazy("postgres://localhost/dummy").expect("Failed to create lazy pool"))),
                     cdc_listener: None,
+                    import_service: web::Data::from(import_service),
                 },
                 FinanceState {
                     accounting_service: web::Data::new(accounting_service),
@@ -840,6 +866,7 @@ pub mod app {
                     edefter_service: web::Data::new(edefter_service),
                     webhook_service: web::Data::new(webhook_service),
                     workflow_service: web::Data::new(workflow_service),
+                    inter_company_service: web::Data::new(inter_company_service),
                 },
                 AnalyticsState {
                     audit_service: web::Data::new(audit_service),
@@ -1227,6 +1254,25 @@ pub mod app {
                 std::process::id()
             ))) as Arc<dyn crate::common::file_storage::FileStorage>;
 
+        // Import Service
+        let import_service: Arc<dyn crate::common::import::ImportService> =
+            Arc::new(crate::common::import::CsvImportService::new(
+                product_repo.clone(),
+                cari_repo.clone(),
+                chart_account_repo.clone(),
+                stock_movement_repo.clone(),
+                job_scheduler.clone(),
+            ));
+
+        // Inter-Company Service
+        let inter_company_service =
+            Arc::new(crate::common::inter_company::InterCompanyService::new(
+                Arc::new(company_service.clone()),
+                Arc::new(invoice_service.clone()),
+                Arc::new(stock_service.clone()),
+                Arc::new(product_service.clone()),
+            ));
+
         AppState {
             auth: AuthState {
                 auth_service: web::Data::new(auth_service),
@@ -1264,6 +1310,7 @@ pub mod app {
                 rate_limit_stats: web::Data::new(rate_limit_stats),
                 db_pool: web::Data::new(pool),
                 cdc_listener: None,
+                import_service: web::Data::from(import_service),
             },
             finance: FinanceState {
                 accounting_service: web::Data::new(accounting_service),
@@ -1288,6 +1335,7 @@ pub mod app {
                 edefter_service: web::Data::new(edefter_service),
                 webhook_service: web::Data::new(webhook_service),
                 workflow_service: web::Data::new(workflow_service),
+                inter_company_service: web::Data::new(inter_company_service),
             },
             analytics: AnalyticsState {
                 audit_service: web::Data::new(audit_service),
