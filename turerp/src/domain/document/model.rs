@@ -304,3 +304,328 @@ pub struct BulkRestoreFailed {
     pub id: i64,
     pub reason: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    #[test]
+    fn test_document_creation() {
+        let now = Utc::now();
+        let doc = Document {
+            id: 1,
+            tenant_id: 10,
+            name: "Contract".to_string(),
+            filename: "contract.pdf".to_string(),
+            size_bytes: 1024,
+            mime_type: "application/pdf".to_string(),
+            hash: "abc123".to_string(),
+            storage_path: "/docs/contract.pdf".to_string(),
+            uploaded_by: Some(5),
+            category_id: Some(2),
+            tags: vec!["legal".to_string(), "2024".to_string()],
+            description: Some("Main contract".to_string()),
+            current_version: 1,
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
+        };
+
+        assert_eq!(doc.id, 1);
+        assert_eq!(doc.tenant_id, 10);
+        assert_eq!(doc.name, "Contract");
+        assert_eq!(doc.filename, "contract.pdf");
+        assert_eq!(doc.size_bytes, 1024);
+        assert_eq!(doc.mime_type, "application/pdf");
+        assert_eq!(doc.hash, "abc123");
+        assert_eq!(doc.storage_path, "/docs/contract.pdf");
+        assert_eq!(doc.uploaded_by, Some(5));
+        assert_eq!(doc.category_id, Some(2));
+        assert_eq!(doc.tags.len(), 2);
+        assert_eq!(doc.current_version, 1);
+        assert!(doc.deleted_at.is_none());
+        assert!(doc.deleted_by.is_none());
+    }
+
+    #[test]
+    fn test_create_document_creation() {
+        let create = CreateDocument {
+            tenant_id: 10,
+            name: "Report".to_string(),
+            filename: "report.xlsx".to_string(),
+            size_bytes: 2048,
+            mime_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                .to_string(),
+            hash: "def456".to_string(),
+            storage_path: "/docs/report.xlsx".to_string(),
+            uploaded_by: Some(3),
+            category_id: None,
+            tags: Some(vec!["finance".to_string()]),
+            description: Some("Q1 report".to_string()),
+        };
+
+        assert_eq!(create.tenant_id, 10);
+        assert_eq!(create.name, "Report");
+        assert_eq!(create.filename, "report.xlsx");
+        assert_eq!(create.size_bytes, 2048);
+        assert_eq!(
+            create.mime_type,
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        assert_eq!(create.hash, "def456");
+        assert_eq!(create.storage_path, "/docs/report.xlsx");
+        assert_eq!(create.uploaded_by, Some(3));
+        assert!(create.category_id.is_none());
+        assert_eq!(create.tags.as_ref().unwrap().len(), 1);
+        assert_eq!(create.description, Some("Q1 report".to_string()));
+    }
+
+    #[test]
+    fn test_document_serialization() {
+        let now = Utc::now();
+        let doc = Document {
+            id: 1,
+            tenant_id: 10,
+            name: "Invoice".to_string(),
+            filename: "inv.pdf".to_string(),
+            size_bytes: 512,
+            mime_type: "application/pdf".to_string(),
+            hash: "hash99".to_string(),
+            storage_path: "/inv.pdf".to_string(),
+            uploaded_by: None,
+            category_id: None,
+            tags: vec![],
+            description: None,
+            current_version: 1,
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
+        };
+
+        let json = serde_json::to_string(&doc).unwrap();
+        assert!(json.contains("Invoice"));
+        assert!(json.contains("inv.pdf"));
+
+        let deserialized: Document = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id, doc.id);
+        assert_eq!(deserialized.name, doc.name);
+        assert_eq!(deserialized.filename, doc.filename);
+    }
+
+    #[test]
+    fn test_create_document_deserialization() {
+        let json = r#"{"tenant_id":10,"name":"Memo","filename":"memo.txt","size_bytes":128,"mime_type":"text/plain","hash":"hash00","storage_path":"/memo.txt","uploaded_by":null,"category_id":null,"tags":null,"description":null}"#;
+
+        let deserialized: CreateDocument = serde_json::from_str(json).unwrap();
+        assert_eq!(deserialized.tenant_id, 10);
+        assert_eq!(deserialized.name, "Memo");
+        assert_eq!(deserialized.filename, "memo.txt");
+        assert_eq!(deserialized.size_bytes, 128);
+        assert_eq!(deserialized.mime_type, "text/plain");
+        assert_eq!(deserialized.hash, "hash00");
+        assert_eq!(deserialized.storage_path, "/memo.txt");
+        assert!(deserialized.uploaded_by.is_none());
+        assert!(deserialized.category_id.is_none());
+        assert!(deserialized.tags.is_none());
+        assert!(deserialized.description.is_none());
+    }
+
+    #[test]
+    fn test_document_to_response() {
+        let now = Utc::now();
+        let doc = Document {
+            id: 7,
+            tenant_id: 10,
+            name: "Plan".to_string(),
+            filename: "plan.pdf".to_string(),
+            size_bytes: 4096,
+            mime_type: "application/pdf".to_string(),
+            hash: "h1".to_string(),
+            storage_path: "/plan.pdf".to_string(),
+            uploaded_by: Some(2),
+            category_id: Some(3),
+            tags: vec!["strategy".to_string()],
+            description: Some("2025 plan".to_string()),
+            current_version: 2,
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            deleted_by: None,
+        };
+
+        let resp: DocumentResponse = doc.into();
+        assert_eq!(resp.id, 7);
+        assert_eq!(resp.name, "Plan");
+        assert_eq!(resp.filename, "plan.pdf");
+        assert_eq!(resp.size_bytes, 4096);
+        assert_eq!(resp.mime_type, "application/pdf");
+        assert_eq!(resp.hash, "h1");
+        assert_eq!(resp.uploaded_by, Some(2));
+        assert_eq!(resp.category_id, Some(3));
+        assert_eq!(resp.tags.len(), 1);
+        assert_eq!(resp.current_version, 2);
+    }
+
+    #[test]
+    fn test_document_category_to_response() {
+        let now = Utc::now();
+        let cat = DocumentCategory {
+            id: 4,
+            tenant_id: 10,
+            name: "Legal".to_string(),
+            description: Some("Legal docs".to_string()),
+            color: Some("#ff0000".to_string()),
+            parent_id: None,
+            created_at: now,
+            updated_at: now,
+        };
+
+        let resp: DocumentCategoryResponse = cat.into();
+        assert_eq!(resp.id, 4);
+        assert_eq!(resp.name, "Legal");
+        assert_eq!(resp.description, Some("Legal docs".to_string()));
+        assert_eq!(resp.color, Some("#ff0000".to_string()));
+        assert!(resp.parent_id.is_none());
+    }
+
+    #[test]
+    fn test_linked_entity_type_display() {
+        assert_eq!(LinkedEntityType::Invoice.to_string(), "invoice");
+        assert_eq!(LinkedEntityType::Order.to_string(), "order");
+        assert_eq!(LinkedEntityType::Cari.to_string(), "cari");
+        assert_eq!(LinkedEntityType::Product.to_string(), "product");
+        assert_eq!(LinkedEntityType::Project.to_string(), "project");
+        assert_eq!(LinkedEntityType::Employee.to_string(), "employee");
+        assert_eq!(
+            LinkedEntityType::PurchaseOrder.to_string(),
+            "purchase_order"
+        );
+        assert_eq!(LinkedEntityType::SalesOrder.to_string(), "sales_order");
+        assert_eq!(LinkedEntityType::WorkOrder.to_string(), "work_order");
+        assert_eq!(LinkedEntityType::Other.to_string(), "other");
+    }
+
+    #[test]
+    fn test_linked_entity_type_from_str() {
+        assert!(matches!(
+            "invoice".parse::<LinkedEntityType>().unwrap(),
+            LinkedEntityType::Invoice
+        ));
+        assert!(matches!(
+            "ORDER".parse::<LinkedEntityType>().unwrap(),
+            LinkedEntityType::Order
+        ));
+        assert!(matches!(
+            "Cari".parse::<LinkedEntityType>().unwrap(),
+            LinkedEntityType::Cari
+        ));
+        assert!(matches!(
+            "product".parse::<LinkedEntityType>().unwrap(),
+            LinkedEntityType::Product
+        ));
+        assert!(matches!(
+            "project".parse::<LinkedEntityType>().unwrap(),
+            LinkedEntityType::Project
+        ));
+        assert!(matches!(
+            "employee".parse::<LinkedEntityType>().unwrap(),
+            LinkedEntityType::Employee
+        ));
+        assert!(matches!(
+            "purchase_order".parse::<LinkedEntityType>().unwrap(),
+            LinkedEntityType::PurchaseOrder
+        ));
+        assert!(matches!(
+            "sales_order".parse::<LinkedEntityType>().unwrap(),
+            LinkedEntityType::SalesOrder
+        ));
+        assert!(matches!(
+            "work_order".parse::<LinkedEntityType>().unwrap(),
+            LinkedEntityType::WorkOrder
+        ));
+        assert!(matches!(
+            "unknown".parse::<LinkedEntityType>().unwrap(),
+            LinkedEntityType::Other
+        ));
+    }
+
+    #[test]
+    fn test_document_search_params_default() {
+        let params = DocumentSearchParams::default();
+        assert!(params.query.is_none());
+        assert!(params.category_id.is_none());
+        assert!(params.tags.is_none());
+        assert!(params.entity_type.is_none());
+        assert!(params.entity_id.is_none());
+        assert!(params.mime_type.is_none());
+        assert!(params.uploaded_by.is_none());
+        assert_eq!(params.page, 1);
+        assert_eq!(params.per_page, 20);
+    }
+
+    #[test]
+    fn test_document_version_creation() {
+        let now = Utc::now();
+        let version = DocumentVersion {
+            id: 1,
+            document_id: 5,
+            tenant_id: 10,
+            version_number: 2,
+            filename: "v2.pdf".to_string(),
+            size_bytes: 1024,
+            hash: "v2hash".to_string(),
+            storage_path: "/v2.pdf".to_string(),
+            created_by: Some(3),
+            comment: Some("Updated".to_string()),
+            created_at: now,
+        };
+
+        assert_eq!(version.document_id, 5);
+        assert_eq!(version.version_number, 2);
+        assert_eq!(version.filename, "v2.pdf");
+        assert_eq!(version.comment, Some("Updated".to_string()));
+    }
+
+    #[test]
+    fn test_document_link_creation() {
+        let now = Utc::now();
+        let link = DocumentLink {
+            id: 1,
+            document_id: 5,
+            tenant_id: 10,
+            entity_type: "invoice".to_string(),
+            entity_id: 42,
+            created_at: now,
+        };
+
+        assert_eq!(link.document_id, 5);
+        assert_eq!(link.entity_type, "invoice");
+        assert_eq!(link.entity_id, 42);
+    }
+
+    #[test]
+    fn test_bulk_restore_request_creation() {
+        let req = BulkRestoreRequest { ids: vec![1, 2, 3] };
+        assert_eq!(req.ids.len(), 3);
+        assert_eq!(req.ids[0], 1);
+    }
+
+    #[test]
+    fn test_bulk_restore_response_creation() {
+        let resp = BulkRestoreResponse {
+            restored: 2,
+            items: vec!["a".to_string(), "b".to_string()],
+            failed: vec![BulkRestoreFailed {
+                id: 3,
+                reason: "Not found".to_string(),
+            }],
+        };
+        assert_eq!(resp.restored, 2);
+        assert_eq!(resp.items.len(), 2);
+        assert_eq!(resp.failed.len(), 1);
+        assert_eq!(resp.failed[0].id, 3);
+    }
+}

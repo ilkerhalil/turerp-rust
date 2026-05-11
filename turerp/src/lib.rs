@@ -646,7 +646,7 @@ pub mod app {
 
             // Cache
             let cache_service: Arc<dyn crate::cache::CacheService> =
-                Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>;
+                Arc::new(crate::cache::InMemoryCacheService::new()) as Arc<dyn crate::cache::CacheService>;
 
             // Currency
             let currency_repo =

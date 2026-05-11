@@ -10,6 +10,10 @@ use crate::domain::user::model::{CreateUser, Role, UserResponse};
 use crate::domain::user::service::UserService;
 use crate::error::ApiError;
 use crate::utils::jwt::{JwtService, TokenPair};
+use parking_lot::Mutex;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 /// Login request
 #[derive(Debug, Clone, Deserialize, Serialize, validator::Validate, ToSchema)]
@@ -68,12 +72,20 @@ pub struct LoginResponse {
     pub tokens: TokenPair,
 }
 
+/// Login attempt tracker for brute-force protection
+#[derive(Clone)]
+struct LoginAttemptTracker {
+    attempts: u32,
+    locked_until: Option<Instant>,
+}
+
 /// Auth service
 #[derive(Clone)]
 pub struct AuthService {
     user_service: UserService,
     pub jwt_service: JwtService,
     mfa_service: MfaService,
+    login_attempts: Arc<Mutex<HashMap<String, LoginAttemptTracker>>>,
 }
 
 impl AuthService {
@@ -86,6 +98,7 @@ impl AuthService {
             user_service,
             jwt_service,
             mfa_service,
+            login_attempts: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -155,48 +168,99 @@ impl AuthService {
             .validate()
             .map_err(|e| ApiError::Validation(e.to_string()))?;
 
-        // Verify credentials
-        let user = self
-            .user_service
-            .verify_credentials(&request.username, &request.password, tenant_id)
-            .await?;
-
-        // Check if MFA is enabled for this user
-        let mfa_enabled = self.mfa_service.is_mfa_enabled(user.id, tenant_id).await?;
-
-        if mfa_enabled {
-            // If MFA code provided, verify it
-            if let Some(mfa_code) = request.mfa_code {
-                let valid = self
-                    .mfa_service
-                    .validate_mfa_challenge(user.id, tenant_id, &mfa_code)
-                    .await?;
-                if !valid {
-                    return Err(ApiError::Unauthorized("Invalid MFA code".to_string()));
+        // Check if account is temporarily locked
+        {
+            let mut attempts = self.login_attempts.lock();
+            if let Some(tracker) = attempts.get_mut(&request.username) {
+                if let Some(locked_until) = tracker.locked_until {
+                    let now = Instant::now();
+                    if now < locked_until {
+                        let remaining_secs = (locked_until - now).as_secs();
+                        let remaining_mins = (remaining_secs / 60).max(1);
+                        return Err(ApiError::Unauthorized(format!(
+                            "Account temporarily locked due to too many failed attempts. Try again in {} minutes.",
+                            remaining_mins
+                        )));
+                    } else {
+                        // Lock has expired — clear the tracker
+                        tracker.locked_until = None;
+                        tracker.attempts = 0;
+                    }
                 }
-            } else {
-                // MFA required but no code provided — return temporary MFA token
-                let mfa_token = self.mfa_service.generate_mfa_token(
-                    user.id,
-                    tenant_id,
-                    user.username.clone(),
-                )?;
-
-                return Err(ApiError::MfaRequired(mfa_token));
             }
         }
 
-        // Generate tokens
-        let (user_id, tenant_id, username, role) =
-            (user.id, user.tenant_id, user.username.clone(), user.role);
-        let tokens = self
-            .jwt_service
-            .generate_tokens(user_id, tenant_id, username, role)?;
+        // Verify credentials
+        let user_result = self
+            .user_service
+            .verify_credentials(&request.username, &request.password, tenant_id)
+            .await;
 
-        Ok(LoginResponse {
-            user: user.into(),
-            tokens,
-        })
+        match user_result {
+            Ok(user) => {
+                // Reset failed attempts on successful login
+                {
+                    let mut attempts = self.login_attempts.lock();
+                    attempts.remove(&request.username);
+                }
+
+                // Check if MFA is enabled for this user
+                let mfa_enabled = self.mfa_service.is_mfa_enabled(user.id, tenant_id).await?;
+
+                if mfa_enabled {
+                    // If MFA code provided, verify it
+                    if let Some(mfa_code) = request.mfa_code {
+                        let valid = self
+                            .mfa_service
+                            .validate_mfa_challenge(user.id, tenant_id, &mfa_code)
+                            .await?;
+                        if !valid {
+                            return Err(ApiError::Unauthorized("Invalid MFA code".to_string()));
+                        }
+                    } else {
+                        // MFA required but no code provided — return temporary MFA token
+                        let mfa_token = self.mfa_service.generate_mfa_token(
+                            user.id,
+                            tenant_id,
+                            user.username.clone(),
+                        )?;
+
+                        return Err(ApiError::MfaRequired(mfa_token));
+                    }
+                }
+
+                // Generate tokens
+                let (user_id, tenant_id, username, role) =
+                    (user.id, user.tenant_id, user.username.clone(), user.role);
+                let tokens = self
+                    .jwt_service
+                    .generate_tokens(user_id, tenant_id, username, role)?;
+
+                Ok(LoginResponse {
+                    user: user.into(),
+                    tokens,
+                })
+            }
+            Err(ApiError::InvalidCredentials) => {
+                // Increment failed attempt counter
+                {
+                    let mut attempts = self.login_attempts.lock();
+                    let tracker =
+                        attempts
+                            .entry(request.username.clone())
+                            .or_insert(LoginAttemptTracker {
+                                attempts: 0,
+                                locked_until: None,
+                            });
+                    tracker.attempts += 1;
+                    if tracker.attempts >= 5 {
+                        tracker.locked_until = Some(Instant::now() + Duration::from_secs(900));
+                    }
+                }
+                Err(ApiError::InvalidCredentials)
+            }
+            Err(e) => Err(e),
+        }
     }
 
     /// Refresh access token
