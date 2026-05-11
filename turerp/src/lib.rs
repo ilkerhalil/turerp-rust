@@ -344,6 +344,7 @@ pub mod app {
         pub sales_service: web::Data<SalesService>,
         pub purchase_service: web::Data<PurchaseService>,
         pub product_service: web::Data<ProductService>,
+        pub inter_company_service: web::Data<crate::common::inter_company::InterCompanyService>,
     }
 
     /// HR domain services
@@ -414,7 +415,6 @@ pub mod app {
         pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
         pub webhook_service: web::Data<WebhookService>,
         pub workflow_service: web::Data<WorkflowService>,
-        pub inter_company_service: web::Data<crate::common::inter_company::InterCompanyService>,
     }
 
     /// Analytics & Reporting domain services
@@ -817,6 +817,7 @@ pub mod app {
                     sales_service: web::Data::new(sales_service),
                     purchase_service: web::Data::new(purchase_service),
                     product_service: web::Data::new(product_service),
+                    inter_company_service: web::Data::new(inter_company_service),
                 },
                 HrState {
                     hr_service: web::Data::new(hr_service),
@@ -866,7 +867,6 @@ pub mod app {
                     edefter_service: web::Data::new(edefter_service),
                     webhook_service: web::Data::new(webhook_service),
                     workflow_service: web::Data::new(workflow_service),
-                    inter_company_service: web::Data::new(inter_company_service),
                 },
                 AnalyticsState {
                     audit_service: web::Data::new(audit_service),
@@ -1287,6 +1287,7 @@ pub mod app {
                 sales_service: web::Data::new(sales_service),
                 purchase_service: web::Data::new(purchase_service),
                 product_service: web::Data::new(product_service),
+                inter_company_service: web::Data::new(inter_company_service),
             },
             hr: HrState {
                 hr_service: web::Data::new(hr_service),
@@ -1335,7 +1336,6 @@ pub mod app {
                 edefter_service: web::Data::new(edefter_service),
                 webhook_service: web::Data::new(webhook_service),
                 workflow_service: web::Data::new(workflow_service),
-                inter_company_service: web::Data::new(inter_company_service),
             },
             analytics: AnalyticsState {
                 audit_service: web::Data::new(audit_service),

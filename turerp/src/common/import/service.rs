@@ -62,6 +62,7 @@ pub trait ImportService: Send + Sync {
     async fn import(
         &self,
         tenant_id: i64,
+        company_id: i64,
         entity_type: EntityType,
         format: ImportFormat,
         data: Vec<u8>,
@@ -92,6 +93,7 @@ pub trait ImportService: Send + Sync {
     async fn schedule_import(
         &self,
         tenant_id: i64,
+        company_id: i64,
         entity_type: EntityType,
         format: ImportFormat,
         file_id: i64,
@@ -135,6 +137,7 @@ impl ImportService for CsvImportService {
     async fn import(
         &self,
         tenant_id: i64,
+        company_id: i64,
         entity_type: EntityType,
         format: ImportFormat,
         data: Vec<u8>,
@@ -173,7 +176,7 @@ impl ImportService for CsvImportService {
                         .map_err(|e| ApiError::Validation(format!("Invalid unit_price: {}", e)))?;
                     let create = CreateProduct {
                         tenant_id,
-                        company_id: 0,
+                        company_id,
                         code: row.code,
                         name: row.name,
                         description: None,
@@ -222,7 +225,7 @@ impl ImportService for CsvImportService {
                         .map_err(ApiError::Validation)?;
                     let create = CreateCari {
                         code: row.code,
-                        company_id: 0,
+                        company_id,
                         name: row.name,
                         cari_type,
                         tax_number: row.tax_number,
@@ -362,7 +365,7 @@ impl ImportService for CsvImportService {
                     };
                     let create = CreateStockMovement {
                         warehouse_id,
-                        company_id: 0,
+                        company_id,
                         product_id: product.id,
                         movement_type,
                         quantity,
@@ -576,6 +579,7 @@ impl ImportService for CsvImportService {
     async fn schedule_import(
         &self,
         tenant_id: i64,
+        company_id: i64,
         entity_type: EntityType,
         format: ImportFormat,
         file_id: i64,
@@ -585,6 +589,7 @@ impl ImportService for CsvImportService {
                 file_id,
                 entity_type: entity_type.to_string(),
                 tenant_id,
+                company_id,
                 format: format.to_string(),
             },
             tenant_id,
@@ -624,7 +629,14 @@ mod tests {
         let svc = create_test_service();
         let data = b"code,name,unit_price\nP001,Product 1,100.00\nP002,Product 2,200.00";
         let result = svc
-            .import(1, EntityType::Product, ImportFormat::Csv, data.to_vec(), 1)
+            .import(
+                1,
+                1,
+                EntityType::Product,
+                ImportFormat::Csv,
+                data.to_vec(),
+                1,
+            )
             .await
             .unwrap();
         assert_eq!(result.total_rows, 2);
@@ -636,11 +648,25 @@ mod tests {
     async fn test_import_duplicate_detection() {
         let svc = create_test_service();
         let data = b"code,name,unit_price\nP001,Product 1,100.00";
-        svc.import(1, EntityType::Product, ImportFormat::Csv, data.to_vec(), 1)
-            .await
-            .unwrap();
+        svc.import(
+            1,
+            1,
+            EntityType::Product,
+            ImportFormat::Csv,
+            data.to_vec(),
+            1,
+        )
+        .await
+        .unwrap();
         let result = svc
-            .import(1, EntityType::Product, ImportFormat::Csv, data.to_vec(), 1)
+            .import(
+                1,
+                1,
+                EntityType::Product,
+                ImportFormat::Csv,
+                data.to_vec(),
+                1,
+            )
             .await
             .unwrap();
         assert_eq!(result.total_rows, 1);
@@ -664,10 +690,41 @@ mod tests {
         let svc = create_test_service();
         let data = b"code,name,unit_price\nP001,Product 1,100.00";
         let result = svc
-            .import(1, EntityType::Product, ImportFormat::Csv, data.to_vec(), 1)
+            .import(
+                1,
+                1,
+                EntityType::Product,
+                ImportFormat::Csv,
+                data.to_vec(),
+                1,
+            )
             .await
             .unwrap();
         let fetched = svc.get_result(result.job_id);
         assert!(fetched.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_import_respects_company_id() {
+        let svc = create_test_service();
+        let data = b"code,name,unit_price\nP001,Product 1,100.00";
+        svc.import(
+            1,
+            42,
+            EntityType::Product,
+            ImportFormat::Csv,
+            data.to_vec(),
+            1,
+        )
+        .await
+        .unwrap();
+
+        let product = svc
+            .product_repo
+            .find_by_code(1, "P001")
+            .await
+            .unwrap()
+            .expect("Product should exist");
+        assert_eq!(product.company_id, 42);
     }
 }
