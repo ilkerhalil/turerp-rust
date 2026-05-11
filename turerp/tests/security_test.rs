@@ -71,28 +71,28 @@ fn build_full_test_app(
     );
     App::new()
         .wrap(JwtAuthMiddleware::new(jwt))
-        .app_data(state.auth_service.clone())
-        .app_data(state.user_service.clone())
-        .app_data(state.jwt_service.clone())
-        .app_data(state.cari_service.clone())
-        .app_data(state.stock_service.clone())
-        .app_data(state.invoice_service.clone())
-        .app_data(state.sales_service.clone())
-        .app_data(state.hr_service.clone())
-        .app_data(state.accounting_service.clone())
-        .app_data(state.project_service.clone())
-        .app_data(state.manufacturing_service.clone())
-        .app_data(state.crm_service.clone())
-        .app_data(state.tenant_service.clone())
+        .app_data(state.auth.auth_service.clone())
+        .app_data(state.auth.user_service.clone())
+        .app_data(state.auth.jwt_service.clone())
+        .app_data(state.commerce.cari_service.clone())
+        .app_data(state.commerce.stock_service.clone())
+        .app_data(state.commerce.invoice_service.clone())
+        .app_data(state.commerce.sales_service.clone())
+        .app_data(state.hr.hr_service.clone())
+        .app_data(state.finance.accounting_service.clone())
+        .app_data(state.project.project_service.clone())
+        .app_data(state.project.manufacturing_service.clone())
+        .app_data(state.project.crm_service.clone())
+        .app_data(state.admin.tenant_service.clone())
         .app_data(state.assets_service.clone())
         .app_data(state.feature_service.clone())
-        .app_data(state.product_service.clone())
-        .app_data(state.purchase_service.clone())
+        .app_data(state.commerce.product_service.clone())
+        .app_data(state.commerce.purchase_service.clone())
         .app_data(state.chart_of_accounts_service.clone())
-        .app_data(state.tax_service.clone())
-        .app_data(state.webhook_service.clone())
-        .app_data(state.search_service.clone())
-        .app_data(state.notification_service.clone())
+        .app_data(state.finance.tax_service.clone())
+        .app_data(state.integration.webhook_service.clone())
+        .app_data(state.infra.search_service.clone())
+        .app_data(state.infra.notification_service.clone())
         .configure(configure_all_routes)
 }
 
@@ -100,18 +100,20 @@ fn build_full_test_app(
 macro_rules! test_app {
     ($state:expr) => {
         App::new()
-            .wrap(JwtAuthMiddleware::new((*(*$state.jwt_service)).clone()))
-            .app_data($state.auth_service.clone())
-            .app_data($state.user_service.clone())
-            .app_data($state.jwt_service.clone())
+            .wrap(JwtAuthMiddleware::new(
+                (*(*$state.auth.jwt_service)).clone(),
+            ))
+            .app_data($state.auth.auth_service.clone())
+            .app_data($state.auth.user_service.clone())
+            .app_data($state.auth.jwt_service.clone())
             .app_data($state.feature_service.clone())
-            .app_data($state.product_service.clone())
-            .app_data($state.purchase_service.clone())
+            .app_data($state.commerce.product_service.clone())
+            .app_data($state.commerce.purchase_service.clone())
             .app_data($state.chart_of_accounts_service.clone())
-            .app_data($state.tax_service.clone())
-            .app_data($state.webhook_service.clone())
-            .app_data($state.search_service.clone())
-            .app_data($state.notification_service.clone())
+            .app_data($state.finance.tax_service.clone())
+            .app_data($state.integration.webhook_service.clone())
+            .app_data($state.infra.search_service.clone())
+            .app_data($state.infra.notification_service.clone())
             .configure(configure_all_routes)
     };
 }
@@ -124,6 +126,7 @@ macro_rules! sec_register_admin {
             chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
         );
         let user = $state
+            .auth
             .user_service
             .get_ref()
             .create_user(turerp::CreateUser {
@@ -137,6 +140,7 @@ macro_rules! sec_register_admin {
             .await
             .unwrap();
         let tokens = $state
+            .auth
             .jwt_service
             .get_ref()
             .generate_tokens(

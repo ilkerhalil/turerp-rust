@@ -61,7 +61,7 @@ async fn health_ready() -> actix_web::Result<actix_web::HttpResponse> {
 async fn health_ready(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
-    let pool: &sqlx::PgPool = app_state.db_pool.as_ref();
+    let pool: &sqlx::PgPool = app_state.infra.db_pool.as_ref();
 
     let start = std::time::Instant::now();
     let db_result = sqlx::query("SELECT 1").execute(pool).await;
@@ -214,14 +214,14 @@ async fn main() -> std::io::Result<()> {
 
     // Build rate-limit middleware with shared stats store so the dashboard can read them
     let rate_limit_middleware = {
-        let stats_store = app_state.rate_limit_stats.get_ref().clone();
+        let stats_store = app_state.infra.rate_limit_stats.get_ref().clone();
         RateLimitMiddleware::with_config(&config.rate_limit).with_stats_store(stats_store)
     };
 
     // Set up audit log channel (bounded to prevent unbounded memory growth under load)
     let (audit_tx, audit_rx) = mpsc::channel::<AuditEvent>(AUDIT_CHANNEL_CAPACITY);
     let audit_sender: std::sync::Arc<mpsc::Sender<AuditEvent>> = std::sync::Arc::new(audit_tx);
-    let audit_svc = app_state.audit_service.get_ref().clone();
+    let audit_svc = app_state.analytics.audit_service.get_ref().clone();
     spawn_audit_writer(audit_rx, audit_svc);
 
     let is_production = config.is_production();
@@ -242,7 +242,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default()) // Access logging
             .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
             .wrap(JwtAuthMiddleware::new(
-                app_state.jwt_service.get_ref().clone(),
+                app_state.auth.jwt_service.get_ref().clone(),
             )) // JWT validation
             .wrap(IdempotencyMiddleware::in_memory()) // Idempotency key caching
             .wrap(rate_limit_middleware.clone()) // Rate limiting (shared stats)
@@ -250,48 +250,48 @@ async fn main() -> std::io::Result<()> {
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
             .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
-            .app_data(app_state.jwt_service.clone())
-            .app_data(app_state.cari_service.clone())
-            .app_data(app_state.stock_service.clone())
-            .app_data(app_state.invoice_service.clone())
-            .app_data(app_state.sales_service.clone())
-            .app_data(app_state.hr_service.clone())
-            .app_data(app_state.accounting_service.clone())
-            .app_data(app_state.project_service.clone())
-            .app_data(app_state.manufacturing_service.clone())
-            .app_data(app_state.qc_service.clone())
-            .app_data(app_state.crm_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
+            .app_data(app_state.auth.jwt_service.clone())
+            .app_data(app_state.commerce.cari_service.clone())
+            .app_data(app_state.commerce.stock_service.clone())
+            .app_data(app_state.commerce.invoice_service.clone())
+            .app_data(app_state.commerce.sales_service.clone())
+            .app_data(app_state.hr.hr_service.clone())
+            .app_data(app_state.finance.accounting_service.clone())
+            .app_data(app_state.project.project_service.clone())
+            .app_data(app_state.project.manufacturing_service.clone())
+            .app_data(app_state.project.qc_service.clone())
+            .app_data(app_state.project.crm_service.clone())
             .app_data(app_state.chart_of_accounts_service.clone())
             .app_data(app_state.custom_field_service.clone())
-            .app_data(app_state.tenant_service.clone())
-            .app_data(app_state.tenant_config_service.clone())
+            .app_data(app_state.admin.tenant_service.clone())
+            .app_data(app_state.admin.tenant_config_service.clone())
             .app_data(app_state.assets_service.clone())
             .app_data(app_state.feature_service.clone())
-            .app_data(app_state.product_service.clone())
-            .app_data(app_state.purchase_service.clone())
-            .app_data(app_state.audit_service.clone())
-            .app_data(app_state.settings_service.clone())
-            .app_data(app_state.api_key_service.clone())
-            .app_data(app_state.job_scheduler.clone())
-            .app_data(app_state.event_bus.clone())
-            .app_data(app_state.notification_service.clone())
-            .app_data(app_state.report_engine.clone())
-            .app_data(app_state.forecasting_service.clone())
-            .app_data(app_state.shift_service.clone())
-            .app_data(app_state.tracing_service.clone())
-            .app_data(app_state.db_router.clone())
+            .app_data(app_state.commerce.product_service.clone())
+            .app_data(app_state.commerce.purchase_service.clone())
+            .app_data(app_state.analytics.audit_service.clone())
+            .app_data(app_state.admin.settings_service.clone())
+            .app_data(app_state.admin.api_key_service.clone())
+            .app_data(app_state.infra.job_scheduler.clone())
+            .app_data(app_state.infra.event_bus.clone())
+            .app_data(app_state.infra.notification_service.clone())
+            .app_data(app_state.infra.report_engine.clone())
+            .app_data(app_state.analytics.forecasting_service.clone())
+            .app_data(app_state.hr.shift_service.clone())
+            .app_data(app_state.infra.tracing_service.clone())
+            .app_data(app_state.infra.db_router.clone())
             .app_data(app_state.i18n.clone())
-            .app_data(app_state.tax_service.clone())
-            .app_data(app_state.efatura_service.clone())
-            .app_data(app_state.edefter_service.clone())
-            .app_data(app_state.webhook_service.clone())
-            .app_data(app_state.cache_service.clone())
-            .app_data(app_state.search_service.clone())
-            .app_data(app_state.rate_limit_stats.clone())
-            .app_data(app_state.archive_service.clone())
-            .app_data(app_state.db_pool.clone());
+            .app_data(app_state.finance.tax_service.clone())
+            .app_data(app_state.integration.efatura_service.clone())
+            .app_data(app_state.integration.edefter_service.clone())
+            .app_data(app_state.integration.webhook_service.clone())
+            .app_data(app_state.infra.cache_service.clone())
+            .app_data(app_state.infra.search_service.clone())
+            .app_data(app_state.infra.rate_limit_stats.clone())
+            .app_data(app_state.analytics.archive_service.clone())
+            .app_data(app_state.infra.db_pool.clone());
 
         #[cfg(not(feature = "postgres"))]
         let app = App::new()
@@ -307,7 +307,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(middleware::Logger::default()) // Access logging
             .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
             .wrap(JwtAuthMiddleware::new(
-                app_state.jwt_service.get_ref().clone(),
+                app_state.auth.jwt_service.get_ref().clone(),
             )) // JWT validation
             .wrap(IdempotencyMiddleware::in_memory()) // Idempotency key caching
             .wrap(rate_limit_middleware.clone()) // Rate limiting (shared stats)
@@ -315,47 +315,47 @@ async fn main() -> std::io::Result<()> {
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
             .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
-            .app_data(app_state.jwt_service.clone())
-            .app_data(app_state.cari_service.clone())
-            .app_data(app_state.stock_service.clone())
-            .app_data(app_state.invoice_service.clone())
-            .app_data(app_state.sales_service.clone())
-            .app_data(app_state.hr_service.clone())
-            .app_data(app_state.accounting_service.clone())
-            .app_data(app_state.project_service.clone())
-            .app_data(app_state.manufacturing_service.clone())
-            .app_data(app_state.qc_service.clone())
-            .app_data(app_state.crm_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
+            .app_data(app_state.auth.jwt_service.clone())
+            .app_data(app_state.commerce.cari_service.clone())
+            .app_data(app_state.commerce.stock_service.clone())
+            .app_data(app_state.commerce.invoice_service.clone())
+            .app_data(app_state.commerce.sales_service.clone())
+            .app_data(app_state.hr.hr_service.clone())
+            .app_data(app_state.finance.accounting_service.clone())
+            .app_data(app_state.project.project_service.clone())
+            .app_data(app_state.project.manufacturing_service.clone())
+            .app_data(app_state.project.qc_service.clone())
+            .app_data(app_state.project.crm_service.clone())
             .app_data(app_state.chart_of_accounts_service.clone())
             .app_data(app_state.custom_field_service.clone())
-            .app_data(app_state.tenant_service.clone())
-            .app_data(app_state.tenant_config_service.clone())
+            .app_data(app_state.admin.tenant_service.clone())
+            .app_data(app_state.admin.tenant_config_service.clone())
             .app_data(app_state.assets_service.clone())
             .app_data(app_state.feature_service.clone())
-            .app_data(app_state.product_service.clone())
-            .app_data(app_state.purchase_service.clone())
-            .app_data(app_state.audit_service.clone())
-            .app_data(app_state.settings_service.clone())
-            .app_data(app_state.api_key_service.clone())
-            .app_data(app_state.job_scheduler.clone())
-            .app_data(app_state.event_bus.clone())
-            .app_data(app_state.notification_service.clone())
-            .app_data(app_state.report_engine.clone())
-            .app_data(app_state.forecasting_service.clone())
-            .app_data(app_state.shift_service.clone())
-            .app_data(app_state.tracing_service.clone())
-            .app_data(app_state.db_router.clone())
+            .app_data(app_state.commerce.product_service.clone())
+            .app_data(app_state.commerce.purchase_service.clone())
+            .app_data(app_state.analytics.audit_service.clone())
+            .app_data(app_state.admin.settings_service.clone())
+            .app_data(app_state.admin.api_key_service.clone())
+            .app_data(app_state.infra.job_scheduler.clone())
+            .app_data(app_state.infra.event_bus.clone())
+            .app_data(app_state.infra.notification_service.clone())
+            .app_data(app_state.infra.report_engine.clone())
+            .app_data(app_state.analytics.forecasting_service.clone())
+            .app_data(app_state.hr.shift_service.clone())
+            .app_data(app_state.infra.tracing_service.clone())
+            .app_data(app_state.infra.db_router.clone())
             .app_data(app_state.i18n.clone())
-            .app_data(app_state.tax_service.clone())
-            .app_data(app_state.efatura_service.clone())
-            .app_data(app_state.edefter_service.clone())
-            .app_data(app_state.webhook_service.clone())
-            .app_data(app_state.cache_service.clone())
-            .app_data(app_state.search_service.clone())
-            .app_data(app_state.rate_limit_stats.clone())
-            .app_data(app_state.archive_service.clone());
+            .app_data(app_state.finance.tax_service.clone())
+            .app_data(app_state.integration.efatura_service.clone())
+            .app_data(app_state.integration.edefter_service.clone())
+            .app_data(app_state.integration.webhook_service.clone())
+            .app_data(app_state.infra.cache_service.clone())
+            .app_data(app_state.infra.search_service.clone())
+            .app_data(app_state.infra.rate_limit_stats.clone())
+            .app_data(app_state.analytics.archive_service.clone());
 
         app // Health check
             .route("/health", web::get().to(health_check))

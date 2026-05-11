@@ -96,42 +96,42 @@ fn build_full_test_app(
     );
     App::new()
         .wrap(JwtAuthMiddleware::new(jwt))
-        .app_data(state.auth_service.clone())
-        .app_data(state.user_service.clone())
-        .app_data(state.jwt_service.clone())
-        .app_data(state.cari_service.clone())
-        .app_data(state.stock_service.clone())
-        .app_data(state.invoice_service.clone())
-        .app_data(state.sales_service.clone())
-        .app_data(state.hr_service.clone())
-        .app_data(state.accounting_service.clone())
-        .app_data(state.project_service.clone())
-        .app_data(state.manufacturing_service.clone())
-        .app_data(state.crm_service.clone())
-        .app_data(state.tenant_service.clone())
-        .app_data(state.tenant_config_service.clone())
+        .app_data(state.auth.auth_service.clone())
+        .app_data(state.auth.user_service.clone())
+        .app_data(state.auth.jwt_service.clone())
+        .app_data(state.commerce.cari_service.clone())
+        .app_data(state.commerce.stock_service.clone())
+        .app_data(state.commerce.invoice_service.clone())
+        .app_data(state.commerce.sales_service.clone())
+        .app_data(state.hr.hr_service.clone())
+        .app_data(state.finance.accounting_service.clone())
+        .app_data(state.project.project_service.clone())
+        .app_data(state.project.manufacturing_service.clone())
+        .app_data(state.project.crm_service.clone())
+        .app_data(state.admin.tenant_service.clone())
+        .app_data(state.admin.tenant_config_service.clone())
         .app_data(state.i18n.clone())
         .app_data(state.assets_service.clone())
         .app_data(state.feature_service.clone())
-        .app_data(state.product_service.clone())
-        .app_data(state.purchase_service.clone())
+        .app_data(state.commerce.product_service.clone())
+        .app_data(state.commerce.purchase_service.clone())
         .app_data(state.chart_of_accounts_service.clone())
-        .app_data(state.tax_service.clone())
-        .app_data(state.webhook_service.clone())
-        .app_data(state.search_service.clone())
-        .app_data(state.report_engine.clone())
-        .app_data(state.job_scheduler.clone())
-        .app_data(state.notification_service.clone())
-        .app_data(state.audit_service.clone())
-        .app_data(state.bank_service.clone())
-        .app_data(state.cost_center_service.clone())
-        .app_data(state.dashboard_service.clone())
-        .app_data(state.file_storage.clone())
-        .app_data(state.qc_service.clone())
-        .app_data(state.settings_service.clone())
-        .app_data(state.api_key_service.clone())
-        .app_data(state.subscription_service.clone())
-        .app_data(state.workflow_service.clone())
+        .app_data(state.finance.tax_service.clone())
+        .app_data(state.integration.webhook_service.clone())
+        .app_data(state.infra.search_service.clone())
+        .app_data(state.infra.report_engine.clone())
+        .app_data(state.infra.job_scheduler.clone())
+        .app_data(state.infra.notification_service.clone())
+        .app_data(state.analytics.audit_service.clone())
+        .app_data(state.finance.bank_service.clone())
+        .app_data(state.finance.cost_center_service.clone())
+        .app_data(state.document.dashboard_service.clone())
+        .app_data(state.document.file_storage.clone())
+        .app_data(state.project.qc_service.clone())
+        .app_data(state.admin.settings_service.clone())
+        .app_data(state.admin.api_key_service.clone())
+        .app_data(state.analytics.subscription_service.clone())
+        .app_data(state.integration.workflow_service.clone())
         .service(
             web::scope("/api")
                 .configure(configure_all_routes)
@@ -148,6 +148,7 @@ macro_rules! register_admin {
             chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
         );
         let user = $state
+            .auth
             .user_service
             .get_ref()
             .create_user(turerp::CreateUser {
@@ -161,6 +162,7 @@ macro_rules! register_admin {
             .await
             .unwrap();
         let tokens = $state
+            .auth
             .jwt_service
             .get_ref()
             .generate_tokens(
@@ -234,8 +236,8 @@ async fn test_auth_register() {
 
     let app = test::init_service(
         App::new()
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
             .service(web::scope("/api").configure(auth_configure)),
     )
     .await;
@@ -266,8 +268,8 @@ async fn test_auth_register_validation_error() {
 
     let app = test::init_service(
         App::new()
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
             .service(web::scope("/api").configure(auth_configure)),
     )
     .await;
@@ -289,8 +291,8 @@ async fn test_auth_login() {
 
     let app = test::init_service(
         App::new()
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
             .service(web::scope("/api").configure(auth_configure)),
     )
     .await;
@@ -332,8 +334,8 @@ async fn test_auth_login_invalid_credentials() {
 
     let app = test::init_service(
         App::new()
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
             .service(web::scope("/api").configure(auth_configure)),
     )
     .await;
@@ -358,9 +360,9 @@ async fn test_auth_me_unauthorized() {
     let app = test::init_service(
         App::new()
             .wrap(JwtAuthMiddleware::new(jwt_service))
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
-            .app_data(app_state.jwt_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
+            .app_data(app_state.auth.jwt_service.clone())
             .service(web::scope("/api").configure(auth_configure)),
     )
     .await;
@@ -379,9 +381,9 @@ async fn test_auth_me_with_valid_token() {
     let app = test::init_service(
         App::new()
             .wrap(JwtAuthMiddleware::new(jwt_service))
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
-            .app_data(app_state.jwt_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
+            .app_data(app_state.auth.jwt_service.clone())
             .service(web::scope("/api").configure(auth_configure)),
     )
     .await;
@@ -431,7 +433,7 @@ async fn test_users_create_unauthorized() {
     let app = test::init_service(
         App::new()
             .wrap(JwtAuthMiddleware::new(jwt_service))
-            .app_data(app_state.user_service.clone())
+            .app_data(app_state.auth.user_service.clone())
             .service(web::scope("/api").configure(users_configure)),
     )
     .await;
@@ -510,7 +512,7 @@ async fn test_users_list_unauthorized() {
     let app = test::init_service(
         App::new()
             .wrap(JwtAuthMiddleware::new(jwt_service))
-            .app_data(app_state.user_service.clone())
+            .app_data(app_state.auth.user_service.clone())
             .service(web::scope("/api").configure(users_configure)),
     )
     .await;

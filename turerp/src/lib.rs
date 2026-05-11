@@ -326,62 +326,122 @@ pub mod app {
     #[cfg(feature = "postgres")]
     use sqlx::PgPool;
 
-    /// Application state data
+    /// Auth domain services
     #[derive(Clone)]
-    pub struct AppState {
+    pub struct AuthState {
         pub auth_service: web::Data<AuthService>,
         pub user_service: web::Data<UserService>,
         pub jwt_service: web::Data<JwtService>,
+    }
+
+    /// Commerce domain services
+    #[derive(Clone)]
+    pub struct CommerceState {
         pub cari_service: web::Data<CariService>,
         pub company_service: web::Data<CompanyService>,
         pub stock_service: web::Data<StockService>,
         pub invoice_service: web::Data<InvoiceService>,
         pub sales_service: web::Data<SalesService>,
+        pub purchase_service: web::Data<PurchaseService>,
+        pub product_service: web::Data<ProductService>,
+    }
+
+    /// HR domain services
+    #[derive(Clone)]
+    pub struct HrState {
         pub hr_service: web::Data<HrService>,
-        pub accounting_service: web::Data<AccountingService>,
-        pub project_service: web::Data<ProjectService>,
-        pub manufacturing_service: web::Data<ManufacturingService>,
-        pub crm_service: web::Data<CrmService>,
-        pub chart_of_accounts_service: web::Data<ChartOfAccountsService>,
-        pub custom_field_service: web::Data<CustomFieldService>,
+        pub shift_service: web::Data<ShiftService>,
+    }
+
+    /// Admin domain services
+    #[derive(Clone)]
+    pub struct AdminState {
         pub tenant_service: web::Data<TenantService>,
         pub tenant_config_service: web::Data<TenantConfigService>,
-        pub assets_service: web::Data<AssetsService>,
-        pub feature_service: web::Data<FeatureFlagService>,
-        pub product_service: web::Data<ProductService>,
-        pub purchase_service: web::Data<PurchaseService>,
-        pub audit_service: web::Data<AuditService>,
-        pub archive_service: web::Data<ArchiveService>,
-        pub bank_service: web::Data<BankService>,
-        pub cost_center_service: web::Data<CostCenterService>,
-        pub dashboard_service: web::Data<DashboardService>,
-        pub document_service: web::Data<DocumentService>,
-        pub file_storage: web::Data<dyn crate::common::file_storage::FileStorage>,
-        pub qc_service: web::Data<crate::domain::manufacturing::QualityControlService>,
-        pub subscription_service: web::Data<SubscriptionService>,
-        pub forecasting_service: web::Data<ForecastingService>,
-        pub shift_service: web::Data<ShiftService>,
-        pub workflow_service: web::Data<WorkflowService>,
         pub settings_service: web::Data<crate::domain::settings::SettingsService>,
         pub api_key_service: web::Data<crate::domain::api_key::ApiKeyService>,
+    }
+
+    /// Infrastructure services
+    #[derive(Clone)]
+    pub struct InfraState {
         pub job_scheduler: web::Data<dyn JobScheduler>,
         pub event_bus: web::Data<dyn EventBus>,
         pub notification_service: web::Data<dyn NotificationService>,
         pub report_engine: web::Data<dyn ReportEngine>,
         pub tracing_service: web::Data<dyn TracingService>,
         pub db_router: web::Data<dyn DbRouter>,
-        pub i18n: web::Data<I18n>,
-        pub tax_service: web::Data<TaxService>,
-        pub currency_service: web::Data<crate::domain::currency::service::CurrencyService>,
-        pub efatura_service: web::Data<crate::domain::efatura::EFaturaService>,
-        pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
-        pub webhook_service: web::Data<WebhookService>,
         pub cache_service: web::Data<dyn crate::cache::CacheService>,
         pub search_service: web::Data<dyn SearchService>,
         pub rate_limit_stats: web::Data<crate::middleware::rate_limit::RateLimitStatsStore>,
         #[cfg(feature = "postgres")]
         pub db_pool: web::Data<Arc<PgPool>>,
         pub cdc_listener: Option<Arc<crate::common::cdc::CdcListener>>,
+    }
+
+    /// Accounting & Finance domain services
+    #[derive(Clone)]
+    pub struct FinanceState {
+        pub accounting_service: web::Data<AccountingService>,
+        pub bank_service: web::Data<BankService>,
+        pub cost_center_service: web::Data<CostCenterService>,
+        pub tax_service: web::Data<TaxService>,
+        pub currency_service: web::Data<crate::domain::currency::service::CurrencyService>,
+    }
+
+    /// Project & Manufacturing domain services
+    #[derive(Clone)]
+    pub struct ProjectState {
+        pub project_service: web::Data<ProjectService>,
+        pub manufacturing_service: web::Data<ManufacturingService>,
+        pub crm_service: web::Data<CrmService>,
+        pub qc_service: web::Data<crate::domain::manufacturing::QualityControlService>,
+    }
+
+    /// Document & Content domain services
+    #[derive(Clone)]
+    pub struct DocumentState {
+        pub document_service: web::Data<DocumentService>,
+        pub file_storage: web::Data<dyn crate::common::file_storage::FileStorage>,
+        pub dashboard_service: web::Data<DashboardService>,
+    }
+
+    /// Integration & External domain services
+    #[derive(Clone)]
+    pub struct IntegrationState {
+        pub efatura_service: web::Data<crate::domain::efatura::EFaturaService>,
+        pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
+        pub webhook_service: web::Data<WebhookService>,
+        pub workflow_service: web::Data<WorkflowService>,
+    }
+
+    /// Analytics & Reporting domain services
+    #[derive(Clone)]
+    pub struct AnalyticsState {
+        pub audit_service: web::Data<AuditService>,
+        pub archive_service: web::Data<ArchiveService>,
+        pub subscription_service: web::Data<SubscriptionService>,
+        pub forecasting_service: web::Data<ForecastingService>,
+    }
+
+    /// Application state data
+    #[derive(Clone)]
+    pub struct AppState {
+        pub auth: AuthState,
+        pub commerce: CommerceState,
+        pub hr: HrState,
+        pub admin: AdminState,
+        pub infra: InfraState,
+        pub finance: FinanceState,
+        pub project: ProjectState,
+        pub document: DocumentState,
+        pub integration: IntegrationState,
+        pub analytics: AnalyticsState,
+        pub chart_of_accounts_service: web::Data<ChartOfAccountsService>,
+        pub custom_field_service: web::Data<CustomFieldService>,
+        pub assets_service: web::Data<AssetsService>,
+        pub feature_service: web::Data<FeatureFlagService>,
+        pub i18n: web::Data<I18n>,
     }
 
     /// Create all in-memory services
@@ -719,55 +779,78 @@ pub mod app {
             let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
 
             (
-                auth_service,
-                user_service,
-                jwt_service,
-                cari_service,
-                company_service,
-                stock_service,
-                invoice_service,
-                sales_service,
-                hr_service,
-                accounting_service,
-                project_service,
-                manufacturing_service,
-                crm_service,
+                AuthState {
+                    auth_service: web::Data::new(auth_service),
+                    user_service: web::Data::new(user_service),
+                    jwt_service: web::Data::new(jwt_service),
+                },
+                CommerceState {
+                    cari_service: web::Data::new(cari_service),
+                    company_service: web::Data::new(company_service),
+                    stock_service: web::Data::new(stock_service),
+                    invoice_service: web::Data::new(invoice_service),
+                    sales_service: web::Data::new(sales_service),
+                    purchase_service: web::Data::new(purchase_service),
+                    product_service: web::Data::new(product_service),
+                },
+                HrState {
+                    hr_service: web::Data::new(hr_service),
+                    shift_service: web::Data::new(shift_service),
+                },
+                AdminState {
+                    tenant_service: web::Data::new(tenant_service),
+                    tenant_config_service: web::Data::new(tenant_config_service),
+                    settings_service: web::Data::new(settings_service),
+                    api_key_service: web::Data::new(api_key_service),
+                },
+                InfraState {
+                    job_scheduler: web::Data::from(job_scheduler),
+                    event_bus: web::Data::from(event_bus),
+                    notification_service: web::Data::from(notification_service),
+                    report_engine: web::Data::from(report_engine),
+                    tracing_service: web::Data::from(tracing_service),
+                    db_router: web::Data::from(db_router),
+                    cache_service: web::Data::from(cache_service),
+                    search_service: web::Data::from(search_service),
+                    rate_limit_stats: web::Data::new(rate_limit_stats),
+                    #[cfg(feature = "postgres")]
+                    db_pool: web::Data::new(Arc::new(sqlx::PgPool::connect_lazy("postgres://localhost/dummy").expect("Failed to create lazy pool"))),
+                    cdc_listener: None,
+                },
+                FinanceState {
+                    accounting_service: web::Data::new(accounting_service),
+                    bank_service: web::Data::new(bank_service),
+                    cost_center_service: web::Data::new(cost_center_service),
+                    tax_service: web::Data::new(tax_service),
+                    currency_service: web::Data::new(currency_service),
+                },
+                ProjectState {
+                    project_service: web::Data::new(project_service),
+                    manufacturing_service: web::Data::new(manufacturing_service),
+                    crm_service: web::Data::new(crm_service),
+                    qc_service: web::Data::new(qc_service),
+                },
+                DocumentState {
+                    document_service: web::Data::new(document_service),
+                    file_storage: web::Data::from(file_storage),
+                    dashboard_service: web::Data::new(dashboard_service),
+                },
+                IntegrationState {
+                    efatura_service: web::Data::new(efatura_service),
+                    edefter_service: web::Data::new(edefter_service),
+                    webhook_service: web::Data::new(webhook_service),
+                    workflow_service: web::Data::new(workflow_service),
+                },
+                AnalyticsState {
+                    audit_service: web::Data::new(audit_service),
+                    archive_service: web::Data::new(archive_service),
+                    subscription_service: web::Data::new(subscription_service),
+                    forecasting_service: web::Data::new(forecasting_service),
+                },
                 chart_of_accounts_service,
                 custom_field_service,
-                tenant_service,
-                tenant_config_service,
                 assets_service,
                 feature_service,
-                product_service,
-                purchase_service,
-                audit_service,
-                archive_service,
-                bank_service,
-                cost_center_service,
-                dashboard_service,
-                document_service,
-                file_storage,
-                qc_service,
-                settings_service,
-                api_key_service,
-                job_scheduler,
-                event_bus,
-                notification_service,
-                report_engine,
-                subscription_service,
-                forecasting_service,
-                shift_service,
-                tracing_service,
-                workflow_service,
-                db_router,
-                tax_service,
-                currency_service,
-                efatura_service,
-                edefter_service,
-                webhook_service,
-                cache_service,
-                search_service,
-                rate_limit_stats,
             )
         }};
     }
@@ -776,111 +859,40 @@ pub mod app {
     #[cfg(not(feature = "postgres"))]
     pub fn create_app_state(config: &Config) -> AppState {
         let (
-            auth_service,
-            user_service,
-            jwt_service,
-            cari_service,
-            company_service,
-            stock_service,
-            invoice_service,
-            sales_service,
-            hr_service,
-            accounting_service,
-            project_service,
-            manufacturing_service,
-            crm_service,
+            auth,
+            commerce,
+            hr,
+            admin,
+            infra,
+            finance,
+            project,
+            document,
+            integration,
+            analytics,
             chart_of_accounts_service,
             custom_field_service,
-            tenant_service,
-            tenant_config_service,
             assets_service,
             feature_service,
-            product_service,
-            purchase_service,
-            audit_service,
-            archive_service,
-            bank_service,
-            cost_center_service,
-            dashboard_service,
-            document_service,
-            file_storage,
-            qc_service,
-            settings_service,
-            api_key_service,
-            job_scheduler,
-            event_bus,
-            notification_service,
-            report_engine,
-            subscription_service,
-            forecasting_service,
-            shift_service,
-            tracing_service,
-            workflow_service,
-            db_router,
-            tax_service,
-            currency_service,
-            efatura_service,
-            edefter_service,
-            webhook_service,
-            cache_service,
-            search_service,
-            rate_limit_stats,
         ) = create_in_memory_services!(config);
 
         let i18n = I18n::init();
 
         AppState {
-            auth_service: web::Data::new(auth_service),
-            user_service: web::Data::new(user_service),
-            jwt_service: web::Data::new(jwt_service),
-            cari_service: web::Data::new(cari_service),
-            company_service: web::Data::new(company_service),
-            stock_service: web::Data::new(stock_service),
-            invoice_service: web::Data::new(invoice_service),
-            sales_service: web::Data::new(sales_service),
-            hr_service: web::Data::new(hr_service),
-            accounting_service: web::Data::new(accounting_service),
-            project_service: web::Data::new(project_service),
-            manufacturing_service: web::Data::new(manufacturing_service),
-            crm_service: web::Data::new(crm_service),
+            auth,
+            commerce,
+            hr,
+            admin,
+            infra,
+            finance,
+            project,
+            document,
+            integration,
+            analytics,
             chart_of_accounts_service: web::Data::new(chart_of_accounts_service),
             custom_field_service: web::Data::new(custom_field_service),
-            tenant_service: web::Data::new(tenant_service),
-            tenant_config_service: web::Data::new(tenant_config_service),
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
-            product_service: web::Data::new(product_service),
-            purchase_service: web::Data::new(purchase_service),
-            audit_service: web::Data::new(audit_service),
-            archive_service: web::Data::new(archive_service),
-            bank_service: web::Data::new(bank_service),
-            cost_center_service: web::Data::new(cost_center_service),
-            dashboard_service: web::Data::new(dashboard_service),
-            document_service: web::Data::new(document_service),
-            file_storage: web::Data::from(file_storage),
-            qc_service: web::Data::new(qc_service),
-            settings_service: web::Data::new(settings_service),
-            api_key_service: web::Data::new(api_key_service),
-            job_scheduler: web::Data::from(job_scheduler),
-            event_bus: web::Data::from(event_bus),
-            notification_service: web::Data::from(notification_service),
-            report_engine: web::Data::from(report_engine),
-            subscription_service: web::Data::new(subscription_service),
-            forecasting_service: web::Data::new(forecasting_service),
-            shift_service: web::Data::new(shift_service),
-            tracing_service: web::Data::from(tracing_service),
-            workflow_service: web::Data::new(workflow_service),
-            db_router: web::Data::from(db_router),
-            cdc_listener: None,
             i18n: web::Data::new(i18n),
-            tax_service: web::Data::new(tax_service),
-            currency_service: web::Data::new(currency_service),
-            efatura_service: web::Data::new(efatura_service),
-            edefter_service: web::Data::new(edefter_service),
-            webhook_service: web::Data::new(webhook_service),
-            cache_service: web::Data::from(cache_service),
-            search_service: web::Data::from(search_service),
-            rate_limit_stats: web::Data::new(rate_limit_stats),
         }
     }
 
@@ -1209,64 +1221,84 @@ pub mod app {
 
         let i18n = I18n::init();
 
+        let file_storage: Arc<dyn crate::common::file_storage::FileStorage> =
+            Arc::new(crate::common::file_storage::LocalFileStorage::new(format!(
+                "/tmp/turerp-test-files-{}",
+                std::process::id()
+            ))) as Arc<dyn crate::common::file_storage::FileStorage>;
+
         AppState {
-            auth_service: web::Data::new(auth_service),
-            user_service: web::Data::new(user_service),
-            jwt_service: web::Data::new(jwt_service),
-            cari_service: web::Data::new(cari_service),
-            company_service: web::Data::new(company_service),
-            stock_service: web::Data::new(stock_service),
-            invoice_service: web::Data::new(invoice_service),
-            sales_service: web::Data::new(sales_service),
-            hr_service: web::Data::new(hr_service),
-            accounting_service: web::Data::new(accounting_service),
-            project_service: web::Data::new(project_service),
-            manufacturing_service: web::Data::new(manufacturing_service),
-            crm_service: web::Data::new(crm_service),
+            auth: AuthState {
+                auth_service: web::Data::new(auth_service),
+                user_service: web::Data::new(user_service),
+                jwt_service: web::Data::new(jwt_service),
+            },
+            commerce: CommerceState {
+                cari_service: web::Data::new(cari_service),
+                company_service: web::Data::new(company_service),
+                stock_service: web::Data::new(stock_service),
+                invoice_service: web::Data::new(invoice_service),
+                sales_service: web::Data::new(sales_service),
+                purchase_service: web::Data::new(purchase_service),
+                product_service: web::Data::new(product_service),
+            },
+            hr: HrState {
+                hr_service: web::Data::new(hr_service),
+                shift_service: web::Data::new(shift_service),
+            },
+            admin: AdminState {
+                tenant_service: web::Data::new(tenant_service),
+                tenant_config_service: web::Data::new(tenant_config_service),
+                settings_service: web::Data::new(settings_service),
+                api_key_service: web::Data::new(api_key_service),
+            },
+            infra: InfraState {
+                job_scheduler: web::Data::from(job_scheduler),
+                event_bus: web::Data::from(event_bus),
+                notification_service: web::Data::from(notification_service),
+                report_engine: web::Data::from(report_engine),
+                tracing_service: web::Data::from(tracing_service),
+                db_router: web::Data::from(db_router),
+                cache_service: web::Data::from(cache_service),
+                search_service: web::Data::from(search_service),
+                rate_limit_stats: web::Data::new(rate_limit_stats),
+                db_pool: web::Data::new(pool),
+                cdc_listener: None,
+            },
+            finance: FinanceState {
+                accounting_service: web::Data::new(accounting_service),
+                bank_service: web::Data::new(bank_service),
+                cost_center_service: web::Data::new(cost_center_service),
+                tax_service: web::Data::new(tax_service),
+                currency_service: web::Data::new(currency_service),
+            },
+            project: ProjectState {
+                project_service: web::Data::new(project_service),
+                manufacturing_service: web::Data::new(manufacturing_service),
+                crm_service: web::Data::new(crm_service),
+                qc_service: web::Data::new(qc_service),
+            },
+            document: DocumentState {
+                document_service: web::Data::new(document_service),
+                file_storage: web::Data::from(file_storage),
+                dashboard_service: web::Data::new(dashboard_service),
+            },
+            integration: IntegrationState {
+                efatura_service: web::Data::new(efatura_service),
+                edefter_service: web::Data::new(edefter_service),
+                webhook_service: web::Data::new(webhook_service),
+                workflow_service: web::Data::new(workflow_service),
+            },
+            analytics: AnalyticsState {
+                audit_service: web::Data::new(audit_service),
+                archive_service: web::Data::new(archive_service),
+                subscription_service: web::Data::new(subscription_service),
+                forecasting_service: web::Data::new(forecasting_service),
+            },
             chart_of_accounts_service: web::Data::new(chart_of_accounts_service),
             custom_field_service: web::Data::new(custom_field_service),
-            tenant_service: web::Data::new(tenant_service),
-            tenant_config_service: web::Data::new(tenant_config_service),
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
-            product_service: web::Data::new(product_service),
-            purchase_service: web::Data::new(purchase_service),
-            audit_service: web::Data::new(audit_service),
-            archive_service: web::Data::new(archive_service),
-            bank_service: web::Data::new(bank_service),
-            cost_center_service: web::Data::new(cost_center_service),
-            dashboard_service: web::Data::new(dashboard_service),
-            document_service: web::Data::new(document_service),
-            file_storage: web::Data::from(Arc::new(
-                crate::common::file_storage::LocalFileStorage::new(format!(
-                    "/tmp/turerp-test-files-{}",
-                    std::process::id()
-                )),
-            )
-                as Arc<dyn crate::common::file_storage::FileStorage>),
-            qc_service: web::Data::new(qc_service),
-            settings_service: web::Data::new(settings_service),
-            api_key_service: web::Data::new(api_key_service),
-            job_scheduler: web::Data::from(job_scheduler),
-            event_bus: web::Data::from(event_bus),
-            notification_service: web::Data::from(notification_service),
-            report_engine: web::Data::from(report_engine),
-            subscription_service: web::Data::new(subscription_service),
-            forecasting_service: web::Data::new(forecasting_service),
-            shift_service: web::Data::new(shift_service),
-            tracing_service: web::Data::from(tracing_service),
-            workflow_service: web::Data::new(workflow_service),
-            db_router: web::Data::from(db_router),
-            tax_service: web::Data::new(tax_service),
-            currency_service: web::Data::new(currency_service),
-            efatura_service: web::Data::new(efatura_service),
-            edefter_service: web::Data::new(edefter_service),
-            webhook_service: web::Data::new(webhook_service),
-            cache_service: web::Data::from(cache_service),
-            search_service: web::Data::from(search_service),
-            rate_limit_stats: web::Data::new(rate_limit_stats),
-            db_pool: web::Data::new(pool),
-            cdc_listener: None,
             i18n: web::Data::new(i18n),
         }
     }
@@ -1281,55 +1313,20 @@ pub mod app {
     #[cfg(feature = "postgres")]
     pub fn create_app_state_in_memory(config: &Config) -> AppState {
         let (
-            auth_service,
-            user_service,
-            jwt_service,
-            cari_service,
-            company_service,
-            stock_service,
-            invoice_service,
-            sales_service,
-            hr_service,
-            accounting_service,
-            project_service,
-            manufacturing_service,
-            crm_service,
+            auth,
+            commerce,
+            hr,
+            admin,
+            mut infra,
+            finance,
+            project,
+            document,
+            integration,
+            analytics,
             chart_of_accounts_service,
             custom_field_service,
-            tenant_service,
-            tenant_config_service,
             assets_service,
             feature_service,
-            product_service,
-            purchase_service,
-            audit_service,
-            archive_service,
-            bank_service,
-            cost_center_service,
-            dashboard_service,
-            document_service,
-            file_storage,
-            qc_service,
-            settings_service,
-            api_key_service,
-            job_scheduler,
-            event_bus,
-            notification_service,
-            report_engine,
-            subscription_service,
-            forecasting_service,
-            shift_service,
-            tracing_service,
-            workflow_service,
-            db_router,
-            tax_service,
-            currency_service,
-            efatura_service,
-            edefter_service,
-            webhook_service,
-            cache_service,
-            search_service,
-            rate_limit_stats,
         ) = create_in_memory_services!(config);
 
         // For in-memory testing with postgres feature, create a mock pool
@@ -1337,15 +1334,15 @@ pub mod app {
             .max_connections(1)
             .connect_lazy("postgres://localhost/dummy")
             .expect("Failed to create lazy pool");
-        let db_pool = web::Data::new(Arc::new(pool));
+        infra.db_pool = web::Data::new(Arc::new(pool));
 
         // Register webhook subscriber on event bus
+        let webhook_service_arc = Arc::new(integration.webhook_service.get_ref().clone());
         tokio::runtime::Handle::current().block_on(async {
-            event_bus
+            infra
+                .event_bus
                 .subscribe(Arc::new(
-                    crate::domain::webhook::subscriber::WebhookSubscriber::new(Arc::new(
-                        webhook_service.clone(),
-                    )),
+                    crate::domain::webhook::subscriber::WebhookSubscriber::new(webhook_service_arc),
                 ))
                 .await
                 .ok();
@@ -1354,57 +1351,20 @@ pub mod app {
         let i18n = I18n::init();
 
         AppState {
-            auth_service: web::Data::new(auth_service),
-            user_service: web::Data::new(user_service),
-            jwt_service: web::Data::new(jwt_service),
-            cari_service: web::Data::new(cari_service),
-            company_service: web::Data::new(company_service),
-            stock_service: web::Data::new(stock_service),
-            invoice_service: web::Data::new(invoice_service),
-            sales_service: web::Data::new(sales_service),
-            hr_service: web::Data::new(hr_service),
-            accounting_service: web::Data::new(accounting_service),
-            project_service: web::Data::new(project_service),
-            manufacturing_service: web::Data::new(manufacturing_service),
-            crm_service: web::Data::new(crm_service),
+            auth,
+            commerce,
+            hr,
+            admin,
+            infra,
+            finance,
+            project,
+            document,
+            integration,
+            analytics,
             chart_of_accounts_service: web::Data::new(chart_of_accounts_service),
             custom_field_service: web::Data::new(custom_field_service),
-            tenant_service: web::Data::new(tenant_service),
-            tenant_config_service: web::Data::new(tenant_config_service),
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
-            product_service: web::Data::new(product_service),
-            purchase_service: web::Data::new(purchase_service),
-            audit_service: web::Data::new(audit_service),
-            archive_service: web::Data::new(archive_service),
-            bank_service: web::Data::new(bank_service),
-            cost_center_service: web::Data::new(cost_center_service),
-            dashboard_service: web::Data::new(dashboard_service),
-            document_service: web::Data::new(document_service),
-            file_storage: web::Data::from(file_storage),
-            qc_service: web::Data::new(qc_service),
-            settings_service: web::Data::new(settings_service),
-            api_key_service: web::Data::new(api_key_service),
-            job_scheduler: web::Data::from(job_scheduler),
-            event_bus: web::Data::from(event_bus),
-            notification_service: web::Data::from(notification_service),
-            report_engine: web::Data::from(report_engine),
-            subscription_service: web::Data::new(subscription_service),
-            forecasting_service: web::Data::new(forecasting_service),
-            shift_service: web::Data::new(shift_service),
-            tracing_service: web::Data::from(tracing_service),
-            workflow_service: web::Data::new(workflow_service),
-            db_router: web::Data::from(db_router),
-            tax_service: web::Data::new(tax_service),
-            currency_service: web::Data::new(currency_service),
-            efatura_service: web::Data::new(efatura_service),
-            edefter_service: web::Data::new(edefter_service),
-            webhook_service: web::Data::new(webhook_service),
-            cache_service: web::Data::from(cache_service),
-            search_service: web::Data::from(search_service),
-            rate_limit_stats: web::Data::new(rate_limit_stats),
-            db_pool,
-            cdc_listener: None,
             i18n: web::Data::new(i18n),
         }
     }
@@ -1444,9 +1404,9 @@ mod tests {
         let config = Config::default();
         let state = app::create_app_state_in_memory(&config);
         // Verify services are created
-        assert!(std::sync::Arc::strong_count(&state.auth_service) > 0);
-        assert!(std::sync::Arc::strong_count(&state.user_service) > 0);
-        assert!(std::sync::Arc::strong_count(&state.jwt_service) > 0);
-        assert!(std::sync::Arc::strong_count(&state.cari_service) > 0);
+        assert!(std::sync::Arc::strong_count(&state.auth.auth_service) > 0);
+        assert!(std::sync::Arc::strong_count(&state.auth.user_service) > 0);
+        assert!(std::sync::Arc::strong_count(&state.auth.jwt_service) > 0);
+        assert!(std::sync::Arc::strong_count(&state.commerce.cari_service) > 0);
     }
 }
