@@ -227,14 +227,6 @@ impl PostgresEventBus {
     }
 }
 
-impl Default for PostgresEventBus {
-    fn default() -> Self {
-        // This is only useful for testing when no pool is needed immediately.
-        // In practice, always use PostgresEventBus::new().
-        unimplemented!("PostgresEventBus requires a PgPool")
-    }
-}
-
 #[async_trait::async_trait]
 impl EventBus for PostgresEventBus {
     async fn publish(&self, event: DomainEvent) -> Result<i64, String> {

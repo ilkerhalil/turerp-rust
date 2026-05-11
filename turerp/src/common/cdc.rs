@@ -402,20 +402,19 @@ mod tests {
             timestamp: Utc::now(),
         };
         let domain = convert_to_domain_event(&cdc).unwrap();
-        match domain {
-            DomainEvent::InvoiceCreated {
-                invoice_id,
-                tenant_id,
-                amount,
-                currency,
-            } => {
-                assert_eq!(invoice_id, 1);
-                assert_eq!(tenant_id, 1);
-                assert_eq!(amount, "500.00");
-                assert_eq!(currency, "USD");
-            }
-            _ => panic!("Expected InvoiceCreated"),
-        }
+        let DomainEvent::InvoiceCreated {
+            invoice_id,
+            tenant_id,
+            amount,
+            currency,
+        } = domain
+        else {
+            panic!("Expected InvoiceCreated, got {:?}", domain);
+        };
+        assert_eq!(invoice_id, 1);
+        assert_eq!(tenant_id, 1);
+        assert_eq!(amount, "500.00");
+        assert_eq!(currency, "USD");
     }
 
     #[test]
@@ -430,20 +429,19 @@ mod tests {
             timestamp: Utc::now(),
         };
         let domain = convert_to_domain_event(&cdc).unwrap();
-        match domain {
-            DomainEvent::PaymentReceived {
-                payment_id,
-                invoice_id,
-                tenant_id,
-                amount,
-            } => {
-                assert_eq!(payment_id, 2);
-                assert_eq!(invoice_id, 10);
-                assert_eq!(tenant_id, 1);
-                assert_eq!(amount, "250.00");
-            }
-            _ => panic!("Expected PaymentReceived"),
-        }
+        let DomainEvent::PaymentReceived {
+            payment_id,
+            invoice_id,
+            tenant_id,
+            amount,
+        } = domain
+        else {
+            panic!("Expected PaymentReceived, got {:?}", domain);
+        };
+        assert_eq!(payment_id, 2);
+        assert_eq!(invoice_id, 10);
+        assert_eq!(tenant_id, 1);
+        assert_eq!(amount, "250.00");
     }
 
     #[test]
@@ -460,24 +458,23 @@ mod tests {
             timestamp: Utc::now(),
         };
         let domain = convert_to_domain_event(&cdc).unwrap();
-        match domain {
-            DomainEvent::StockMoved {
-                movement_id,
-                tenant_id,
-                product_id,
-                warehouse_id,
-                quantity,
-                direction,
-            } => {
-                assert_eq!(movement_id, 3);
-                assert_eq!(tenant_id, 1);
-                assert_eq!(product_id, 5);
-                assert_eq!(warehouse_id, 2);
-                assert_eq!(quantity, 100);
-                assert_eq!(direction, "In");
-            }
-            _ => panic!("Expected StockMoved"),
-        }
+        let DomainEvent::StockMoved {
+            movement_id,
+            tenant_id,
+            product_id,
+            warehouse_id,
+            quantity,
+            direction,
+        } = domain
+        else {
+            panic!("Expected StockMoved, got {:?}", domain);
+        };
+        assert_eq!(movement_id, 3);
+        assert_eq!(tenant_id, 1);
+        assert_eq!(product_id, 5);
+        assert_eq!(warehouse_id, 2);
+        assert_eq!(quantity, 100);
+        assert_eq!(direction, "In");
     }
 
     #[test]
