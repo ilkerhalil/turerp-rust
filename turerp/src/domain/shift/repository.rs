@@ -468,9 +468,10 @@ impl AttendanceRecordRepository for InMemoryAttendanceRecordRepository {
                 .timestamp
                 .date_naive()
                 .and_hms_opt(0, 0, 0)
-                .unwrap()
+                .expect("00:00:00 is always valid")
                 .and_local_timezone(Utc)
-                .unwrap(),
+                .single()
+                .expect("UTC has no ambiguous times"),
             clock_in: Some(req.timestamp),
             clock_out: None,
             hours_worked: Decimal::ZERO,
@@ -514,7 +515,11 @@ impl AttendanceRecordRepository for InMemoryAttendanceRecordRepository {
         let id = found.ok_or_else(|| {
             ApiError::NotFound("No open attendance record found for employee".to_string())
         })?;
-        Ok(inner.records.get(&id).unwrap().clone())
+        Ok(inner
+            .records
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| ApiError::NotFound("Attendance record disappeared".to_string()))?)
     }
 
     async fn find_by_id(&self, id: i64) -> Result<Option<AttendanceRecord>, ApiError> {

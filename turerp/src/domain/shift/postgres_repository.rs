@@ -630,9 +630,10 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
             .timestamp
             .date_naive()
             .and_hms_opt(0, 0, 0)
-            .unwrap()
+            .expect("00:00:00 is always valid")
             .and_local_timezone(Utc)
-            .unwrap();
+            .single()
+            .expect("UTC has no ambiguous times");
         let status_str = AttendanceStatus::Present.to_string();
 
         let row: AttendanceRecordRow = sqlx::query_as(

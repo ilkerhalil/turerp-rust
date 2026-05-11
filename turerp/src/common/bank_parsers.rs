@@ -13,27 +13,38 @@ use crate::domain::bank::model::{BankCode, ParsedBankTransaction};
 // Format: :61:2301010101C1000,00NTRFNONREF//REF123
 // Date (6) + entry_date (4) + D/C + amount + N + transaction_type + reference
 static MT940_61_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r":61:(\d{6})(?:\d{4})?([CD])([\d,]+)N([A-Z]{3})([^/]*)(?://(.*))?").unwrap()
+    Regex::new(r":61:(\d{6})(?:\d{4})?([CD])([\d,]+)N([A-Z]{3})([^/]*)(?://(.*))?")
+        .expect("static regex should compile")
 });
 
 // MT940 :86: tag pattern (description)
 #[allow(dead_code)]
-static MT940_86_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r":86:(.+?)(?:\n|:[0-9A-Z]{2,3}:|$)").unwrap());
+static MT940_86_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r":86:(.+?)(?:\n|:[0-9A-Z]{2,3}:|$)").expect("static regex should compile")
+});
 
 // CAMT.053 basic XML patterns
-static CAMT_DATE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?s)<Dt>(\d{4}-\d{2}-\d{2})</Dt>").unwrap());
-static CAMT_TXDTL_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?s)<NtryDtls>.*?</NtryDtls>").unwrap());
-static CAMT_AMOUNT_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"(?s)<Amt Ccy=\"([A-Z]{3})\">([\d.]+)</Amt>"#).unwrap());
-static CAMT_CREDIT_DEBIT_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?s)<CdtDbtInd>([A-Za-z]+)</CdtDbtInd>").unwrap());
-static CAMT_RMT_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?s)<RmtInf>.*?<Ustrd>(.+?)</Ustrd>.*?</RmtInf>").unwrap());
-static CAMT_REF_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?s)<Refs>.*?<EndToEndId>(.+?)</EndToEndId>.*?</Refs>").unwrap());
+static CAMT_DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)<Dt>(\d{4}-\d{2}-\d{2})</Dt>").expect("static regex should compile")
+});
+static CAMT_TXDTL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)<NtryDtls>.*?</NtryDtls>").expect("static regex should compile")
+});
+static CAMT_AMOUNT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?s)<Amt Ccy=\"([A-Z]{3})\">([\d.]+)</Amt>"#)
+        .expect("static regex should compile")
+});
+static CAMT_CREDIT_DEBIT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)<CdtDbtInd>([A-Za-z]+)</CdtDbtInd>").expect("static regex should compile")
+});
+static CAMT_RMT_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)<RmtInf>.*?<Ustrd>(.+?)</Ustrd>.*?</RmtInf>")
+        .expect("static regex should compile")
+});
+static CAMT_REF_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?s)<Refs>.*?<EndToEndId>(.+?)</EndToEndId>.*?</Refs>")
+        .expect("static regex should compile")
+});
 
 /// Parse MT940 format statement data
 pub fn parse_mt940(data: &str) -> Vec<ParsedBankTransaction> {
@@ -125,7 +136,7 @@ fn parse_mt940_date(date_str: &str) -> NaiveDate {
     let month = date_str[2..4].parse::<u32>().unwrap_or(1);
     let day = date_str[4..6].parse::<u32>().unwrap_or(1);
     NaiveDate::from_ymd_opt(year as i32, month, day)
-        .unwrap_or_else(|| NaiveDate::from_ymd_opt(2000, 1, 1).unwrap())
+        .unwrap_or_else(|| NaiveDate::from_ymd_opt(2000, 1, 1).expect("2000-01-01 is always valid"))
 }
 
 fn parse_mt940_amount(amount_str: &str) -> Decimal {
@@ -245,14 +256,21 @@ fn parse_generic_bank_xml(
 ) -> Vec<ParsedBankTransaction> {
     let mut transactions = Vec::new();
 
-    let tx_re = Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", tx_tag, tx_tag))
-        .unwrap_or_else(|_| Regex::new(r"(?s)<\w+>(.*?)</\w+>").unwrap());
-    let date_re = Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", date_tag, date_tag))
-        .unwrap_or_else(|_| Regex::new(r"(?s)<\w+>(.*?)</\w+>").unwrap());
-    let desc_re = Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", desc_tag, desc_tag))
-        .unwrap_or_else(|_| Regex::new(r"(?s)<\w+>(.*?)</\w+>").unwrap());
+    let tx_re = Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", tx_tag, tx_tag)).unwrap_or_else(|_| {
+        Regex::new(r"(?s)<\w+>(.*?)</\w+>").expect("fallback regex should compile")
+    });
+    let date_re =
+        Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", date_tag, date_tag)).unwrap_or_else(|_| {
+            Regex::new(r"(?s)<\w+>(.*?)</\w+>").expect("fallback regex should compile")
+        });
+    let desc_re =
+        Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", desc_tag, desc_tag)).unwrap_or_else(|_| {
+            Regex::new(r"(?s)<\w+>(.*?)</\w+>").expect("fallback regex should compile")
+        });
     let amount_re = Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", amount_tag, amount_tag))
-        .unwrap_or_else(|_| Regex::new(r"(?s)<\w+>(.*?)</\w+>").unwrap());
+        .unwrap_or_else(|_| {
+            Regex::new(r"(?s)<\w+>(.*?)</\w+>").expect("fallback regex should compile")
+        });
 
     for tx_caps in tx_re.captures_iter(data) {
         let block = tx_caps.get(1).map(|m| m.as_str()).unwrap_or("");

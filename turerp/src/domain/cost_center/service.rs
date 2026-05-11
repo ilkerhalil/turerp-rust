@@ -320,12 +320,11 @@ impl CostCenterService {
         }
         match rule.rule_type {
             crate::domain::cost_center::model::AllocationRuleType::Percentage => {
-                if rule.percentage.is_none() {
+                let Some(pct) = rule.percentage else {
                     return Err(ApiError::Validation(
                         "Percentage is required for percentage rules".to_string(),
                     ));
-                }
-                let pct = rule.percentage.unwrap();
+                };
                 if pct <= rust_decimal::Decimal::ZERO || pct > rust_decimal::Decimal::new(100, 0) {
                     return Err(ApiError::Validation(
                         "Percentage must be between 0 and 100".to_string(),
@@ -390,12 +389,11 @@ impl CostCenterService {
             match rule_type {
                 crate::domain::cost_center::model::AllocationRuleType::Percentage => {
                     let pct = update.percentage.unwrap_or(existing.percentage);
-                    if pct.is_none() {
+                    let Some(p) = pct else {
                         return Err(ApiError::Validation(
                             "Percentage is required for percentage rules".to_string(),
                         ));
-                    }
-                    let p = pct.unwrap();
+                    };
                     if p <= rust_decimal::Decimal::ZERO || p > rust_decimal::Decimal::new(100, 0) {
                         return Err(ApiError::Validation(
                             "Percentage must be between 0 and 100".to_string(),

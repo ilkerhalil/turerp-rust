@@ -406,7 +406,9 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
             );
         }
 
-        let level = inner.levels.get_mut(&key).unwrap();
+        let level = inner.levels.get_mut(&key).ok_or_else(|| {
+            ApiError::Internal("Stock level disappeared after insertion".to_string())
+        })?;
         level.quantity = quantity;
         level.updated_at = chrono::Utc::now();
         Ok(level.clone())
@@ -439,7 +441,9 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
             );
         }
 
-        let level = inner.levels.get_mut(&key).unwrap();
+        let level = inner.levels.get_mut(&key).ok_or_else(|| {
+            ApiError::Internal("Stock level disappeared after insertion".to_string())
+        })?;
         let available = level.quantity - level.reserved_quantity;
         if quantity > available {
             return Err(ApiError::BadRequest(format!(
@@ -480,7 +484,9 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
             );
         }
 
-        let level = inner.levels.get_mut(&key).unwrap();
+        let level = inner.levels.get_mut(&key).ok_or_else(|| {
+            ApiError::Internal("Stock level disappeared after insertion".to_string())
+        })?;
         level.reserved_quantity = (level.reserved_quantity - quantity).max(Decimal::ZERO);
         level.updated_at = chrono::Utc::now();
         Ok(level.clone())

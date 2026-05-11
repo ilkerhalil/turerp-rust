@@ -8,7 +8,8 @@ use actix_web::{middleware, web, App, HttpServer};
 use turerp::config::Config;
 use turerp::middleware::{
     audit::spawn_audit_writer, AuditLoggingMiddleware, IdempotencyMiddleware, JwtAuthMiddleware,
-    MetricsMiddleware, RateLimitMiddleware, RequestIdMiddleware, TenantMiddleware,
+    MetricsMiddleware, RateLimitMiddleware, RequestIdMiddleware, SecurityHeadersMiddleware,
+    TenantMiddleware,
 };
 
 use tokio::sync::mpsc;
@@ -223,6 +224,9 @@ async fn main() -> std::io::Result<()> {
     let audit_svc = app_state.audit_service.get_ref().clone();
     spawn_audit_writer(audit_rx, audit_svc);
 
+    let is_production = config.is_production();
+    let security_headers_config = config.security_headers.clone();
+
     HttpServer::new(move || {
         #[cfg(feature = "postgres")]
         let app = App::new()
@@ -230,6 +234,10 @@ async fn main() -> std::io::Result<()> {
             // First wrap = outermost (touches request first, response last).
             // Last wrap = innermost (touches request last, response first).
             .wrap(middleware::Compress::default()) // Outermost: response compression
+            .wrap(SecurityHeadersMiddleware::new(
+                &security_headers_config,
+                is_production,
+            )) // Security headers
             .wrap(configure_cors(&config.cors)) // CORS handling
             .wrap(middleware::Logger::default()) // Access logging
             .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
@@ -291,6 +299,10 @@ async fn main() -> std::io::Result<()> {
             // First wrap = outermost (touches request first, response last).
             // Last wrap = innermost (touches request last, response first).
             .wrap(middleware::Compress::default()) // Outermost: response compression
+            .wrap(SecurityHeadersMiddleware::new(
+                &security_headers_config,
+                is_production,
+            )) // Security headers
             .wrap(configure_cors(&config.cors)) // CORS handling
             .wrap(middleware::Logger::default()) // Access logging
             .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging

@@ -474,7 +474,7 @@ impl NotificationService for InMemoryNotificationService {
             .filter(|n| n.tenant_id == tenant_id)
             .filter(|n| n.deleted_at.is_none())
             .filter(|n| user_id.is_none() || n.user_id == user_id)
-            .filter(|n| channel.is_none() || n.channel == channel.unwrap())
+            .filter(|n| channel.is_none() || n.channel == channel.expect("checked above"))
             .cloned()
             .collect();
 

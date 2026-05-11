@@ -310,7 +310,11 @@ impl SubscriptionRepository for InMemorySubscriptionRepository {
             ));
         }
 
-        inner.plans.get_mut(&id).unwrap().mark_deleted(0);
+        inner
+            .plans
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::NotFound("Subscription plan not found".to_string()))?
+            .mark_deleted(0);
         Ok(())
     }
 

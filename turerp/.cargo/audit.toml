@@ -1,0 +1,17 @@
+[advisories]
+# RUSTSEC-2023-0071: Marvin Attack - potential key recovery through timing sidechannels
+#
+# The `rsa` crate is pulled in as a transitive dependency via:
+# turerp -> sqlx (derive) -> sqlx-macros -> sqlx-macros-core -> sqlx-mysql -> rsa
+#
+# This is a BUILD-TIME-ONLY dependency chain. `sqlx-macros` is a proc-macro crate
+# compiled for the HOST target during compilation. Neither `sqlx-macros-core`,
+# `sqlx-mysql`, nor `rsa` are linked into the final application binary.
+#
+# The Marvin Attack requires an attacker to observe timing of RSA operations
+# over the network. Since `rsa` is only used at build time (proc-macro compilation),
+# there is no network-exposed RSA operation at runtime.
+#
+# Upstream issue: https://github.com/launchbadge/sqlx/issues/2949
+# RUSTSEC: https://rustsec.org/advisories/RUSTSEC-2023-0071
+ignore = ["RUSTSEC-2023-0071"]

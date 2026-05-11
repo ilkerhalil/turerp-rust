@@ -17,11 +17,13 @@ use crate::domain::bank::model::{
 use crate::domain::bank::repository::BoxBankRepository;
 use crate::error::ApiError;
 
-static INVOICE_REF_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)(?:fatura|inv|invoice)[\s#:-]*(\d+)").unwrap());
-static NUMERIC_REF_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\b(\d{4,})\b").unwrap());
+static INVOICE_REF_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(?:fatura|inv|invoice)[\s#:-]*(\d+)").expect("static regex should compile")
+});
+static NUMERIC_REF_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b(\d{4,})\b").expect("static regex should compile"));
 static NESTED_QUANTIFIER_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\([^)]*\+[^)]*\)\+").unwrap());
+    LazyLock::new(|| Regex::new(r"\([^)]*\+[^)]*\)\+").expect("static regex should compile"));
 
 fn validate_regex_pattern(pattern: &str) -> Result<(), String> {
     if pattern.len() > 500 {
