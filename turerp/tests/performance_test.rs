@@ -33,9 +33,9 @@ async fn test_sequential_health_latency() {
             .wrap(TenantMiddleware)
             .wrap(RequestIdMiddleware)
             .app_data(web::JsonConfig::default().limit(1024 * 1024))
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
-            .app_data(app_state.jwt_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
+            .app_data(app_state.auth.jwt_service.clone())
             .app_data(app_state.i18n.clone())
             .route(
                 "/health/live",
@@ -80,9 +80,9 @@ async fn test_concurrent_health_burst() {
             .wrap(TenantMiddleware)
             .wrap(RequestIdMiddleware)
             .app_data(web::JsonConfig::default().limit(1024 * 1024))
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
-            .app_data(app_state.jwt_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
+            .app_data(app_state.auth.jwt_service.clone())
             .app_data(app_state.i18n.clone())
             .route(
                 "/health/live",
@@ -137,9 +137,9 @@ async fn test_post_load_json_parsing() {
             .wrap(TenantMiddleware)
             .wrap(RequestIdMiddleware)
             .app_data(web::JsonConfig::default().limit(1024 * 1024))
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
-            .app_data(app_state.jwt_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
+            .app_data(app_state.auth.jwt_service.clone())
             .app_data(app_state.i18n.clone())
             .route(
                 "/health/live",
@@ -187,9 +187,9 @@ async fn test_rate_limit_stats_accumulation() {
             .wrap(TenantMiddleware)
             .wrap(RequestIdMiddleware)
             .app_data(web::JsonConfig::default().limit(1024 * 1024))
-            .app_data(app_state.auth_service.clone())
-            .app_data(app_state.user_service.clone())
-            .app_data(app_state.jwt_service.clone())
+            .app_data(app_state.auth.auth_service.clone())
+            .app_data(app_state.auth.user_service.clone())
+            .app_data(app_state.auth.jwt_service.clone())
             .app_data(app_state.i18n.clone())
             .route(
                 "/health/live",
@@ -247,7 +247,7 @@ async fn test_job_scheduling_throughput() {
     let app = test::init_service(
         App::new()
             .wrap(JwtAuthMiddleware::new(jwt))
-            .app_data(app_state.job_scheduler.clone())
+            .app_data(app_state.infra.job_scheduler.clone())
             .service(web::scope("/api").configure(v1_jobs_configure)),
     )
     .await;
@@ -300,7 +300,7 @@ async fn test_concurrent_job_scheduling_burst() {
     let app = test::init_service(
         App::new()
             .wrap(JwtAuthMiddleware::new(jwt))
-            .app_data(app_state.job_scheduler.clone())
+            .app_data(app_state.infra.job_scheduler.clone())
             .service(web::scope("/api").configure(v1_jobs_configure)),
     )
     .await;

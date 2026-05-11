@@ -267,7 +267,7 @@ pub async fn get_cdc_status(
     let _ = &app_state;
     #[cfg(feature = "postgres")]
     {
-        if let Some(ref listener) = app_state.cdc_listener {
+        if let Some(ref listener) = app_state.infra.cdc_listener {
             let active = listener.is_active();
             let channels = listener.active_channels();
             let last_event_time = listener.last_event_time().map(|t| t.to_rfc3339());

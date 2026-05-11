@@ -44,7 +44,7 @@ pub async fn create_setting(
     let mut create = body.into_inner();
     create.tenant_id = _admin.0.tenant_id;
 
-    let setting = state.settings_service.create(create).await?;
+    let setting = state.admin.settings_service.create(create).await?;
     Ok(HttpResponse::Created().json(SettingResponse::from(setting)))
 }
 
@@ -73,6 +73,7 @@ pub async fn list_settings(
     let per_page = query.per_page.unwrap_or(50).min(200);
 
     let result = state
+        .admin
         .settings_service
         .list_paginated(user.0.tenant_id, query.group.as_deref(), page, per_page)
         .await?;
@@ -111,6 +112,7 @@ pub async fn get_setting_by_key(
 ) -> Result<HttpResponse, ApiError> {
     let key = path.into_inner();
     let setting = state
+        .admin
         .settings_service
         .get_by_key(user.0.tenant_id, &key)
         .await?
@@ -145,7 +147,11 @@ pub async fn update_setting(
     let tenant_id = _admin.0.tenant_id;
     let update = body.into_inner();
 
-    let setting = state.settings_service.update(tenant_id, id, update).await?;
+    let setting = state
+        .admin
+        .settings_service
+        .update(tenant_id, id, update)
+        .await?;
     Ok(HttpResponse::Ok().json(SettingResponse::from(setting)))
 }
 
@@ -171,6 +177,7 @@ pub async fn bulk_update_settings(
     let bulk = body.into_inner();
 
     let updated = state
+        .admin
         .settings_service
         .bulk_update(tenant_id, bulk.updates)
         .await?;
@@ -205,7 +212,7 @@ pub async fn delete_setting(
     let id = path.into_inner();
     let tenant_id = _admin.0.tenant_id;
 
-    state.settings_service.delete(tenant_id, id).await?;
+    state.admin.settings_service.delete(tenant_id, id).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -234,6 +241,7 @@ pub async fn soft_delete_setting(
     let deleted_by = _admin.0.user_id()?;
 
     state
+        .admin
         .settings_service
         .soft_delete_setting(tenant_id, id, deleted_by)
         .await?;
@@ -263,6 +271,7 @@ pub async fn restore_setting(
     let tenant_id = _admin.0.tenant_id;
 
     state
+        .admin
         .settings_service
         .restore_setting(tenant_id, id)
         .await?;
@@ -287,6 +296,7 @@ pub async fn list_deleted_settings(
 ) -> Result<HttpResponse, ApiError> {
     let tenant_id = _admin.0.tenant_id;
     let settings = state
+        .admin
         .settings_service
         .list_deleted_settings(tenant_id)
         .await?;
@@ -317,6 +327,7 @@ pub async fn destroy_setting(
     let tenant_id = _admin.0.tenant_id;
 
     state
+        .admin
         .settings_service
         .destroy_setting(tenant_id, id)
         .await?;
@@ -340,7 +351,11 @@ pub async fn seed_settings(
     state: web::Data<AppState>,
 ) -> Result<HttpResponse, ApiError> {
     let tenant_id = _admin.0.tenant_id;
-    let created = state.settings_service.seed_defaults(tenant_id).await?;
+    let created = state
+        .admin
+        .settings_service
+        .seed_defaults(tenant_id)
+        .await?;
 
     let responses: Vec<SettingResponse> = created.into_iter().map(SettingResponse::from).collect();
 
