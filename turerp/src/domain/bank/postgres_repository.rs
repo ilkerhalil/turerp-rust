@@ -8,9 +8,9 @@ use std::sync::Arc;
 
 use crate::db::error::map_sqlx_error;
 use crate::domain::bank::model::{
-    BankAccount, BankAccountResponse, BankStatement, BankTransaction, CreateBankAccount,
-    CreateReconciliationRule, ImportBankStatement, MatchField, MatchStatus, ParsedBankTransaction,
-    ReconciliationRule, StatementFormat, UpdateBankAccount, UpdateReconciliationRule,
+    BankAccount, BankStatement, BankTransaction, CreateBankAccount, CreateReconciliationRule,
+    ImportBankStatement, MatchField, MatchStatus, ParsedBankTransaction, ReconciliationRule,
+    StatementFormat, UpdateBankAccount, UpdateReconciliationRule,
 };
 use crate::domain::bank::repository::{BankRepository, BoxBankRepository};
 use crate::error::ApiError;

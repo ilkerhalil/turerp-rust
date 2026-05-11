@@ -185,7 +185,7 @@ impl DocumentRepository for PostgresDocumentRepository {
         .bind(&doc.storage_path)
         .bind(doc.uploaded_by)
         .bind(doc.category_id)
-        .bind(&doc.tags.unwrap_or_default())
+        .bind(doc.tags.unwrap_or_default())
         .bind(&doc.description)
         .fetch_one(&*self.pool)
         .await
@@ -215,8 +215,8 @@ impl DocumentRepository for PostgresDocumentRepository {
         tenant_id: i64,
         params: DocumentSearchParams,
     ) -> Result<DocumentSearchResult, ApiError> {
-        let mut conditions = vec!["tenant_id = $1", "deleted_at IS NULL"];
-        let mut binds: Vec<Box<dyn std::any::Any + Send + Sync>> = Vec::new();
+        let _conditions = ["tenant_id = $1", "deleted_at IS NULL"];
+        let _binds: Vec<Box<dyn std::any::Any + Send + Sync>> = Vec::new();
         // Note: dynamic conditions with sqlx are limited; we use a simplified approach
         // that checks all common filters in the query and applies entity filtering in code.
 

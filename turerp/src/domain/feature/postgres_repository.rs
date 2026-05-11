@@ -1,5 +1,4 @@
 //! PostgreSQL feature flag repository implementation
-
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use sqlx::{FromRow, PgPool};
@@ -13,7 +12,7 @@ use crate::domain::feature::model::{
 use crate::domain::feature::repository::FeatureFlagRepository;
 use crate::error::ApiError;
 
-/// Convert sqlx errors to ApiError with proper detection of error types
+// Convert sqlx errors to ApiError with proper detection of error types
 
 /// Parse a feature flag status string from the database
 fn parse_status(s: &str) -> FeatureFlagStatus {

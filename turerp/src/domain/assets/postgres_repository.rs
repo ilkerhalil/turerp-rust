@@ -1,5 +1,4 @@
 //! PostgreSQL assets repository implementation
-
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
@@ -16,11 +15,12 @@ use crate::domain::assets::repository::{
 };
 use crate::error::ApiError;
 
+#[allow(dead_code)]
 fn default_company_id() -> i64 {
     1
 }
 
-/// Convert sqlx errors to ApiError with proper detection of error types
+// Convert sqlx errors to ApiError with proper detection of error types
 
 /// Parse AssetStatus from database string representation
 fn parse_asset_status(s: &str) -> AssetStatus {
@@ -62,6 +62,7 @@ fn parse_depreciation_method(s: &str) -> DepreciationMethod {
 // ============================================================================
 
 /// Database row representation for AssetCategory
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct AssetCategoryRow {
     id: i64,
@@ -191,6 +192,7 @@ impl AssetCategoryRepository for PostgresAssetCategoryRepository {
 // ============================================================================
 
 /// Database row representation for Asset
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct AssetRow {
     id: i64,
@@ -255,6 +257,7 @@ impl From<AssetRow> for Asset {
 }
 
 /// Database row representation for paginated asset queries with total count
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct AssetRowWithTotal {
     id: i64,

@@ -11,7 +11,7 @@ use crate::db::error::map_sqlx_error;
 use crate::domain::cost_center::model::{
     AllocationRule, Budget, CostCenter, CostCenterAllocation, CostCenterType, CreateAllocation,
     CreateAllocationRule, CreateBudget, CreateCostCenter, ProfitabilityReport,
-    UpdateAllocationRule, UpdateBudget, UpdateCostCenter, VarianceReport,
+    UpdateAllocationRule, UpdateBudget, UpdateCostCenter,
 };
 use crate::domain::cost_center::repository::{BoxCostCenterRepository, CostCenterRepository};
 use crate::error::ApiError;

@@ -7,7 +7,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::common::jobs::{CreateJob, Job, JobPriority, JobScheduler, JobStatus, JobType};
-use crate::error::ApiError;
 
 /// Database row for a job
 #[derive(Debug, FromRow)]
@@ -25,7 +24,7 @@ struct JobRow {
     completed_at: Option<DateTime<Utc>>,
     last_error: Option<String>,
     created_at: DateTime<Utc>,
-    updated_at: Option<DateTime<Utc>>,
+    _updated_at: Option<DateTime<Utc>>,
 }
 
 impl From<JobRow> for Job {

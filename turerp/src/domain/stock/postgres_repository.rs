@@ -1,5 +1,4 @@
 //! PostgreSQL stock repository implementation
-
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
@@ -16,17 +15,19 @@ use crate::domain::stock::repository::{
 };
 use crate::error::ApiError;
 
+#[allow(dead_code)]
 fn default_company_id() -> i64 {
     1
 }
 
-/// Convert sqlx errors to ApiError with proper detection of error types
+// Convert sqlx errors to ApiError with proper detection of error types
 
 // ============================================================================
 // Warehouse Row and Repository
 // ============================================================================
 
 /// Database row representation for Warehouse
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct WarehouseRow {
     id: i64,

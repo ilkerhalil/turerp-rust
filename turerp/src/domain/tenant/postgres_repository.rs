@@ -1,5 +1,4 @@
 //! PostgreSQL tenant repository implementation
-
 use async_trait::async_trait;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
@@ -10,7 +9,7 @@ use crate::domain::tenant::model::{CreateTenant, Tenant, UpdateTenant};
 use crate::domain::tenant::repository::{BoxTenantRepository, TenantRepository};
 use crate::error::ApiError;
 
-/// Convert sqlx errors to ApiError with proper detection of error types
+// Convert sqlx errors to ApiError with proper detection of error types
 
 /// Database row representation for Tenant
 #[derive(Debug, FromRow)]

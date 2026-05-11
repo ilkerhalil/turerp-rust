@@ -9,9 +9,8 @@ use std::sync::Arc;
 use crate::common::pagination::PaginatedResult;
 use crate::db::error::map_sqlx_error;
 use crate::domain::shift::model::{
-    AttendanceRecord, AttendanceRecordResponse, AttendanceStatus, ClockInRequest, ClockOutRequest,
-    CreateShift, CreateShiftAssignment, Shift, ShiftAssignment, ShiftResponse, ShiftType,
-    UpdateShift,
+    AttendanceRecord, AttendanceStatus, ClockInRequest, ClockOutRequest, CreateShift,
+    CreateShiftAssignment, Shift, ShiftAssignment, ShiftType, UpdateShift,
 };
 use crate::domain::shift::repository::{
     AttendanceRecordRepository, BoxAttendanceRecordRepository, BoxShiftAssignmentRepository,

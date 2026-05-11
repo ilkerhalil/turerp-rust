@@ -1,5 +1,4 @@
 //! PostgreSQL project repository implementation
-
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
@@ -17,7 +16,7 @@ use crate::domain::project::repository::{
 };
 use crate::error::ApiError;
 
-/// Convert sqlx errors to ApiError with proper detection of error types
+// Convert sqlx errors to ApiError with proper detection of error types
 
 // ---------------------------------------------------------------------------
 // Project row mapping

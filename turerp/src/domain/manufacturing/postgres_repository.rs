@@ -1,5 +1,4 @@
 //! PostgreSQL manufacturing repository implementation
-
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
@@ -22,7 +21,7 @@ use crate::domain::manufacturing::repository::{
 };
 use crate::error::ApiError;
 
-/// Convert sqlx errors to ApiError with proper detection of error types
+// Convert sqlx errors to ApiError with proper detection of error types
 
 /// Convert WorkOrderStatus to its database string representation
 fn work_order_status_to_str(status: &WorkOrderStatus) -> &'static str {
