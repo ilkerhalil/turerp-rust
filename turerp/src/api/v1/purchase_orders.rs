@@ -128,11 +128,10 @@ pub async fn get_orders(
         .skip(offset)
         .take(query.per_page as usize)
         .collect();
-    let total_pages = ((total as f64) / (query.per_page as f64)).ceil() as u32;
-    let total_pages = if total_pages == 0 && total > 0 {
-        1
+    let total_pages = if query.per_page == 0 {
+        0
     } else {
-        total_pages
+        total.div_ceil(query.per_page as u64) as u32
     };
 
     let result = PaginatedResult {

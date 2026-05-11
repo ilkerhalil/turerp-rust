@@ -231,3 +231,215 @@ pub fn create_auth_service_dev(user_service: UserService, mfa_service: MfaServic
     let jwt_config = JwtConfig::dev();
     create_auth_service(user_service, mfa_service, &jwt_config)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use std::sync::Arc;
+
+    use crate::domain::mfa::repository::{BoxMfaRepository, InMemoryMfaRepository};
+    use crate::domain::mfa::service::MfaService;
+    use crate::domain::user::repository::{BoxUserRepository, InMemoryUserRepository};
+    use crate::domain::user::service::UserService;
+    use crate::utils::jwt::JwtService;
+
+    fn create_test_auth_service() -> AuthService {
+        let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
+        let user_service = UserService::new(user_repo);
+        let mfa_repo = Arc::new(InMemoryMfaRepository::new()) as BoxMfaRepository;
+        let jwt_service = JwtService::new("test-secret".to_string(), 3600, 86400);
+        let mfa_service = MfaService::new(mfa_repo, jwt_service);
+        create_auth_service_dev(user_service, mfa_service)
+    }
+
+    #[test]
+    fn test_valid_password() {
+        let req = RegisterRequest {
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            full_name: "Test User".to_string(),
+            password: "ValidPass123!".to_string(),
+            tenant_id: 1,
+            role: None,
+        };
+        assert!(req.validate_password().is_ok());
+    }
+
+    #[test]
+    fn test_short_password() {
+        let req = RegisterRequest {
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            full_name: "Test User".to_string(),
+            password: "Short1!".to_string(),
+            tenant_id: 1,
+            role: None,
+        };
+        assert!(req.validate_password().is_err());
+    }
+
+    #[test]
+    fn test_password_missing_uppercase() {
+        let req = RegisterRequest {
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            full_name: "Test User".to_string(),
+            password: "invalidpass123!".to_string(),
+            tenant_id: 1,
+            role: None,
+        };
+        assert!(req.validate_password().is_err());
+    }
+
+    #[test]
+    fn test_password_missing_lowercase() {
+        let req = RegisterRequest {
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            full_name: "Test User".to_string(),
+            password: "INVALIDPASS123!".to_string(),
+            tenant_id: 1,
+            role: None,
+        };
+        assert!(req.validate_password().is_err());
+    }
+
+    #[test]
+    fn test_password_missing_digit() {
+        let req = RegisterRequest {
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            full_name: "Test User".to_string(),
+            password: "InvalidPass!".to_string(),
+            tenant_id: 1,
+            role: None,
+        };
+        assert!(req.validate_password().is_err());
+    }
+
+    #[test]
+    fn test_password_missing_special() {
+        let req = RegisterRequest {
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            full_name: "Test User".to_string(),
+            password: "InvalidPass123".to_string(),
+            tenant_id: 1,
+            role: None,
+        };
+        assert!(req.validate_password().is_err());
+    }
+
+    #[tokio::test]
+    async fn test_self_registration_admin_forced_to_user() {
+        let auth_service = create_test_auth_service();
+        let req = RegisterRequest {
+            username: "adminuser".to_string(),
+            email: "admin@example.com".to_string(),
+            full_name: "Admin User".to_string(),
+            password: "ValidPass123!".to_string(),
+            tenant_id: 1,
+            role: Some(Role::Admin),
+        };
+        let result = auth_service.register(req).await.unwrap();
+        assert_eq!(result.user.role, Role::User);
+    }
+
+    #[tokio::test]
+    async fn test_self_registration_user_stays_user() {
+        let auth_service = create_test_auth_service();
+        let req = RegisterRequest {
+            username: "normaluser".to_string(),
+            email: "user@example.com".to_string(),
+            full_name: "Normal User".to_string(),
+            password: "ValidPass123!".to_string(),
+            tenant_id: 1,
+            role: Some(Role::User),
+        };
+        let result = auth_service.register(req).await.unwrap();
+        assert_eq!(result.user.role, Role::User);
+    }
+
+    #[tokio::test]
+    async fn test_self_registration_no_role_defaults_to_user() {
+        let auth_service = create_test_auth_service();
+        let req = RegisterRequest {
+            username: "defaultuser".to_string(),
+            email: "default@example.com".to_string(),
+            full_name: "Default User".to_string(),
+            password: "ValidPass123!".to_string(),
+            tenant_id: 1,
+            role: None,
+        };
+        let result = auth_service.register(req).await.unwrap();
+        assert_eq!(result.user.role, Role::User);
+    }
+
+    #[test]
+    fn test_login_request_empty_username() {
+        let req = LoginRequest {
+            username: "".to_string(),
+            password: "somepassword".to_string(),
+            mfa_code: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_login_request_empty_password() {
+        let req = LoginRequest {
+            username: "someuser".to_string(),
+            password: "".to_string(),
+            mfa_code: None,
+        };
+        let result = req.validate();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_auth_service_creation() {
+        let _service = create_test_auth_service();
+    }
+
+    #[test]
+    fn test_refresh_token_request_serialization() {
+        let req = RefreshTokenRequest {
+            refresh_token: "test-refresh-token".to_string(),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("test-refresh-token"));
+
+        let deserialized: RefreshTokenRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.refresh_token, "test-refresh-token");
+    }
+
+    #[test]
+    fn test_login_response_serialization() {
+        let user = UserResponse {
+            id: 1,
+            username: "testuser".to_string(),
+            email: "test@example.com".to_string(),
+            full_name: "Test User".to_string(),
+            tenant_id: 1,
+            role: Role::User,
+            is_active: true,
+            created_at: Utc::now(),
+        };
+        let tokens = TokenPair {
+            access_token: "access".to_string(),
+            refresh_token: "refresh".to_string(),
+            token_type: "Bearer".to_string(),
+            expires_in: 3600,
+        };
+        let response = LoginResponse { user, tokens };
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("testuser"));
+        assert!(json.contains("access"));
+
+        let deserialized: LoginResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.user.username, "testuser");
+        assert_eq!(deserialized.tokens.access_token, "access");
+    }
+}
