@@ -192,7 +192,10 @@ impl TaxRateRepository for InMemoryTaxRateRepository {
                 }
             }
             // Pick the most specific (latest effective_from) that is still effective
-            if best.is_none() || rate.effective_from > best.unwrap().effective_from {
+            if best
+                .map(|b| rate.effective_from > b.effective_from)
+                .unwrap_or(true)
+            {
                 best = Some(rate);
             }
         }

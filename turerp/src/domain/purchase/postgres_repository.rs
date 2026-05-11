@@ -1,5 +1,4 @@
 //! PostgreSQL purchase repository implementation
-
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
@@ -21,11 +20,12 @@ use crate::domain::purchase::repository::{
 };
 use crate::error::ApiError;
 
+#[allow(dead_code)]
 fn default_company_id() -> i64 {
     1
 }
 
-/// Convert sqlx errors to ApiError with proper detection of error types
+// Convert sqlx errors to ApiError with proper detection of error types
 
 /// Parse a string into PurchaseOrderStatus, defaulting to Draft on failure
 fn parse_purchase_order_status(s: &str) -> PurchaseOrderStatus {
@@ -88,6 +88,7 @@ fn parse_goods_receipt_status(s: &str) -> GoodsReceiptStatus {
 // ============================================================================
 
 /// Database row representation for PurchaseOrder
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct PurchaseOrderRow {
     id: i64,
@@ -671,6 +672,7 @@ impl PurchaseOrderLineRepository for PostgresPurchaseOrderLineRepository {
 // ============================================================================
 
 /// Database row representation for GoodsReceipt
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct GoodsReceiptRow {
     id: i64,
@@ -1100,6 +1102,7 @@ impl GoodsReceiptLineRepository for PostgresGoodsReceiptLineRepository {
 // ============================================================================
 
 /// Database row representation for PurchaseRequest
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct PurchaseRequestRow {
     id: i64,
@@ -1140,6 +1143,7 @@ impl From<PurchaseRequestRow> for PurchaseRequest {
 }
 
 /// Row for paginated queries that includes a total count
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct PurchaseRequestRowWithCount {
     id: i64,

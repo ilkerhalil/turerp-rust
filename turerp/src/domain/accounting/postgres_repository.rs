@@ -1,5 +1,4 @@
 //! PostgreSQL accounting repository implementation
-
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -18,7 +17,7 @@ use crate::domain::accounting::repository::{
 };
 use crate::error::ApiError;
 
-/// Convert sqlx errors to ApiError with proper detection of error types
+// Convert sqlx errors to ApiError with proper detection of error types
 
 // ---------------------------------------------------------------------------
 // AccountRow / Account conversion
@@ -147,6 +146,7 @@ struct JournalLineRow {
     id: i64,
     entry_id: i64,
     account_id: i64,
+    cost_center_id: Option<i64>,
     debit: Decimal,
     credit: Decimal,
     description: Option<String>,
@@ -159,6 +159,7 @@ impl From<JournalLineRow> for JournalLine {
             id: row.id,
             entry_id: row.entry_id,
             account_id: row.account_id,
+            cost_center_id: row.cost_center_id,
             debit: row.debit,
             credit: row.credit,
             description: row.description,

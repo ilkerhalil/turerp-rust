@@ -320,6 +320,7 @@ mod tests {
             lines: vec![
                 crate::domain::accounting::model::CreateJournalLine {
                     account_id: 1,
+                    cost_center_id: None,
                     debit: Decimal::ZERO,
                     credit: dec!(100.0),
                     description: None,
@@ -327,6 +328,7 @@ mod tests {
                 },
                 crate::domain::accounting::model::CreateJournalLine {
                     account_id: 8,
+                    cost_center_id: None,
                     debit: dec!(100.0),
                     credit: Decimal::ZERO,
                     description: None,
@@ -351,6 +353,7 @@ mod tests {
             lines: vec![
                 crate::domain::accounting::model::CreateJournalLine {
                     account_id: 1,
+                    cost_center_id: None,
                     debit: dec!(50.0),
                     credit: Decimal::ZERO,
                     description: None,
@@ -358,6 +361,7 @@ mod tests {
                 },
                 crate::domain::accounting::model::CreateJournalLine {
                     account_id: 11,
+                    cost_center_id: None,
                     debit: Decimal::ZERO,
                     credit: dec!(50.0),
                     description: None,

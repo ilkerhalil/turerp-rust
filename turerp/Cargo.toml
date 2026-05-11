@@ -117,6 +117,9 @@ lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"] }
 # Template engine
 handlebars = "6.0"
 
+# XML parsing (CAMT.053 / ISO 20022)
+quick-xml = { version = "0.37", features = ["serialize"] }
+
 # Mocking for tests
 mockall = "0.12"
 

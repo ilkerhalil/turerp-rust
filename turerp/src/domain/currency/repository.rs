@@ -462,7 +462,10 @@ impl ExchangeRateRepository for InMemoryExchangeRateRepository {
                 continue;
             }
             // Pick the most recent effective rate
-            if best.is_none() || rate.effective_date > best.unwrap().effective_date {
+            if best
+                .map(|b| rate.effective_date > b.effective_date)
+                .unwrap_or(true)
+            {
                 best = Some(rate);
             }
         }

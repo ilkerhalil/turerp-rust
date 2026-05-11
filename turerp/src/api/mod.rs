@@ -13,6 +13,7 @@ pub use users::configure as users_configure;
 // V1 re-exports
 pub use v1::accounting_configure as v1_accounting_configure;
 pub use v1::api_keys_configure as v1_api_keys_configure;
+pub use v1::archive_configure as v1_archive_configure;
 pub use v1::assets_configure as v1_assets_configure;
 pub use v1::audit_configure as v1_audit_configure;
 pub use v1::auth_configure as v1_auth_configure;
@@ -25,11 +26,13 @@ pub use v1::crm_configure as v1_crm_configure;
 pub use v1::currency_configure as v1_currency_configure;
 pub use v1::custom_fields_configure as v1_custom_fields_configure;
 pub use v1::dashboard_configure as v1_dashboard_configure;
+pub use v1::documents_configure as v1_documents_configure;
 pub use v1::edefter_configure as v1_edefter_configure;
 pub use v1::efatura_configure as v1_efatura_configure;
 pub use v1::events_configure as v1_events_configure;
 pub use v1::feature_flags_configure as v1_feature_flags_configure;
 pub use v1::files_configure as v1_files_configure;
+pub use v1::forecasting_configure as v1_forecasting_configure;
 pub use v1::goods_receipts_configure as v1_goods_receipts_configure;
 pub use v1::hr_configure as v1_hr_configure;
 pub use v1::import_configure as v1_import_configure;
@@ -48,6 +51,7 @@ pub use v1::resilience_configure as v1_resilience_configure;
 pub use v1::sales_configure as v1_sales_configure;
 pub use v1::search_configure as v1_search_configure;
 pub use v1::settings_configure as v1_settings_configure;
+pub use v1::shifts_configure as v1_shifts_configure;
 pub use v1::stock_configure as v1_stock_configure;
 pub use v1::subscriptions_configure as v1_subscriptions_configure;
 pub use v1::tax_configure as v1_tax_configure;
@@ -493,6 +497,11 @@ use utoipa::OpenApi;
         crate::api::v1::feature_flags::enable_flag,
         crate::api::v1::feature_flags::disable_flag,
         crate::api::v1::feature_flags::check_feature,
+        // Forecasting
+        crate::api::v1::forecasting::forecast_demand,
+        crate::api::v1::forecasting::get_reorder_suggestions,
+        crate::api::v1::forecasting::get_stock_alerts,
+        crate::api::v1::forecasting::get_forecast_report,
         // Audit
         crate::api::v1::audit::get_audit_logs,
         // Custom Fields
@@ -528,6 +537,21 @@ use utoipa::OpenApi;
         crate::api::v1::api_keys::list_deleted_api_keys,
         crate::api::v1::api_keys::destroy_api_key,
         crate::api::v1::api_keys::check_scope,
+        // Archive
+        crate::api::v1::archive::create_policy,
+        crate::api::v1::archive::list_policies,
+        crate::api::v1::archive::list_active_policies,
+        crate::api::v1::archive::get_policy,
+        crate::api::v1::archive::update_policy,
+        crate::api::v1::archive::delete_policy,
+        crate::api::v1::archive::create_job,
+        crate::api::v1::archive::list_jobs,
+        crate::api::v1::archive::get_job,
+        crate::api::v1::archive::delete_job,
+        crate::api::v1::archive::list_records,
+        crate::api::v1::archive::get_record,
+        crate::api::v1::archive::restore_records,
+        crate::api::v1::archive::delete_record,
         // Jobs
         crate::api::v1::jobs::schedule_job,
         crate::api::v1::jobs::next_pending_job,
@@ -666,6 +690,25 @@ use utoipa::OpenApi;
         crate::api::v1::workflows::get_pending_approvals,
         crate::api::v1::workflows::get_instance,
         crate::api::v1::workflows::get_instance_audit,
+        // Shift Planning
+        crate::api::v1::shifts::create_shift,
+        crate::api::v1::shifts::get_shifts,
+        crate::api::v1::shifts::get_shift,
+        crate::api::v1::shifts::update_shift,
+        crate::api::v1::shifts::delete_shift,
+        crate::api::v1::shifts::soft_delete_shift,
+        crate::api::v1::shifts::restore_shift,
+        crate::api::v1::shifts::list_deleted_shifts,
+        crate::api::v1::shifts::destroy_shift,
+        crate::api::v1::shifts::create_assignment,
+        crate::api::v1::shifts::get_assignments_by_employee,
+        crate::api::v1::shifts::get_assignments_by_shift,
+        crate::api::v1::shifts::delete_assignment,
+        crate::api::v1::shifts::clock_in,
+        crate::api::v1::shifts::clock_out,
+        crate::api::v1::shifts::get_attendance_by_employee,
+        crate::api::v1::shifts::generate_report,
+        crate::api::v1::shifts::calculate_overtime,
     ),
     components(
         schemas(
@@ -702,6 +745,20 @@ use utoipa::OpenApi;
             crate::domain::api_key::model::CreateApiKey,
             crate::domain::api_key::model::UpdateApiKey,
             crate::domain::api_key::model::ApiKeyScope,
+            // Archive
+            crate::domain::archive::model::ArchivePolicy,
+            crate::domain::archive::model::ArchivePolicyResponse,
+            crate::domain::archive::model::ArchiveJob,
+            crate::domain::archive::model::ArchiveJobResponse,
+            crate::domain::archive::model::ArchiveJobStatus,
+            crate::domain::archive::model::ArchiveRecord,
+            crate::domain::archive::model::ArchiveRecordResponse,
+            crate::domain::archive::model::CreateArchivePolicy,
+            crate::domain::archive::model::UpdateArchivePolicy,
+            crate::domain::archive::model::CreateArchiveJob,
+            crate::domain::archive::model::RestoreRequest,
+            crate::domain::archive::model::BulkRestoreResponse<crate::domain::archive::model::ArchiveRecordResponse>,
+            crate::domain::archive::model::BulkRestoreFailed,
             // Notifications
             crate::api::v1::notifications::SendNotificationRequest,
             crate::api::v1::notifications::InAppNotificationResponse,
@@ -864,6 +921,19 @@ use utoipa::OpenApi;
             crate::api::v1::resilience::CircuitBreakerResetResponse,
             crate::api::v1::resilience::RetryStatsResponse,
             crate::api::v1::resilience::ServicePath,
+            // Forecasting
+            crate::domain::forecasting::model::DemandForecast,
+            crate::domain::forecasting::model::DemandDataPoint,
+            crate::domain::forecasting::model::ForecastPeriod,
+            crate::domain::forecasting::model::ForecastReport,
+            crate::domain::forecasting::model::ForecastRequest,
+            crate::domain::forecasting::model::ReorderRequest,
+            crate::domain::forecasting::model::ReorderSuggestion,
+            crate::domain::forecasting::model::ReorderUrgency,
+            crate::domain::forecasting::model::StockAlert,
+            crate::domain::forecasting::model::StockAlertRequest,
+            crate::domain::forecasting::model::StockAlertType,
+            crate::api::v1::forecasting::ForecastReportQuery,
             // Workflows
             crate::domain::workflow::model::WorkflowTemplate,
             crate::domain::workflow::model::CreateWorkflowTemplate,
@@ -881,6 +951,23 @@ use utoipa::OpenApi;
             crate::domain::workflow::model::WorkflowStepStatus,
             crate::domain::workflow::model::WorkflowEntityType,
             crate::api::v1::workflows::StartWorkflowRequest,
+            // Shift Planning
+            crate::domain::shift::model::Shift,
+            crate::domain::shift::model::ShiftResponse,
+            crate::domain::shift::model::ShiftType,
+            crate::domain::shift::model::CreateShift,
+            crate::domain::shift::model::UpdateShift,
+            crate::domain::shift::model::ShiftAssignment,
+            crate::domain::shift::model::CreateShiftAssignment,
+            crate::domain::shift::model::AttendanceRecord,
+            crate::domain::shift::model::AttendanceRecordResponse,
+            crate::domain::shift::model::AttendanceStatus,
+            crate::domain::shift::model::ClockInRequest,
+            crate::domain::shift::model::ClockOutRequest,
+            crate::domain::shift::model::ShiftReport,
+            crate::domain::shift::model::ShiftReportQuery,
+            crate::domain::shift::model::OvertimeCalculation,
+            crate::api::v1::shifts::CalculateOvertimeRequest,
         )
     ),
     security(
@@ -911,10 +998,12 @@ use utoipa::OpenApi;
         (name = "Chart of Accounts", description = "Chart of accounts, account tree and trial balance"),
         (name = "Cost Centers", description = "Cost center and profit center management with allocations and profitability reports"),
         (name = "Feature Flags", description = "Feature flag management endpoints"),
+        (name = "Forecasting", description = "Inventory demand forecasting, reorder suggestions and stock alerts"),
         (name = "Custom Fields", description = "Custom field definitions for dynamic module attributes"),
         (name = "Settings", description = "Configuration management endpoints"),
         (name = "Jobs", description = "Background job scheduler endpoints"),
         (name = "API Keys", description = "API key management and scope validation"),
+        (name = "Archive", description = "Data archiving policies, jobs, and record restoration"),
         (name = "Notifications", description = "In-app notifications, email/SMS sending"),
         (name = "Reports", description = "Report generation and management"),
         (name = "Events", description = "Event bus, outbox pattern, and dead letter queue"),

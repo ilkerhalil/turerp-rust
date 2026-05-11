@@ -72,10 +72,10 @@ pub struct PaginatedResult<T> {
 impl<T> PaginatedResult<T> {
     /// Create a new paginated result
     pub fn new(items: Vec<T>, page: u32, per_page: u32, total: u64) -> Self {
-        let total_pages = if per_page > 0 {
-            ((total as f64) / (per_page as f64)).ceil() as u32
-        } else {
+        let total_pages = if per_page == 0 {
             0
+        } else {
+            total.div_ceil(per_page as u64) as u32
         };
 
         Self {

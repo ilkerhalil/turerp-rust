@@ -725,6 +725,7 @@ impl JournalLineRepository for InMemoryJournalLineRepository {
                 id,
                 entry_id,
                 account_id: create.account_id,
+                cost_center_id: None,
                 debit: create.debit,
                 credit: create.credit,
                 description: create.description,

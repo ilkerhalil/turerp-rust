@@ -5,7 +5,8 @@ use chrono::{NaiveDate, Utc};
 
 use crate::common::MessageResponse;
 use crate::domain::subscription::model::{
-    CreatePlan, CreateSubscription, UpdatePlan, UpdateSubscription,
+    CalculateProrationRequest, CancelSubscriptionRequest, CreatePlan, CreateSubscription,
+    RecordUsageRequest, UpdatePlan, UpdateSubscription,
 };
 use crate::domain::subscription::service::SubscriptionService;
 use crate::error::ApiResult;
@@ -404,6 +405,254 @@ pub async fn get_subscription_invoices(
     }
 }
 
+/// Calculate proration for plan change
+#[utoipa::path(
+    post,
+    path = "/api/v1/subscriptions/{id}/proration",
+    tag = "Subscriptions",
+    params(("id" = i64, Path, description = "Subscription ID")),
+    request_body = CalculateProrationRequest,
+    responses(
+        (status = 200, description = "Proration calculated"),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Subscription or plan not found")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn calculate_proration(
+    auth_user: AuthUser,
+    subscription_service: web::Data<SubscriptionService>,
+    path: web::Path<i64>,
+    payload: web::Json<CalculateProrationRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match subscription_service
+        .calculate_proration(
+            *path,
+            auth_user.0.tenant_id,
+            payload.new_plan_id,
+            payload.effective_date,
+        )
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Handle dunning retry for failed payment
+#[utoipa::path(
+    post,
+    path = "/api/v1/subscriptions/{id}/dunning/retry",
+    tag = "Subscriptions",
+    params(("id" = i64, Path, description = "Subscription ID")),
+    request_body = DunningRetryRequest,
+    responses(
+        (status = 200, description = "Dunning retry processed"),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn handle_dunning_retry(
+    auth_user: AuthUser,
+    subscription_service: web::Data<SubscriptionService>,
+    path: web::Path<i64>,
+    payload: web::Json<DunningRetryRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match subscription_service
+        .handle_dunning(*path, auth_user.0.tenant_id, payload.invoice_id)
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Get dunning status for a subscription
+#[utoipa::path(
+    get,
+    path = "/api/v1/subscriptions/{id}/dunning",
+    tag = "Subscriptions",
+    params(("id" = i64, Path, description = "Subscription ID")),
+    responses(
+        (status = 200, description = "Dunning entries found"),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_dunning_status(
+    auth_user: AuthUser,
+    subscription_service: web::Data<SubscriptionService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    match subscription_service
+        .get_dunning_status(*path, auth_user.0.tenant_id)
+        .await
+    {
+        Ok(entries) => Ok(HttpResponse::Ok().json(entries)),
+        Err(e) => Ok(e.error_response()),
+    }
+}
+
+/// Convert trial subscription to paid
+#[utoipa::path(
+    post,
+    path = "/api/v1/subscriptions/{id}/trial/convert",
+    tag = "Subscriptions",
+    params(("id" = i64, Path, description = "Subscription ID")),
+    responses(
+        (status = 200, description = "Trial converted to paid"),
+        (status = 400, description = "Subscription is not in trial"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Subscription not found")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn convert_trial(
+    auth_user: AuthUser,
+    subscription_service: web::Data<SubscriptionService>,
+    path: web::Path<i64>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match subscription_service
+        .process_trial_conversion(*path, auth_user.0.tenant_id)
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// List trial subscriptions
+#[utoipa::path(
+    get,
+    path = "/api/v1/subscriptions/trials",
+    tag = "Subscriptions",
+    responses(
+        (status = 200, description = "List of trial subscriptions"),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn list_trial_subscriptions(
+    auth_user: AuthUser,
+    subscription_service: web::Data<SubscriptionService>,
+) -> ApiResult<HttpResponse> {
+    match subscription_service
+        .list_trial_subscriptions(auth_user.0.tenant_id)
+        .await
+    {
+        Ok(subs) => Ok(HttpResponse::Ok().json(subs)),
+        Err(e) => Ok(e.error_response()),
+    }
+}
+
+/// Record usage for metered billing
+#[utoipa::path(
+    post,
+    path = "/api/v1/subscriptions/{id}/usage",
+    tag = "Subscriptions",
+    params(("id" = i64, Path, description = "Subscription ID")),
+    request_body = RecordUsageRequest,
+    responses(
+        (status = 201, description = "Usage recorded"),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn record_usage(
+    auth_user: AuthUser,
+    subscription_service: web::Data<SubscriptionService>,
+    path: web::Path<i64>,
+    payload: web::Json<RecordUsageRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match subscription_service
+        .record_usage(*path, auth_user.0.tenant_id, payload.into_inner())
+        .await
+    {
+        Ok(record) => Ok(HttpResponse::Created().json(record)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Get usage records for a subscription
+#[utoipa::path(
+    get,
+    path = "/api/v1/subscriptions/{id}/usage",
+    tag = "Subscriptions",
+    params(("id" = i64, Path, description = "Subscription ID")),
+    responses(
+        (status = 200, description = "List of usage records"),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_usage_records(
+    auth_user: AuthUser,
+    subscription_service: web::Data<SubscriptionService>,
+    path: web::Path<i64>,
+) -> ApiResult<HttpResponse> {
+    match subscription_service
+        .get_usage_records(*path, auth_user.0.tenant_id)
+        .await
+    {
+        Ok(records) => Ok(HttpResponse::Ok().json(records)),
+        Err(e) => Ok(e.error_response()),
+    }
+}
+
+/// Cancel a subscription
+#[utoipa::path(
+    post,
+    path = "/api/v1/subscriptions/{id}/cancel",
+    tag = "Subscriptions",
+    params(("id" = i64, Path, description = "Subscription ID")),
+    request_body = CancelSubscriptionRequest,
+    responses(
+        (status = 200, description = "Subscription cancelled"),
+        (status = 400, description = "Already cancelled or expired"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Subscription not found")
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn cancel_subscription(
+    auth_user: AuthUser,
+    subscription_service: web::Data<SubscriptionService>,
+    path: web::Path<i64>,
+    payload: web::Json<CancelSubscriptionRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    match subscription_service
+        .cancel_subscription(*path, auth_user.0.tenant_id, payload.into_inner())
+        .await
+    {
+        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
+}
+
+/// Request body for dunning retry
+#[derive(serde::Deserialize, utoipa::ToSchema)]
+pub struct DunningRetryRequest {
+    pub invoice_id: i64,
+}
+
 /// Query parameters for due-for-billing endpoint
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct DueForBillingQuery {
@@ -445,5 +694,28 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/subscriptions/{id}/invoices")
             .route(web::get().to(get_subscription_invoices)),
+    )
+    .service(
+        web::resource("/v1/subscriptions/{id}/proration")
+            .route(web::post().to(calculate_proration)),
+    )
+    .service(
+        web::resource("/v1/subscriptions/{id}/dunning")
+            .route(web::get().to(get_dunning_status))
+            .route(web::post().to(handle_dunning_retry)),
+    )
+    .service(
+        web::resource("/v1/subscriptions/{id}/trial/convert").route(web::post().to(convert_trial)),
+    )
+    .service(
+        web::resource("/v1/subscriptions/trials").route(web::get().to(list_trial_subscriptions)),
+    )
+    .service(
+        web::resource("/v1/subscriptions/{id}/usage")
+            .route(web::get().to(get_usage_records))
+            .route(web::post().to(record_usage)),
+    )
+    .service(
+        web::resource("/v1/subscriptions/{id}/cancel").route(web::post().to(cancel_subscription)),
     );
 }

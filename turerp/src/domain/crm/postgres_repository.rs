@@ -1,5 +1,4 @@
 //! PostgreSQL CRM repository implementations
-
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
@@ -17,7 +16,7 @@ use crate::domain::crm::repository::{
 };
 use crate::error::ApiError;
 
-/// Convert sqlx errors to ApiError with proper detection of error types
+// Convert sqlx errors to ApiError with proper detection of error types
 
 // ==================== LEAD ====================
 

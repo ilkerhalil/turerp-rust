@@ -7,6 +7,7 @@ pub mod idempotency;
 pub mod metrics;
 pub mod rate_limit;
 pub mod request_id;
+pub mod security_headers;
 pub mod tenant;
 
 pub use api_key::{ApiKeyAuth, ApiKeyClaims};
@@ -16,4 +17,5 @@ pub use idempotency::IdempotencyMiddleware;
 pub use metrics::{install_metrics_exporter, render_metrics, MetricsMiddleware};
 pub use rate_limit::RateLimitMiddleware;
 pub use request_id::RequestIdMiddleware;
+pub use security_headers::SecurityHeadersMiddleware;
 pub use tenant::{TenantContext, TenantContextExt, TenantMiddleware};

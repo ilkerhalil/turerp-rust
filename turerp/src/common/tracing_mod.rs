@@ -109,7 +109,7 @@ impl InMemoryTracingService {
         let mut s = String::with_capacity(16);
         for &b in &bytes {
             use std::fmt::Write;
-            write!(&mut s, "{:02x}", b).unwrap();
+            let _ = write!(&mut s, "{:02x}", b);
         }
         s
     }
@@ -121,7 +121,7 @@ impl InMemoryTracingService {
         let mut s = String::with_capacity(32);
         for &b in &bytes {
             use std::fmt::Write;
-            write!(&mut s, "{:02x}", b).unwrap();
+            let _ = write!(&mut s, "{:02x}", b);
         }
         s
     }

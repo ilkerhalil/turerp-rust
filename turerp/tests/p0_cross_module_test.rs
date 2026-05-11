@@ -657,6 +657,7 @@ async fn test_chart_of_accounts_to_accounting_flow() {
                     credit: Decimal::ZERO,
                     description: None,
                     reference: None,
+                    cost_center_id: None,
                 },
                 CreateJournalLine {
                     account_id: 2,
@@ -664,6 +665,7 @@ async fn test_chart_of_accounts_to_accounting_flow() {
                     credit: dec!(1000.0),
                     description: None,
                     reference: None,
+                    cost_center_id: None,
                 },
             ],
         })

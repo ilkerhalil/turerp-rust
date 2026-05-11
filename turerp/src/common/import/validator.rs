@@ -33,18 +33,24 @@ pub fn validate_product_row(row: usize, data: &ProductImportRow) -> Vec<ImportEr
             field: Some("unit_price".to_string()),
             message: "Unit price is required".to_string(),
         });
-    } else if parse_decimal(&data.unit_price).is_err() {
-        errors.push(ImportError {
-            row,
-            field: Some("unit_price".to_string()),
-            message: "Unit price must be a valid number".to_string(),
-        });
-    } else if parse_decimal(&data.unit_price).unwrap() < Decimal::ZERO {
-        errors.push(ImportError {
-            row,
-            field: Some("unit_price".to_string()),
-            message: "Unit price cannot be negative".to_string(),
-        });
+    } else {
+        match parse_decimal(&data.unit_price) {
+            Ok(price) if price < Decimal::ZERO => {
+                errors.push(ImportError {
+                    row,
+                    field: Some("unit_price".to_string()),
+                    message: "Unit price cannot be negative".to_string(),
+                });
+            }
+            Ok(_) => {}
+            Err(_) => {
+                errors.push(ImportError {
+                    row,
+                    field: Some("unit_price".to_string()),
+                    message: "Unit price must be a valid number".to_string(),
+                });
+            }
+        }
     }
 
     errors
@@ -166,18 +172,24 @@ pub fn validate_stock_movement_row(row: usize, data: &StockMovementImportRow) ->
             field: Some("quantity".to_string()),
             message: "Quantity is required".to_string(),
         });
-    } else if parse_decimal(&data.quantity).is_err() {
-        errors.push(ImportError {
-            row,
-            field: Some("quantity".to_string()),
-            message: "Quantity must be a valid number".to_string(),
-        });
-    } else if parse_decimal(&data.quantity).unwrap() <= Decimal::ZERO {
-        errors.push(ImportError {
-            row,
-            field: Some("quantity".to_string()),
-            message: "Quantity must be positive".to_string(),
-        });
+    } else {
+        match parse_decimal(&data.quantity) {
+            Ok(qty) if qty <= Decimal::ZERO => {
+                errors.push(ImportError {
+                    row,
+                    field: Some("quantity".to_string()),
+                    message: "Quantity must be positive".to_string(),
+                });
+            }
+            Ok(_) => {}
+            Err(_) => {
+                errors.push(ImportError {
+                    row,
+                    field: Some("quantity".to_string()),
+                    message: "Quantity must be a valid number".to_string(),
+                });
+            }
+        }
     }
     if data.direction.trim().is_empty() {
         errors.push(ImportError {

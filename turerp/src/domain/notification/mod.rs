@@ -1,6 +1,7 @@
 //! Notification domain module
 
 pub mod model;
+#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 pub mod provider;
 pub mod repository;

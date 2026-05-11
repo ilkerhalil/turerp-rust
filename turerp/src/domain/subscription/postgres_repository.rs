@@ -1,16 +1,16 @@
 //! PostgreSQL subscription repository implementation
 
 use async_trait::async_trait;
-use chrono::{NaiveDate, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
 use crate::db::error::map_sqlx_error;
 use crate::domain::subscription::model::{
-    BillingCycle, CreatePlan, CreateSubscription, Subscription, SubscriptionInvoice,
-    SubscriptionInvoiceStatus, SubscriptionPlan, SubscriptionStatus, UpdatePlan,
-    UpdateSubscription,
+    BillingCycle, CreatePlan, CreateSubscription, DunningEntry, DunningStatus, Subscription,
+    SubscriptionInvoice, SubscriptionInvoiceStatus, SubscriptionPlan, SubscriptionStatus,
+    UpdatePlan, UpdateSubscription, UsageRecord,
 };
 use crate::domain::subscription::repository::{BoxSubscriptionRepository, SubscriptionRepository};
 use crate::error::ApiError;
@@ -28,6 +28,8 @@ struct SubscriptionPlanRow {
     currency: String,
     features: Option<serde_json::Value>,
     is_active: bool,
+    included_quantity: Option<i64>,
+    overage_rate: Option<Decimal>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -55,6 +57,8 @@ impl From<SubscriptionPlanRow> for SubscriptionPlan {
             currency: row.currency,
             features: row.features,
             is_active: row.is_active,
+            included_quantity: row.included_quantity,
+            overage_rate: row.overage_rate,
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
@@ -75,6 +79,8 @@ struct SubscriptionRow {
     auto_renew: bool,
     last_billed_at: Option<chrono::DateTime<chrono::Utc>>,
     next_billing_date: Option<NaiveDate>,
+    trial_start_date: Option<NaiveDate>,
+    trial_end_date: Option<NaiveDate>,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: Option<chrono::DateTime<chrono::Utc>>,
     deleted_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -103,6 +109,8 @@ impl From<SubscriptionRow> for Subscription {
             auto_renew: row.auto_renew,
             last_billed_at: row.last_billed_at,
             next_billing_date: row.next_billing_date,
+            trial_start_date: row.trial_start_date,
+            trial_end_date: row.trial_end_date,
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: row.deleted_at,
@@ -175,9 +183,9 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
 
         let row: SubscriptionPlanRow = sqlx::query_as(
             r#"
-            INSERT INTO subscription_plans (tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-            RETURNING id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at, deleted_at, deleted_by
+            INSERT INTO subscription_plans (tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, included_quantity, overage_rate, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+            RETURNING id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, included_quantity, overage_rate, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -188,6 +196,8 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
         .bind(&create.currency)
         .bind(&create.features)
         .bind(create.is_active)
+        .bind(create.included_quantity)
+        .bind(create.overage_rate)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "SubscriptionPlan"))?;
@@ -202,7 +212,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
     ) -> Result<Option<SubscriptionPlan>, ApiError> {
         let result: Option<SubscriptionPlanRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at, deleted_at, deleted_by
+            SELECT id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, included_quantity, overage_rate, created_at, updated_at, deleted_at, deleted_by
             FROM subscription_plans
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
@@ -222,7 +232,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
     ) -> Result<Vec<SubscriptionPlan>, ApiError> {
         let rows: Vec<SubscriptionPlanRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at, deleted_at, deleted_by
+            SELECT id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, included_quantity, overage_rate, created_at, updated_at, deleted_at, deleted_by
             FROM subscription_plans
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
@@ -255,9 +265,11 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
                 currency = COALESCE($5, currency),
                 features = COALESCE($6, features),
                 is_active = COALESCE($7, is_active),
+                included_quantity = COALESCE($8, included_quantity),
+                overage_rate = COALESCE($9, overage_rate),
                 updated_at = NOW()
-            WHERE id = $8 AND tenant_id = $9 AND deleted_at IS NULL
-            RETURNING id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, created_at, updated_at, deleted_at, deleted_by
+            WHERE id = $10 AND tenant_id = $11 AND deleted_at IS NULL
+            RETURNING id, tenant_id, name, description, billing_cycle, base_amount, currency, features, is_active, included_quantity, overage_rate, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.name)
@@ -267,6 +279,8 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
         .bind(&update.currency)
         .bind(&update.features)
         .bind(update.is_active)
+        .bind(update.included_quantity)
+        .bind(update.overage_rate)
         .bind(id)
         .bind(tenant_id)
         .fetch_one(&*self.pool)
@@ -310,9 +324,9 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
 
         let row: SubscriptionRow = sqlx::query_as(
             r#"
-            INSERT INTO subscriptions (tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, NOW())
-            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
+            INSERT INTO subscriptions (tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, trial_start_date, trial_end_date, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8, $9, $10, NOW())
+            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, trial_start_date, trial_end_date, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
@@ -323,6 +337,8 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
         .bind(&status)
         .bind(create.auto_renew)
         .bind(create.next_billing_date)
+        .bind(create.trial_start_date)
+        .bind(create.trial_end_date)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Subscription"))?;
@@ -337,7 +353,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
     ) -> Result<Option<Subscription>, ApiError> {
         let result: Option<SubscriptionRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
+            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, trial_start_date, trial_end_date, created_at, updated_at, deleted_at, deleted_by
             FROM subscriptions
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
@@ -357,7 +373,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
     ) -> Result<Vec<Subscription>, ApiError> {
         let rows: Vec<SubscriptionRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
+            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, trial_start_date, trial_end_date, created_at, updated_at, deleted_at, deleted_by
             FROM subscriptions
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
@@ -380,7 +396,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
 
         let rows: Vec<SubscriptionRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
+            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, trial_start_date, trial_end_date, created_at, updated_at, deleted_at, deleted_by
             FROM subscriptions
             WHERE customer_id = $1 AND tenant_id = $2 AND status = $3 AND deleted_at IS NULL
             ORDER BY created_at DESC
@@ -414,9 +430,11 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
                 status = COALESCE($4, status),
                 auto_renew = COALESCE($5, auto_renew),
                 next_billing_date = COALESCE($6, next_billing_date),
+                trial_start_date = COALESCE($7, trial_start_date),
+                trial_end_date = COALESCE($8, trial_end_date),
                 updated_at = NOW()
-            WHERE id = $7 AND tenant_id = $8 AND deleted_at IS NULL
-            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
+            WHERE id = $9 AND tenant_id = $10 AND deleted_at IS NULL
+            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, trial_start_date, trial_end_date, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(update.plan_id)
@@ -425,6 +443,8 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
         .bind(&status_str)
         .bind(update.auto_renew)
         .bind(update.next_billing_date)
+        .bind(update.trial_start_date)
+        .bind(update.trial_end_date)
         .bind(id)
         .bind(tenant_id)
         .fetch_one(&*self.pool)
@@ -466,7 +486,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
 
         let rows: Vec<SubscriptionRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
+            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, trial_start_date, trial_end_date, created_at, updated_at, deleted_at, deleted_by
             FROM subscriptions
             WHERE tenant_id = $1 AND status = $2 AND auto_renew = true
               AND next_billing_date IS NOT NULL AND next_billing_date <= $3 AND deleted_at IS NULL
@@ -487,7 +507,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
         // Get the subscription and plan billing cycle
         let sub: SubscriptionRow = sqlx::query_as(
             r#"
-            SELECT s.id, s.tenant_id, s.customer_id, s.plan_id, s.start_date, s.end_date, s.status, s.auto_renew, s.last_billed_at, s.next_billing_date, s.created_at, s.updated_at, s.deleted_at, s.deleted_by
+            SELECT s.id, s.tenant_id, s.customer_id, s.plan_id, s.start_date, s.end_date, s.status, s.auto_renew, s.last_billed_at, s.next_billing_date, s.trial_start_date, s.trial_end_date, s.created_at, s.updated_at, s.deleted_at, s.deleted_by
             FROM subscriptions s
             WHERE s.id = $1 AND s.tenant_id = $2 AND s.deleted_at IS NULL
             "#,
@@ -546,7 +566,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
                 end_date = $2,
                 updated_at = NOW()
             WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL
-            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, created_at, updated_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, trial_start_date, trial_end_date, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(new_next)
@@ -613,6 +633,125 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to list subscription invoices: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn create_dunning_entry(
+        &self,
+        _tenant_id: i64,
+        _subscription_id: i64,
+        _invoice_id: i64,
+        _attempt_number: i32,
+    ) -> Result<DunningEntry, ApiError> {
+        Err(ApiError::ServiceUnavailable(
+            "Dunning not yet implemented for PostgreSQL".to_string(),
+        ))
+    }
+
+    async fn find_dunning_by_subscription(
+        &self,
+        _subscription_id: i64,
+        _tenant_id: i64,
+    ) -> Result<Vec<DunningEntry>, ApiError> {
+        Err(ApiError::ServiceUnavailable(
+            "Dunning not yet implemented for PostgreSQL".to_string(),
+        ))
+    }
+
+    async fn update_dunning_status(
+        &self,
+        _id: i64,
+        _tenant_id: i64,
+        _status: DunningStatus,
+        _attempt_number: i32,
+        _retry_at: Option<DateTime<Utc>>,
+    ) -> Result<DunningEntry, ApiError> {
+        Err(ApiError::ServiceUnavailable(
+            "Dunning not yet implemented for PostgreSQL".to_string(),
+        ))
+    }
+
+    async fn find_subscriptions_for_dunning(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Subscription>, ApiError> {
+        let status_active = SubscriptionStatus::Active.to_string();
+        let status_past_due = SubscriptionStatus::PastDue.to_string();
+
+        let rows: Vec<SubscriptionRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, trial_start_date, trial_end_date, created_at, updated_at, deleted_at, deleted_by
+            FROM subscriptions
+            WHERE tenant_id = $1 AND status IN ($2, $3) AND deleted_at IS NULL
+            ORDER BY next_billing_date ASC
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&status_active)
+        .bind(&status_past_due)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find subscriptions for dunning: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn create_usage_record(
+        &self,
+        _tenant_id: i64,
+        _subscription_id: i64,
+        _quantity: i64,
+        _unit: String,
+        _billing_period_start: NaiveDate,
+        _billing_period_end: NaiveDate,
+    ) -> Result<UsageRecord, ApiError> {
+        Err(ApiError::ServiceUnavailable(
+            "Usage records not yet implemented for PostgreSQL".to_string(),
+        ))
+    }
+
+    async fn find_usage_by_subscription(
+        &self,
+        _subscription_id: i64,
+        _tenant_id: i64,
+    ) -> Result<Vec<UsageRecord>, ApiError> {
+        Err(ApiError::ServiceUnavailable(
+            "Usage records not yet implemented for PostgreSQL".to_string(),
+        ))
+    }
+
+    async fn find_usage_by_period(
+        &self,
+        _subscription_id: i64,
+        _tenant_id: i64,
+        _period_start: NaiveDate,
+        _period_end: NaiveDate,
+    ) -> Result<Vec<UsageRecord>, ApiError> {
+        Err(ApiError::ServiceUnavailable(
+            "Usage records not yet implemented for PostgreSQL".to_string(),
+        ))
+    }
+
+    async fn find_trial_subscriptions(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Subscription>, ApiError> {
+        let status = SubscriptionStatus::Trial.to_string();
+
+        let rows: Vec<SubscriptionRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, customer_id, plan_id, start_date, end_date, status, auto_renew, last_billed_at, next_billing_date, trial_start_date, trial_end_date, created_at, updated_at, deleted_at, deleted_by
+            FROM subscriptions
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&status)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find trial subscriptions: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }

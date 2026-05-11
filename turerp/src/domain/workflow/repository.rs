@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::common::SoftDeletable;
 use crate::domain::workflow::model::{
     CreateWorkflowTemplate, WorkflowAuditLog, WorkflowEntityType, WorkflowInstance, WorkflowStatus,
-    WorkflowStep, WorkflowStepStatus, WorkflowTemplate,
+    WorkflowStep, WorkflowStepApproval, WorkflowStepStatus, WorkflowTemplate,
 };
 use crate::error::ApiError;
 
@@ -109,6 +109,32 @@ pub trait WorkflowRepository: Send + Sync {
         &self,
         hours: i64,
     ) -> Result<Vec<(WorkflowInstance, WorkflowStep)>, ApiError>;
+
+    // Role-based assignment
+
+    /// Find user IDs assigned to a role within a tenant
+    async fn find_users_by_role(&self, tenant_id: i64, role: &str) -> Result<Vec<i64>, ApiError>;
+
+    /// Find pending workflow instances for users with a given role
+    async fn find_pending_approvals_by_role(
+        &self,
+        role: String,
+        tenant_id: i64,
+    ) -> Result<Vec<WorkflowInstance>, ApiError>;
+
+    // Parallel approval tracking
+
+    /// Create a step approval record
+    async fn create_step_approval(
+        &self,
+        approval: WorkflowStepApproval,
+    ) -> Result<WorkflowStepApproval, ApiError>;
+
+    /// Find all approval records for a step
+    async fn find_step_approvals(
+        &self,
+        step_id: i64,
+    ) -> Result<Vec<WorkflowStepApproval>, ApiError>;
 }
 
 /// Type alias for boxed WorkflowRepository
@@ -123,10 +149,12 @@ struct Inner {
     instances: HashMap<i64, WorkflowInstance>,
     steps: HashMap<i64, WorkflowStep>,
     audit_logs: HashMap<i64, WorkflowAuditLog>,
+    step_approvals: HashMap<i64, WorkflowStepApproval>,
     next_template_id: AtomicI64,
     next_instance_id: AtomicI64,
     next_step_id: AtomicI64,
     next_log_id: AtomicI64,
+    next_approval_id: AtomicI64,
 }
 
 /// In-memory workflow repository for testing and development
@@ -142,10 +170,12 @@ impl InMemoryWorkflowRepository {
                 instances: HashMap::new(),
                 steps: HashMap::new(),
                 audit_logs: HashMap::new(),
+                step_approvals: HashMap::new(),
                 next_template_id: AtomicI64::new(1),
                 next_instance_id: AtomicI64::new(1),
                 next_step_id: AtomicI64::new(1),
                 next_log_id: AtomicI64::new(1),
+                next_approval_id: AtomicI64::new(1),
             }),
         }
     }
@@ -383,6 +413,63 @@ impl WorkflowRepository for InMemoryWorkflowRepository {
             }
         }
         Ok(result)
+    }
+
+    async fn find_users_by_role(&self, _tenant_id: i64, _role: &str) -> Result<Vec<i64>, ApiError> {
+        // Stub: no user/role domain integration in this repository
+        Ok(Vec::new())
+    }
+
+    async fn find_pending_approvals_by_role(
+        &self,
+        role: String,
+        tenant_id: i64,
+    ) -> Result<Vec<WorkflowInstance>, ApiError> {
+        let inner = self.inner.lock();
+        let mut result = Vec::new();
+        for instance in inner.instances.values() {
+            if instance.tenant_id != tenant_id || instance.status != WorkflowStatus::Pending {
+                continue;
+            }
+            let steps: Vec<&WorkflowStep> = inner
+                .steps
+                .values()
+                .filter(|s| s.instance_id == instance.id && s.status == WorkflowStepStatus::Pending)
+                .collect();
+            if steps
+                .iter()
+                .any(|s| s.approver_role.as_deref() == Some(&role))
+            {
+                result.push(instance.clone());
+            }
+        }
+        Ok(result)
+    }
+
+    async fn create_step_approval(
+        &self,
+        approval: WorkflowStepApproval,
+    ) -> Result<WorkflowStepApproval, ApiError> {
+        let mut inner = self.inner.lock();
+        let id = inner.next_approval_id.fetch_add(1, Ordering::SeqCst);
+        let approval = WorkflowStepApproval { id, ..approval };
+        inner.step_approvals.insert(id, approval.clone());
+        Ok(approval)
+    }
+
+    async fn find_step_approvals(
+        &self,
+        step_id: i64,
+    ) -> Result<Vec<WorkflowStepApproval>, ApiError> {
+        let inner = self.inner.lock();
+        let mut approvals: Vec<WorkflowStepApproval> = inner
+            .step_approvals
+            .values()
+            .filter(|a| a.step_id == step_id)
+            .cloned()
+            .collect();
+        approvals.sort_by_key(|a| a.created_at);
+        Ok(approvals)
     }
 }
 

@@ -174,7 +174,7 @@ impl NotificationRepository for InMemoryNotificationRepository {
             .filter(|n| n.tenant_id == tenant_id)
             .filter(|n| !n.is_deleted())
             .filter(|n| user_id.is_none() || n.user_id == user_id)
-            .filter(|n| channel.is_none() || n.channel == channel.unwrap())
+            .filter(|n| channel.map(|c| n.channel == c).unwrap_or(true))
             .cloned()
             .collect();
 
@@ -279,7 +279,9 @@ impl NotificationRepository for InMemoryNotificationRepository {
             .filter(|n| n.tenant_id == tenant_id && n.is_deleted())
             .cloned()
             .collect();
-        results.sort_by_key(|n| std::cmp::Reverse(n.deleted_at.unwrap()));
+        results.sort_by_key(|n| {
+            std::cmp::Reverse(n.deleted_at.expect("deleted items have deleted_at"))
+        });
         Ok(results)
     }
 
@@ -439,7 +441,9 @@ impl InAppNotificationRepository for InMemoryInAppNotificationRepository {
             .filter(|n| n.tenant_id == tenant_id && n.is_deleted())
             .cloned()
             .collect();
-        results.sort_by_key(|n| std::cmp::Reverse(n.deleted_at.unwrap()));
+        results.sort_by_key(|n| {
+            std::cmp::Reverse(n.deleted_at.expect("deleted items have deleted_at"))
+        });
         Ok(results)
     }
 

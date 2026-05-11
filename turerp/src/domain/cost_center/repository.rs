@@ -11,8 +11,9 @@ use std::sync::Arc;
 use crate::common::pagination::{PaginatedResult, PaginationParams};
 use crate::common::soft_delete::SoftDeletable;
 use crate::domain::cost_center::model::{
-    CostCenter, CostCenterAllocation, CostCenterType, CreateAllocation, CreateCostCenter,
-    ProfitabilityReport, UpdateCostCenter,
+    AllocationRule, Budget, CostCenter, CostCenterAllocation, CostCenterType, CreateAllocation,
+    CreateAllocationRule, CreateBudget, CreateCostCenter, ProfitabilityReport,
+    UpdateAllocationRule, UpdateBudget, UpdateCostCenter, VarianceReport, VarianceReportLine,
 };
 use crate::error::ApiError;
 
@@ -90,6 +91,83 @@ pub trait CostCenterRepository: Send + Sync {
         period_start: Option<DateTime<Utc>>,
         period_end: Option<DateTime<Utc>>,
     ) -> Result<ProfitabilityReport, ApiError>;
+
+    // ---- Budget Operations ----
+
+    /// Create a budget
+    async fn create_budget(&self, budget: CreateBudget, tenant_id: i64)
+        -> Result<Budget, ApiError>;
+
+    /// Find a budget by ID
+    async fn find_budget_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Budget>, ApiError>;
+
+    /// Find budgets for a cost center
+    async fn find_budgets_by_cost_center(
+        &self,
+        cost_center_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Budget>, ApiError>;
+
+    /// Update a budget
+    async fn update_budget(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateBudget,
+    ) -> Result<Budget, ApiError>;
+
+    /// Delete a budget
+    async fn delete_budget(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Get variance report for a cost center
+    async fn get_variance_report(
+        &self,
+        cost_center_id: i64,
+        tenant_id: i64,
+        period_start: Option<DateTime<Utc>>,
+        period_end: Option<DateTime<Utc>>,
+    ) -> Result<VarianceReport, ApiError>;
+
+    // ---- Allocation Rule Operations ----
+
+    /// Create an allocation rule
+    async fn create_allocation_rule(
+        &self,
+        rule: CreateAllocationRule,
+        tenant_id: i64,
+    ) -> Result<AllocationRule, ApiError>;
+
+    /// Find an allocation rule by ID
+    async fn find_allocation_rule_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<AllocationRule>, ApiError>;
+
+    /// Find active allocation rules for a source type
+    async fn find_allocation_rules_by_source(
+        &self,
+        source_type: &str,
+        tenant_id: i64,
+    ) -> Result<Vec<AllocationRule>, ApiError>;
+
+    /// Find allocation rules for a cost center
+    async fn find_allocation_rules_by_cost_center(
+        &self,
+        cost_center_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<AllocationRule>, ApiError>;
+
+    /// Update an allocation rule
+    async fn update_allocation_rule(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateAllocationRule,
+    ) -> Result<AllocationRule, ApiError>;
+
+    /// Delete an allocation rule
+    async fn delete_allocation_rule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed CostCenterRepository
@@ -102,8 +180,12 @@ pub type BoxCostCenterRepository = Arc<dyn CostCenterRepository>;
 struct CostCenterInner {
     centers: HashMap<i64, CostCenter>,
     allocations: HashMap<i64, CostCenterAllocation>,
+    budgets: HashMap<i64, Budget>,
+    rules: HashMap<i64, AllocationRule>,
     next_center_id: AtomicI64,
     next_allocation_id: AtomicI64,
+    next_budget_id: AtomicI64,
+    next_rule_id: AtomicI64,
 }
 
 /// In-memory cost center repository for testing and development
@@ -117,8 +199,12 @@ impl InMemoryCostCenterRepository {
             inner: Mutex::new(CostCenterInner {
                 centers: HashMap::new(),
                 allocations: HashMap::new(),
+                budgets: HashMap::new(),
+                rules: HashMap::new(),
                 next_center_id: AtomicI64::new(1),
                 next_allocation_id: AtomicI64::new(1),
+                next_budget_id: AtomicI64::new(1),
+                next_rule_id: AtomicI64::new(1),
             }),
         }
     }
@@ -434,6 +520,355 @@ impl CostCenterRepository for InMemoryCostCenterRepository {
             period_end,
         })
     }
+
+    // ---- Budget Operations ----
+
+    async fn create_budget(
+        &self,
+        budget: CreateBudget,
+        tenant_id: i64,
+    ) -> Result<Budget, ApiError> {
+        let mut inner = self.inner.lock();
+        let id = inner.next_budget_id.fetch_add(1, Ordering::SeqCst);
+        let now = chrono::Utc::now();
+
+        let b = Budget {
+            id,
+            tenant_id,
+            cost_center_id: budget.cost_center_id,
+            period: budget.period,
+            period_start: budget.period_start,
+            period_end: budget.period_end,
+            budgeted_amount: budget.budgeted_amount,
+            actual_amount: Decimal::ZERO,
+            variance: Decimal::ZERO,
+            notes: budget.notes,
+            created_at: now,
+            updated_at: None,
+        };
+
+        inner.budgets.insert(id, b.clone());
+        Ok(b)
+    }
+
+    async fn find_budget_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Budget>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .budgets
+            .get(&id)
+            .filter(|b| b.tenant_id == tenant_id)
+            .cloned())
+    }
+
+    async fn find_budgets_by_cost_center(
+        &self,
+        cost_center_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Budget>, ApiError> {
+        let inner = self.inner.lock();
+        let mut items: Vec<Budget> = inner
+            .budgets
+            .values()
+            .filter(|b| b.tenant_id == tenant_id && b.cost_center_id == cost_center_id)
+            .cloned()
+            .collect();
+        items.sort_by_key(|b| b.period_start);
+        Ok(items)
+    }
+
+    async fn update_budget(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateBudget,
+    ) -> Result<Budget, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let budget = inner
+            .budgets
+            .get_mut(&id)
+            .filter(|b| b.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Budget {} not found", id)))?;
+
+        if let Some(period) = update.period {
+            budget.period = period;
+        }
+        if let Some(start) = update.period_start {
+            budget.period_start = start;
+        }
+        if let Some(end) = update.period_end {
+            budget.period_end = end;
+        }
+        if let Some(amount) = update.budgeted_amount {
+            budget.budgeted_amount = amount;
+        }
+        if let Some(notes) = update.notes {
+            budget.notes = notes;
+        }
+        budget.updated_at = Some(chrono::Utc::now());
+
+        Ok(budget.clone())
+    }
+
+    async fn delete_budget(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let existed = inner
+            .budgets
+            .remove(&id)
+            .filter(|b| b.tenant_id == tenant_id)
+            .is_some();
+        if !existed {
+            return Err(ApiError::NotFound(format!("Budget {} not found", id)));
+        }
+        Ok(())
+    }
+
+    async fn get_variance_report(
+        &self,
+        cost_center_id: i64,
+        tenant_id: i64,
+        period_start: Option<DateTime<Utc>>,
+        period_end: Option<DateTime<Utc>>,
+    ) -> Result<VarianceReport, ApiError> {
+        let inner = self.inner.lock();
+
+        let center = inner
+            .centers
+            .get(&cost_center_id)
+            .filter(|c| c.tenant_id == tenant_id && !c.is_deleted())
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Cost center {} not found", cost_center_id))
+            })?;
+
+        let budgets: Vec<&Budget> = inner
+            .budgets
+            .values()
+            .filter(|b| b.tenant_id == tenant_id && b.cost_center_id == cost_center_id)
+            .filter(|b| {
+                if let Some(start) = period_start {
+                    b.period_start >= start
+                } else {
+                    true
+                }
+            })
+            .filter(|b| {
+                if let Some(end) = period_end {
+                    b.period_end <= end
+                } else {
+                    true
+                }
+            })
+            .collect();
+
+        let allocations: Vec<&CostCenterAllocation> = inner
+            .allocations
+            .values()
+            .filter(|a| a.tenant_id == tenant_id && a.cost_center_id == cost_center_id)
+            .filter(|a| {
+                if let Some(start) = period_start {
+                    a.allocation_date >= start
+                } else {
+                    true
+                }
+            })
+            .filter(|a| {
+                if let Some(end) = period_end {
+                    a.allocation_date <= end
+                } else {
+                    true
+                }
+            })
+            .collect();
+
+        let mut total_budgeted = Decimal::ZERO;
+        let mut total_actual = Decimal::ZERO;
+        let mut lines = Vec::new();
+
+        for budget in budgets {
+            let actual: Decimal = allocations
+                .iter()
+                .filter(|a| {
+                    a.allocation_date >= budget.period_start
+                        && a.allocation_date <= budget.period_end
+                })
+                .map(|a| a.amount)
+                .sum();
+            let variance = budget.budgeted_amount - actual;
+            let variance_percentage = if budget.budgeted_amount > Decimal::ZERO {
+                (variance / budget.budgeted_amount) * Decimal::new(100, 0)
+            } else {
+                Decimal::ZERO
+            };
+
+            total_budgeted += budget.budgeted_amount;
+            total_actual += actual;
+
+            lines.push(VarianceReportLine {
+                cost_center_id: center.id,
+                cost_center_code: center.code.clone(),
+                cost_center_name: center.name.clone(),
+                period: budget.period.clone(),
+                period_start: budget.period_start,
+                period_end: budget.period_end,
+                budgeted_amount: budget.budgeted_amount,
+                actual_amount: actual,
+                variance,
+                variance_percentage,
+            });
+        }
+
+        let total_variance = total_budgeted - total_actual;
+
+        Ok(VarianceReport {
+            tenant_id,
+            total_budgeted,
+            total_actual,
+            total_variance,
+            lines,
+        })
+    }
+
+    // ---- Allocation Rule Operations ----
+
+    async fn create_allocation_rule(
+        &self,
+        rule: CreateAllocationRule,
+        tenant_id: i64,
+    ) -> Result<AllocationRule, ApiError> {
+        let mut inner = self.inner.lock();
+        let id = inner.next_rule_id.fetch_add(1, Ordering::SeqCst);
+        let now = chrono::Utc::now();
+
+        let r = AllocationRule {
+            id,
+            tenant_id,
+            name: rule.name,
+            source_type: rule.source_type,
+            account_range_start: rule.account_range_start,
+            account_range_end: rule.account_range_end,
+            cost_center_id: rule.cost_center_id,
+            rule_type: rule.rule_type,
+            percentage: rule.percentage,
+            fixed_amount: rule.fixed_amount,
+            is_active: rule.is_active,
+            priority: rule.priority,
+            created_at: now,
+            updated_at: None,
+        };
+
+        inner.rules.insert(id, r.clone());
+        Ok(r)
+    }
+
+    async fn find_allocation_rule_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<AllocationRule>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .rules
+            .get(&id)
+            .filter(|r| r.tenant_id == tenant_id)
+            .cloned())
+    }
+
+    async fn find_allocation_rules_by_source(
+        &self,
+        source_type: &str,
+        tenant_id: i64,
+    ) -> Result<Vec<AllocationRule>, ApiError> {
+        let inner = self.inner.lock();
+        let mut items: Vec<AllocationRule> = inner
+            .rules
+            .values()
+            .filter(|r| r.tenant_id == tenant_id && r.source_type == source_type && r.is_active)
+            .cloned()
+            .collect();
+        items.sort_by_key(|r| (r.priority, r.id));
+        Ok(items)
+    }
+
+    async fn find_allocation_rules_by_cost_center(
+        &self,
+        cost_center_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<AllocationRule>, ApiError> {
+        let inner = self.inner.lock();
+        let mut items: Vec<AllocationRule> = inner
+            .rules
+            .values()
+            .filter(|r| r.tenant_id == tenant_id && r.cost_center_id == cost_center_id)
+            .cloned()
+            .collect();
+        items.sort_by_key(|r| (r.priority, r.id));
+        Ok(items)
+    }
+
+    async fn update_allocation_rule(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateAllocationRule,
+    ) -> Result<AllocationRule, ApiError> {
+        let mut inner = self.inner.lock();
+
+        let rule = inner
+            .rules
+            .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Allocation rule {} not found", id)))?;
+
+        if let Some(name) = update.name {
+            rule.name = name;
+        }
+        if let Some(source_type) = update.source_type {
+            rule.source_type = source_type;
+        }
+        if let Some(start) = update.account_range_start {
+            rule.account_range_start = start;
+        }
+        if let Some(end) = update.account_range_end {
+            rule.account_range_end = end;
+        }
+        if let Some(cost_center_id) = update.cost_center_id {
+            rule.cost_center_id = cost_center_id;
+        }
+        if let Some(rule_type) = update.rule_type {
+            rule.rule_type = rule_type;
+        }
+        if let Some(pct) = update.percentage {
+            rule.percentage = pct;
+        }
+        if let Some(fixed) = update.fixed_amount {
+            rule.fixed_amount = fixed;
+        }
+        if let Some(is_active) = update.is_active {
+            rule.is_active = is_active;
+        }
+        if let Some(priority) = update.priority {
+            rule.priority = priority;
+        }
+        rule.updated_at = Some(chrono::Utc::now());
+
+        Ok(rule.clone())
+    }
+
+    async fn delete_allocation_rule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let existed = inner
+            .rules
+            .remove(&id)
+            .filter(|r| r.tenant_id == tenant_id)
+            .is_some();
+        if !existed {
+            return Err(ApiError::NotFound(format!(
+                "Allocation rule {} not found",
+                id
+            )));
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -538,5 +973,167 @@ mod tests {
         assert_eq!(report.total_expense, Decimal::new(2000, 0));
         assert_eq!(report.net_profit, Decimal::new(3000, 0));
         assert_eq!(report.allocation_count, 2);
+    }
+
+    #[tokio::test]
+    async fn test_budget_crud() {
+        let repo = InMemoryCostCenterRepository::new();
+
+        let create = CreateCostCenter {
+            code: "CC-001".to_string(),
+            name: "Production".to_string(),
+            description: None,
+            center_type: CostCenterType::Cost,
+            parent_id: None,
+            is_active: true,
+        };
+        let center = repo.create(create, 1).await.unwrap();
+
+        let budget_create = CreateBudget {
+            cost_center_id: center.id,
+            period: crate::domain::cost_center::model::BudgetPeriod::Monthly,
+            period_start: Utc::now(),
+            period_end: Utc::now(),
+            budgeted_amount: Decimal::new(10000, 0),
+            notes: Some("January budget".to_string()),
+        };
+        let budget = repo.create_budget(budget_create, 1).await.unwrap();
+        assert_eq!(budget.budgeted_amount, Decimal::new(10000, 0));
+
+        let found = repo.find_budget_by_id(budget.id, 1).await.unwrap().unwrap();
+        assert_eq!(found.id, budget.id);
+
+        let budgets = repo
+            .find_budgets_by_cost_center(center.id, 1)
+            .await
+            .unwrap();
+        assert_eq!(budgets.len(), 1);
+
+        let update = UpdateBudget {
+            budgeted_amount: Some(Decimal::new(12000, 0)),
+            ..Default::default()
+        };
+        let updated = repo.update_budget(budget.id, 1, update).await.unwrap();
+        assert_eq!(updated.budgeted_amount, Decimal::new(12000, 0));
+
+        repo.delete_budget(budget.id, 1).await.unwrap();
+        let gone = repo.find_budget_by_id(budget.id, 1).await.unwrap();
+        assert!(gone.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_variance_report() {
+        let repo = InMemoryCostCenterRepository::new();
+
+        let create = CreateCostCenter {
+            code: "CC-001".to_string(),
+            name: "Production".to_string(),
+            description: None,
+            center_type: CostCenterType::Cost,
+            parent_id: None,
+            is_active: true,
+        };
+        let center = repo.create(create, 1).await.unwrap();
+
+        let now = Utc::now();
+        let budget_create = CreateBudget {
+            cost_center_id: center.id,
+            period: crate::domain::cost_center::model::BudgetPeriod::Monthly,
+            period_start: now,
+            period_end: now + chrono::Duration::days(30),
+            budgeted_amount: Decimal::new(10000, 0),
+            notes: None,
+        };
+        repo.create_budget(budget_create, 1).await.unwrap();
+
+        let alloc = CreateAllocation {
+            source_type: "payroll".to_string(),
+            source_id: 1,
+            cost_center_id: center.id,
+            amount: Decimal::new(3000, 0),
+            percentage: Decimal::new(100, 0),
+            allocation_date: Some(now + chrono::Duration::days(5)),
+            description: None,
+        };
+        repo.create_allocation(alloc, 1).await.unwrap();
+
+        let report = repo
+            .get_variance_report(
+                center.id,
+                1,
+                Some(now),
+                Some(now + chrono::Duration::days(30)),
+            )
+            .await
+            .unwrap();
+        assert_eq!(report.total_budgeted, Decimal::new(10000, 0));
+        assert_eq!(report.total_actual, Decimal::new(3000, 0));
+        assert_eq!(report.total_variance, Decimal::new(7000, 0));
+        assert_eq!(report.lines.len(), 1);
+        assert_eq!(report.lines[0].variance, Decimal::new(7000, 0));
+    }
+
+    #[tokio::test]
+    async fn test_allocation_rule_crud() {
+        let repo = InMemoryCostCenterRepository::new();
+
+        let create = CreateCostCenter {
+            code: "CC-001".to_string(),
+            name: "Production".to_string(),
+            description: None,
+            center_type: CostCenterType::Cost,
+            parent_id: None,
+            is_active: true,
+        };
+        let center = repo.create(create, 1).await.unwrap();
+
+        let rule_create = CreateAllocationRule {
+            name: "Payroll Split".to_string(),
+            source_type: "payroll".to_string(),
+            account_range_start: Some("6000".to_string()),
+            account_range_end: Some("6999".to_string()),
+            cost_center_id: center.id,
+            rule_type: crate::domain::cost_center::model::AllocationRuleType::Percentage,
+            percentage: Some(Decimal::new(50, 0)),
+            fixed_amount: None,
+            is_active: true,
+            priority: 1,
+        };
+        let rule = repo.create_allocation_rule(rule_create, 1).await.unwrap();
+        assert_eq!(rule.name, "Payroll Split");
+        assert_eq!(rule.percentage, Some(Decimal::new(50, 0)));
+
+        let found = repo
+            .find_allocation_rule_by_id(rule.id, 1)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.id, rule.id);
+
+        let by_source = repo
+            .find_allocation_rules_by_source("payroll", 1)
+            .await
+            .unwrap();
+        assert_eq!(by_source.len(), 1);
+
+        let by_center = repo
+            .find_allocation_rules_by_cost_center(center.id, 1)
+            .await
+            .unwrap();
+        assert_eq!(by_center.len(), 1);
+
+        let update = UpdateAllocationRule {
+            percentage: Some(Some(Decimal::new(75, 0))),
+            ..Default::default()
+        };
+        let updated = repo
+            .update_allocation_rule(rule.id, 1, update)
+            .await
+            .unwrap();
+        assert_eq!(updated.percentage, Some(Decimal::new(75, 0)));
+
+        repo.delete_allocation_rule(rule.id, 1).await.unwrap();
+        let gone = repo.find_allocation_rule_by_id(rule.id, 1).await.unwrap();
+        assert!(gone.is_none());
     }
 }

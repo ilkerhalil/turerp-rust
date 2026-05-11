@@ -1138,6 +1138,524 @@
         ]
       }
     },
+    "/api/v1/archive/jobs": {
+      "get": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "List archive jobs (paginated, optional policy filter)",
+        "operationId": "list_jobs",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of archive jobs"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "Create and start an archive job (requires admin role)",
+        "operationId": "create_job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateArchiveJob"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Archive job created and started"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/archive/jobs/{id}": {
+      "get": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "Get an archive job by ID",
+        "operationId": "get_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Archive job ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive job found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "Delete an archive job (requires admin role)",
+        "operationId": "delete_job",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Archive job ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Archive job deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/archive/policies": {
+      "get": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "List archive policies (paginated)",
+        "operationId": "list_policies",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of archive policies"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "Create an archive policy (requires admin role)",
+        "operationId": "create_policy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateArchivePolicy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Archive policy created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/archive/policies/active": {
+      "get": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "List active archive policies",
+        "operationId": "list_active_policies",
+        "responses": {
+          "200": {
+            "description": "List of active archive policies"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/archive/policies/{id}": {
+      "get": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "Get an archive policy by ID",
+        "operationId": "get_policy",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Archive policy ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive policy found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "Update an archive policy (requires admin role)",
+        "operationId": "update_policy",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Archive policy ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateArchivePolicy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Archive policy updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "Delete an archive policy (requires admin role)",
+        "operationId": "delete_policy",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Archive policy ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Archive policy deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/archive/records": {
+      "get": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "List archived records (paginated, optional filters)",
+        "operationId": "list_records",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "source_table",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "source_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of archive records"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/archive/records/restore": {
+      "post": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "Restore archived records (requires admin role)",
+        "operationId": "restore_records",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RestoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Records restored"
+          },
+          "400": {
+            "description": "Bad request — empty IDs list"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/archive/records/{id}": {
+      "get": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "Get an archive record by ID",
+        "operationId": "get_record",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Archive record ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Archive record found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Archive"
+        ],
+        "summary": "Permanently delete an archive record (requires admin role)",
+        "operationId": "delete_record",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Archive record ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Archive record deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/assets": {
       "get": {
         "tags": [
@@ -8832,6 +9350,140 @@
         ]
       }
     },
+    "/api/v1/forecasting/alerts": {
+      "post": {
+        "tags": [
+          "Forecasting"
+        ],
+        "summary": "Get stock level alerts",
+        "operationId": "get_stock_alerts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockAlertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Stock alerts generated"
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/forecasting/demand": {
+      "post": {
+        "tags": [
+          "Forecasting"
+        ],
+        "summary": "Generate demand forecast for a product",
+        "operationId": "forecast_demand",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForecastRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Demand forecast generated"
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/forecasting/reorder": {
+      "post": {
+        "tags": [
+          "Forecasting"
+        ],
+        "summary": "Get reorder suggestions for products",
+        "operationId": "get_reorder_suggestions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Reorder suggestions generated"
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/forecasting/report": {
+      "get": {
+        "tags": [
+          "Forecasting"
+        ],
+        "summary": "Get comprehensive forecast report for all products",
+        "operationId": "get_forecast_report",
+        "parameters": [
+          {
+            "name": "warehouse_id",
+            "in": "query",
+            "description": "Optional warehouse filter",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Forecast report generated"
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/goods-receipts": {
       "post": {
         "tags": [
@@ -16213,6 +16865,580 @@
         }
       }
     },
+    "/api/v1/shifts": {
+      "get": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Get all shifts",
+        "operationId": "get_shifts",
+        "responses": {
+          "200": {
+            "description": "List of shifts"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Create shift (requires admin role)",
+        "operationId": "create_shift",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShift"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Shift created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/assignments": {
+      "post": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Assign employee to shift (requires admin role)",
+        "operationId": "create_assignment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateShiftAssignment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Assignment created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/assignments/employee/{employee_id}": {
+      "get": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Get assignments by employee",
+        "operationId": "get_assignments_by_employee",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shift assignments"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/assignments/{id}": {
+      "delete": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Remove assignment (requires admin role)",
+        "operationId": "delete_assignment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Assignment ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Assignment removed"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/attendance/clock-in": {
+      "post": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Clock in",
+        "operationId": "clock_in",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClockInRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Clocked in"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/attendance/clock-out": {
+      "post": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Clock out",
+        "operationId": "clock_out",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClockOutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Clocked out"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/attendance/employee/{employee_id}": {
+      "get": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Get attendance by employee",
+        "operationId": "get_attendance_by_employee",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "description": "Employee ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Attendance records"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/deleted": {
+      "get": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "List soft-deleted shifts (requires admin role)",
+        "operationId": "list_deleted_shifts",
+        "responses": {
+          "200": {
+            "description": "List of soft-deleted shifts"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/overtime": {
+      "post": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Calculate overtime",
+        "operationId": "calculate_overtime",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalculateOvertimeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Overtime calculated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/reports": {
+      "post": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Generate shift report",
+        "operationId": "generate_report",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftReportQuery"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Shift report generated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/{id}": {
+      "get": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Get shift by ID",
+        "operationId": "get_shift",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Shift ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shift found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Update shift (requires admin role)",
+        "operationId": "update_shift",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Shift ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateShift"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Shift updated"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Delete shift (requires admin role)",
+        "operationId": "delete_shift",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Shift ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Shift deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/{id}/destroy": {
+      "delete": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Permanently destroy a shift (requires admin role)",
+        "operationId": "destroy_shift",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Shift ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Shift permanently deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/{id}/restore": {
+      "put": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Restore a soft-deleted shift (requires admin role)",
+        "operationId": "restore_shift",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Shift ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shift restored"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/{id}/soft-delete": {
+      "delete": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Soft-delete a shift (requires admin role)",
+        "operationId": "soft_delete_shift",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Shift ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Shift soft-deleted"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/{shift_id}/assignments": {
+      "get": {
+        "tags": [
+          "Shift Planning"
+        ],
+        "summary": "Get assignments by shift",
+        "operationId": "get_assignments_by_shift",
+        "parameters": [
+          {
+            "name": "shift_id",
+            "in": "path",
+            "description": "Shift ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shift assignments"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/stock/levels/product/{product_id}": {
       "get": {
         "tags": [
@@ -20685,6 +21911,474 @@
           }
         }
       },
+      "ArchiveJob": {
+        "type": "object",
+        "description": "An archive job execution record",
+        "required": [
+          "id",
+          "tenant_id",
+          "policy_id",
+          "status",
+          "records_archived",
+          "records_failed",
+          "created_at"
+        ],
+        "properties": {
+          "completed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "policy_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "records_archived": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "records_failed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "started_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/ArchiveJobStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ArchiveJobResponse": {
+        "type": "object",
+        "description": "Response representation of an archive job",
+        "required": [
+          "id",
+          "tenant_id",
+          "policy_id",
+          "status",
+          "records_archived",
+          "records_failed",
+          "created_at"
+        ],
+        "properties": {
+          "completed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "policy_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "records_archived": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "records_failed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "started_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/ArchiveJobStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ArchiveJobStatus": {
+        "type": "string",
+        "description": "Status of an archive job",
+        "enum": [
+          "Pending",
+          "Running",
+          "Completed",
+          "Failed",
+          "Cancelled"
+        ]
+      },
+      "ArchivePolicy": {
+        "type": "object",
+        "description": "An archive policy defining what data to archive",
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "table_name",
+          "age_days",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "age_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conditions": {
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "table_name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "ArchivePolicyResponse": {
+        "type": "object",
+        "description": "Response representation of an archive policy",
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "table_name",
+          "age_days",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "age_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conditions": {
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "table_name": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "ArchiveRecord": {
+        "type": "object",
+        "description": "A single archived record",
+        "required": [
+          "id",
+          "tenant_id",
+          "source_table",
+          "source_id",
+          "archived_data",
+          "archived_at",
+          "archive_job_id"
+        ],
+        "properties": {
+          "archive_job_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "archived_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "archived_data": {},
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "restored_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source_table": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ArchiveRecordResponse": {
+        "type": "object",
+        "description": "Response representation of an archived record",
+        "required": [
+          "id",
+          "tenant_id",
+          "source_table",
+          "source_id",
+          "archived_data",
+          "archived_at",
+          "archive_job_id"
+        ],
+        "properties": {
+          "archive_job_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "archived_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "archived_data": {},
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "restored_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "source_table": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "AttendanceRecord": {
+        "type": "object",
+        "description": "Attendance record with clock in/out",
+        "required": [
+          "id",
+          "employee_id",
+          "shift_id",
+          "date",
+          "hours_worked",
+          "overtime_hours",
+          "status"
+        ],
+        "properties": {
+          "clock_in": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "clock_out": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "employee_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hours_worked": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "overtime_hours": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "shift_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AttendanceStatus"
+          }
+        }
+      },
+      "AttendanceRecordResponse": {
+        "type": "object",
+        "description": "Attendance record response",
+        "required": [
+          "id",
+          "employee_id",
+          "shift_id",
+          "date",
+          "hours_worked",
+          "overtime_hours",
+          "status"
+        ],
+        "properties": {
+          "clock_in": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "clock_out": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "employee_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hours_worked": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "overtime_hours": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "shift_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AttendanceStatus"
+          }
+        }
+      },
+      "AttendanceStatus": {
+        "type": "string",
+        "description": "Attendance status",
+        "enum": [
+          "Present",
+          "Absent",
+          "Late",
+          "EarlyLeave",
+          "OnLeave",
+          "Holiday"
+        ]
+      },
       "BackupCodesResponse": {
         "type": "object",
         "description": "Response after backup codes are generated",
@@ -21178,6 +22872,34 @@
           }
         }
       },
+      "CalculateOvertimeRequest": {
+        "type": "object",
+        "required": [
+          "employee_id",
+          "period_start",
+          "period_end",
+          "expected_hours_per_day",
+          "overtime_rate"
+        ],
+        "properties": {
+          "employee_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expected_hours_per_day": {
+            "$ref": "#/components/schemas/rust_decimal.Decimal"
+          },
+          "overtime_rate": {
+            "$ref": "#/components/schemas/rust_decimal.Decimal"
+          },
+          "period_end": {
+            "$ref": "#/components/schemas/chrono.DateTime"
+          },
+          "period_start": {
+            "$ref": "#/components/schemas/chrono.DateTime"
+          }
+        }
+      },
       "CalculateTaxRequest": {
         "type": "object",
         "description": "Request body for calculating tax",
@@ -21580,6 +23302,53 @@
           "HalfOpen"
         ]
       },
+      "ClockInRequest": {
+        "type": "object",
+        "description": "Clock in request",
+        "required": [
+          "employee_id",
+          "shift_id",
+          "timestamp"
+        ],
+        "properties": {
+          "employee_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "shift_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timestamp": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
+      "ClockOutRequest": {
+        "type": "object",
+        "description": "Clock out request",
+        "required": [
+          "employee_id",
+          "timestamp"
+        ],
+        "properties": {
+          "employee_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "timestamp": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
       "ConversionResult": {
         "type": "object",
         "description": "Result of a currency conversion",
@@ -21870,6 +23639,46 @@
           "user_id": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "CreateArchiveJob": {
+        "type": "object",
+        "description": "Create a new archive job",
+        "required": [
+          "policy_id"
+        ],
+        "properties": {
+          "policy_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreateArchivePolicy": {
+        "type": "object",
+        "description": "Create a new archive policy",
+        "required": [
+          "name",
+          "table_name",
+          "age_days"
+        ],
+        "properties": {
+          "age_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "conditions": {
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "table_name": {
+            "type": "string"
           }
         }
       },
@@ -22236,11 +24045,24 @@
           "features": {
             "nullable": true
           },
+          "included_quantity": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
           "is_active": {
             "type": "boolean"
           },
           "name": {
             "type": "string"
+          },
+          "overage_rate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
           },
           "tenant_id": {
             "type": "integer",
@@ -22276,6 +24098,74 @@
           "tenant_id": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "CreateShift": {
+        "type": "object",
+        "description": "Create shift request",
+        "required": [
+          "tenant_id",
+          "name",
+          "shift_type",
+          "start_time",
+          "end_time",
+          "break_duration_minutes",
+          "expected_hours"
+        ],
+        "properties": {
+          "break_duration_minutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "end_time": {
+            "$ref": "#/components/schemas/NaiveTime"
+          },
+          "expected_hours": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shift_type": {
+            "$ref": "#/components/schemas/ShiftType"
+          },
+          "start_time": {
+            "$ref": "#/components/schemas/NaiveTime"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreateShiftAssignment": {
+        "type": "object",
+        "description": "Create shift assignment request",
+        "required": [
+          "shift_id",
+          "employee_id",
+          "start_date"
+        ],
+        "properties": {
+          "employee_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "end_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "shift_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "start_date": {
+            "$ref": "#/components/schemas/DateTime"
           }
         }
       },
@@ -22325,6 +24215,22 @@
           "tenant_id": {
             "type": "integer",
             "format": "int64"
+          },
+          "trial_end_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "trial_start_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
           }
         }
       },
@@ -22760,6 +24666,67 @@
           "retrying"
         ]
       },
+      "DemandDataPoint": {
+        "type": "object",
+        "description": "Historical demand data point",
+        "required": [
+          "period_start",
+          "quantity"
+        ],
+        "properties": {
+          "period_start": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "DemandForecast": {
+        "type": "object",
+        "description": "Demand forecast for a product",
+        "required": [
+          "product_id",
+          "product_name",
+          "forecast_period",
+          "periods_ahead",
+          "forecasted_quantity",
+          "historical_average",
+          "historical_data_points",
+          "generated_at"
+        ],
+        "properties": {
+          "forecast_period": {
+            "$ref": "#/components/schemas/ForecastPeriod"
+          },
+          "forecasted_quantity": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "generated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "historical_average": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "historical_data_points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DemandDataPoint"
+            }
+          },
+          "periods_ahead": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "product_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "product_name": {
+            "type": "string"
+          }
+        }
+      },
       "DisableMfaRequest": {
         "type": "object",
         "description": "Request to disable MFA",
@@ -23092,6 +25059,128 @@
             "type": "integer",
             "format": "int64",
             "description": "Tenant ID context"
+          }
+        }
+      },
+      "ForecastPeriod": {
+        "type": "string",
+        "description": "Time period for forecasting",
+        "enum": [
+          "Daily",
+          "Weekly",
+          "Monthly"
+        ]
+      },
+      "ForecastReport": {
+        "type": "object",
+        "description": "Forecast report combining demand and stock status",
+        "required": [
+          "product_id",
+          "product_name",
+          "warehouse_id",
+          "current_stock",
+          "reserved_stock",
+          "available_stock",
+          "forecasted_demand",
+          "forecast_period",
+          "periods_ahead",
+          "stock_coverage_days",
+          "alerts",
+          "generated_at"
+        ],
+        "properties": {
+          "alerts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockAlert"
+            }
+          },
+          "available_stock": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "current_stock": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "forecast_period": {
+            "$ref": "#/components/schemas/ForecastPeriod"
+          },
+          "forecasted_demand": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "generated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "periods_ahead": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "product_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "reorder_suggestion": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReorderSuggestion"
+              }
+            ],
+            "nullable": true
+          },
+          "reserved_stock": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "stock_coverage_days": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ForecastReportQuery": {
+        "type": "object",
+        "description": "Query parameters for forecast report",
+        "properties": {
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "ForecastRequest": {
+        "type": "object",
+        "description": "Request parameters for demand forecast",
+        "required": [
+          "product_id",
+          "periods",
+          "period_type",
+          "history_days"
+        ],
+        "properties": {
+          "history_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "period_type": {
+            "$ref": "#/components/schemas/ForecastPeriod"
+          },
+          "periods": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "product_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
           }
         }
       },
@@ -23923,6 +26012,43 @@
           }
         }
       },
+      "OvertimeCalculation": {
+        "type": "object",
+        "description": "Overtime calculation result for a period",
+        "required": [
+          "employee_id",
+          "period_start",
+          "period_end",
+          "regular_hours",
+          "overtime_hours",
+          "overtime_rate",
+          "overtime_pay"
+        ],
+        "properties": {
+          "employee_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "overtime_hours": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "overtime_pay": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "overtime_rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "period_end": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "period_start": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "regular_hours": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
       "PaginationParams": {
         "type": "object",
         "description": "Pagination query parameters",
@@ -24291,6 +26417,99 @@
           }
         }
       },
+      "ReorderRequest": {
+        "type": "object",
+        "description": "Request parameters for reorder suggestions",
+        "properties": {
+          "lead_time_days": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "safety_factor": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "ReorderSuggestion": {
+        "type": "object",
+        "description": "Reorder suggestion for a product",
+        "required": [
+          "product_id",
+          "product_name",
+          "warehouse_id",
+          "current_stock",
+          "reserved_stock",
+          "available_stock",
+          "avg_daily_demand",
+          "lead_time_days",
+          "safety_stock",
+          "reorder_point",
+          "suggested_quantity",
+          "urgency"
+        ],
+        "properties": {
+          "available_stock": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "avg_daily_demand": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "current_stock": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "lead_time_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "product_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "reorder_point": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "reserved_stock": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "safety_stock": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "suggested_quantity": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "urgency": {
+            "$ref": "#/components/schemas/ReorderUrgency"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ReorderUrgency": {
+        "type": "string",
+        "description": "Urgency level for reorder",
+        "enum": [
+          "Critical",
+          "High",
+          "Medium",
+          "Low"
+        ]
+      },
       "ReportMetaResponse": {
         "type": "object",
         "description": "Report metadata response",
@@ -24336,6 +26555,22 @@
           },
           "title": {
             "type": "string"
+          }
+        }
+      },
+      "RestoreRequest": {
+        "type": "object",
+        "description": "Request to restore archived records",
+        "required": [
+          "record_ids"
+        ],
+        "properties": {
+          "record_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
           }
         }
       },
@@ -24562,6 +26797,264 @@
           }
         }
       },
+      "Shift": {
+        "type": "object",
+        "description": "Shift schedule definition",
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "shift_type",
+          "start_time",
+          "end_time",
+          "break_duration_minutes",
+          "expected_hours",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "break_duration_minutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "end_time": {
+            "$ref": "#/components/schemas/NaiveTime"
+          },
+          "expected_hours": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shift_type": {
+            "$ref": "#/components/schemas/ShiftType"
+          },
+          "start_time": {
+            "$ref": "#/components/schemas/NaiveTime"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
+      "ShiftAssignment": {
+        "type": "object",
+        "description": "Shift assignment for an employee",
+        "required": [
+          "id",
+          "shift_id",
+          "employee_id",
+          "start_date",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "employee_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "end_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shift_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "start_date": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
+      "ShiftReport": {
+        "type": "object",
+        "description": "Shift report per employee per period",
+        "required": [
+          "employee_id",
+          "employee_name",
+          "period_start",
+          "period_end",
+          "total_hours",
+          "regular_hours",
+          "overtime_hours",
+          "absent_days",
+          "late_days",
+          "early_leave_days"
+        ],
+        "properties": {
+          "absent_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "early_leave_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "employee_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "employee_name": {
+            "type": "string"
+          },
+          "late_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "overtime_hours": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "period_end": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "period_start": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "regular_hours": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_hours": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "ShiftReportQuery": {
+        "type": "object",
+        "description": "Shift report query parameters",
+        "required": [
+          "period_start",
+          "period_end"
+        ],
+        "properties": {
+          "employee_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "period_end": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "period_start": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
+      "ShiftResponse": {
+        "type": "object",
+        "description": "Shift response (without soft-delete fields)",
+        "required": [
+          "id",
+          "tenant_id",
+          "name",
+          "shift_type",
+          "start_time",
+          "end_time",
+          "break_duration_minutes",
+          "expected_hours",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "break_duration_minutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "end_time": {
+            "$ref": "#/components/schemas/NaiveTime"
+          },
+          "expected_hours": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "shift_type": {
+            "$ref": "#/components/schemas/ShiftType"
+          },
+          "start_time": {
+            "$ref": "#/components/schemas/NaiveTime"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
+      "ShiftType": {
+        "type": "string",
+        "description": "Shift type",
+        "enum": [
+          "Morning",
+          "Evening",
+          "Night",
+          "Custom"
+        ]
+      },
       "StartWorkflowRequest": {
         "type": "object",
         "description": "Request body to start a workflow instance",
@@ -24591,6 +27084,71 @@
           "mt940",
           "xml",
           "camt053"
+        ]
+      },
+      "StockAlert": {
+        "type": "object",
+        "description": "Stock level alert",
+        "required": [
+          "product_id",
+          "product_name",
+          "warehouse_id",
+          "current_stock",
+          "safety_stock",
+          "alert_type",
+          "message"
+        ],
+        "properties": {
+          "alert_type": {
+            "$ref": "#/components/schemas/StockAlertType"
+          },
+          "current_stock": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "message": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "safety_stock": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "StockAlertRequest": {
+        "type": "object",
+        "description": "Request parameters for stock alerts",
+        "properties": {
+          "alert_types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockAlertType"
+            },
+            "nullable": true
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "StockAlertType": {
+        "type": "string",
+        "description": "Type of stock alert",
+        "enum": [
+          "BelowSafetyStock",
+          "NearReorderPoint",
+          "ExcessStock"
         ]
       },
       "Subscription": {
@@ -24671,6 +27229,22 @@
           "tenant_id": {
             "type": "integer",
             "format": "int64"
+          },
+          "trial_end_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "trial_start_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
           },
           "updated_at": {
             "allOf": [
@@ -24837,11 +27411,24 @@
             "type": "integer",
             "format": "int64"
           },
+          "included_quantity": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
           "is_active": {
             "type": "boolean"
           },
           "name": {
             "type": "string"
+          },
+          "overage_rate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
           },
           "tenant_id": {
             "type": "integer",
@@ -24894,11 +27481,24 @@
             "type": "integer",
             "format": "int64"
           },
+          "included_quantity": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
           "is_active": {
             "type": "boolean"
           },
           "name": {
             "type": "string"
+          },
+          "overage_rate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
           },
           "tenant_id": {
             "type": "integer",
@@ -24980,6 +27580,22 @@
             "type": "integer",
             "format": "int64"
           },
+          "trial_end_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "trial_start_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
           "updated_at": {
             "allOf": [
               {
@@ -24997,7 +27613,8 @@
           "active",
           "cancelled",
           "expired",
-          "trial"
+          "trial",
+          "pastdue"
         ]
       },
       "TaxCalculationResult": {
@@ -25454,6 +28071,32 @@
           }
         }
       },
+      "UpdateArchivePolicy": {
+        "type": "object",
+        "description": "Update an existing archive policy",
+        "properties": {
+          "age_days": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "conditions": {
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "table_name": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "UpdateBankAccount": {
         "type": "object",
         "description": "Data for updating an existing bank account",
@@ -25649,12 +28292,25 @@
           "features": {
             "nullable": true
           },
+          "included_quantity": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
           "is_active": {
             "type": "boolean",
             "nullable": true
           },
           "name": {
             "type": "string",
+            "nullable": true
+          },
+          "overage_rate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
             "nullable": true
           }
         }
@@ -25701,6 +28357,57 @@
           }
         }
       },
+      "UpdateShift": {
+        "type": "object",
+        "description": "Update shift request",
+        "properties": {
+          "break_duration_minutes": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "end_time": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveTime"
+              }
+            ],
+            "nullable": true
+          },
+          "expected_hours": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
+          },
+          "is_active": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "shift_type": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ShiftType"
+              }
+            ],
+            "nullable": true
+          },
+          "start_time": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveTime"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
       "UpdateSubscription": {
         "type": "object",
         "description": "Data for updating a subscription",
@@ -25742,6 +28449,22 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/SubscriptionStatus"
+              }
+            ],
+            "nullable": true
+          },
+          "trial_end_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "trial_start_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
               }
             ],
             "nullable": true
@@ -26733,6 +29456,10 @@
       "description": "Feature flag management endpoints"
     },
     {
+      "name": "Forecasting",
+      "description": "Inventory demand forecasting, reorder suggestions and stock alerts"
+    },
+    {
       "name": "Custom Fields",
       "description": "Custom field definitions for dynamic module attributes"
     },
@@ -26747,6 +29474,10 @@
     {
       "name": "API Keys",
       "description": "API key management and scope validation"
+    },
+    {
+      "name": "Archive",
+      "description": "Data archiving policies, jobs, and record restoration"
     },
     {
       "name": "Notifications",

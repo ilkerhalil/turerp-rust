@@ -480,10 +480,175 @@ pub struct ParsedBankTransaction {
     pub reference_no: Option<String>,
 }
 
+/// Payment type for Turkish banking
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+pub enum PaymentType {
+    #[default]
+    Havale,
+    Eft,
+    Fast,
+}
+
+impl std::fmt::Display for PaymentType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PaymentType::Havale => write!(f, "havale"),
+            PaymentType::Eft => write!(f, "eft"),
+            PaymentType::Fast => write!(f, "fast"),
+        }
+    }
+}
+
+impl std::str::FromStr for PaymentType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "havale" => Ok(PaymentType::Havale),
+            "eft" => Ok(PaymentType::Eft),
+            "fast" => Ok(PaymentType::Fast),
+            _ => Err(format!("Invalid payment type: {}", s)),
+        }
+    }
+}
+
+/// Payment status in bank processing lifecycle
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+pub enum PaymentStatus {
+    #[default]
+    Pending,
+    Processing,
+    Completed,
+    Failed,
+    Cancelled,
+    Rejected,
+}
+
+impl std::fmt::Display for PaymentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PaymentStatus::Pending => write!(f, "pending"),
+            PaymentStatus::Processing => write!(f, "processing"),
+            PaymentStatus::Completed => write!(f, "completed"),
+            PaymentStatus::Failed => write!(f, "failed"),
+            PaymentStatus::Cancelled => write!(f, "cancelled"),
+            PaymentStatus::Rejected => write!(f, "rejected"),
+        }
+    }
+}
+
+impl std::str::FromStr for PaymentStatus {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "pending" => Ok(PaymentStatus::Pending),
+            "processing" => Ok(PaymentStatus::Processing),
+            "completed" => Ok(PaymentStatus::Completed),
+            "failed" => Ok(PaymentStatus::Failed),
+            "cancelled" => Ok(PaymentStatus::Cancelled),
+            "rejected" => Ok(PaymentStatus::Rejected),
+            _ => Err(format!("Invalid payment status: {}", s)),
+        }
+    }
+}
+
+/// Bank API connection status
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+#[derive(Default)]
+pub enum BankConnectionStatus {
+    #[default]
+    Disconnected,
+    Connected,
+    Error,
+}
+
+/// Data for initiating a payment through bank API
+#[derive(Debug, Clone, Deserialize, Serialize, Validate, ToSchema)]
+pub struct PaymentInitiation {
+    pub source_account_id: i64,
+
+    #[validate(length(min = 1, max = 34))]
+    pub destination_iban: Option<String>,
+
+    #[validate(length(min = 1, max = 100))]
+    pub destination_account_no: Option<String>,
+
+    #[validate(length(min = 1, max = 200))]
+    pub beneficiary_name: String,
+
+    pub amount: Decimal,
+
+    #[validate(length(min = 3, max = 3))]
+    #[serde(default = "default_currency")]
+    pub currency: String,
+
+    #[validate(length(max = 500))]
+    #[serde(default)]
+    pub description: Option<String>,
+
+    pub payment_type: PaymentType,
+
+    pub tenant_id: i64,
+}
+
+/// Response after initiating a payment
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct PaymentInitiationResponse {
+    pub tracking_id: String,
+    pub status: PaymentStatus,
+    pub bank_reference: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Bank API credentials for connecting to a bank
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct BankApiCredentials {
+    pub bank_code: BankCode,
+    pub api_key: String,
+    pub api_secret: String,
+    pub base_url: String,
+    pub client_id: Option<String>,
+}
+
+/// Parsed CAMT.053 statement
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CamtStatement {
+    pub statement_id: String,
+    pub creation_date: DateTime<Utc>,
+    pub account_iban: String,
+    pub entries: Vec<CamtEntry>,
+}
+
+/// Individual entry in a CAMT.053 statement
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CamtEntry {
+    pub entry_date: NaiveDate,
+    pub amount: Decimal,
+    pub currency: String,
+    pub credit_debit: String,
+    pub reference: Option<String>,
+    pub description: Option<String>,
+    pub counterparty_name: Option<String>,
+    pub counterparty_iban: Option<String>,
+}
+
+/// Data for checking payment status
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct CheckPaymentStatus {
+    pub tracking_id: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::common::SoftDeletable;
+    use rust_decimal_macros::dec;
     use std::str::FromStr;
 
     #[test]
@@ -538,6 +703,73 @@ mod tests {
         };
 
         assert!(create.validate().is_ok());
+    }
+
+    #[test]
+    fn test_payment_type_from_str() {
+        assert_eq!(
+            PaymentType::from_str("havale").unwrap(),
+            PaymentType::Havale
+        );
+        assert_eq!(PaymentType::from_str("EFT").unwrap(), PaymentType::Eft);
+        assert_eq!(PaymentType::from_str("fast").unwrap(), PaymentType::Fast);
+        assert!(PaymentType::from_str("unknown").is_err());
+    }
+
+    #[test]
+    fn test_payment_status_from_str() {
+        assert_eq!(
+            PaymentStatus::from_str("pending").unwrap(),
+            PaymentStatus::Pending
+        );
+        assert_eq!(
+            PaymentStatus::from_str("completed").unwrap(),
+            PaymentStatus::Completed
+        );
+        assert_eq!(
+            PaymentStatus::from_str("rejected").unwrap(),
+            PaymentStatus::Rejected
+        );
+        assert!(PaymentStatus::from_str("unknown").is_err());
+    }
+
+    #[test]
+    fn test_payment_initiation_validation() {
+        let initiation = PaymentInitiation {
+            source_account_id: 1,
+            destination_iban: Some("TR000123456789012345678901".to_string()),
+            destination_account_no: None,
+            beneficiary_name: "Test Recipient".to_string(),
+            amount: dec!(1000.00),
+            currency: "TRY".to_string(),
+            description: Some("Test payment".to_string()),
+            payment_type: PaymentType::Havale,
+            tenant_id: 1,
+        };
+        assert!(initiation.validate().is_ok());
+    }
+
+    #[test]
+    fn test_camt_statement_serialization() {
+        let statement = CamtStatement {
+            statement_id: "stmt-001".to_string(),
+            creation_date: Utc::now(),
+            account_iban: "TR000123456789012345678901".to_string(),
+            entries: vec![CamtEntry {
+                entry_date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
+                amount: dec!(500.00),
+                currency: "TRY".to_string(),
+                credit_debit: "CRDT".to_string(),
+                reference: Some("REF-001".to_string()),
+                description: Some("Invoice payment".to_string()),
+                counterparty_name: Some("ABC Ltd".to_string()),
+                counterparty_iban: None,
+            }],
+        };
+
+        let json = serde_json::to_string(&statement).unwrap();
+        assert!(json.contains("stmt-001"));
+        assert!(json.contains("TR000123456789012345678901"));
     }
 
     #[test]

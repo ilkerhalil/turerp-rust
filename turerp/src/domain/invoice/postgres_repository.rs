@@ -1,5 +1,4 @@
 //! PostgreSQL invoice repository implementation
-
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
@@ -17,13 +16,15 @@ use crate::domain::invoice::repository::{
 };
 use crate::error::ApiError;
 
+#[allow(dead_code)]
 fn default_company_id() -> i64 {
     1
 }
 
-/// Convert sqlx errors to ApiError with proper detection of error types
+// Convert sqlx errors to ApiError with proper detection of error types
 
 /// Database row representation for Invoice
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct InvoiceRow {
     id: i64,
@@ -96,6 +97,7 @@ impl From<InvoiceRow> for Invoice {
 }
 
 /// Database row representation for paginated invoice queries with total count
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct InvoiceRowWithTotal {
     id: i64,
@@ -206,6 +208,7 @@ impl From<InvoiceLineRow> for InvoiceLine {
 }
 
 /// Database row representation for Payment
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct PaymentRow {
     id: i64,

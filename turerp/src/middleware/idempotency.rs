@@ -194,7 +194,7 @@ where
             });
         }
 
-        let key = idempotency_key.unwrap();
+        let key = idempotency_key.expect("guard ensures Some");
         let store = self.store.clone();
         let ttl = self.ttl;
 

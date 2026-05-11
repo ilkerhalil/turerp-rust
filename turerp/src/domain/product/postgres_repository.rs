@@ -18,6 +18,7 @@ use crate::domain::product::repository::{
 };
 use crate::error::ApiError;
 
+#[allow(dead_code)]
 fn default_company_id() -> i64 {
     1
 }
@@ -27,6 +28,7 @@ fn default_company_id() -> i64 {
 // ---------------------------------------------------------------------------
 
 /// Database row representation for Product
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct ProductRow {
     id: i64,
@@ -424,6 +426,7 @@ impl ProductRepository for PostgresProductRepository {
 // ---------------------------------------------------------------------------
 
 /// Database row representation for Category
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct CategoryRow {
     id: i64,
@@ -688,6 +691,7 @@ impl CategoryRepository for PostgresCategoryRepository {
 // ---------------------------------------------------------------------------
 
 /// Database row representation for Unit
+#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct UnitRow {
     id: i64,

@@ -2,6 +2,7 @@
 
 pub mod accounting;
 pub mod api_key;
+pub mod archive;
 pub mod assets;
 pub mod audit;
 pub mod auth;
@@ -14,10 +15,12 @@ pub mod crm;
 pub mod currency;
 pub mod custom_field;
 pub mod dashboard;
+pub mod document;
 pub mod edefter;
 pub mod efatura;
 pub mod feature;
 pub mod file;
+pub mod forecasting;
 pub mod hr;
 pub mod invoice;
 pub mod manufacturing;
@@ -28,6 +31,7 @@ pub mod project;
 pub mod purchase;
 pub mod sales;
 pub mod settings;
+pub mod shift;
 pub mod stock;
 pub mod subscription;
 pub mod tax;
@@ -190,6 +194,18 @@ pub use stock::repository::{
 };
 pub use stock::service::StockService;
 
+// Forecasting module re-exports
+pub use forecasting::model::{
+    DemandDataPoint, DemandForecast, ForecastPeriod, ForecastReport, ForecastRequest,
+    ReorderRequest, ReorderSuggestion, ReorderUrgency, StockAlert, StockAlertRequest,
+    StockAlertType,
+};
+pub use forecasting::repository::{
+    BoxForecastingRepository, ForecastProduct, ForecastingRepository, HistoricalSale,
+    InMemoryForecastingRepository,
+};
+pub use forecasting::service::ForecastingService;
+
 // Tenant module re-exports
 pub use tenant::model::{generate_db_name, CreateTenant, Tenant, UpdateTenant};
 pub use tenant::repository::{BoxTenantRepository, InMemoryTenantRepository, TenantRepository};
@@ -226,12 +242,38 @@ pub use settings::repository::{
 };
 pub use settings::service::SettingsService;
 
+// Shift module re-exports
+pub use shift::model::{
+    AttendanceRecord, AttendanceRecordResponse, ClockInRequest, ClockOutRequest, CreateShift,
+    CreateShiftAssignment, OvertimeCalculation, Shift, ShiftAssignment, ShiftReport,
+    ShiftReportQuery, ShiftResponse, ShiftType, UpdateShift,
+};
+pub use shift::repository::{
+    AttendanceRecordRepository, BoxAttendanceRecordRepository, BoxShiftAssignmentRepository,
+    BoxShiftRepository, InMemoryAttendanceRecordRepository, InMemoryShiftAssignmentRepository,
+    InMemoryShiftRepository, ShiftAssignmentRepository, ShiftRepository,
+};
+pub use shift::service::ShiftService;
+
 // API Key module re-exports
 pub use api_key::model::{
     ApiKey, ApiKeyCreationResult, ApiKeyResponse, ApiKeyScope, CreateApiKey, UpdateApiKey,
 };
 pub use api_key::repository::{ApiKeyRepository, BoxApiKeyRepository, InMemoryApiKeyRepository};
 pub use api_key::service::ApiKeyService;
+
+// Archive module re-exports
+pub use archive::model::{
+    ArchiveJob, ArchiveJobResponse, ArchiveJobStatus, ArchivePolicy, ArchivePolicyResponse,
+    ArchiveRecord, ArchiveRecordResponse, BulkRestoreFailed, BulkRestoreResponse, CreateArchiveJob,
+    CreateArchivePolicy, RestoreRequest, UpdateArchivePolicy,
+};
+pub use archive::repository::{
+    ArchiveJobRepository, ArchivePolicyRepository, ArchiveRecordRepository,
+    BoxArchiveJobRepository, BoxArchivePolicyRepository, BoxArchiveRecordRepository,
+    InMemoryArchiveJobRepository, InMemoryArchivePolicyRepository, InMemoryArchiveRecordRepository,
+};
+pub use archive::service::ArchiveService;
 
 // Custom Field module re-exports
 pub use custom_field::model::{
@@ -291,6 +333,18 @@ pub use mfa::model::{
 };
 pub use mfa::repository::{BoxMfaRepository, InMemoryMfaRepository, MfaRepository};
 pub use mfa::service::MfaService;
+
+// Document module re-exports
+pub use document::model::{
+    BulkRestoreRequest, CreateDocument, CreateDocumentCategory, CreateDocumentLink,
+    CreateDocumentVersion, Document, DocumentCategory, DocumentCategoryResponse, DocumentLink,
+    DocumentResponse, DocumentSearchParams, DocumentSearchResult, DocumentVersion,
+    LinkedEntityType, UpdateDocument, UpdateDocumentCategory,
+};
+pub use document::repository::{
+    BoxDocumentRepository, DocumentRepository, InMemoryDocumentRepository,
+};
+pub use document::service::DocumentService;
 
 // Test: is file module visible?
 pub type __TestFileVisibility = crate::domain::file::model::FileRecord;

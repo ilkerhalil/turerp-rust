@@ -351,6 +351,29 @@ impl CdcConfig {
     }
 }
 
+/// Security headers configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct SecurityHeadersConfig {
+    pub enabled: bool,
+}
+
+impl Default for SecurityHeadersConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+impl SecurityHeadersConfig {
+    pub fn from_env() -> Self {
+        Self {
+            enabled: std::env::var("TURERP_SECURITY_HEADERS_ENABLED")
+                .ok()
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(true),
+        }
+    }
+}
+
 pub struct Config {
     pub environment: Environment,
     pub server: ServerConfig,
@@ -362,6 +385,7 @@ pub struct Config {
     pub metrics: MetricsConfig,
     pub localization: LocalizationConfig,
     pub cdc: CdcConfig,
+    pub security_headers: SecurityHeadersConfig,
 }
 
 impl Default for Config {
@@ -385,6 +409,7 @@ impl Default for Config {
             metrics: MetricsConfig::default(),
             localization: LocalizationConfig::default(),
             cdc: CdcConfig::default(),
+            security_headers: SecurityHeadersConfig::default(),
         }
     }
 }
@@ -442,6 +467,7 @@ impl Config {
         let metrics = MetricsConfig::from_env();
         let localization = LocalizationConfig::from_env();
         let cdc = CdcConfig::from_env();
+        let security_headers = SecurityHeadersConfig::from_env();
 
         Ok(Self {
             environment,
@@ -454,6 +480,7 @@ impl Config {
             metrics,
             localization,
             cdc,
+            security_headers,
         })
     }
 
