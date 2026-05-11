@@ -11,6 +11,8 @@ use crate::common::pagination::PaginationParams;
 use crate::common::MessageResponse;
 use crate::domain::company::model::{CompanyResponse, CreateCompany, UpdateCompany};
 use crate::domain::company::service::CompanyService;
+use crate::domain::invoice::model::{InvoiceStatus, InvoiceType};
+use crate::domain::invoice::service::InvoiceService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::{AdminUser, AuthUser};
@@ -38,12 +40,26 @@ pub struct TransferStockRequest {
     pub quantity: Decimal,
 }
 
-/// Simple consolidated report placeholder.
+/// Financial summary for a single company within a consolidated report.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct CompanyFinancialSummary {
+    pub company: CompanyResponse,
+    pub total_sales: rust_decimal::Decimal,
+    pub total_purchases: rust_decimal::Decimal,
+    pub outstanding_receivables: rust_decimal::Decimal,
+    pub outstanding_payables: rust_decimal::Decimal,
+    pub net_position: rust_decimal::Decimal,
+}
+
+/// Consolidated financial report across all companies in a tenant.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct ConsolidatedReport {
     pub tenant_id: i64,
-    pub companies: Vec<CompanyResponse>,
     pub total_companies: usize,
+    pub companies: Vec<CompanyFinancialSummary>,
+    pub consolidated_sales: rust_decimal::Decimal,
+    pub consolidated_purchases: rust_decimal::Decimal,
+    pub consolidated_net_position: rust_decimal::Decimal,
 }
 
 // ---------------------------------------------------------------------------
@@ -401,21 +417,83 @@ pub async fn transfer_stock(
 pub async fn consolidated_report(
     auth_user: AuthUser,
     company_service: web::Data<CompanyService>,
+    invoice_service: web::Data<InvoiceService>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match company_service
-        .get_all_companies(auth_user.0.tenant_id)
-        .await
-    {
-        Ok(companies) => Ok(HttpResponse::Ok().json(ConsolidatedReport {
-            tenant_id: auth_user.0.tenant_id,
-            total_companies: companies.len(),
-            companies,
-        })),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    let tenant_id = auth_user.0.tenant_id;
+
+    let companies = match company_service.get_all_companies(tenant_id).await {
+        Ok(c) => c,
+        Err(e) => return Ok(e.to_http_response(i18n, locale.as_str())),
+    };
+
+    let invoices = match invoice_service.get_invoices_by_tenant(tenant_id).await {
+        Ok(i) => i,
+        Err(e) => return Ok(e.to_http_response(i18n, locale.as_str())),
+    };
+
+    let mut summaries = Vec::with_capacity(companies.len());
+    let mut consolidated_sales = rust_decimal::Decimal::ZERO;
+    let mut consolidated_purchases = rust_decimal::Decimal::ZERO;
+
+    for company in companies {
+        let company_id = company.id;
+        let mut total_sales = rust_decimal::Decimal::ZERO;
+        let mut total_purchases = rust_decimal::Decimal::ZERO;
+        let mut outstanding_receivables = rust_decimal::Decimal::ZERO;
+        let mut outstanding_payables = rust_decimal::Decimal::ZERO;
+
+        for invoice in &invoices {
+            if invoice.company_id != company_id {
+                continue;
+            }
+            // Skip cancelled and draft invoices from financial totals
+            if matches!(
+                invoice.status,
+                InvoiceStatus::Cancelled | InvoiceStatus::Draft
+            ) {
+                continue;
+            }
+
+            match invoice.invoice_type {
+                InvoiceType::SalesInvoice => {
+                    total_sales += invoice.total_amount;
+                    outstanding_receivables += invoice.total_amount - invoice.paid_amount;
+                }
+                InvoiceType::PurchaseInvoice => {
+                    total_purchases += invoice.total_amount;
+                    outstanding_payables += invoice.total_amount - invoice.paid_amount;
+                }
+                _ => {}
+            }
+        }
+
+        let net_position = total_sales - total_purchases;
+        consolidated_sales += total_sales;
+        consolidated_purchases += total_purchases;
+
+        summaries.push(CompanyFinancialSummary {
+            company,
+            total_sales,
+            total_purchases,
+            outstanding_receivables,
+            outstanding_payables,
+            net_position,
+        });
     }
+
+    let report = ConsolidatedReport {
+        tenant_id,
+        total_companies: summaries.len(),
+        companies: summaries,
+        consolidated_sales,
+        consolidated_purchases,
+        consolidated_net_position: consolidated_sales - consolidated_purchases,
+    };
+
+    Ok(HttpResponse::Ok().json(report))
 }
 
 // ---------------------------------------------------------------------------
