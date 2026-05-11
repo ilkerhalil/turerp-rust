@@ -9,8 +9,9 @@ use std::sync::Arc;
 use crate::common::pagination::{PaginatedResult, PaginationParams};
 use crate::db::error::map_sqlx_error;
 use crate::domain::cost_center::model::{
-    CostCenter, CostCenterAllocation, CostCenterType, CreateAllocation, CreateCostCenter,
-    ProfitabilityReport, UpdateCostCenter,
+    AllocationRule, Budget, CostCenter, CostCenterAllocation, CostCenterType, CreateAllocation,
+    CreateAllocationRule, CreateBudget, CreateCostCenter, ProfitabilityReport,
+    UpdateAllocationRule, UpdateBudget, UpdateCostCenter, VarianceReport,
 };
 use crate::domain::cost_center::repository::{BoxCostCenterRepository, CostCenterRepository};
 use crate::error::ApiError;
@@ -513,6 +514,124 @@ impl CostCenterRepository for PostgresCostCenterRepository {
             period_start,
             period_end,
         })
+    }
+
+    // ---- Budget Operations ----
+
+    async fn create_budget(
+        &self,
+        _budget: CreateBudget,
+        _tenant_id: i64,
+    ) -> Result<Budget, ApiError> {
+        tracing::warn!("create_budget not yet implemented for PostgreSQL");
+        Err(ApiError::Internal(
+            "create_budget not yet implemented".to_string(),
+        ))
+    }
+
+    async fn find_budget_by_id(
+        &self,
+        _id: i64,
+        _tenant_id: i64,
+    ) -> Result<Option<Budget>, ApiError> {
+        tracing::warn!("find_budget_by_id not yet implemented for PostgreSQL");
+        Ok(None)
+    }
+
+    async fn find_budgets_by_cost_center(
+        &self,
+        _cost_center_id: i64,
+        _tenant_id: i64,
+    ) -> Result<Vec<Budget>, ApiError> {
+        tracing::warn!("find_budgets_by_cost_center not yet implemented for PostgreSQL");
+        Ok(vec![])
+    }
+
+    async fn update_budget(
+        &self,
+        _id: i64,
+        _tenant_id: i64,
+        _update: UpdateBudget,
+    ) -> Result<Budget, ApiError> {
+        tracing::warn!("update_budget not yet implemented for PostgreSQL");
+        Err(ApiError::Internal(
+            "update_budget not yet implemented".to_string(),
+        ))
+    }
+
+    async fn delete_budget(&self, _id: i64, _tenant_id: i64) -> Result<(), ApiError> {
+        tracing::warn!("delete_budget not yet implemented for PostgreSQL");
+        Ok(())
+    }
+
+    async fn get_variance_report(
+        &self,
+        _cost_center_id: i64,
+        _tenant_id: i64,
+        _period_start: Option<DateTime<Utc>>,
+        _period_end: Option<DateTime<Utc>>,
+    ) -> Result<crate::domain::cost_center::model::VarianceReport, ApiError> {
+        tracing::warn!("get_variance_report not yet implemented for PostgreSQL");
+        Err(ApiError::Internal(
+            "get_variance_report not yet implemented".to_string(),
+        ))
+    }
+
+    // ---- Allocation Rule Operations ----
+
+    async fn create_allocation_rule(
+        &self,
+        _rule: CreateAllocationRule,
+        _tenant_id: i64,
+    ) -> Result<AllocationRule, ApiError> {
+        tracing::warn!("create_allocation_rule not yet implemented for PostgreSQL");
+        Err(ApiError::Internal(
+            "create_allocation_rule not yet implemented".to_string(),
+        ))
+    }
+
+    async fn find_allocation_rule_by_id(
+        &self,
+        _id: i64,
+        _tenant_id: i64,
+    ) -> Result<Option<AllocationRule>, ApiError> {
+        tracing::warn!("find_allocation_rule_by_id not yet implemented for PostgreSQL");
+        Ok(None)
+    }
+
+    async fn find_allocation_rules_by_source(
+        &self,
+        _source_type: &str,
+        _tenant_id: i64,
+    ) -> Result<Vec<AllocationRule>, ApiError> {
+        tracing::warn!("find_allocation_rules_by_source not yet implemented for PostgreSQL");
+        Ok(vec![])
+    }
+
+    async fn find_allocation_rules_by_cost_center(
+        &self,
+        _cost_center_id: i64,
+        _tenant_id: i64,
+    ) -> Result<Vec<AllocationRule>, ApiError> {
+        tracing::warn!("find_allocation_rules_by_cost_center not yet implemented for PostgreSQL");
+        Ok(vec![])
+    }
+
+    async fn update_allocation_rule(
+        &self,
+        _id: i64,
+        _tenant_id: i64,
+        _update: UpdateAllocationRule,
+    ) -> Result<AllocationRule, ApiError> {
+        tracing::warn!("update_allocation_rule not yet implemented for PostgreSQL");
+        Err(ApiError::Internal(
+            "update_allocation_rule not yet implemented".to_string(),
+        ))
+    }
+
+    async fn delete_allocation_rule(&self, _id: i64, _tenant_id: i64) -> Result<(), ApiError> {
+        tracing::warn!("delete_allocation_rule not yet implemented for PostgreSQL");
+        Ok(())
     }
 }
 

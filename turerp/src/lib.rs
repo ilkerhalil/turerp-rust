@@ -1236,6 +1236,7 @@ pub mod app {
             bank_service: web::Data::new(bank_service),
             cost_center_service: web::Data::new(cost_center_service),
             dashboard_service: web::Data::new(dashboard_service),
+            document_service: web::Data::new(document_service),
             file_storage: web::Data::from(Arc::new(
                 crate::common::file_storage::LocalFileStorage::new(format!(
                     "/tmp/turerp-test-files-{}",
@@ -1317,6 +1318,7 @@ pub mod app {
             report_engine,
             subscription_service,
             forecasting_service,
+            shift_service,
             tracing_service,
             workflow_service,
             db_router,
