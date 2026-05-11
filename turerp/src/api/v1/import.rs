@@ -224,7 +224,13 @@ pub async fn export_entity(
         .map_err(ApiError::Validation)?;
 
     let data = import_service
-        .export(admin_user.0.tenant_id, entity_type, format)
+        .export(
+            admin_user.0.tenant_id,
+            entity_type,
+            format,
+            query.from.clone(),
+            query.to.clone(),
+        )
         .await?;
 
     let content_type = match format {

@@ -26,6 +26,35 @@ use crate::domain::stock::model::{CreateStockMovement, MovementType};
 use crate::domain::stock::repository::BoxStockMovementRepository;
 use crate::error::ApiError;
 
+/// Parse optional ISO date strings (YYYY-MM-DD) into DateTime<Utc> range bounds.
+#[allow(clippy::type_complexity)]
+fn parse_date_range(
+    from: Option<String>,
+    to: Option<String>,
+) -> Result<
+    (
+        Option<chrono::DateTime<chrono::Utc>>,
+        Option<chrono::DateTime<chrono::Utc>>,
+    ),
+    ApiError,
+> {
+    let from_dt = from
+        .map(|s| {
+            chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d")
+                .map_err(|e| ApiError::Validation(format!("Invalid from date: {}", e)))
+                .map(|d| d.and_hms_opt(0, 0, 0).unwrap_or_default().and_utc())
+        })
+        .transpose()?;
+    let to_dt = to
+        .map(|s| {
+            chrono::NaiveDate::parse_from_str(&s, "%Y-%m-%d")
+                .map_err(|e| ApiError::Validation(format!("Invalid to date: {}", e)))
+                .map(|d| d.and_hms_opt(23, 59, 59).unwrap_or_default().and_utc())
+        })
+        .transpose()?;
+    Ok((from_dt, to_dt))
+}
+
 /// Trait for import/export operations
 #[async_trait]
 pub trait ImportService: Send + Sync {
@@ -55,6 +84,8 @@ pub trait ImportService: Send + Sync {
         tenant_id: i64,
         entity_type: EntityType,
         format: ImportFormat,
+        from: Option<String>,
+        to: Option<String>,
     ) -> Result<Vec<u8>, ApiError>;
 
     /// Schedule an import as a background job
@@ -428,12 +459,19 @@ impl ImportService for CsvImportService {
         tenant_id: i64,
         entity_type: EntityType,
         format: ImportFormat,
+        from: Option<String>,
+        to: Option<String>,
     ) -> Result<Vec<u8>, ApiError> {
+        let (from_dt, to_dt) = parse_date_range(from, to)?;
         match entity_type {
             EntityType::Product => {
                 let products = self.product_repo.find_by_tenant(tenant_id).await?;
                 let records: Vec<Vec<String>> = products
                     .into_iter()
+                    .filter(|p| {
+                        from_dt.is_none_or(|d| p.created_at >= d)
+                            && to_dt.is_none_or(|d| p.created_at <= d)
+                    })
                     .map(|p| {
                         vec![
                             p.code,
@@ -456,6 +494,10 @@ impl ImportService for CsvImportService {
                 let caris = self.cari_repo.find_all(tenant_id).await?;
                 let records: Vec<Vec<String>> = caris
                     .into_iter()
+                    .filter(|c| {
+                        from_dt.is_none_or(|d| c.created_at >= d)
+                            && to_dt.is_none_or(|d| c.created_at <= d)
+                    })
                     .map(|c| {
                         vec![
                             c.code,
@@ -482,6 +524,10 @@ impl ImportService for CsvImportService {
                 let records: Vec<Vec<String>> = accounts
                     .items
                     .into_iter()
+                    .filter(|a| {
+                        from_dt.is_none_or(|d| a.created_at >= d)
+                            && to_dt.is_none_or(|d| a.created_at <= d)
+                    })
                     .map(|a| {
                         vec![
                             a.code,
@@ -503,6 +549,10 @@ impl ImportService for CsvImportService {
                 let movements = self.stock_movement_repo.find_by_tenant(tenant_id).await?;
                 let records: Vec<Vec<String>> = movements
                     .into_iter()
+                    .filter(|m| {
+                        from_dt.is_none_or(|d| m.created_at >= d)
+                            && to_dt.is_none_or(|d| m.created_at <= d)
+                    })
                     .map(|m| {
                         vec![
                             m.product_id.to_string(),
