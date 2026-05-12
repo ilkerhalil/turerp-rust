@@ -1,4 +1,7 @@
 //! Tenant service for business logic
+use std::sync::Arc;
+
+use crate::cache::{cache_get, cache_key, cache_set, CacheService};
 use crate::common::pagination::PaginatedResult;
 use crate::domain::tenant::model::{
     CreateTenant, CreateTenantConfig, Tenant, TenantConfigResponse, UpdateTenant,
@@ -128,7 +131,12 @@ pub struct TenantConfigService {
     repo: BoxTenantConfigRepository,
     /// Optional encryption key for sensitive values (securely zeroed on drop)
     encryption_key: Option<Zeroizing<Vec<u8>>>,
+    /// Optional cache service for tenant config caching
+    cache: Option<Arc<dyn CacheService>>,
 }
+
+/// TTL for tenant config cache entries (seconds)
+const TENANT_CONFIG_TTL: u64 = 60;
 
 impl TenantConfigService {
     /// Create a new config service without encryption
@@ -136,6 +144,7 @@ impl TenantConfigService {
         Self {
             repo,
             encryption_key: None,
+            cache: None,
         }
     }
 
@@ -147,7 +156,23 @@ impl TenantConfigService {
         Self {
             repo,
             encryption_key: Some(Zeroizing::new(encryption_key)),
+            cache: None,
         }
+    }
+
+    /// Attach a cache service for config caching
+    pub fn with_cache(mut self, cache: Arc<dyn CacheService>) -> Self {
+        self.cache = Some(cache);
+        self
+    }
+
+    /// Invalidate all cached configs for a tenant
+    async fn invalidate_tenant_cache(&self, tenant_id: i64) -> Result<(), ApiError> {
+        if let Some(ref cache) = self.cache {
+            let pattern = cache_key(tenant_id, "config", "*");
+            cache.delete_pattern(&pattern).await?;
+        }
+        Ok(())
     }
 
     /// Encrypt a value if encryption is enabled
@@ -195,6 +220,10 @@ impl TenantConfigService {
         }
 
         let config = self.repo.set(create).await?;
+
+        // Invalidate cached configs for this tenant
+        self.invalidate_tenant_cache(config.tenant_id).await.ok();
+
         Ok(config.into())
     }
 
@@ -204,6 +233,15 @@ impl TenantConfigService {
         tenant_id: i64,
         key: &str,
     ) -> Result<TenantConfigResponse, ApiError> {
+        let cache_key = cache_key(tenant_id, "config", key);
+
+        // Try cache first
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<TenantConfigResponse>(&**cache, &cache_key).await? {
+                return Ok(cached);
+            }
+        }
+
         let config = self
             .repo
             .get(tenant_id, key)
@@ -224,6 +262,13 @@ impl TenantConfigService {
             config.into()
         };
 
+        // Cache the response
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &cache_key, &response, Some(TENANT_CONFIG_TTL))
+                .await
+                .ok();
+        }
+
         Ok(response)
     }
 
@@ -232,6 +277,17 @@ impl TenantConfigService {
         &self,
         tenant_id: i64,
     ) -> Result<Vec<TenantConfigResponse>, ApiError> {
+        let cache_key = crate::cache::cache_key(tenant_id, "config", "all");
+
+        // Try cache first
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) =
+                cache_get::<Vec<TenantConfigResponse>>(&**cache, &cache_key).await?
+            {
+                return Ok(cached);
+            }
+        }
+
         let configs = self.repo.get_all(tenant_id).await?;
         let mut responses = Vec::new();
 
@@ -257,6 +313,13 @@ impl TenantConfigService {
             responses.push(response);
         }
 
+        // Cache the response list
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &cache_key, &responses, Some(TENANT_CONFIG_TTL))
+                .await
+                .ok();
+        }
+
         Ok(responses)
     }
 
@@ -275,6 +338,9 @@ impl TenantConfigService {
         }
 
         let config = self.repo.update(id, update).await?;
+
+        // Invalidate cached configs for this tenant
+        self.invalidate_tenant_cache(config.tenant_id).await.ok();
 
         // Decrypt for response if encrypted
         let response = if config.is_encrypted {
@@ -295,12 +361,21 @@ impl TenantConfigService {
 
     /// Delete a config
     pub async fn delete_config(&self, id: i64) -> Result<(), ApiError> {
-        self.repo.delete(id).await
+        self.repo.delete(id).await?;
+
+        // Clear all config caches since we don't know the tenant_id
+        if let Some(ref cache) = self.cache {
+            cache.delete_pattern("turerp:*:config:*").await.ok();
+        }
+
+        Ok(())
     }
 
     /// Delete all configs for a tenant
     pub async fn delete_all_configs(&self, tenant_id: i64) -> Result<(), ApiError> {
-        self.repo.delete_by_tenant(tenant_id).await
+        self.repo.delete_by_tenant(tenant_id).await?;
+        self.invalidate_tenant_cache(tenant_id).await.ok();
+        Ok(())
     }
 }
 
