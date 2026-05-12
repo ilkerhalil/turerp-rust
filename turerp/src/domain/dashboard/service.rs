@@ -14,6 +14,9 @@ use rust_decimal::Decimal;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+/// TTL for dashboard cache entries (seconds)
+const DASHBOARD_CACHE_TTL: u64 = 60;
+
 /// Dashboard service
 #[derive(Clone)]
 pub struct DashboardService {
@@ -73,7 +76,13 @@ impl DashboardService {
             customer_count,
         };
 
-        cache_set(&*self.cache, &cache_key, &response, Some(30)).await?;
+        cache_set(
+            &*self.cache,
+            &cache_key,
+            &response,
+            Some(DASHBOARD_CACHE_TTL),
+        )
+        .await?;
         Ok(response)
     }
 
@@ -147,7 +156,7 @@ impl DashboardService {
             format,
         };
 
-        cache_set(&*self.cache, &cache_key, &widget, Some(30)).await?;
+        cache_set(&*self.cache, &cache_key, &widget, Some(DASHBOARD_CACHE_TTL)).await?;
         Ok(widget)
     }
 
@@ -181,7 +190,7 @@ impl DashboardService {
             ],
         };
 
-        cache_set(&*self.cache, &cache_key, &chart, Some(30)).await?;
+        cache_set(&*self.cache, &cache_key, &chart, Some(DASHBOARD_CACHE_TTL)).await?;
         Ok(chart)
     }
 
@@ -207,7 +216,7 @@ impl DashboardService {
             }],
         };
 
-        cache_set(&*self.cache, &cache_key, &chart, Some(30)).await?;
+        cache_set(&*self.cache, &cache_key, &chart, Some(DASHBOARD_CACHE_TTL)).await?;
         Ok(chart)
     }
 
@@ -234,7 +243,7 @@ impl DashboardService {
             }],
         };
 
-        cache_set(&*self.cache, &cache_key, &chart, Some(30)).await?;
+        cache_set(&*self.cache, &cache_key, &chart, Some(DASHBOARD_CACHE_TTL)).await?;
         Ok(chart)
     }
 

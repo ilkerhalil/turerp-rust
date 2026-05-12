@@ -4,7 +4,7 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
-use crate::cache::{cache_get, cache_set, CacheService};
+use crate::cache::{cache_get, cache_key, cache_set, CacheService};
 use crate::common::pagination::PaginatedResult;
 use crate::db::error::map_sqlx_error;
 use crate::domain::cari::model::{Cari, CariStatus, CariType, CreateCari, UpdateCari};
@@ -180,6 +180,9 @@ impl From<CariRowWithTotal> for (Cari, i64) {
     }
 }
 
+/// TTL for cari cache entries (seconds)
+const CARI_CACHE_TTL: u64 = 120;
+
 /// PostgreSQL cari repository
 pub struct PostgresCariRepository {
     pool: Arc<PgPool>,
@@ -199,7 +202,7 @@ impl PostgresCariRepository {
 
     /// Invalidate cari list cache entries for a tenant
     async fn invalidate_cari_lists(&self, tenant_id: i64) {
-        let pattern = format!("turerp:t{}:cari:*", tenant_id);
+        let pattern = cache_key(tenant_id, "cari", "*");
         self.cache.delete_pattern(&pattern).await.ok();
     }
 }
@@ -291,8 +294,8 @@ impl CariRepository for PostgresCariRepository {
     }
 
     async fn find_all(&self, tenant_id: i64) -> Result<Vec<Cari>, ApiError> {
-        let cache_key = format!("turerp:t{}:cari:all", tenant_id);
-        if let Some(cached) = cache_get::<Vec<Cari>>(&*self.cache, &cache_key).await? {
+        let ck = cache_key(tenant_id, "cari", "all");
+        if let Some(cached) = cache_get::<Vec<Cari>>(&*self.cache, &ck).await? {
             if self.cache.is_enabled() {
                 metrics::counter!("cache_hits_total", "cache" => "cari").increment(1);
             }
@@ -319,7 +322,7 @@ impl CariRepository for PostgresCariRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find all cari: {}", e)))?;
 
         let items: Vec<Cari> = rows.into_iter().map(|r| r.into()).collect();
-        cache_set(&*self.cache, &cache_key, &items, Some(30))
+        cache_set(&*self.cache, &ck, &items, Some(CARI_CACHE_TTL))
             .await
             .ok();
         Ok(items)
