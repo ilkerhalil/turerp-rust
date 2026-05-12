@@ -1,7 +1,6 @@
 //! Product service for business logic
 use std::sync::Arc;
 
-#[allow(unused_imports)]
 use crate::cache::{cache_get, cache_key, cache_set, CacheService};
 use crate::common::pagination::PaginatedResult;
 use crate::domain::product::model::{
@@ -14,7 +13,6 @@ use crate::domain::product::repository::{
 use crate::error::ApiError;
 
 /// TTL for product catalog cache entries (seconds)
-#[allow(dead_code)]
 const CATALOG_TTL: u64 = 120;
 
 /// Product service
@@ -73,7 +71,6 @@ impl ProductService {
     }
 
     /// Invalidate category catalog cache for a tenant
-    #[allow(dead_code)]
     async fn invalidate_category_cache(&self, tenant_id: i64) {
         if let Some(ref cache) = self.cache {
             let pattern = cache_key(tenant_id, "categories", "*");
@@ -82,7 +79,6 @@ impl ProductService {
     }
 
     /// Invalidate unit catalog cache for a tenant
-    #[allow(dead_code)]
     async fn invalidate_unit_cache(&self, tenant_id: i64) {
         if let Some(ref cache) = self.cache {
             let pattern = cache_key(tenant_id, "units", "*");
@@ -115,7 +111,7 @@ impl ProductService {
     }
 
     pub async fn get_product(&self, id: i64, tenant_id: i64) -> Result<Product, ApiError> {
-        let ck = cache_key(tenant_id, "product", &id.to_string());
+        let ck = cache_key(tenant_id, "products", &id.to_string());
 
         if let Some(ref cache) = self.cache {
             if let Some(cached) = cache_get::<Product>(&**cache, &ck).await? {
@@ -263,10 +259,27 @@ impl ProductService {
     }
 
     pub async fn get_category(&self, id: i64, tenant_id: i64) -> Result<Category, ApiError> {
-        self.category_repo
+        let ck = cache_key(tenant_id, "categories", &id.to_string());
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<Category>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let category = self
+            .category_repo
             .find_by_id(id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", id)))
+            .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", id)))?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &category, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(category)
     }
 
     pub async fn get_categories_by_tenant(
@@ -388,10 +401,27 @@ impl ProductService {
     }
 
     pub async fn get_unit(&self, id: i64, tenant_id: i64) -> Result<Unit, ApiError> {
-        self.unit_repo
+        let ck = cache_key(tenant_id, "units", &id.to_string());
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<Unit>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let unit = self
+            .unit_repo
             .find_by_id(id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", id)))
+            .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", id)))?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &unit, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(unit)
     }
 
     pub async fn get_units_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
