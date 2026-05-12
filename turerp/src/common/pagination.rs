@@ -55,7 +55,7 @@ impl PaginationParams {
 }
 
 /// Paginated result wrapper
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PaginatedResult<T> {
     /// The items on this page
     pub items: Vec<T>,

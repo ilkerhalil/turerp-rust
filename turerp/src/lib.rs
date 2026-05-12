@@ -450,9 +450,14 @@ pub mod app {
     macro_rules! create_in_memory_services {
         ($config:expr) => {{
             let config = $config;
+
+            // Cache (created early so all services can attach it)
+            let cache_service: Arc<dyn crate::cache::CacheService> =
+                Arc::new(crate::cache::InMemoryCacheService::new()) as Arc<dyn crate::cache::CacheService>;
+
             // Auth & User
             let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
-            let user_service = UserService::new(user_repo);
+            let user_service = UserService::new(user_repo).with_cache(cache_service.clone());
             let jwt_service = JwtService::new(
                 config.jwt.secret.clone(),
                 config.jwt.access_token_expiration,
@@ -579,7 +584,8 @@ pub mod app {
             let tenant_service = TenantService::new(tenant_repo);
             let tenant_config_repo =
                 Arc::new(InMemoryTenantConfigRepository::new()) as BoxTenantConfigRepository;
-            let tenant_config_service = TenantConfigService::new(tenant_config_repo);
+            let tenant_config_service =
+                TenantConfigService::new(tenant_config_repo).with_cache(cache_service.clone());
 
             // Assets
             let asset_repo = Arc::new(InMemoryAssetsRepository::new()) as BoxAssetsRepository;
@@ -600,7 +606,8 @@ pub mod app {
             let variant_repo =
                 Arc::new(InMemoryProductVariantRepository::new()) as BoxProductVariantRepository;
             let product_service =
-                ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo);
+                ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo)
+                    .with_cache(cache_service.clone());
 
             // Purchase
             let order_repo =
@@ -715,10 +722,6 @@ pub mod app {
             let delivery_repo =
                 Arc::new(InMemoryWebhookDeliveryRepository::new()) as BoxWebhookDeliveryRepository;
             let webhook_service = WebhookService::new(webhook_repo, delivery_repo);
-
-            // Cache
-            let cache_service: Arc<dyn crate::cache::CacheService> =
-                Arc::new(crate::cache::InMemoryCacheService::new()) as Arc<dyn crate::cache::CacheService>;
 
             // Currency
             let currency_repo =
@@ -958,7 +961,7 @@ pub mod app {
 
         // Auth & User - PostgreSQL
         let user_repo = PostgresUserRepository::new(pool.clone()).into_boxed();
-        let user_service = UserService::new(user_repo);
+        let user_service = UserService::new(user_repo).with_cache(cache_service.clone());
         let jwt_service = JwtService::new(
             config.jwt.secret.clone(),
             config.jwt.access_token_expiration,
@@ -975,6 +978,7 @@ pub mod app {
         // Cari - PostgreSQL
         let cari_repo =
             PostgresCariRepository::new(pool.clone(), cache_service.clone()).into_boxed();
+        let cari_repo_import = cari_repo.clone();
         let cari_service = CariService::new(cari_repo);
 
         // Company - PostgreSQL
@@ -985,6 +989,7 @@ pub mod app {
         let warehouse_repo = PostgresWarehouseRepository::new(pool.clone()).into_boxed();
         let stock_level_repo = PostgresStockLevelRepository::new(pool.clone()).into_boxed();
         let stock_movement_repo = PostgresStockMovementRepository::new(pool.clone()).into_boxed();
+        let stock_movement_repo_import = stock_movement_repo.clone();
         let stock_service =
             StockService::new(warehouse_repo, stock_level_repo, stock_movement_repo);
 
@@ -1049,6 +1054,7 @@ pub mod app {
 
         // Chart of Accounts - PostgreSQL
         let chart_account_repo = PostgresChartAccountRepository::new(pool.clone()).into_boxed();
+        let chart_account_repo_import = chart_account_repo.clone();
         let chart_of_accounts_service = ChartOfAccountsService::new(chart_account_repo);
 
         // Custom Fields - PostgreSQL
@@ -1060,7 +1066,8 @@ pub mod app {
         let tenant_service = TenantService::new(tenant_repo);
         let tenant_config_repo =
             Arc::new(InMemoryTenantConfigRepository::new()) as BoxTenantConfigRepository;
-        let tenant_config_service = TenantConfigService::new(tenant_config_repo);
+        let tenant_config_service =
+            TenantConfigService::new(tenant_config_repo).with_cache(cache_service.clone());
         // Quality Control - using in-memory repos until PostgreSQL repos are implemented
         let inspection_repo =
             Arc::new(crate::domain::manufacturing::InMemoryInspectionRepository::new())
@@ -1086,11 +1093,13 @@ pub mod app {
         // Product - PostgreSQL
         let product_repo =
             PostgresProductRepository::new(pool.clone(), cache_service.clone()).into_boxed();
+        let product_repo_import = product_repo.clone();
         let category_repo = PostgresCategoryRepository::new(pool.clone()).into_boxed();
         let unit_repo = PostgresUnitRepository::new(pool.clone()).into_boxed();
         let variant_repo = PostgresProductVariantRepository::new(pool.clone()).into_boxed();
         let product_service =
-            ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo);
+            ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo)
+                .with_cache(cache_service.clone());
 
         // Purchase - PostgreSQL
         let order_repo = PostgresPurchaseOrderRepository::new(pool.clone()).into_boxed();
@@ -1257,21 +1266,20 @@ pub mod app {
         // Import Service
         let import_service: Arc<dyn crate::common::import::ImportService> =
             Arc::new(crate::common::import::CsvImportService::new(
-                product_repo.clone(),
-                cari_repo.clone(),
-                chart_account_repo.clone(),
-                stock_movement_repo.clone(),
+                product_repo_import,
+                cari_repo_import,
+                chart_account_repo_import,
+                stock_movement_repo_import,
                 job_scheduler.clone(),
             ));
 
         // Inter-Company Service
-        let inter_company_service =
-            Arc::new(crate::common::inter_company::InterCompanyService::new(
-                Arc::new(company_service.clone()),
-                Arc::new(invoice_service.clone()),
-                Arc::new(stock_service.clone()),
-                Arc::new(product_service.clone()),
-            ));
+        let inter_company_service = crate::common::inter_company::InterCompanyService::new(
+            Arc::new(company_service.clone()),
+            Arc::new(invoice_service.clone()),
+            Arc::new(stock_service.clone()),
+            Arc::new(product_service.clone()),
+        );
 
         AppState {
             auth: AuthState {

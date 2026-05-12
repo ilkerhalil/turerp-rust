@@ -5,7 +5,7 @@ use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
-use crate::cache::{cache_get, cache_set, CacheService};
+use crate::cache::{cache_get, cache_key, cache_set, CacheService};
 use crate::common::pagination::PaginatedResult;
 use crate::db::error::map_sqlx_error;
 use crate::domain::product::model::{
@@ -81,6 +81,9 @@ pub struct PostgresProductRepository {
     cache: Arc<dyn CacheService>,
 }
 
+/// TTL for product catalog cache entries (seconds)
+const PRODUCT_CACHE_TTL: u64 = 120;
+
 impl PostgresProductRepository {
     /// Create a new PostgreSQL product repository
     pub fn new(pool: Arc<PgPool>, cache: Arc<dyn CacheService>) -> Self {
@@ -89,7 +92,7 @@ impl PostgresProductRepository {
 
     /// Invalidate product list cache entries for a tenant
     async fn invalidate_product_lists(&self, tenant_id: i64) {
-        let pattern = format!("turerp:t{}:products:*", tenant_id);
+        let pattern = cache_key(tenant_id, "products", "*");
         self.cache.delete_pattern(&pattern).await.ok();
     }
 
@@ -152,8 +155,8 @@ impl ProductRepository for PostgresProductRepository {
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
-        let cache_key = format!("turerp:t{}:products:all", tenant_id);
-        if let Some(cached) = cache_get::<Vec<Product>>(&*self.cache, &cache_key).await? {
+        let ck = cache_key(tenant_id, "products", "all");
+        if let Some(cached) = cache_get::<Vec<Product>>(&*self.cache, &ck).await? {
             if self.cache.is_enabled() {
                 metrics::counter!("cache_hits_total", "cache" => "products").increment(1);
             }
@@ -179,7 +182,7 @@ impl ProductRepository for PostgresProductRepository {
         .map_err(|e| ApiError::Database(format!("Failed to find products by tenant: {}", e)))?;
 
         let items: Vec<Product> = rows.into_iter().map(|r| r.into()).collect();
-        cache_set(&*self.cache, &cache_key, &items, Some(30))
+        cache_set(&*self.cache, &ck, &items, Some(PRODUCT_CACHE_TTL))
             .await
             .ok();
         Ok(items)

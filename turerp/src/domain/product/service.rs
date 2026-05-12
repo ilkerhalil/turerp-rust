@@ -1,4 +1,7 @@
 //! Product service for business logic
+use std::sync::Arc;
+
+use crate::cache::{cache_get, cache_key, cache_set, CacheService};
 use crate::common::pagination::PaginatedResult;
 use crate::domain::product::model::{
     Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
@@ -9,6 +12,9 @@ use crate::domain::product::repository::{
 };
 use crate::error::ApiError;
 
+/// TTL for product catalog cache entries (seconds)
+const CATALOG_TTL: u64 = 120;
+
 /// Product service
 #[derive(Clone)]
 pub struct ProductService {
@@ -16,6 +22,7 @@ pub struct ProductService {
     category_repo: BoxCategoryRepository,
     unit_repo: BoxUnitRepository,
     variant_repo: Option<BoxProductVariantRepository>,
+    cache: Option<Arc<dyn CacheService>>,
 }
 
 impl ProductService {
@@ -29,6 +36,7 @@ impl ProductService {
             category_repo,
             unit_repo,
             variant_repo: None,
+            cache: None,
         }
     }
 
@@ -44,6 +52,37 @@ impl ProductService {
             category_repo,
             unit_repo,
             variant_repo: Some(variant_repo),
+            cache: None,
+        }
+    }
+
+    /// Attach a cache service for catalog caching
+    pub fn with_cache(mut self, cache: Arc<dyn CacheService>) -> Self {
+        self.cache = Some(cache);
+        self
+    }
+
+    /// Invalidate product catalog cache for a tenant
+    async fn invalidate_product_cache(&self, tenant_id: i64) {
+        if let Some(ref cache) = self.cache {
+            let pattern = cache_key(tenant_id, "products", "*");
+            cache.delete_pattern(&pattern).await.ok();
+        }
+    }
+
+    /// Invalidate category catalog cache for a tenant
+    async fn invalidate_category_cache(&self, tenant_id: i64) {
+        if let Some(ref cache) = self.cache {
+            let pattern = cache_key(tenant_id, "categories", "*");
+            cache.delete_pattern(&pattern).await.ok();
+        }
+    }
+
+    /// Invalidate unit catalog cache for a tenant
+    async fn invalidate_unit_cache(&self, tenant_id: i64) {
+        if let Some(ref cache) = self.cache {
+            let pattern = cache_key(tenant_id, "units", "*");
+            cache.delete_pattern(&pattern).await.ok();
         }
     }
 
@@ -66,18 +105,53 @@ impl ProductService {
             )));
         }
 
-        self.product_repo.create(create).await
+        let product = self.product_repo.create(create).await?;
+        self.invalidate_product_cache(product.tenant_id).await;
+        Ok(product)
     }
 
     pub async fn get_product(&self, id: i64, tenant_id: i64) -> Result<Product, ApiError> {
-        self.product_repo
+        let ck = cache_key(tenant_id, "products", &id.to_string());
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<Product>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let product = self
+            .product_repo
             .find_by_id(id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", id)))
+            .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", id)))?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &product, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(product)
     }
 
     pub async fn get_products_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
-        self.product_repo.find_by_tenant(tenant_id).await
+        let ck = cache_key(tenant_id, "products", "all");
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<Vec<Product>>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let products = self.product_repo.find_by_tenant(tenant_id).await?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &products, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(products)
     }
 
     pub async fn get_products_paginated(
@@ -88,9 +162,31 @@ impl ProductService {
     ) -> Result<PaginatedResult<Product>, ApiError> {
         let params = crate::common::pagination::PaginationParams { page, per_page };
         params.validate().map_err(ApiError::Validation)?;
-        self.product_repo
+
+        let ck = cache_key(
+            tenant_id,
+            "products",
+            &format!("list:{}:{}", page, per_page),
+        );
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<PaginatedResult<Product>>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let result = self
+            .product_repo
             .find_by_tenant_paginated(tenant_id, page, per_page)
-            .await
+            .await?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &result, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(result)
     }
 
     pub async fn search_products(
@@ -98,6 +194,7 @@ impl ProductService {
         tenant_id: i64,
         query: &str,
     ) -> Result<Vec<Product>, ApiError> {
+        // Search is not cached — always fresh results
         self.product_repo.search(tenant_id, query).await
     }
 
@@ -107,11 +204,15 @@ impl ProductService {
         tenant_id: i64,
         update: UpdateProduct,
     ) -> Result<Product, ApiError> {
-        self.product_repo.update(id, tenant_id, update).await
+        let product = self.product_repo.update(id, tenant_id, update).await?;
+        self.invalidate_product_cache(tenant_id).await;
+        Ok(product)
     }
 
     pub async fn delete_product(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.product_repo.delete(id, tenant_id).await
+        self.product_repo.delete(id, tenant_id).await?;
+        self.invalidate_product_cache(tenant_id).await;
+        Ok(())
     }
 
     /// Soft delete a product (sets deleted_at)
@@ -123,12 +224,16 @@ impl ProductService {
     ) -> Result<(), ApiError> {
         self.product_repo
             .soft_delete(id, tenant_id, deleted_by)
-            .await
+            .await?;
+        self.invalidate_product_cache(tenant_id).await;
+        Ok(())
     }
 
     /// Restore a soft-deleted product
     pub async fn restore_product(&self, id: i64, tenant_id: i64) -> Result<Product, ApiError> {
-        self.product_repo.restore(id, tenant_id).await
+        let product = self.product_repo.restore(id, tenant_id).await?;
+        self.invalidate_product_cache(tenant_id).await;
+        Ok(product)
     }
 
     /// List soft-deleted products
@@ -138,7 +243,9 @@ impl ProductService {
 
     /// Permanently delete a product (hard delete)
     pub async fn destroy_product(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.product_repo.destroy(id, tenant_id).await
+        self.product_repo.destroy(id, tenant_id).await?;
+        self.invalidate_product_cache(tenant_id).await;
+        Ok(())
     }
 
     // Category operations
@@ -146,21 +253,56 @@ impl ProductService {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        self.category_repo.create(create).await
+        let category = self.category_repo.create(create).await?;
+        self.invalidate_category_cache(category.tenant_id).await;
+        Ok(category)
     }
 
     pub async fn get_category(&self, id: i64, tenant_id: i64) -> Result<Category, ApiError> {
-        self.category_repo
+        let ck = cache_key(tenant_id, "categories", &id.to_string());
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<Category>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let category = self
+            .category_repo
             .find_by_id(id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", id)))
+            .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", id)))?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &category, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(category)
     }
 
     pub async fn get_categories_by_tenant(
         &self,
         tenant_id: i64,
     ) -> Result<Vec<Category>, ApiError> {
-        self.category_repo.find_by_tenant(tenant_id).await
+        let ck = cache_key(tenant_id, "categories", "all");
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<Vec<Category>>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let categories = self.category_repo.find_by_tenant(tenant_id).await?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &categories, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(categories)
     }
 
     pub async fn get_categories_paginated(
@@ -171,9 +313,31 @@ impl ProductService {
     ) -> Result<PaginatedResult<Category>, ApiError> {
         let params = crate::common::pagination::PaginationParams { page, per_page };
         params.validate().map_err(ApiError::Validation)?;
-        self.category_repo
+
+        let ck = cache_key(
+            tenant_id,
+            "categories",
+            &format!("list:{}:{}", page, per_page),
+        );
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<PaginatedResult<Category>>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let result = self
+            .category_repo
             .find_by_tenant_paginated(tenant_id, page, per_page)
-            .await
+            .await?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &result, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(result)
     }
 
     pub async fn update_category(
@@ -182,11 +346,15 @@ impl ProductService {
         tenant_id: i64,
         update: UpdateCategory,
     ) -> Result<Category, ApiError> {
-        self.category_repo.update(id, tenant_id, update).await
+        let category = self.category_repo.update(id, tenant_id, update).await?;
+        self.invalidate_category_cache(tenant_id).await;
+        Ok(category)
     }
 
     pub async fn delete_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.category_repo.delete(id, tenant_id).await
+        self.category_repo.delete(id, tenant_id).await?;
+        self.invalidate_category_cache(tenant_id).await;
+        Ok(())
     }
 
     /// Soft delete a category (sets deleted_at)
@@ -198,12 +366,16 @@ impl ProductService {
     ) -> Result<(), ApiError> {
         self.category_repo
             .soft_delete(id, tenant_id, deleted_by)
-            .await
+            .await?;
+        self.invalidate_category_cache(tenant_id).await;
+        Ok(())
     }
 
     /// Restore a soft-deleted category
     pub async fn restore_category(&self, id: i64, tenant_id: i64) -> Result<Category, ApiError> {
-        self.category_repo.restore(id, tenant_id).await
+        let category = self.category_repo.restore(id, tenant_id).await?;
+        self.invalidate_category_cache(tenant_id).await;
+        Ok(category)
     }
 
     /// List soft-deleted categories
@@ -213,7 +385,9 @@ impl ProductService {
 
     /// Permanently delete a category (hard delete)
     pub async fn destroy_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.category_repo.destroy(id, tenant_id).await
+        self.category_repo.destroy(id, tenant_id).await?;
+        self.invalidate_category_cache(tenant_id).await;
+        Ok(())
     }
 
     // Unit operations
@@ -221,18 +395,53 @@ impl ProductService {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
-        self.unit_repo.create(create).await
+        let unit = self.unit_repo.create(create).await?;
+        self.invalidate_unit_cache(unit.tenant_id).await;
+        Ok(unit)
     }
 
     pub async fn get_unit(&self, id: i64, tenant_id: i64) -> Result<Unit, ApiError> {
-        self.unit_repo
+        let ck = cache_key(tenant_id, "units", &id.to_string());
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<Unit>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let unit = self
+            .unit_repo
             .find_by_id(id, tenant_id)
             .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", id)))
+            .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", id)))?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &unit, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(unit)
     }
 
     pub async fn get_units_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
-        self.unit_repo.find_by_tenant(tenant_id).await
+        let ck = cache_key(tenant_id, "units", "all");
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<Vec<Unit>>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let units = self.unit_repo.find_by_tenant(tenant_id).await?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &units, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(units)
     }
 
     pub async fn get_units_paginated(
@@ -243,9 +452,27 @@ impl ProductService {
     ) -> Result<PaginatedResult<Unit>, ApiError> {
         let params = crate::common::pagination::PaginationParams { page, per_page };
         params.validate().map_err(ApiError::Validation)?;
-        self.unit_repo
+
+        let ck = cache_key(tenant_id, "units", &format!("list:{}:{}", page, per_page));
+
+        if let Some(ref cache) = self.cache {
+            if let Some(cached) = cache_get::<PaginatedResult<Unit>>(&**cache, &ck).await? {
+                return Ok(cached);
+            }
+        }
+
+        let result = self
+            .unit_repo
             .find_by_tenant_paginated(tenant_id, page, per_page)
-            .await
+            .await?;
+
+        if let Some(ref cache) = self.cache {
+            cache_set(&**cache, &ck, &result, Some(CATALOG_TTL))
+                .await
+                .ok();
+        }
+
+        Ok(result)
     }
 
     pub async fn update_unit(
@@ -254,11 +481,15 @@ impl ProductService {
         tenant_id: i64,
         update: UpdateUnit,
     ) -> Result<Unit, ApiError> {
-        self.unit_repo.update(id, tenant_id, update).await
+        let unit = self.unit_repo.update(id, tenant_id, update).await?;
+        self.invalidate_unit_cache(tenant_id).await;
+        Ok(unit)
     }
 
     pub async fn delete_unit(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.unit_repo.delete(id, tenant_id).await
+        self.unit_repo.delete(id, tenant_id).await?;
+        self.invalidate_unit_cache(tenant_id).await;
+        Ok(())
     }
 
     /// Soft delete a unit (sets deleted_at)
@@ -268,12 +499,18 @@ impl ProductService {
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
-        self.unit_repo.soft_delete(id, tenant_id, deleted_by).await
+        self.unit_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await?;
+        self.invalidate_unit_cache(tenant_id).await;
+        Ok(())
     }
 
     /// Restore a soft-deleted unit
     pub async fn restore_unit(&self, id: i64, tenant_id: i64) -> Result<Unit, ApiError> {
-        self.unit_repo.restore(id, tenant_id).await
+        let unit = self.unit_repo.restore(id, tenant_id).await?;
+        self.invalidate_unit_cache(tenant_id).await;
+        Ok(unit)
     }
 
     /// List soft-deleted units
@@ -283,7 +520,9 @@ impl ProductService {
 
     /// Permanently delete a unit (hard delete)
     pub async fn destroy_unit(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.unit_repo.destroy(id, tenant_id).await
+        self.unit_repo.destroy(id, tenant_id).await?;
+        self.invalidate_unit_cache(tenant_id).await;
+        Ok(())
     }
 
     // Product variant operations
@@ -418,6 +657,7 @@ impl ProductService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::cache::NoopCacheService;
     use crate::domain::product::repository::{
         InMemoryCategoryRepository, InMemoryProductRepository, InMemoryProductVariantRepository,
         InMemoryUnitRepository,
@@ -430,6 +670,14 @@ mod tests {
         let category_repo = Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
         let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
         ProductService::new(product_repo, category_repo, unit_repo)
+    }
+
+    fn create_service_with_cache() -> ProductService {
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        let category_repo = Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
+        let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
+        ProductService::new(product_repo, category_repo, unit_repo)
+            .with_cache(Arc::new(NoopCacheService))
     }
 
     fn create_service_with_variants() -> ProductService {
@@ -800,5 +1048,33 @@ mod tests {
         // Restore
         let restored = service.restore_unit(id, 1).await.unwrap();
         assert_eq!(restored.id, id);
+    }
+
+    #[tokio::test]
+    async fn test_catalog_cache_with_noop() {
+        let service = create_service_with_cache();
+
+        let create = CreateProduct {
+            tenant_id: 1,
+            company_id: 1,
+            code: "P-CACHE".to_string(),
+            name: "Cache Test".to_string(),
+            description: None,
+            category_id: None,
+            unit_id: None,
+            barcode: None,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
+        };
+
+        service.create_product(create).await.unwrap();
+
+        // With NoopCache, this should still work (fallback to DB)
+        let products = service.get_products_by_tenant(1).await.unwrap();
+        assert!(!products.is_empty());
+
+        let paginated = service.get_products_paginated(1, 1, 10).await.unwrap();
+        assert!(!paginated.items.is_empty());
     }
 }
