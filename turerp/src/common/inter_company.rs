@@ -7,13 +7,9 @@ use crate::domain::product::service::ProductService;
 use crate::domain::stock::model::{CreateStockMovement, MovementType};
 use crate::domain::stock::service::StockService;
 use crate::error::ApiError;
-use num_traits::FromPrimitive;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-
-/// Maximum allowed deviation from standard sale price for transfer pricing.
-const TRANSFER_PRICE_TOLERANCE: f64 = 0.20;
 
 /// Service for inter-company transactions.
 #[derive(Clone)]
@@ -64,12 +60,8 @@ impl InterCompanyService {
                 .get_product(line.product_id, tenant_id)
                 .await?;
             if product.sale_price > Decimal::ZERO {
-                let lower = product.sale_price
-                    * Decimal::from_f64(1.0 - TRANSFER_PRICE_TOLERANCE)
-                        .unwrap_or_else(|| Decimal::from(8) / Decimal::from(10));
-                let upper = product.sale_price
-                    * Decimal::from_f64(1.0 + TRANSFER_PRICE_TOLERANCE)
-                        .unwrap_or_else(|| Decimal::from(12) / Decimal::from(10));
+                let lower = product.sale_price * Decimal::from(8) / Decimal::from(10);
+                let upper = product.sale_price * Decimal::from(12) / Decimal::from(10);
                 if line.unit_price < lower || line.unit_price > upper {
                     return Err(ApiError::Validation(format!(
                         "Transfer pricing violation for product {}: unit price {} is outside the acceptable range {} - {} (standard sale price: {})",

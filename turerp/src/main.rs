@@ -212,6 +212,14 @@ async fn main() -> std::io::Result<()> {
         turerp::app::create_app_state(&config).await
     };
 
+    // Start background job executor
+    let job_executor = turerp::common::job_executor::JobExecutor::new(
+        app_state.infra.job_scheduler.clone(),
+        app_state.infra.import_service.clone(),
+        app_state.document.file_storage.clone(),
+    );
+    job_executor.start().await;
+
     // Build rate-limit middleware with shared stats store so the dashboard can read them
     let rate_limit_middleware = {
         let stats_store = app_state.infra.rate_limit_stats.get_ref().clone();
