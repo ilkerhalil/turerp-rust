@@ -1,5 +1,6 @@
 //! Configuration management for Turerp ERP
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use config::ConfigError;
 use serde::Deserialize;
 use std::fmt;
@@ -357,6 +358,12 @@ pub struct SecurityHeadersConfig {
     pub enabled: bool,
 }
 
+/// Encryption configuration
+#[derive(Debug, Clone, Deserialize)]
+pub struct EncryptionConfig {
+    pub key: String,
+}
+
 /// Secrets management configuration
 #[derive(Debug, Clone)]
 pub struct SecretsConfig {
@@ -397,6 +404,7 @@ pub struct Config {
     pub cdc: CdcConfig,
     pub security_headers: SecurityHeadersConfig,
     pub secrets: SecretsConfig,
+    pub encryption_key: String,
 }
 
 impl Default for Config {
@@ -422,6 +430,7 @@ impl Default for Config {
             cdc: CdcConfig::default(),
             security_headers: SecurityHeadersConfig::default(),
             secrets: SecretsConfig::default(),
+            encryption_key: "dGVzdC1rZXktZm9yLXRlc3Rpbmctb25seS0xMjM0NTY=".to_string(),
         }
     }
 }
@@ -509,6 +518,8 @@ impl Config {
         let cdc = CdcConfig::from_env();
         let security_headers = SecurityHeadersConfig::from_env();
         let secrets = SecretsConfig::from_env();
+        let encryption_key = std::env::var("TURERP_ENCRYPTION_KEY")
+            .unwrap_or_else(|_| "dGVzdC1rZXktZm9yLXRlc3Rpbmctb25seS0xMjM0NTY=".to_string());
 
         Ok(Self {
             environment,
@@ -523,6 +534,7 @@ impl Config {
             cdc,
             security_headers,
             secrets,
+            encryption_key,
         })
     }
 
@@ -630,6 +642,17 @@ impl Config {
         }
 
         Ok(())
+    }
+
+    /// Decode the base64-encoded encryption key into a 32-byte array.
+    /// Panics if the key is not valid base64 or not exactly 32 bytes.
+    pub fn encryption_key_bytes(&self) -> [u8; 32] {
+        let decoded = BASE64
+            .decode(&self.encryption_key)
+            .expect("encryption_key must be valid base64");
+        decoded
+            .try_into()
+            .expect("encryption_key must decode to exactly 32 bytes")
     }
 }
 

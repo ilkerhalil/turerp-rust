@@ -101,22 +101,57 @@ struct WebhookInner {
 /// In-memory webhook repository
 pub struct InMemoryWebhookRepository {
     inner: RwLock<WebhookInner>,
+    encryption_key: [u8; 32],
 }
 
 impl InMemoryWebhookRepository {
-    pub fn new() -> Self {
+    pub fn new(encryption_key: [u8; 32]) -> Self {
         Self {
             inner: RwLock::new(WebhookInner {
                 webhooks: Vec::new(),
                 next_id: 1,
             }),
+            encryption_key,
+        }
+    }
+
+    fn encrypt_secret(&self, secret: &str) -> Result<String, ApiError> {
+        crate::utils::encryption::encrypt(secret, &self.encryption_key).map_err(|e| {
+            tracing::error!("Failed to encrypt webhook secret: {}", e);
+            ApiError::Internal("Failed to encrypt webhook secret".to_string())
+        })
+    }
+
+    fn decrypt_secret(&self, secret: &str) -> Result<String, ApiError> {
+        match crate::utils::encryption::decrypt(secret, &self.encryption_key) {
+            Ok(decrypted) => Ok(decrypted),
+            Err(crate::utils::encryption::EncryptionError::InvalidCiphertext)
+            | Err(crate::utils::encryption::EncryptionError::DecryptionFailed(_)) => {
+                if secret.len() <= 64 {
+                    tracing::warn!(
+                        "Webhook secret appears to be unencrypted plaintext; returning as-is"
+                    );
+                    Ok(secret.to_string())
+                } else {
+                    tracing::error!("Failed to decrypt webhook secret");
+                    Err(ApiError::Internal(
+                        "Failed to decrypt webhook secret".to_string(),
+                    ))
+                }
+            }
+            Err(e) => {
+                tracing::error!("Unexpected decryption error: {}", e);
+                Err(ApiError::Internal(
+                    "Failed to decrypt webhook secret".to_string(),
+                ))
+            }
         }
     }
 }
 
 impl Default for InMemoryWebhookRepository {
     fn default() -> Self {
-        Self::new()
+        Self::new([0u8; 32])
     }
 }
 
@@ -127,6 +162,9 @@ impl WebhookRepository for InMemoryWebhookRepository {
         let id = inner.next_id;
         inner.next_id += 1;
 
+        let raw_secret = webhook.secret.unwrap_or_else(generate_secret);
+        let encrypted_secret = self.encrypt_secret(&raw_secret)?;
+
         let now = chrono::Utc::now();
         let wh = Webhook {
             id,
@@ -134,7 +172,7 @@ impl WebhookRepository for InMemoryWebhookRepository {
             url: webhook.url,
             description: webhook.description,
             event_types: webhook.event_types,
-            secret: webhook.secret.unwrap_or_else(generate_secret),
+            secret: encrypted_secret,
             status: crate::domain::webhook::model::WebhookStatus::Active,
             created_at: now,
             updated_at: now,
@@ -142,26 +180,38 @@ impl WebhookRepository for InMemoryWebhookRepository {
             deleted_by: None,
         };
         inner.webhooks.push(wh.clone());
-        Ok(wh)
+
+        let mut decrypted = wh;
+        decrypted.secret = self.decrypt_secret(&decrypted.secret)?;
+        Ok(decrypted)
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Webhook>, ApiError> {
         let inner = self.inner.read();
-        Ok(inner
+        let mut wh = inner
             .webhooks
             .iter()
             .find(|w| w.id == id && w.tenant_id == tenant_id && w.deleted_at.is_none())
-            .cloned())
+            .cloned();
+        if let Some(ref mut w) = wh {
+            w.secret = self.decrypt_secret(&w.secret)?;
+        }
+        Ok(wh)
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Webhook>, ApiError> {
         let inner = self.inner.read();
-        Ok(inner
+        let mut result = Vec::new();
+        for mut w in inner
             .webhooks
             .iter()
             .filter(|w| w.tenant_id == tenant_id && w.deleted_at.is_none())
             .cloned()
-            .collect())
+        {
+            w.secret = self.decrypt_secret(&w.secret)?;
+            result.push(w);
+        }
+        Ok(result)
     }
 
     async fn find_active_by_event(
@@ -170,7 +220,8 @@ impl WebhookRepository for InMemoryWebhookRepository {
         event_type: &str,
     ) -> Result<Vec<Webhook>, ApiError> {
         let inner = self.inner.read();
-        Ok(inner
+        let mut result = Vec::new();
+        for mut w in inner
             .webhooks
             .iter()
             .filter(|w| {
@@ -181,7 +232,11 @@ impl WebhookRepository for InMemoryWebhookRepository {
                         || w.event_types.iter().any(|t| t == "*" || t == event_type))
             })
             .cloned()
-            .collect())
+        {
+            w.secret = self.decrypt_secret(&w.secret)?;
+            result.push(w);
+        }
+        Ok(result)
     }
 
     async fn update(
@@ -210,7 +265,9 @@ impl WebhookRepository for InMemoryWebhookRepository {
             wh.status = status;
         }
         wh.updated_at = chrono::Utc::now();
-        Ok(wh.clone())
+        let mut result = wh.clone();
+        result.secret = self.decrypt_secret(&result.secret)?;
+        Ok(result)
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
@@ -245,12 +302,17 @@ impl WebhookRepository for InMemoryWebhookRepository {
 
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Webhook>, ApiError> {
         let inner = self.inner.read();
-        Ok(inner
+        let mut result = Vec::new();
+        for mut w in inner
             .webhooks
             .iter()
             .filter(|w| w.tenant_id == tenant_id && w.is_deleted())
             .cloned()
-            .collect())
+        {
+            w.secret = self.decrypt_secret(&w.secret)?;
+            result.push(w);
+        }
+        Ok(result)
     }
 
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
@@ -442,9 +504,13 @@ mod tests {
         }
     }
 
+    fn test_key() -> [u8; 32] {
+        *b"test-key-for-testing-only-123456"
+    }
+
     #[tokio::test]
     async fn test_create_and_find() {
-        let repo = InMemoryWebhookRepository::new();
+        let repo = InMemoryWebhookRepository::new(test_key());
         let wh = repo.create(1, make_create()).await.unwrap();
         assert_eq!(wh.id, 1);
 
@@ -454,7 +520,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_active_by_event() {
-        let repo = InMemoryWebhookRepository::new();
+        let repo = InMemoryWebhookRepository::new(test_key());
         repo.create(1, make_create()).await.unwrap();
 
         let active = repo
@@ -466,7 +532,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update() {
-        let repo = InMemoryWebhookRepository::new();
+        let repo = InMemoryWebhookRepository::new(test_key());
         repo.create(1, make_create()).await.unwrap();
 
         let updated = repo
@@ -487,7 +553,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_soft_delete() {
-        let repo = InMemoryWebhookRepository::new();
+        let repo = InMemoryWebhookRepository::new(test_key());
         repo.create(1, make_create()).await.unwrap();
 
         repo.soft_delete(1, 1, 42).await.unwrap();

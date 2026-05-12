@@ -42,33 +42,6 @@ struct WebhookRow {
     deleted_by: Option<i64>,
 }
 
-#[cfg(feature = "postgres")]
-impl From<WebhookRow> for Webhook {
-    fn from(row: WebhookRow) -> Self {
-        let status = row.status.parse().unwrap_or_else(|e| {
-            tracing::warn!(
-                "Invalid WebhookStatus '{}': {}, defaulting to Active",
-                row.status,
-                e
-            );
-            WebhookStatus::Active
-        });
-        Self {
-            id: row.id,
-            tenant_id: row.tenant_id,
-            url: row.url,
-            description: row.description,
-            event_types: row.event_types,
-            secret: row.secret,
-            status,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-            deleted_by: row.deleted_by,
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // WebhookDeliveryRow / WebhookDelivery conversion
 // ---------------------------------------------------------------------------
@@ -146,16 +119,78 @@ struct WebhookDeliveryRowWithTotal {
 #[cfg(feature = "postgres")]
 pub struct PostgresWebhookRepository {
     pool: Arc<PgPool>,
+    encryption_key: [u8; 32],
 }
 
 #[cfg(feature = "postgres")]
 impl PostgresWebhookRepository {
-    pub fn new(pool: Arc<PgPool>) -> Self {
-        Self { pool }
+    pub fn new(pool: Arc<PgPool>, encryption_key: [u8; 32]) -> Self {
+        Self {
+            pool,
+            encryption_key,
+        }
     }
 
     pub fn into_boxed(self) -> Arc<dyn WebhookRepository> {
         Arc::new(self)
+    }
+
+    fn encrypt_secret(&self, secret: &str) -> Result<String, ApiError> {
+        crate::utils::encryption::encrypt(secret, &self.encryption_key).map_err(|e| {
+            tracing::error!("Failed to encrypt webhook secret: {}", e);
+            ApiError::Internal("Failed to encrypt webhook secret".to_string())
+        })
+    }
+
+    fn decrypt_secret(&self, secret: &str) -> Result<String, ApiError> {
+        match crate::utils::encryption::decrypt(secret, &self.encryption_key) {
+            Ok(decrypted) => Ok(decrypted),
+            Err(crate::utils::encryption::EncryptionError::InvalidCiphertext)
+            | Err(crate::utils::encryption::EncryptionError::DecryptionFailed(_)) => {
+                if secret.len() <= 64 {
+                    tracing::warn!(
+                        "Webhook secret appears to be unencrypted plaintext; returning as-is"
+                    );
+                    Ok(secret.to_string())
+                } else {
+                    tracing::error!("Failed to decrypt webhook secret");
+                    Err(ApiError::Internal(
+                        "Failed to decrypt webhook secret".to_string(),
+                    ))
+                }
+            }
+            Err(e) => {
+                tracing::error!("Unexpected decryption error: {}", e);
+                Err(ApiError::Internal(
+                    "Failed to decrypt webhook secret".to_string(),
+                ))
+            }
+        }
+    }
+
+    fn row_to_webhook(&self, row: WebhookRow) -> Result<Webhook, ApiError> {
+        let status = row.status.parse().unwrap_or_else(|e| {
+            tracing::warn!(
+                "Invalid WebhookStatus '{}': {}, defaulting to Active",
+                row.status,
+                e
+            );
+            WebhookStatus::Active
+        });
+        let secret = self.decrypt_secret(&row.secret)?;
+        Ok(Webhook {
+            id: row.id,
+            tenant_id: row.tenant_id,
+            url: row.url,
+            description: row.description,
+            event_types: row.event_types,
+            secret,
+            status,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by,
+        })
     }
 }
 
@@ -163,7 +198,8 @@ impl PostgresWebhookRepository {
 #[async_trait]
 impl WebhookRepository for PostgresWebhookRepository {
     async fn create(&self, tenant_id: i64, webhook: CreateWebhook) -> Result<Webhook, ApiError> {
-        let secret = webhook.secret.unwrap_or_else(generate_secret);
+        let raw_secret = webhook.secret.unwrap_or_else(generate_secret);
+        let encrypted_secret = self.encrypt_secret(&raw_secret)?;
         let row: WebhookRow = sqlx::query_as(
             r#"
             INSERT INTO webhooks (tenant_id, url, description, event_types, secret, status)
@@ -176,12 +212,12 @@ impl WebhookRepository for PostgresWebhookRepository {
         .bind(&webhook.url)
         .bind(&webhook.description)
         .bind(&webhook.event_types)
-        .bind(&secret)
+        .bind(&encrypted_secret)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Webhook"))?;
 
-        Ok(row.into())
+        self.row_to_webhook(row)
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Webhook>, ApiError> {
@@ -199,7 +235,10 @@ impl WebhookRepository for PostgresWebhookRepository {
         .await
         .map_err(|e| map_sqlx_error(e, "Webhook"))?;
 
-        Ok(row.map(Into::into))
+        match row {
+            Some(r) => Ok(Some(self.row_to_webhook(r)?)),
+            None => Ok(None),
+        }
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Webhook>, ApiError> {
@@ -217,7 +256,7 @@ impl WebhookRepository for PostgresWebhookRepository {
         .await
         .map_err(|e| map_sqlx_error(e, "Webhook"))?;
 
-        Ok(rows.into_iter().map(Into::into).collect())
+        rows.into_iter().map(|r| self.row_to_webhook(r)).collect()
     }
 
     async fn find_active_by_event(
@@ -240,7 +279,7 @@ impl WebhookRepository for PostgresWebhookRepository {
         .await
         .map_err(|e| map_sqlx_error(e, "Webhook"))?;
 
-        Ok(rows.into_iter().map(Into::into).collect())
+        rows.into_iter().map(|r| self.row_to_webhook(r)).collect()
     }
 
     async fn update(
@@ -273,7 +312,7 @@ impl WebhookRepository for PostgresWebhookRepository {
         .map_err(|e| map_sqlx_error(e, "Webhook"))?
         .ok_or_else(|| ApiError::NotFound(format!("Webhook {} not found", id)))?;
 
-        Ok(row.into())
+        self.row_to_webhook(row)
     }
 
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
@@ -341,7 +380,7 @@ impl WebhookRepository for PostgresWebhookRepository {
         .await
         .map_err(|e| map_sqlx_error(e, "Webhook"))?;
 
-        Ok(rows.into_iter().map(Into::into).collect())
+        rows.into_iter().map(|r| self.row_to_webhook(r)).collect()
     }
 
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {

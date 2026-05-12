@@ -58,11 +58,12 @@ services:
     ports:
       - "8200:8200"
     environment:
-      VAULT_DEV_ROOT_TOKEN_ID: dev-token-only-for-local-dev
+      VAULT_DEV_ROOT_TOKEN_ID: myroot
       VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
     cap_add:
       - IPC_LOCK
     volumes:
+      - ./vault-data:/vault/file
       - ./scripts/vault-init.sh:/vault-init.sh:ro
     command: >
       sh -c "
