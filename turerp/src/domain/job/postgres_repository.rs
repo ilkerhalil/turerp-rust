@@ -36,9 +36,8 @@ impl TryFrom<JobRow> for Job {
     type Error = ApiError;
 
     fn try_from(row: JobRow) -> Result<Self, Self::Error> {
-        let job_type: JobType = serde_json::from_value(row.payload.0).map_err(|e| {
-            ApiError::Internal(format!("Failed to deserialize job payload: {}", e))
-        })?;
+        let job_type: JobType = serde_json::from_value(row.payload.0)
+            .map_err(|e| ApiError::Internal(format!("Failed to deserialize job payload: {}", e)))?;
         Ok(Job {
             id: row.id,
             job_type,
@@ -123,9 +122,7 @@ impl PostgresJobRepository {
 
 #[async_trait::async_trait]
 impl super::JobRepository for PostgresJobRepository {
-    async fn create(&self,
-        job: CreateJob,
-    ) -> Result<Job, ApiError> {
+    async fn create(&self, job: CreateJob) -> Result<Job, ApiError> {
         let payload =
             serde_json::to_value(&job.job_type).map_err(|e| ApiError::Internal(e.to_string()))?;
         let status = if job.scheduled_at.is_some() {
@@ -155,17 +152,13 @@ impl super::JobRepository for PostgresJobRepository {
         row.try_into()
     }
 
-    async fn find_by_id(
-        &self,
-        id: i64,
-    ) -> Result<Option<Job>, ApiError> {
-        let row = sqlx::query_as::<_, JobRow>(
-            "SELECT * FROM jobs WHERE id = $1 AND deleted_at IS NULL"
-        )
-            .bind(id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| map_sqlx_error(e, "Job"))?;
+    async fn find_by_id(&self, id: i64) -> Result<Option<Job>, ApiError> {
+        let row =
+            sqlx::query_as::<_, JobRow>("SELECT * FROM jobs WHERE id = $1 AND deleted_at IS NULL")
+                .bind(id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| map_sqlx_error(e, "Job"))?;
 
         match row {
             Some(r) => Ok(Some(r.try_into()?)),
@@ -173,8 +166,7 @@ impl super::JobRepository for PostgresJobRepository {
         }
     }
 
-    async fn find_next_pending(&self,
-    ) -> Result<Option<Job>, ApiError> {
+    async fn find_next_pending(&self) -> Result<Option<Job>, ApiError> {
         let mut tx = self
             .pool
             .begin()
@@ -225,9 +217,7 @@ impl super::JobRepository for PostgresJobRepository {
         Ok(job)
     }
 
-    async fn mark_running(&self,
-        id: i64,
-    ) -> Result<(), ApiError> {
+    async fn mark_running(&self, id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             "UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
         )
@@ -242,9 +232,7 @@ impl super::JobRepository for PostgresJobRepository {
         Ok(())
     }
 
-    async fn mark_completed(&self,
-        id: i64,
-    ) -> Result<(), ApiError> {
+    async fn mark_completed(&self, id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             "UPDATE jobs SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
         )
@@ -259,11 +247,7 @@ impl super::JobRepository for PostgresJobRepository {
         Ok(())
     }
 
-    async fn mark_failed(
-        &self,
-        id: i64,
-        error: &str,
-    ) -> Result<(), ApiError> {
+    async fn mark_failed(&self, id: i64, error: &str) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE jobs
@@ -288,9 +272,7 @@ impl super::JobRepository for PostgresJobRepository {
         Ok(())
     }
 
-    async fn cancel(&self,
-        id: i64,
-    ) -> Result<(), ApiError> {
+    async fn cancel(&self, id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             "UPDATE jobs SET status = 'cancelled', completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND status IN ('pending', 'scheduled') AND deleted_at IS NULL",
         )
@@ -326,9 +308,7 @@ impl super::JobRepository for PostgresJobRepository {
             .collect::<Result<Vec<_>, _>>()
     }
 
-    async fn retry(&self,
-        id: i64,
-    ) -> Result<(), ApiError> {
+    async fn retry(&self, id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             "UPDATE jobs SET status = 'pending', attempts = 0, last_error = NULL, scheduled_at = NULL, started_at = NULL, completed_at = NULL, updated_at = NOW() WHERE id = $1 AND status = 'failed' AND deleted_at IS NULL",
         )
@@ -338,15 +318,14 @@ impl super::JobRepository for PostgresJobRepository {
         .map_err(|e| map_sqlx_error(e, "Job"))?;
 
         if result.rows_affected() == 0 {
-            return Err(ApiError::BadRequest("Can only retry failed jobs".to_string()));
+            return Err(ApiError::BadRequest(
+                "Can only retry failed jobs".to_string(),
+            ));
         }
         Ok(())
     }
 
-    async fn cleanup(
-        &self,
-        older_than: Duration,
-    ) -> Result<u64, ApiError> {
+    async fn cleanup(&self, older_than: Duration) -> Result<u64, ApiError> {
         let secs = older_than.as_secs() as i64;
         let result = sqlx::query(
             "DELETE FROM jobs WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < NOW() - INTERVAL '1 second' * $1",
@@ -359,10 +338,7 @@ impl super::JobRepository for PostgresJobRepository {
         Ok(result.rows_affected())
     }
 
-    async fn create_schedule(
-        &self,
-        schedule: CreateJobSchedule,
-    ) -> Result<JobSchedule, ApiError> {
+    async fn create_schedule(&self, schedule: CreateJobSchedule) -> Result<JobSchedule, ApiError> {
         let payload = serde_json::to_value(&schedule.job_type)
             .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -386,10 +362,7 @@ impl super::JobRepository for PostgresJobRepository {
         row.try_into()
     }
 
-    async fn list_schedules(
-        &self,
-        tenant_id: i64,
-    ) -> Result<Vec<JobSchedule>, ApiError> {
+    async fn list_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>, ApiError> {
         let rows = sqlx::query_as::<_, JobScheduleRow>(
             "SELECT * FROM job_schedules WHERE tenant_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC",
         )
@@ -425,11 +398,7 @@ impl super::JobRepository for PostgresJobRepository {
         Ok(())
     }
 
-    async fn toggle_schedule(
-        &self,
-        id: i64,
-        active: bool,
-    ) -> Result<(), ApiError> {
+    async fn toggle_schedule(&self, id: i64, active: bool) -> Result<(), ApiError> {
         let result = sqlx::query(
             "UPDATE job_schedules SET is_active = $1, updated_at = NOW() WHERE id = $2 AND deleted_at IS NULL",
         )
@@ -445,8 +414,7 @@ impl super::JobRepository for PostgresJobRepository {
         Ok(())
     }
 
-    async fn list_due_schedules(&self,
-    ) -> Result<Vec<JobSchedule>, ApiError> {
+    async fn list_due_schedules(&self) -> Result<Vec<JobSchedule>, ApiError> {
         let rows = sqlx::query_as::<_, JobScheduleRow>(
             "SELECT * FROM job_schedules WHERE is_active = true AND deleted_at IS NULL AND (next_run_at IS NULL OR next_run_at <= NOW())",
         )
@@ -459,10 +427,7 @@ impl super::JobRepository for PostgresJobRepository {
             .collect::<Result<Vec<_>, _>>()
     }
 
-    async fn count_by_status(
-        &self,
-        tenant_id: i64,
-    ) -> Result<JobCounts, ApiError> {
+    async fn count_by_status(&self, tenant_id: i64) -> Result<JobCounts, ApiError> {
         let rows: Vec<(String, i64)> = sqlx::query_as(
             "SELECT status, COUNT(*) FROM jobs WHERE tenant_id = $1 AND deleted_at IS NULL GROUP BY status",
         )
@@ -486,11 +451,7 @@ impl super::JobRepository for PostgresJobRepository {
         Ok(counts)
     }
 
-    async fn list_recent(
-        &self,
-        tenant_id: i64,
-        limit: i64,
-    ) -> Result<Vec<Job>, ApiError> {
+    async fn list_recent(&self, tenant_id: i64, limit: i64) -> Result<Vec<Job>, ApiError> {
         let rows = sqlx::query_as::<_, JobRow>(
             "SELECT * FROM jobs WHERE tenant_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT $2",
         )
@@ -505,10 +466,7 @@ impl super::JobRepository for PostgresJobRepository {
             .collect::<Result<Vec<_>, _>>()
     }
 
-    async fn reset_stalled(
-        &self,
-        timeout: Duration,
-    ) -> Result<u64, ApiError> {
+    async fn reset_stalled(&self, timeout: Duration) -> Result<u64, ApiError> {
         let secs = timeout.as_secs() as i64;
         let result = sqlx::query(
             r#"
@@ -559,10 +517,7 @@ impl super::JobRepository for PostgresJobRepository {
         .map_err(|e| map_sqlx_error(e, "Job"))?;
 
         if result.rows_affected() == 0 {
-            return Err(ApiError::NotFound(format!(
-                "Deleted job {} not found",
-                id
-            )));
+            return Err(ApiError::NotFound(format!("Deleted job {} not found", id)));
         }
         Ok(())
     }
@@ -582,19 +537,14 @@ impl super::JobRepository for PostgresJobRepository {
     }
 
     async fn destroy(&self, id: i64) -> Result<(), ApiError> {
-        let result = sqlx::query(
-            "DELETE FROM jobs WHERE id = $1 AND deleted_at IS NOT NULL",
-        )
-        .bind(id)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| map_sqlx_error(e, "Job"))?;
+        let result = sqlx::query("DELETE FROM jobs WHERE id = $1 AND deleted_at IS NOT NULL")
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| map_sqlx_error(e, "Job"))?;
 
         if result.rows_affected() == 0 {
-            return Err(ApiError::NotFound(format!(
-                "Deleted job {} not found",
-                id
-            )));
+            return Err(ApiError::NotFound(format!("Deleted job {} not found", id)));
         }
         Ok(())
     }
@@ -656,13 +606,12 @@ impl super::JobRepository for PostgresJobRepository {
     }
 
     async fn destroy_schedule(&self, id: i64) -> Result<(), ApiError> {
-        let result = sqlx::query(
-            "DELETE FROM job_schedules WHERE id = $1 AND deleted_at IS NOT NULL",
-        )
-        .bind(id)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| map_sqlx_error(e, "JobSchedule"))?;
+        let result =
+            sqlx::query("DELETE FROM job_schedules WHERE id = $1 AND deleted_at IS NOT NULL")
+                .bind(id)
+                .execute(&self.pool)
+                .await
+                .map_err(|e| map_sqlx_error(e, "JobSchedule"))?;
 
         if result.rows_affected() == 0 {
             return Err(ApiError::NotFound(format!(

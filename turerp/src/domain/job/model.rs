@@ -110,6 +110,20 @@ pub enum JobType {
         notification_id: i64,
         tenant_id: i64,
     },
+    /// Process pending outbox events for a tenant
+    ProcessOutbox { tenant_id: i64 },
+    /// Bulk import from uploaded file
+    Import {
+        file_id: i64,
+        entity_type: String,
+        tenant_id: i64,
+        company_id: i64,
+        format: String,
+    },
+    /// Import bank statement for an account
+    ImportBankStatement { account_id: i64, file_id: i64 },
+    /// Auto-reconcile bank transactions for a tenant
+    AutoReconcile { tenant_id: i64 },
 }
 
 impl JobType {
@@ -123,6 +137,10 @@ impl JobType {
             JobType::GenerateReport { .. } => "generate_report",
             JobType::Custom { .. } => "custom",
             JobType::SendNotification { .. } => "send_notification",
+            JobType::ProcessOutbox { .. } => "process_outbox",
+            JobType::Import { .. } => "import",
+            JobType::ImportBankStatement { .. } => "import_bank_statement",
+            JobType::AutoReconcile { .. } => "auto_reconcile",
         }
     }
 }
@@ -221,7 +239,7 @@ pub struct CreateJobSchedule {
 }
 
 /// Job counts by status for dashboard
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct JobCounts {
     pub pending: i64,
     pub running: i64,
@@ -229,19 +247,6 @@ pub struct JobCounts {
     pub failed: i64,
     pub cancelled: i64,
     pub scheduled: i64,
-}
-
-impl Default for JobCounts {
-    fn default() -> Self {
-        Self {
-            pending: 0,
-            running: 0,
-            completed: 0,
-            failed: 0,
-            cancelled: 0,
-            scheduled: 0,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -274,12 +279,9 @@ mod tests {
 
     #[test]
     fn test_create_job_builder() {
-        let cj = CreateJob::new(
-            JobType::SendReminders { tenant_id: 1 },
-            1,
-        )
-        .with_priority(JobPriority::High)
-        .with_max_attempts(5);
+        let cj = CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1)
+            .with_priority(JobPriority::High)
+            .with_max_attempts(5);
         assert_eq!(cj.priority, JobPriority::High);
         assert_eq!(cj.max_attempts, 5);
     }

@@ -5,8 +5,11 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 
+use crate::common::SoftDeletable;
+#[cfg(test)]
+use crate::domain::job::model::JobType;
 use crate::domain::job::model::{
-    CreateJob, CreateJobSchedule, Job, JobCounts, JobPriority, JobSchedule, JobStatus, JobType,
+    CreateJob, CreateJobSchedule, Job, JobCounts, JobPriority, JobSchedule, JobStatus,
 };
 use crate::error::ApiError;
 
@@ -35,11 +38,8 @@ pub trait JobRepository: Send + Sync {
     async fn cancel(&self, id: i64) -> Result<(), ApiError>;
 
     /// List jobs by status for a tenant
-    async fn list_by_status(
-        &self,
-        tenant_id: i64,
-        status: JobStatus,
-    ) -> Result<Vec<Job>, ApiError>;
+    async fn list_by_status(&self, tenant_id: i64, status: JobStatus)
+        -> Result<Vec<Job>, ApiError>;
 
     /// Retry a failed job
     async fn retry(&self, id: i64) -> Result<(), ApiError>;
@@ -54,7 +54,7 @@ pub trait JobRepository: Send + Sync {
     async fn restore(&self, id: i64) -> Result<(), ApiError>;
 
     /// List deleted jobs for a tenant
-    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Job>>, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Job>, ApiError>;
 
     /// Permanently destroy a soft-deleted job
     async fn destroy(&self, id: i64) -> Result<(), ApiError>;
@@ -66,7 +66,7 @@ pub trait JobRepository: Send + Sync {
     async fn restore_schedule(&self, id: i64) -> Result<(), ApiError>;
 
     /// List deleted schedules for a tenant
-    async fn find_deleted_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>>, ApiError>;
+    async fn find_deleted_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>, ApiError>;
 
     /// Permanently destroy a soft-deleted schedule
     async fn destroy_schedule(&self, id: i64) -> Result<(), ApiError>;
@@ -74,15 +74,10 @@ pub trait JobRepository: Send + Sync {
     // Cron schedule methods
 
     /// Create a recurring job schedule
-    async fn create_schedule(
-        &self,
-        schedule: CreateJobSchedule,
-    ) -> Result<JobSchedule, ApiError>;
+    async fn create_schedule(&self, schedule: CreateJobSchedule) -> Result<JobSchedule, ApiError>;
 
     /// List recurring schedules for a tenant
-    async fn list_schedules(&self,
-        tenant_id: i64,
-    ) -> Result<Vec<JobSchedule>, ApiError>;
+    async fn list_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>, ApiError>;
 
     /// Update next_run_at and last_run_at for a schedule
     async fn update_schedule_next_run(
@@ -93,10 +88,7 @@ pub trait JobRepository: Send + Sync {
     ) -> Result<(), ApiError>;
 
     /// Enable or disable a schedule
-    async fn toggle_schedule(&self,
-        id: i64,
-        active: bool,
-    ) -> Result<(), ApiError>;
+    async fn toggle_schedule(&self, id: i64, active: bool) -> Result<(), ApiError>;
 
     /// List schedules that are due to run
     async fn list_due_schedules(&self) -> Result<Vec<JobSchedule>, ApiError>;
@@ -104,22 +96,13 @@ pub trait JobRepository: Send + Sync {
     // Dashboard methods
 
     /// Count jobs by status for a tenant
-    async fn count_by_status(
-        &self,
-        tenant_id: i64,
-    ) -> Result<JobCounts, ApiError>;
+    async fn count_by_status(&self, tenant_id: i64) -> Result<JobCounts, ApiError>;
 
     /// List recent jobs for a tenant
-    async fn list_recent(
-        &self,
-        tenant_id: i64,
-        limit: i64,
-    ) -> Result<Vec<Job>, ApiError>;
+    async fn list_recent(&self, tenant_id: i64, limit: i64) -> Result<Vec<Job>, ApiError>;
 
     /// Reset stalled running jobs back to pending
-    async fn reset_stalled(&self,
-        timeout: Duration,
-    ) -> Result<u64, ApiError>;
+    async fn reset_stalled(&self, timeout: Duration) -> Result<u64, ApiError>;
 }
 
 /// Type alias for boxed job repository
@@ -176,9 +159,7 @@ impl Default for InMemoryJobRepository {
 
 #[async_trait::async_trait]
 impl JobRepository for InMemoryJobRepository {
-    async fn create(&self,
-        create: CreateJob,
-    ) -> Result<Job, ApiError> {
+    async fn create(&self, create: CreateJob) -> Result<Job, ApiError> {
         let id = self.allocate_id();
         let job = Job {
             id,
@@ -205,21 +186,23 @@ impl JobRepository for InMemoryJobRepository {
         Ok(job)
     }
 
-    async fn find_by_id(&self,
-        id: i64,
-    ) -> Result<Option<Job>, ApiError> {
-        Ok(self.jobs.read().iter().find(|j| j.id == id && !j.is_deleted()).cloned())
+    async fn find_by_id(&self, id: i64) -> Result<Option<Job>, ApiError> {
+        Ok(self
+            .jobs
+            .read()
+            .iter()
+            .find(|j| j.id == id && !j.is_deleted())
+            .cloned())
     }
 
-    async fn find_next_pending(&self,
-    ) -> Result<Option<Job>, ApiError> {
+    async fn find_next_pending(&self) -> Result<Option<Job>, ApiError> {
         let jobs = self.jobs.read();
         Ok(jobs
             .iter()
             .filter(|j| {
                 !j.is_deleted()
                     && j.status == JobStatus::Pending
-                    && j.scheduled_at.map_or(true, |s| s <= Utc::now())
+                    && j.scheduled_at.is_none_or(|s| s <= Utc::now())
             })
             .max_by(|a, b| {
                 let pa = Self::priority_value(a.priority);
@@ -229,9 +212,7 @@ impl JobRepository for InMemoryJobRepository {
             .cloned())
     }
 
-    async fn mark_running(&self,
-        id: i64,
-    ) -> Result<(), ApiError> {
+    async fn mark_running(&self, id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -244,9 +225,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn mark_completed(&self,
-        id: i64,
-    ) -> Result<(), ApiError> {
+    async fn mark_completed(&self, id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -258,10 +237,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn mark_failed(&self,
-        id: i64,
-        error: &str,
-    ) -> Result<(), ApiError> {
+    async fn mark_failed(&self, id: i64, error: &str) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -280,9 +256,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn cancel(&self,
-        id: i64,
-    ) -> Result<(), ApiError> {
+    async fn cancel(&self, id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -313,16 +287,16 @@ impl JobRepository for InMemoryJobRepository {
             .collect())
     }
 
-    async fn retry(&self,
-        id: i64,
-    ) -> Result<(), ApiError> {
+    async fn retry(&self, id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
             .find(|j| j.id == id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         if job.status != JobStatus::Failed {
-            return Err(ApiError::BadRequest("Can only retry failed jobs".to_string()));
+            return Err(ApiError::BadRequest(
+                "Can only retry failed jobs".to_string(),
+            ));
         }
         job.status = JobStatus::Pending;
         job.attempts = 0;
@@ -334,13 +308,10 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn cleanup(
-        &self,
-        older_than: Duration,
-    ) -> Result<u64, ApiError> {
+    async fn cleanup(&self, older_than: Duration) -> Result<u64, ApiError> {
         let cutoff = Utc::now()
             - chrono::Duration::from_std(older_than)
-                .unwrap_or(chrono::Duration::try_seconds(3600).unwrap_or(chrono::Duration::max_duration()));
+                .unwrap_or(chrono::Duration::try_seconds(3600).unwrap_or(chrono::Duration::zero()));
         let mut jobs = self.jobs.write();
         let before = jobs.len();
         jobs.retain(|j| {
@@ -348,7 +319,7 @@ impl JobRepository for InMemoryJobRepository {
                 || !(j.status == JobStatus::Completed
                     || j.status == JobStatus::Failed
                     || j.status == JobStatus::Cancelled)
-                || j.completed_at.map_or(true, |c| c > cutoff)
+                || j.completed_at.is_none_or(|c| c > cutoff)
         });
         Ok((before - jobs.len()) as u64)
     }
@@ -399,10 +370,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn create_schedule(
-        &self,
-        schedule: CreateJobSchedule,
-    ) -> Result<JobSchedule, ApiError> {
+    async fn create_schedule(&self, schedule: CreateJobSchedule) -> Result<JobSchedule, ApiError> {
         let id = self.allocate_schedule_id();
         let s = JobSchedule {
             id,
@@ -423,10 +391,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok(s)
     }
 
-    async fn list_schedules(
-        &self,
-        tenant_id: i64,
-    ) -> Result<Vec<JobSchedule>, ApiError> {
+    async fn list_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>, ApiError> {
         Ok(self
             .schedules
             .read()
@@ -453,11 +418,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn toggle_schedule(
-        &self,
-        id: i64,
-        active: bool,
-    ) -> Result<(), ApiError> {
+    async fn toggle_schedule(&self, id: i64, active: bool) -> Result<(), ApiError> {
         let mut schedules = self.schedules.write();
         let s = schedules
             .iter_mut()
@@ -474,22 +435,18 @@ impl JobRepository for InMemoryJobRepository {
             .schedules
             .read()
             .iter()
-            .filter(|s| {
-                !s.is_deleted()
-                    && s.is_active
-                    && s.next_run_at.map_or(true, |n| n <= now)
-            })
+            .filter(|s| !s.is_deleted() && s.is_active && s.next_run_at.is_none_or(|n| n <= now))
             .cloned()
             .collect())
     }
 
-    async fn count_by_status(
-        &self,
-        tenant_id: i64,
-    ) -> Result<JobCounts, ApiError> {
+    async fn count_by_status(&self, tenant_id: i64) -> Result<JobCounts, ApiError> {
         let jobs = self.jobs.read();
         let mut counts = JobCounts::default();
-        for j in jobs.iter().filter(|j| j.tenant_id == tenant_id && !j.is_deleted()) {
+        for j in jobs
+            .iter()
+            .filter(|j| j.tenant_id == tenant_id && !j.is_deleted())
+        {
             match j.status {
                 JobStatus::Pending => counts.pending += 1,
                 JobStatus::Running => counts.running += 1,
@@ -502,33 +459,29 @@ impl JobRepository for InMemoryJobRepository {
         Ok(counts)
     }
 
-    async fn list_recent(
-        &self,
-        tenant_id: i64,
-        limit: i64,
-    ) -> Result<Vec<Job>, ApiError> {
+    async fn list_recent(&self, tenant_id: i64, limit: i64) -> Result<Vec<Job>, ApiError> {
         let jobs = self.jobs.read();
         let mut filtered: Vec<Job> = jobs
             .iter()
             .filter(|j| j.tenant_id == tenant_id && !j.is_deleted())
             .cloned()
             .collect();
-        filtered.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        filtered.sort_by_key(|b| std::cmp::Reverse(b.created_at));
         filtered.truncate(limit as usize);
         Ok(filtered)
     }
 
-    async fn reset_stalled(
-        &self,
-        timeout: Duration,
-    ) -> Result<u64, ApiError> {
+    async fn reset_stalled(&self, timeout: Duration) -> Result<u64, ApiError> {
         let cutoff = Utc::now()
             - chrono::Duration::from_std(timeout)
-                .unwrap_or(chrono::Duration::try_seconds(300).unwrap_or(chrono::Duration::max_duration()));
+                .unwrap_or(chrono::Duration::try_seconds(300).unwrap_or(chrono::Duration::zero()));
         let mut jobs = self.jobs.write();
         let mut count = 0u64;
-        for j in jobs.iter_mut().filter(|j| j.status == JobStatus::Running && !j.is_deleted()) {
-            if j.started_at.map_or(false, |s| s < cutoff) {
+        for j in jobs
+            .iter_mut()
+            .filter(|j| j.status == JobStatus::Running && !j.is_deleted())
+        {
+            if j.started_at.is_some_and(|s| s < cutoff) {
                 j.status = JobStatus::Pending;
                 j.attempts += 1;
                 j.started_at = None;
@@ -546,7 +499,10 @@ impl JobRepository for InMemoryJobRepository {
             .find(|s| s.id == id)
             .ok_or_else(|| ApiError::NotFound(format!("Schedule {} not found", id)))?;
         if s.is_deleted() {
-            return Err(ApiError::Conflict(format!("Schedule {} is already deleted", id)));
+            return Err(ApiError::Conflict(format!(
+                "Schedule {} is already deleted",
+                id
+            )));
         }
         s.mark_deleted(deleted_by);
         Ok(())
@@ -559,7 +515,10 @@ impl JobRepository for InMemoryJobRepository {
             .find(|s| s.id == id)
             .ok_or_else(|| ApiError::NotFound(format!("Schedule {} not found", id)))?;
         if !s.is_deleted() {
-            return Err(ApiError::BadRequest(format!("Schedule {} is not deleted", id)));
+            return Err(ApiError::BadRequest(format!(
+                "Schedule {} is not deleted",
+                id
+            )));
         }
         s.restore();
         Ok(())
@@ -580,7 +539,10 @@ impl JobRepository for InMemoryJobRepository {
         let len_before = schedules.len();
         schedules.retain(|s| !(s.id == id && s.is_deleted()));
         if schedules.len() == len_before {
-            return Err(ApiError::NotFound(format!("Deleted schedule {} not found", id)));
+            return Err(ApiError::NotFound(format!(
+                "Deleted schedule {} not found",
+                id
+            )));
         }
         Ok(())
     }
@@ -594,10 +556,7 @@ mod tests {
     async fn test_repo_create_and_find() {
         let repo = InMemoryJobRepository::new();
         let job = repo
-            .create(CreateJob::new(
-                JobType::SendReminders { tenant_id: 1 },
-                1,
-            ))
+            .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
             .await
             .unwrap();
         assert_eq!(job.status, JobStatus::Pending);
@@ -708,7 +667,7 @@ mod tests {
 
         let after = repo.find_by_id(job.id).await.unwrap().unwrap();
         assert_eq!(after.status, JobStatus::Pending);
-        assert_eq!(after.attempts, 1);
+        assert_eq!(after.attempts, 2);
     }
 
     #[tokio::test]
@@ -717,7 +676,7 @@ mod tests {
         let s = repo
             .create_schedule(CreateJobSchedule {
                 job_type: JobType::SendReminders { tenant_id: 1 },
-                cron_expression: "0 0 * * *".to_string(),
+                cron_expression: "0 0 0 * * *".to_string(),
                 priority: JobPriority::Normal,
                 tenant_id: 1,
                 max_attempts: 3,

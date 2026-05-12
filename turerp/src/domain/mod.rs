@@ -23,6 +23,7 @@ pub mod file;
 pub mod forecasting;
 pub mod hr;
 pub mod invoice;
+pub mod job;
 pub mod manufacturing;
 pub mod mfa;
 pub mod notification;
@@ -346,6 +347,13 @@ pub use document::repository::{
     BoxDocumentRepository, DocumentRepository, InMemoryDocumentRepository,
 };
 pub use document::service::DocumentService;
+
+// Job module re-exports
+pub use job::model::{
+    CreateJob, CreateJobSchedule, Job, JobCounts, JobPriority, JobSchedule, JobStatus, JobType,
+};
+pub use job::repository::{BoxJobRepository, InMemoryJobRepository, JobRepository};
+pub use job::service::JobService;
 
 // Test: is file module visible?
 pub type __TestFileVisibility = crate::domain::file::model::FileRecord;
