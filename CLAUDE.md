@@ -346,12 +346,14 @@ let user = repo.find_by_id(id).await.unwrap();
 
 ## Build & Test
 
+- ALWAYS run `cargo clean` before building — the `target/` directory grows unbounded and can reach 100+ GB
 - ALWAYS run tests after code changes
 - ALWAYS verify build succeeds before committing
 
 ```bash
-cargo test
-cargo clippy -- -D warnings
+# Clean + build workflow (mandatory)
+cargo clean && cargo test
+cargo clean && cargo clippy -- -D warnings
 cargo fmt --check
 ```
 
