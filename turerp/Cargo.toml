@@ -61,6 +61,9 @@ async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
 
+# Secrets management (HashiCorp Vault)
+vaultrs = "0.7"
+
 # Redis caching
 redis = { version = "0.27", features = ["tokio-comp"] }
 

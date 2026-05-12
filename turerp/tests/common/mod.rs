@@ -96,6 +96,7 @@ pub fn build_test_app(
     let jwt = create_test_jwt_service();
     App::new()
         .wrap(JwtAuthMiddleware::new(jwt))
+        .app_data(web::Data::new(state.clone()))
         .app_data(state.auth.auth_service.clone())
         .app_data(state.auth.user_service.clone())
         .app_data(state.auth.jwt_service.clone())

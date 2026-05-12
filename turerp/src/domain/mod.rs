@@ -26,6 +26,7 @@ pub mod invoice;
 pub mod manufacturing;
 pub mod mfa;
 pub mod notification;
+pub mod observability;
 pub mod product;
 pub mod project;
 pub mod purchase;

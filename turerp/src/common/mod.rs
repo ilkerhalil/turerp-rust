@@ -21,6 +21,7 @@ pub mod retry;
 pub mod s3_storage;
 pub mod search;
 pub mod search_postgres;
+pub mod secrets;
 pub mod soft_delete;
 pub mod tracing_mod;
 
@@ -80,6 +81,10 @@ pub use search::{
 };
 #[cfg(feature = "postgres")]
 pub use search_postgres::PostgresSearchService;
+pub use secrets::{
+    BoxSecretsService, CachedSecretsService, ChainedSecretsService, EnvFallbackSecretsService,
+    SecretsService, VaultSecretsService,
+};
 pub use soft_delete::{SoftDeletable, SoftDeleteMeta};
 pub use tracing_mod::{
     BoxTracingService, InMemoryTracingService, SpanStatus, TraceContext, TraceQuery, TraceSpan,

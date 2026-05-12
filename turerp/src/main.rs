@@ -22,18 +22,18 @@ use turerp::api::{
     v1_feature_flags_configure, v1_files_configure, v1_forecasting_configure,
     v1_goods_receipts_configure, v1_hr_configure, v1_import_configure, v1_invoice_configure,
     v1_jobs_configure, v1_manufacturing_configure, v1_mfa_configure, v1_notifications_configure,
-    v1_product_variants_configure, v1_project_configure, v1_purchase_orders_configure,
-    v1_purchase_requests_configure, v1_rate_limits_configure, v1_reports_configure,
-    v1_resilience_configure, v1_sales_configure, v1_search_configure, v1_settings_configure,
-    v1_shifts_configure, v1_stock_configure, v1_subscriptions_configure, v1_tax_configure,
-    v1_tenant_configure, v1_users_configure, v1_webhooks_configure, v1_workflows_configure, ApiDoc,
+    v1_observability_configure, v1_product_variants_configure, v1_project_configure,
+    v1_purchase_orders_configure, v1_purchase_requests_configure, v1_rate_limits_configure,
+    v1_reports_configure, v1_resilience_configure, v1_sales_configure, v1_search_configure,
+    v1_settings_configure, v1_shifts_configure, v1_stock_configure, v1_subscriptions_configure,
+    v1_tax_configure, v1_tenant_configure, v1_users_configure, v1_webhooks_configure,
+    v1_workflows_configure, ApiDoc,
 };
 use turerp::middleware::audit::{AuditEvent, AUDIT_CHANNEL_CAPACITY};
 use turerp::setup_logging;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-#[cfg(feature = "postgres")]
 use turerp::app::AppState;
 
 /// Liveness probe - always returns 200 if the process is running
@@ -45,61 +45,91 @@ async fn health_live() -> actix_web::Result<actix_web::HttpResponse> {
     })))
 }
 
-/// Readiness probe (in-memory mode) - always ready
+/// Readiness probe - checks database and cache connectivity
 #[cfg(not(feature = "postgres"))]
-async fn health_ready() -> actix_web::Result<actix_web::HttpResponse> {
-    Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
-        "status": "ok",
-        "service": "turerp-erp",
-        "version": env!("CARGO_PKG_VERSION"),
-        "storage": "in-memory"
-    })))
-}
-
-/// Readiness probe (PostgreSQL mode) - checks database connectivity
-#[cfg(feature = "postgres")]
 async fn health_ready(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
-    let pool: &sqlx::PgPool = app_state.infra.db_pool.as_ref();
+    let cache = app_state.infra.cache_service.get_ref();
+    let cache_result = cache.health_check().await;
 
-    let start = std::time::Instant::now();
-    let db_result = sqlx::query("SELECT 1").execute(pool).await;
-    let latency_ms = start.elapsed().as_millis();
-
-    match db_result {
+    match cache_result {
         Ok(_) => Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
             "status": "ok",
             "service": "turerp-erp",
             "version": env!("CARGO_PKG_VERSION"),
-            "storage": "postgresql",
-            "database": "healthy",
-            "latency_ms": latency_ms
+            "storage": "in-memory",
+            "cache": "healthy"
         }))),
         Err(e) => {
-            tracing::error!("Database health check failed: {}", e);
+            tracing::error!("Cache health check failed: {}", e);
             Ok(
                 actix_web::HttpResponse::ServiceUnavailable().json(serde_json::json!({
                     "status": "unhealthy",
                     "service": "turerp-erp",
                     "version": env!("CARGO_PKG_VERSION"),
-                    "storage": "postgresql",
-                    "database": "unhealthy",
-                    "latency_ms": latency_ms
+                    "storage": "in-memory",
+                    "cache": "unhealthy"
                 })),
             )
         }
     }
 }
 
-/// Backwards-compatible health check endpoint (aliases to readiness)
-#[cfg(not(feature = "postgres"))]
-async fn health_check() -> actix_web::Result<actix_web::HttpResponse> {
-    health_ready().await
+/// Readiness probe (PostgreSQL mode) - checks database and cache connectivity
+#[cfg(feature = "postgres")]
+async fn health_ready(
+    app_state: web::Data<AppState>,
+) -> actix_web::Result<actix_web::HttpResponse> {
+    let pool: &sqlx::PgPool = app_state.infra.db_pool.as_ref();
+
+    let db_start = std::time::Instant::now();
+    let db_result = sqlx::query("SELECT 1").execute(pool).await;
+    let db_latency_ms = db_start.elapsed().as_millis();
+
+    let cache = app_state.infra.cache_service.get_ref();
+    let cache_start = std::time::Instant::now();
+    let cache_result = cache.health_check().await;
+    let cache_latency_ms = cache_start.elapsed().as_millis();
+
+    let db_healthy = db_result.is_ok();
+    let cache_healthy = cache_result.is_ok();
+
+    if !db_healthy {
+        tracing::error!("Database health check failed: {:?}", db_result.unwrap_err());
+    }
+    if !cache_healthy {
+        tracing::error!("Cache health check failed: {:?}", cache_result.unwrap_err());
+    }
+
+    if db_healthy && cache_healthy {
+        Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
+            "status": "ok",
+            "service": "turerp-erp",
+            "version": env!("CARGO_PKG_VERSION"),
+            "storage": "postgresql",
+            "database": "healthy",
+            "database_latency_ms": db_latency_ms,
+            "cache": "healthy",
+            "cache_latency_ms": cache_latency_ms
+        })))
+    } else {
+        Ok(
+            actix_web::HttpResponse::ServiceUnavailable().json(serde_json::json!({
+                "status": "unhealthy",
+                "service": "turerp-erp",
+                "version": env!("CARGO_PKG_VERSION"),
+                "storage": "postgresql",
+                "database": if db_healthy { "healthy" } else { "unhealthy" },
+                "database_latency_ms": db_latency_ms,
+                "cache": if cache_healthy { "healthy" } else { "unhealthy" },
+                "cache_latency_ms": cache_latency_ms
+            })),
+        )
+    }
 }
 
 /// Backwards-compatible health check endpoint (aliases to readiness)
-#[cfg(feature = "postgres")]
 async fn health_check(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
@@ -151,6 +181,61 @@ fn configure_cors(cors_config: &turerp::config::CorsConfig) -> Cors {
     cors
 }
 
+/// Parse Prometheus text-format metrics into a simple key-value map.
+/// Extracts availability, error_rate, latency_p95, and throughput estimates.
+fn parse_prometheus_metrics(text: &str) -> std::collections::HashMap<String, f64> {
+    let mut metrics = std::collections::HashMap::new();
+    let mut total_requests = 0u64;
+    let mut error_requests = 0u64;
+    let mut latency_sum = 0.0;
+    let mut latency_count = 0u64;
+
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        // Parse counter lines: metric_name{labels} value
+        if let Some(value_str) = line.rsplit(' ').next() {
+            if let Ok(value) = value_str.parse::<f64>() {
+                if line.starts_with("http_requests_total{") {
+                    total_requests += value as u64;
+                    if line.contains("status=\"5") {
+                        error_requests += value as u64;
+                    }
+                } else if line.starts_with("http_request_duration_seconds_sum{") {
+                    latency_sum += value;
+                } else if line.starts_with("http_request_duration_seconds_count{") {
+                    latency_count += value as u64;
+                }
+            }
+        }
+    }
+
+    if total_requests > 0 {
+        metrics.insert(
+            "availability".to_string(),
+            (total_requests.saturating_sub(error_requests)) as f64 / total_requests as f64,
+        );
+        metrics.insert(
+            "error_rate".to_string(),
+            error_requests as f64 / total_requests as f64,
+        );
+    }
+
+    if latency_count > 0 {
+        metrics.insert(
+            "latency_p95".to_string(),
+            latency_sum / latency_count as f64,
+        );
+    }
+
+    metrics.insert("throughput".to_string(), total_requests as f64);
+
+    metrics
+}
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Setup logging
@@ -169,10 +254,35 @@ async fn main() -> std::io::Result<()> {
     }
 
     // Load configuration
-    let config = Config::new().unwrap_or_else(|e| {
+    let mut config = Config::new().unwrap_or_else(|e| {
         tracing::warn!("Failed to load config from env: {}, using defaults", e);
         Config::default()
     });
+
+    // Resolve secrets from Vault if enabled
+    if config.secrets.vault_enabled {
+        match turerp::common::secrets::VaultSecretsService::new(
+            &config.secrets.vault_addr,
+            &config.secrets.vault_token,
+            &config.secrets.vault_mount,
+        )
+        .await
+        {
+            Ok(vault) => {
+                if let Err(e) = config.resolve_secrets(&vault).await {
+                    tracing::warn!("Failed to resolve secrets from Vault: {}", e);
+                } else {
+                    tracing::info!(
+                        "Secrets resolved from Vault at {}",
+                        config.secrets.vault_addr
+                    );
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to connect to Vault: {}", e);
+            }
+        }
+    }
 
     // Validate configuration (logs warnings for production issues)
     if let Err(e) = config.validate() {
@@ -220,6 +330,61 @@ async fn main() -> std::io::Result<()> {
     );
     job_executor.start().await;
 
+    // Start background observability evaluator (alert rules + SLI collection)
+    {
+        let observability_service = app_state.observability_service.get_ref().clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+            loop {
+                interval.tick().await;
+
+                // Parse Prometheus metrics for alert evaluation
+                let metrics_text = turerp::middleware::render_metrics();
+                let metrics = parse_prometheus_metrics(&metrics_text);
+
+                if let Err(e) = observability_service.evaluate_alert_rules(&metrics).await {
+                    tracing::warn!("Background alert evaluation failed: {}", e);
+                }
+
+                // Record automatic SLI measurements
+                if let Some(availability) = metrics.get("availability") {
+                    if let Err(e) = observability_service
+                        .record_sli("availability".to_string(), *availability)
+                        .await
+                    {
+                        tracing::debug!("Failed to record availability SLI: {}", e);
+                    }
+                }
+                if let Some(error_rate) = metrics.get("error_rate") {
+                    if let Err(e) = observability_service
+                        .record_sli("error_rate".to_string(), *error_rate)
+                        .await
+                    {
+                        tracing::debug!("Failed to record error_rate SLI: {}", e);
+                    }
+                }
+                if let Some(latency) = metrics.get("latency_p95") {
+                    if let Err(e) = observability_service
+                        .record_sli("latency_p95".to_string(), *latency)
+                        .await
+                    {
+                        tracing::debug!("Failed to record latency SLI: {}", e);
+                    }
+                }
+                if let Some(throughput) = metrics.get("throughput") {
+                    if let Err(e) = observability_service
+                        .record_sli("throughput".to_string(), *throughput)
+                        .await
+                    {
+                        tracing::debug!("Failed to record throughput SLI: {}", e);
+                    }
+                }
+            }
+        });
+    }
+
     // Build rate-limit middleware with shared stats store so the dashboard can read them
     let rate_limit_middleware = {
         let stats_store = app_state.infra.rate_limit_stats.get_ref().clone();
@@ -257,6 +422,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(MetricsMiddleware::new()) // Metrics collection
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
             .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
+            .app_data(web::Data::new(app_state.clone())) // Full AppState for health probes
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
             .app_data(app_state.auth.auth_service.clone())
             .app_data(app_state.auth.user_service.clone())
@@ -287,6 +453,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.infra.notification_service.clone())
             .app_data(app_state.infra.report_engine.clone())
             .app_data(app_state.analytics.forecasting_service.clone())
+            .app_data(app_state.observability_service.clone())
             .app_data(app_state.hr.shift_service.clone())
             .app_data(app_state.infra.tracing_service.clone())
             .app_data(app_state.infra.db_router.clone())
@@ -324,6 +491,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(MetricsMiddleware::new()) // Metrics collection
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
             .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
+            .app_data(web::Data::new(app_state.clone())) // Full AppState for health probes
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
             .app_data(app_state.auth.auth_service.clone())
             .app_data(app_state.auth.user_service.clone())
@@ -354,6 +522,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.infra.notification_service.clone())
             .app_data(app_state.infra.report_engine.clone())
             .app_data(app_state.analytics.forecasting_service.clone())
+            .app_data(app_state.observability_service.clone())
             .app_data(app_state.hr.shift_service.clone())
             .app_data(app_state.infra.tracing_service.clone())
             .app_data(app_state.infra.db_router.clone())
@@ -417,6 +586,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_api_keys_configure)
                     .configure(v1_jobs_configure)
                     .configure(v1_notifications_configure)
+                    .configure(v1_observability_configure)
                     .configure(v1_reports_configure)
                     .configure(v1_events_configure)
                     .configure(v1_search_configure)

@@ -39,6 +39,9 @@ pub trait CacheService: Send + Sync {
 
     /// Check if caching is enabled
     fn is_enabled(&self) -> bool;
+
+    /// Health check - verify cache connectivity
+    async fn health_check(&self) -> Result<(), ApiError>;
 }
 
 /// Helper: serialize a value to JSON and cache it
@@ -113,6 +116,10 @@ impl CacheService for NoopCacheService {
 
     fn is_enabled(&self) -> bool {
         false
+    }
+
+    async fn health_check(&self) -> Result<(), ApiError> {
+        Ok(())
     }
 }
 
