@@ -13570,6 +13570,618 @@
         ]
       }
     },
+    "/api/v1/observability/alert-rules": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "List alert rules",
+        "operationId": "list_alert_rules",
+        "responses": {
+          "200": {
+            "description": "List of alert rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.observability.model.AlertRule"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Create an alert rule",
+        "operationId": "create_alert_rule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAlertRuleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Alert rule created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.observability.model.AlertRule"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/alert-rules/{id}": {
+      "delete": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Delete an alert rule",
+        "operationId": "delete_alert_rule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Alert rule ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Alert rule deleted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/alerts": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "List recent alerts",
+        "operationId": "list_alerts",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Max alerts to return",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of alerts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.observability.model.Alert"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/alerts/evaluate": {
+      "post": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Evaluate alert rules",
+        "operationId": "evaluate_alerts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvaluateAlertsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Alerts evaluated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.observability.model.Alert"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/alerts/{id}/resolve": {
+      "post": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Resolve an alert",
+        "operationId": "resolve_alert",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Alert ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Alert resolved"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/dashboard": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Get observability dashboard summary",
+        "operationId": "get_dashboard",
+        "responses": {
+          "200": {
+            "description": "Dashboard summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.observability.service.DashboardSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/health": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Health check endpoint",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "System health summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.observability.model.SystemHealthSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/observability/health/live": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Liveness probe",
+        "operationId": "health_live",
+        "responses": {
+          "200": {
+            "description": "Liveness status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.observability.model.SystemHealthSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/observability/health/ready": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Readiness probe",
+        "operationId": "health_ready",
+        "responses": {
+          "200": {
+            "description": "Readiness status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.observability.model.SystemHealthSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/observability/slis": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "List SLIs",
+        "operationId": "list_slis",
+        "responses": {
+          "200": {
+            "description": "List of SLIs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.observability.model.SliDefinition"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Create an SLI",
+        "operationId": "create_sli",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSliRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "SLI created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.observability.model.SliDefinition"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/slis/{sli_id}/measurements": {
+      "post": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Record an SLI measurement",
+        "operationId": "record_sli",
+        "parameters": [
+          {
+            "name": "sli_id",
+            "in": "path",
+            "description": "SLI ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "text/plain": {
+              "schema": {
+                "type": "number",
+                "format": "double"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Measurement recorded"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/slos": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "List SLOs",
+        "operationId": "list_slos",
+        "responses": {
+          "200": {
+            "description": "List of SLOs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.observability.model.SloDefinition"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Create an SLO",
+        "operationId": "create_slo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSloRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "SLO created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.observability.model.SloDefinition"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/slos/compliance": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Get SLO compliance",
+        "operationId": "get_slo_compliance",
+        "responses": {
+          "200": {
+            "description": "SLO compliance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.observability.model.SloCompliance"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/slos/compliance/evaluate": {
+      "post": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Evaluate SLO compliance",
+        "operationId": "evaluate_slo_compliance",
+        "responses": {
+          "200": {
+            "description": "SLO compliance evaluated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.observability.model.SloCompliance"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/observability/sparklines/{metric}": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Get sparkline data for a metric",
+        "operationId": "get_sparkline",
+        "parameters": [
+          {
+            "name": "metric",
+            "in": "path",
+            "description": "Metric name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minutes",
+            "in": "query",
+            "description": "Time window in minutes",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sparkline data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/crate.domain.observability.model.SparklineDataPoint"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/products": {
       "get": {
         "tags": [
@@ -21835,6 +22447,119 @@
           }
         }
       },
+      "Alert": {
+        "type": "object",
+        "description": "Alert instance",
+        "required": [
+          "id",
+          "rule_id",
+          "rule_name",
+          "severity",
+          "state",
+          "message",
+          "value",
+          "fired_at"
+        ],
+        "properties": {
+          "fired_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "resolved_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "rule_id": {
+            "type": "string"
+          },
+          "rule_name": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity"
+          },
+          "state": {
+            "$ref": "#/components/schemas/AlertState"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "AlertRule": {
+        "type": "object",
+        "description": "Alert rule definition",
+        "required": [
+          "id",
+          "name",
+          "metric",
+          "condition",
+          "threshold",
+          "severity",
+          "duration_sec",
+          "enabled",
+          "created_at"
+        ],
+        "properties": {
+          "condition": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "duration_sec": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity"
+          },
+          "threshold": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "AlertSeverity": {
+        "type": "string",
+        "description": "Alert severity",
+        "enum": [
+          "Info",
+          "Warning",
+          "Critical"
+        ]
+      },
+      "AlertState": {
+        "type": "string",
+        "description": "Alert state",
+        "enum": [
+          "Firing",
+          "Resolved",
+          "Silenced"
+        ]
+      },
       "AllocationResponse": {
         "type": "object",
         "description": "Allocation response",
@@ -23564,6 +24289,40 @@
           "Profit"
         ]
       },
+      "CreateAlertRuleRequest": {
+        "type": "object",
+        "description": "Create alert rule request",
+        "required": [
+          "name",
+          "metric",
+          "condition",
+          "threshold",
+          "severity",
+          "duration_sec"
+        ],
+        "properties": {
+          "condition": {
+            "type": "string"
+          },
+          "duration_sec": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "severity": {
+            "$ref": "#/components/schemas/AlertSeverity"
+          },
+          "threshold": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
       "CreateAllocation": {
         "type": "object",
         "description": "Create a new cost center allocation",
@@ -24169,6 +24928,62 @@
           }
         }
       },
+      "CreateSliRequest": {
+        "type": "object",
+        "description": "Create SLI request",
+        "required": [
+          "name",
+          "metric_type",
+          "source",
+          "window_minutes"
+        ],
+        "properties": {
+          "metric_type": {
+            "$ref": "#/components/schemas/SliMetricType"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "window_minutes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreateSloRequest": {
+        "type": "object",
+        "description": "Create SLO request",
+        "required": [
+          "name",
+          "sli_id",
+          "target_value",
+          "error_budget",
+          "window_days"
+        ],
+        "properties": {
+          "error_budget": {
+            "type": "number",
+            "format": "double"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sli_id": {
+            "type": "string"
+          },
+          "target_value": {
+            "type": "number",
+            "format": "double"
+          },
+          "window_days": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "CreateSubscription": {
         "type": "object",
         "description": "Data for creating a subscription",
@@ -24569,6 +25384,39 @@
           }
         }
       },
+      "DashboardSummary": {
+        "type": "object",
+        "description": "Dashboard summary response",
+        "required": [
+          "slo_compliance",
+          "recent_alerts",
+          "health_history",
+          "generated_at"
+        ],
+        "properties": {
+          "generated_at": {
+            "$ref": "#/components/schemas/chrono.DateTime"
+          },
+          "health_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HealthCheckResult"
+            }
+          },
+          "recent_alerts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Alert"
+            }
+          },
+          "slo_compliance": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SloCompliance"
+            }
+          }
+        }
+      },
       "DashboardWidgetConfig": {
         "type": "object",
         "description": "Dashboard widget configuration",
@@ -24872,6 +25720,22 @@
         "properties": {
           "error": {
             "type": "string"
+          }
+        }
+      },
+      "EvaluateAlertsRequest": {
+        "type": "object",
+        "description": "Evaluate alerts request",
+        "required": [
+          "metrics"
+        ],
+        "properties": {
+          "metrics": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number",
+              "format": "double"
+            }
           }
         }
       },
@@ -25325,6 +26189,45 @@
           "Partial",
           "Completed",
           "Cancelled"
+        ]
+      },
+      "HealthCheckResult": {
+        "type": "object",
+        "description": "Result of a single health check probe",
+        "required": [
+          "component",
+          "status",
+          "latency_ms",
+          "checked_at"
+        ],
+        "properties": {
+          "checked_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "component": {
+            "type": "string"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/HealthStatus"
+          }
+        }
+      },
+      "HealthStatus": {
+        "type": "string",
+        "description": "Overall health status of a component",
+        "enum": [
+          "Healthy",
+          "Degraded",
+          "Unhealthy"
         ]
       },
       "ImportBankStatement": {
@@ -27055,6 +27958,161 @@
           "Custom"
         ]
       },
+      "SliDefinition": {
+        "type": "object",
+        "description": "Definition of a Service Level Indicator",
+        "required": [
+          "id",
+          "name",
+          "metric_type",
+          "source",
+          "window_minutes",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "string"
+          },
+          "metric_type": {
+            "$ref": "#/components/schemas/SliMetricType"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "window_minutes": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SliMetricType": {
+        "type": "string",
+        "description": "SLI metric type",
+        "enum": [
+          "Availability",
+          "Latency",
+          "ErrorRate",
+          "Throughput",
+          "InvoiceCreationLatency",
+          "PaymentSuccessRate",
+          "StockUpdateLatency",
+          "SalesOrderThroughput"
+        ]
+      },
+      "SloCompliance": {
+        "type": "object",
+        "description": "SLO compliance report",
+        "required": [
+          "slo_id",
+          "slo_name",
+          "current_value",
+          "target_value",
+          "status",
+          "error_budget_remaining",
+          "measured_at"
+        ],
+        "properties": {
+          "current_value": {
+            "type": "number",
+            "format": "double"
+          },
+          "error_budget_remaining": {
+            "type": "number",
+            "format": "double"
+          },
+          "measured_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "slo_id": {
+            "type": "string"
+          },
+          "slo_name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SloStatus"
+          },
+          "target_value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "SloDefinition": {
+        "type": "object",
+        "description": "Definition of a Service Level Objective",
+        "required": [
+          "id",
+          "name",
+          "sli_id",
+          "target_value",
+          "target_operator",
+          "error_budget",
+          "window_days",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "error_budget": {
+            "type": "number",
+            "format": "double"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sli_id": {
+            "type": "string"
+          },
+          "target_operator": {
+            "$ref": "#/components/schemas/SloTarget"
+          },
+          "target_value": {
+            "type": "number",
+            "format": "double"
+          },
+          "window_days": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SloStatus": {
+        "type": "string",
+        "description": "SLO compliance status",
+        "enum": [
+          "Compliant",
+          "AtRisk",
+          "Breached"
+        ]
+      },
+      "SparklineDataPoint": {
+        "type": "object",
+        "description": "Sparkline data point for dashboard charts",
+        "required": [
+          "timestamp",
+          "value"
+        ],
+        "properties": {
+          "timestamp": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "value": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
       "StartWorkflowRequest": {
         "type": "object",
         "description": "Request body to start a workflow instance",
@@ -27616,6 +28674,33 @@
           "trial",
           "pastdue"
         ]
+      },
+      "SystemHealthSummary": {
+        "type": "object",
+        "description": "System-wide health summary",
+        "required": [
+          "overall",
+          "version",
+          "checks",
+          "checked_at"
+        ],
+        "properties": {
+          "checked_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HealthCheckResult"
+            }
+          },
+          "overall": {
+            "$ref": "#/components/schemas/HealthStatus"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
       },
       "TaxCalculationResult": {
         "type": "object",

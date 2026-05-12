@@ -176,6 +176,10 @@ impl CacheService for InMemoryCacheService {
     fn is_enabled(&self) -> bool {
         true
     }
+
+    async fn health_check(&self) -> Result<(), ApiError> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

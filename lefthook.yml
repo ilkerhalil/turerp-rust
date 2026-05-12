@@ -3,8 +3,12 @@
 
 # Pre-commit hooks run before each commit
 pre-commit:
-  parallel: true
   commands:
+    clean:
+      run: cargo clean
+      root: turerp/
+      fail_text: |
+        cargo clean failed. Check disk permissions.
     gen-openapi:
       run: cargo run --bin gen_openapi && git add openapi.json
       root: turerp/
@@ -25,6 +29,11 @@ pre-commit:
 # Pre-push hooks run before pushing to remote
 pre-push:
   commands:
+    clean:
+      run: cargo clean
+      root: turerp/
+      fail_text: |
+        cargo clean failed. Check disk permissions.
     test:
       run: cargo test --verbose
       root: turerp/

@@ -357,6 +357,16 @@ pub struct SecurityHeadersConfig {
     pub enabled: bool,
 }
 
+/// Secrets management configuration
+#[derive(Debug, Clone)]
+pub struct SecretsConfig {
+    pub vault_enabled: bool,
+    pub vault_addr: String,
+    pub vault_token: String,
+    pub vault_mount: String,
+    pub fallback_to_env: bool,
+}
+
 impl Default for SecurityHeadersConfig {
     fn default() -> Self {
         Self { enabled: true }
@@ -386,6 +396,7 @@ pub struct Config {
     pub localization: LocalizationConfig,
     pub cdc: CdcConfig,
     pub security_headers: SecurityHeadersConfig,
+    pub secrets: SecretsConfig,
 }
 
 impl Default for Config {
@@ -410,7 +421,36 @@ impl Default for Config {
             localization: LocalizationConfig::default(),
             cdc: CdcConfig::default(),
             security_headers: SecurityHeadersConfig::default(),
+            secrets: SecretsConfig::default(),
         }
+    }
+}
+
+impl SecretsConfig {
+    pub fn from_env() -> Self {
+        let vault_enabled = std::env::var("TURERP_VAULT_ENABLED")
+            .ok()
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+
+        Self {
+            vault_enabled,
+            vault_addr: std::env::var("TURERP_VAULT_ADDR")
+                .unwrap_or_else(|_| "http://127.0.0.1:8200".to_string()),
+            vault_token: std::env::var("TURERP_VAULT_TOKEN").unwrap_or_default(),
+            vault_mount: std::env::var("TURERP_VAULT_MOUNT")
+                .unwrap_or_else(|_| "secret".to_string()),
+            fallback_to_env: std::env::var("TURERP_VAULT_FALLBACK_TO_ENV")
+                .ok()
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(true),
+        }
+    }
+}
+
+impl Default for SecretsConfig {
+    fn default() -> Self {
+        Self::from_env()
     }
 }
 
@@ -468,6 +508,7 @@ impl Config {
         let localization = LocalizationConfig::from_env();
         let cdc = CdcConfig::from_env();
         let security_headers = SecurityHeadersConfig::from_env();
+        let secrets = SecretsConfig::from_env();
 
         Ok(Self {
             environment,
@@ -481,6 +522,7 @@ impl Config {
             localization,
             cdc,
             security_headers,
+            secrets,
         })
     }
 
@@ -550,6 +592,44 @@ impl Config {
     /// Check if running in development mode
     pub fn is_development(&self) -> bool {
         matches!(self.environment, Environment::Development)
+    }
+
+    /// Resolve secrets from Vault (or fallback to env) and update config fields
+    pub async fn resolve_secrets(
+        &mut self,
+        service: &dyn crate::common::secrets::SecretsService,
+    ) -> Result<(), ConfigError> {
+        // Database URL
+        if let Some(url) = service
+            .get_secret("turerp/database", "url")
+            .await
+            .map_err(|e| {
+                ConfigError::Message(format!("Failed to resolve database secret: {}", e))
+            })?
+        {
+            self.database.url = url;
+        }
+
+        // JWT secret
+        if let Some(secret) = service
+            .get_secret("turerp/jwt", "secret")
+            .await
+            .map_err(|e| ConfigError::Message(format!("Failed to resolve JWT secret: {}", e)))?
+        {
+            self.jwt.secret = secret;
+        }
+
+        // Redis URL (optional)
+        if let Some(url) = service
+            .get_secret("turerp/redis", "url")
+            .await
+            .ok()
+            .flatten()
+        {
+            self.redis.url = url;
+        }
+
+        Ok(())
     }
 }
 

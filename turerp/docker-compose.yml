@@ -51,6 +51,36 @@ services:
     networks:
       - turerp-network
 
+  # HashiCorp Vault (dev mode) for secrets management
+  vault:
+    image: hashicorp/vault:latest
+    container_name: turerp-vault
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: dev-token-only-for-local-dev
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - ./scripts/vault-init.sh:/vault-init.sh:ro
+    command: >
+      sh -c "
+        vault server -dev -dev-root-token-id=$${VAULT_DEV_ROOT_TOKEN_ID} -dev-listen-address=$${VAULT_DEV_LISTEN_ADDRESS} &
+        sleep 2
+        export VAULT_ADDR=http://127.0.0.1:8200
+        export VAULT_TOKEN=$${VAULT_DEV_ROOT_TOKEN_ID}
+        /vault-init.sh
+        wait
+      "
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - turerp-network
+
   # Development service
   dev:
     build:

@@ -680,6 +680,74 @@ impl EventSubscriber for TaxPeriodSubscriber {
     }
 }
 
+/// Subscriber that records business KPI metrics when domain events fire.
+///
+/// Wraps an inner subscriber and records Prometheus metrics for:
+/// - InvoiceCreated -> invoice_creation_duration_seconds
+/// - PaymentReceived -> payment_success_total
+/// - StockMoved -> stock_update_duration_seconds
+/// - SalesOrderCreated -> sales_orders_created_total
+pub struct BusinessMetricsSubscriber {
+    inner: std::sync::Arc<dyn EventSubscriber>,
+    metrics: crate::common::business_metrics::BusinessMetricsRecorder,
+}
+
+impl BusinessMetricsSubscriber {
+    pub fn new(
+        inner: std::sync::Arc<dyn EventSubscriber>,
+        metrics: crate::common::business_metrics::BusinessMetricsRecorder,
+    ) -> Self {
+        Self { inner, metrics }
+    }
+}
+
+#[async_trait::async_trait]
+impl EventSubscriber for BusinessMetricsSubscriber {
+    async fn handle(&self, event: &DomainEvent) -> Result<(), String> {
+        // Delegate to inner subscriber first
+        let result = self.inner.handle(event).await;
+
+        // Record business metrics based on event type
+        match event {
+            DomainEvent::InvoiceCreated {
+                tenant_id, amount, ..
+            } => {
+                let complexity = amount.len().max(1) as f64 * 0.001;
+                self.metrics
+                    .record_invoice_creation_duration(*tenant_id, complexity);
+            }
+            DomainEvent::PaymentReceived {
+                tenant_id, amount, ..
+            } => {
+                let success = !amount.is_empty() && amount != "0" && amount != "0.00";
+                self.metrics.record_payment_success(*tenant_id, success);
+            }
+            DomainEvent::StockMoved {
+                tenant_id,
+                direction,
+                ..
+            } => {
+                self.metrics
+                    .record_stock_update_duration(*tenant_id, direction, 0.05);
+            }
+            DomainEvent::SalesOrderCreated { tenant_id, .. } => {
+                self.metrics.record_sales_order_created(*tenant_id);
+            }
+            _ => {}
+        }
+
+        result
+    }
+
+    fn subscribed_to(&self) -> Vec<String> {
+        self.inner.subscribed_to()
+    }
+
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

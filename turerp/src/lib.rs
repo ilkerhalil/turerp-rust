@@ -90,6 +90,10 @@ pub mod app {
         BoxBillOfMaterialsRepository, BoxRoutingRepository, BoxWorkOrderRepository,
     };
     use crate::domain::manufacturing::service::ManufacturingService;
+    use crate::domain::observability::repository::{
+        BoxObservabilityRepository, InMemoryObservabilityRepository,
+    };
+    use crate::domain::observability::service::ObservabilityService;
     use crate::domain::product::repository::{
         BoxCategoryRepository, BoxProductRepository, BoxProductVariantRepository, BoxUnitRepository,
     };
@@ -277,6 +281,8 @@ pub mod app {
     #[cfg(feature = "postgres")]
     use crate::domain::mfa::postgres_repository::PostgresMfaRepository;
     #[cfg(feature = "postgres")]
+    use crate::domain::observability::postgres_repository::PostgresObservabilityRepository;
+    #[cfg(feature = "postgres")]
     use crate::domain::product::postgres_repository::{
         PostgresCategoryRepository, PostgresProductRepository, PostgresProductVariantRepository,
         PostgresUnitRepository,
@@ -443,6 +449,7 @@ pub mod app {
         pub custom_field_service: web::Data<CustomFieldService>,
         pub assets_service: web::Data<AssetsService>,
         pub feature_service: web::Data<FeatureFlagService>,
+        pub observability_service: web::Data<ObservabilityService>,
         pub i18n: web::Data<I18n>,
     }
 
@@ -748,6 +755,13 @@ pub mod app {
                 Arc::new(InMemoryDashboardRepository::new()) as BoxDashboardRepository;
             let dashboard_service = DashboardService::new(dashboard_repo, cache_service.clone());
 
+            // Observability
+            let observability_repo =
+                Arc::new(InMemoryObservabilityRepository::new()) as BoxObservabilityRepository;
+            let observability_service =
+                ObservabilityService::new(observability_repo, cache_service.clone())
+                    .with_notification(notification_service.clone());
+
             // Documents
             let document_repo =
                 Arc::new(InMemoryDocumentRepository::new()) as BoxDocumentRepository;
@@ -881,6 +895,7 @@ pub mod app {
                 custom_field_service,
                 assets_service,
                 feature_service,
+                observability_service,
             )
         }};
     }
@@ -903,7 +918,40 @@ pub mod app {
             custom_field_service,
             assets_service,
             feature_service,
+            observability_service,
         ) = create_in_memory_services!(config);
+
+        // Register business metrics subscribers on event bus
+        let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
+        futures::executor::block_on(async {
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::AccountingEntrySubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::StockDecrementSubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::TaxPeriodSubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
+        });
 
         let i18n = I18n::init();
 
@@ -922,6 +970,7 @@ pub mod app {
             custom_field_service: web::Data::new(custom_field_service),
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
+            observability_service: web::Data::new(observability_service),
             i18n: web::Data::new(i18n),
         }
     }
@@ -1245,6 +1294,33 @@ pub mod app {
             .await
             .ok();
 
+        // Register business metrics subscribers on event bus
+        let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
+        let _ = event_bus
+            .subscribe(Arc::new(
+                crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                    Arc::new(crate::common::AccountingEntrySubscriber),
+                    metrics_recorder.clone(),
+                ),
+            ))
+            .await;
+        let _ = event_bus
+            .subscribe(Arc::new(
+                crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                    Arc::new(crate::common::StockDecrementSubscriber),
+                    metrics_recorder.clone(),
+                ),
+            ))
+            .await;
+        let _ = event_bus
+            .subscribe(Arc::new(
+                crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                    Arc::new(crate::common::TaxPeriodSubscriber),
+                    metrics_recorder.clone(),
+                ),
+            ))
+            .await;
+
         // Search
         #[cfg(feature = "postgres")]
         let search_service: Arc<dyn SearchService> =
@@ -1256,6 +1332,12 @@ pub mod app {
         let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
 
         let i18n = I18n::init();
+
+        // Observability
+        let observability_repo = PostgresObservabilityRepository::new(pool.clone()).into_boxed();
+        let observability_service =
+            ObservabilityService::new(observability_repo, cache_service.clone())
+                .with_notification(notification_service.clone());
 
         let file_storage: Arc<dyn crate::common::file_storage::FileStorage> =
             Arc::new(crate::common::file_storage::LocalFileStorage::new(format!(
@@ -1355,6 +1437,7 @@ pub mod app {
             custom_field_service: web::Data::new(custom_field_service),
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
+            observability_service: web::Data::new(observability_service),
             i18n: web::Data::new(i18n),
         }
     }
@@ -1383,6 +1466,7 @@ pub mod app {
             custom_field_service,
             assets_service,
             feature_service,
+            observability_service,
         ) = create_in_memory_services!(config);
 
         // For in-memory testing with postgres feature, create a mock pool
@@ -1394,7 +1478,7 @@ pub mod app {
 
         // Register webhook subscriber on event bus
         let webhook_service_arc = Arc::new(integration.webhook_service.get_ref().clone());
-        tokio::runtime::Handle::current().block_on(async {
+        futures::executor::block_on(async {
             infra
                 .event_bus
                 .subscribe(Arc::new(
@@ -1402,6 +1486,36 @@ pub mod app {
                 ))
                 .await
                 .ok();
+
+            // Register business metrics subscribers on event bus
+            let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::AccountingEntrySubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::StockDecrementSubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::TaxPeriodSubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
         });
 
         let i18n = I18n::init();
@@ -1421,6 +1535,7 @@ pub mod app {
             custom_field_service: web::Data::new(custom_field_service),
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
+            observability_service: web::Data::new(observability_service),
             i18n: web::Data::new(i18n),
         }
     }

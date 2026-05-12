@@ -41,6 +41,7 @@ pub use v1::jobs_configure as v1_jobs_configure;
 pub use v1::manufacturing_configure as v1_manufacturing_configure;
 pub use v1::mfa_configure as v1_mfa_configure;
 pub use v1::notifications_configure as v1_notifications_configure;
+pub use v1::observability_configure as v1_observability_configure;
 pub use v1::product_variants_configure as v1_product_variants_configure;
 pub use v1::project_configure as v1_project_configure;
 pub use v1::purchase_orders_configure as v1_purchase_orders_configure;
@@ -574,6 +575,25 @@ use utoipa::OpenApi;
         crate::api::v1::notifications::restore_notification,
         crate::api::v1::notifications::list_deleted_notifications,
         crate::api::v1::notifications::destroy_notification,
+        // Observability
+        crate::api::v1::observability::health,
+        crate::api::v1::observability::health_live,
+        crate::api::v1::observability::health_ready,
+        crate::api::v1::observability::list_slis,
+        crate::api::v1::observability::create_sli,
+        crate::api::v1::observability::record_sli,
+        crate::api::v1::observability::list_slos,
+        crate::api::v1::observability::create_slo,
+        crate::api::v1::observability::get_slo_compliance,
+        crate::api::v1::observability::evaluate_slo_compliance,
+        crate::api::v1::observability::list_alert_rules,
+        crate::api::v1::observability::create_alert_rule,
+        crate::api::v1::observability::delete_alert_rule,
+        crate::api::v1::observability::evaluate_alerts,
+        crate::api::v1::observability::list_alerts,
+        crate::api::v1::observability::resolve_alert,
+        crate::api::v1::observability::get_dashboard,
+        crate::api::v1::observability::get_sparkline,
         // Reports
         crate::api::v1::reports::generate_report,
         crate::api::v1::reports::list_reports,
@@ -764,6 +784,25 @@ use utoipa::OpenApi;
             crate::api::v1::notifications::InAppNotificationResponse,
             crate::api::v1::notifications::UnreadCountResponse,
             crate::api::v1::notifications::MarkReadResponse,
+            // Observability
+            crate::domain::observability::model::SystemHealthSummary,
+            crate::domain::observability::model::HealthCheckResult,
+            crate::domain::observability::model::HealthStatus,
+            crate::domain::observability::model::SliDefinition,
+            crate::domain::observability::model::SliMetricType,
+            crate::domain::observability::model::SloDefinition,
+            crate::domain::observability::model::SloCompliance,
+            crate::domain::observability::model::SloStatus,
+            crate::domain::observability::model::Alert,
+            crate::domain::observability::model::AlertRule,
+            crate::domain::observability::model::AlertSeverity,
+            crate::domain::observability::model::AlertState,
+            crate::domain::observability::model::SparklineDataPoint,
+            crate::api::v1::observability::CreateSliRequest,
+            crate::api::v1::observability::CreateSloRequest,
+            crate::api::v1::observability::CreateAlertRuleRequest,
+            crate::api::v1::observability::EvaluateAlertsRequest,
+            crate::domain::observability::service::DashboardSummary,
             crate::domain::notification::model::NotificationResponse,
             crate::domain::notification::model::NotificationPreferenceResponse,
             // Reports

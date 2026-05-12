@@ -134,17 +134,20 @@ Issue A: branch → PR → CI pass → merge to main → Issue B: branch → PR 
 ## Quick Start
 
 ```bash
+# ALWAYS clean before building to prevent target/ disk bloat
+cargo clean
+
 # Development (in-memory storage)
 cargo run
 
 # Production (PostgreSQL)
-cargo run --features postgres
+cargo clean && cargo run --features postgres
 
 # Run tests
-cargo test
+cargo clean && cargo test
 
 # Run with PostgreSQL tests
-cargo test --features postgres
+cargo clean && cargo test --features postgres
 
 # Code quality
 cargo clippy -- -D warnings

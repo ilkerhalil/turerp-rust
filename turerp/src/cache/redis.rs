@@ -97,4 +97,13 @@ impl CacheService for RedisCacheService {
     fn is_enabled(&self) -> bool {
         true
     }
+
+    async fn health_check(&self) -> Result<(), ApiError> {
+        let mut conn = self.client.clone();
+        redis::cmd("PING")
+            .query_async::<()>(&mut conn)
+            .await
+            .map_err(|e| ApiError::Internal(format!("Redis health check failed: {}", e)))?;
+        Ok(())
+    }
 }
