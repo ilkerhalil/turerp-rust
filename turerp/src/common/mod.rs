@@ -1,6 +1,9 @@
 //! Common utilities and types shared across modules
 
+pub mod alert_duration_tracker;
+pub mod background_evaluator;
 pub mod bank_parsers;
+pub mod business_metrics;
 pub mod cache;
 pub mod cdc;
 pub mod circuit_breaker;
@@ -15,6 +18,7 @@ pub mod job_executor;
 pub mod jobs;
 pub mod notifications;
 pub mod pagination;
+pub mod prometheus_percentile;
 pub mod read_replicas;
 pub mod reports;
 pub mod retry;
@@ -25,7 +29,10 @@ pub mod secrets;
 pub mod soft_delete;
 pub mod tracing_mod;
 
+pub use alert_duration_tracker::AlertDurationTracker;
+pub use background_evaluator::BackgroundEvaluator;
 pub use bank_parsers::{parse_bank_xml, parse_camt053, parse_mt940};
+pub use business_metrics::{BusinessMetricsRecorder, InstrumentedEventSubscriber};
 pub use cache::{BoxCacheService, CacheService, InMemoryCacheService};
 pub use cdc::{convert_to_domain_event, parse_cdc_event, CdcEvent, CdcListener, CdcOperation};
 pub use circuit_breaker::{
@@ -63,6 +70,7 @@ pub use notifications::{
     UpdatePreference,
 };
 pub use pagination::{PaginatedResult, PaginationParams};
+pub use prometheus_percentile::{compute_percentiles, parse_histograms_from_text, ParsedHistogram};
 pub use read_replicas::{
     BoxDbRouter, DbRole, DbRouter, InMemoryDbRouter, QueryType, ReadAfterWriteMode, ReplicaHealth,
     ReplicaNode, RouterStats,

@@ -921,6 +921,38 @@ pub mod app {
             observability_service,
         ) = create_in_memory_services!(config);
 
+        // Register business metrics subscribers on event bus
+        let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
+        futures::executor::block_on(async {
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::AccountingEntrySubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::StockDecrementSubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::TaxPeriodSubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
+        });
+
         let i18n = I18n::init();
 
         AppState {
@@ -1262,6 +1294,33 @@ pub mod app {
             .await
             .ok();
 
+        // Register business metrics subscribers on event bus
+        let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
+        let _ = event_bus
+            .subscribe(Arc::new(
+                crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                    Arc::new(crate::common::AccountingEntrySubscriber),
+                    metrics_recorder.clone(),
+                ),
+            ))
+            .await;
+        let _ = event_bus
+            .subscribe(Arc::new(
+                crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                    Arc::new(crate::common::StockDecrementSubscriber),
+                    metrics_recorder.clone(),
+                ),
+            ))
+            .await;
+        let _ = event_bus
+            .subscribe(Arc::new(
+                crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                    Arc::new(crate::common::TaxPeriodSubscriber),
+                    metrics_recorder.clone(),
+                ),
+            ))
+            .await;
+
         // Search
         #[cfg(feature = "postgres")]
         let search_service: Arc<dyn SearchService> =
@@ -1419,7 +1478,7 @@ pub mod app {
 
         // Register webhook subscriber on event bus
         let webhook_service_arc = Arc::new(integration.webhook_service.get_ref().clone());
-        tokio::runtime::Handle::current().block_on(async {
+        futures::executor::block_on(async {
             infra
                 .event_bus
                 .subscribe(Arc::new(
@@ -1427,6 +1486,36 @@ pub mod app {
                 ))
                 .await
                 .ok();
+
+            // Register business metrics subscribers on event bus
+            let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::AccountingEntrySubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::StockDecrementSubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
+            let _ = infra
+                .event_bus
+                .subscribe(Arc::new(
+                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
+                        Arc::new(crate::common::TaxPeriodSubscriber),
+                        metrics_recorder.clone(),
+                    ),
+                ))
+                .await;
         });
 
         let i18n = I18n::init();

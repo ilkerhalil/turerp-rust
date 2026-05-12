@@ -81,7 +81,7 @@ impl EnvFallbackSecretsService {
 
     fn env_key(&self, path: &str, key: &str) -> String {
         let path = path.replace(['/', '-'], "_").to_uppercase();
-        let key = key.to_uppercase();
+        let key = key.replace('-', "_").to_uppercase();
         format!("{}_{}_{}", self.prefix, path, key)
     }
 }
@@ -214,8 +214,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_env_fallback_reads_env_var() {
+        use std::sync::Mutex;
+        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = ENV_LOCK.lock().unwrap();
         let svc = EnvFallbackSecretsService::new("TURERP");
-        std::env::set_var("TURERP_TEST_PATH_TEST_KEY", "my-secret");
+        unsafe {
+            std::env::set_var("TURERP_TEST_PATH_TEST_KEY", "my-secret");
+        }
         let result = svc.get_secret("test-path", "test-key").await.unwrap();
         assert_eq!(result, Some("my-secret".to_string()));
     }

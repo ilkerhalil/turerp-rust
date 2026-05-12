@@ -183,58 +183,6 @@ fn configure_cors(cors_config: &turerp::config::CorsConfig) -> Cors {
 
 /// Parse Prometheus text-format metrics into a simple key-value map.
 /// Extracts availability, error_rate, latency_p95, and throughput estimates.
-fn parse_prometheus_metrics(text: &str) -> std::collections::HashMap<String, f64> {
-    let mut metrics = std::collections::HashMap::new();
-    let mut total_requests = 0u64;
-    let mut error_requests = 0u64;
-    let mut latency_sum = 0.0;
-    let mut latency_count = 0u64;
-
-    for line in text.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-
-        // Parse counter lines: metric_name{labels} value
-        if let Some(value_str) = line.rsplit(' ').next() {
-            if let Ok(value) = value_str.parse::<f64>() {
-                if line.starts_with("http_requests_total{") {
-                    total_requests += value as u64;
-                    if line.contains("status=\"5") {
-                        error_requests += value as u64;
-                    }
-                } else if line.starts_with("http_request_duration_seconds_sum{") {
-                    latency_sum += value;
-                } else if line.starts_with("http_request_duration_seconds_count{") {
-                    latency_count += value as u64;
-                }
-            }
-        }
-    }
-
-    if total_requests > 0 {
-        metrics.insert(
-            "availability".to_string(),
-            (total_requests.saturating_sub(error_requests)) as f64 / total_requests as f64,
-        );
-        metrics.insert(
-            "error_rate".to_string(),
-            error_requests as f64 / total_requests as f64,
-        );
-    }
-
-    if latency_count > 0 {
-        metrics.insert(
-            "latency_p95".to_string(),
-            latency_sum / latency_count as f64,
-        );
-    }
-
-    metrics.insert("throughput".to_string(), total_requests as f64);
-
-    metrics
-}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -330,59 +278,17 @@ async fn main() -> std::io::Result<()> {
     );
     job_executor.start().await;
 
-    // Start background observability evaluator (alert rules + SLI collection)
+    // Start background observability evaluator (alert rules + SLO + SLI collection)
+    let (_obs_shutdown_tx, obs_shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
     {
         let observability_service = app_state.observability_service.get_ref().clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
-            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-            loop {
-                interval.tick().await;
-
-                // Parse Prometheus metrics for alert evaluation
-                let metrics_text = turerp::middleware::render_metrics();
-                let metrics = parse_prometheus_metrics(&metrics_text);
-
-                if let Err(e) = observability_service.evaluate_alert_rules(&metrics).await {
-                    tracing::warn!("Background alert evaluation failed: {}", e);
-                }
-
-                // Record automatic SLI measurements
-                if let Some(availability) = metrics.get("availability") {
-                    if let Err(e) = observability_service
-                        .record_sli("availability".to_string(), *availability)
-                        .await
-                    {
-                        tracing::debug!("Failed to record availability SLI: {}", e);
-                    }
-                }
-                if let Some(error_rate) = metrics.get("error_rate") {
-                    if let Err(e) = observability_service
-                        .record_sli("error_rate".to_string(), *error_rate)
-                        .await
-                    {
-                        tracing::debug!("Failed to record error_rate SLI: {}", e);
-                    }
-                }
-                if let Some(latency) = metrics.get("latency_p95") {
-                    if let Err(e) = observability_service
-                        .record_sli("latency_p95".to_string(), *latency)
-                        .await
-                    {
-                        tracing::debug!("Failed to record latency SLI: {}", e);
-                    }
-                }
-                if let Some(throughput) = metrics.get("throughput") {
-                    if let Err(e) = observability_service
-                        .record_sli("throughput".to_string(), *throughput)
-                        .await
-                    {
-                        tracing::debug!("Failed to record throughput SLI: {}", e);
-                    }
-                }
-            }
-        });
+        let notification_service = app_state.infra.notification_service.clone().into_inner();
+        let evaluator = turerp::common::background_evaluator::BackgroundEvaluator::new(
+            observability_service,
+            notification_service,
+        );
+        evaluator.start(obs_shutdown_rx);
+        tracing::info!("Background observability evaluator started");
     }
 
     // Build rate-limit middleware with shared stats store so the dashboard can read them

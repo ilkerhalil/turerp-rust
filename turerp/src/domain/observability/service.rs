@@ -2,6 +2,7 @@
 
 use crate::cache::CacheService;
 use crate::cache::{cache_get, cache_key, cache_set};
+use crate::common::alert_duration_tracker::AlertDurationTracker;
 use crate::common::notifications::{NotificationPriority, NotificationRequest};
 use crate::common::NotificationService;
 use crate::domain::observability::model::{
@@ -28,6 +29,7 @@ pub struct ObservabilityService {
     notification_service: Option<Arc<dyn NotificationService>>,
     next_alert_id: Arc<Mutex<i64>>,
     next_rule_id: Arc<Mutex<i64>>,
+    alert_tracker: Arc<Mutex<AlertDurationTracker>>,
 }
 
 impl ObservabilityService {
@@ -39,6 +41,7 @@ impl ObservabilityService {
             notification_service: None,
             next_alert_id: Arc::new(Mutex::new(1)),
             next_rule_id: Arc::new(Mutex::new(1)),
+            alert_tracker: Arc::new(Mutex::new(AlertDurationTracker::new())),
         }
     }
 
@@ -363,7 +366,25 @@ impl ObservabilityService {
                 _ => false,
             };
 
-            if triggered {
+            let should_fire = if triggered {
+                if rule.duration_sec <= 0 {
+                    true
+                } else {
+                    let mut tracker = self.alert_tracker.lock();
+                    tracker
+                        .record(&rule.id, &rule.metric, true, value, rule.duration_sec)
+                        .is_some()
+                }
+            } else {
+                // Condition cleared — reset tracker state
+                if rule.duration_sec > 0 {
+                    let mut tracker = self.alert_tracker.lock();
+                    tracker.record(&rule.id, &rule.metric, false, value, rule.duration_sec);
+                }
+                false
+            };
+
+            if should_fire {
                 let alert_id_num = {
                     let mut id_guard = self.next_alert_id.lock();
                     let num = *id_guard;
@@ -378,8 +399,8 @@ impl ObservabilityService {
                     severity: rule.severity,
                     state: AlertState::Firing,
                     message: format!(
-                        "{}: {} is {} (threshold: {})",
-                        rule.severity, rule.metric, value, rule.threshold
+                        "{}: {} is {} (threshold: {}, duration: {}s)",
+                        rule.severity, rule.metric, value, rule.threshold, rule.duration_sec
                     ),
                     value,
                     fired_at: chrono::Utc::now(),

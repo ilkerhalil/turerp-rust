@@ -76,6 +76,9 @@ pub trait ObservabilityRepository: Send + Sync {
         metric: &str,
         minutes: i64,
     ) -> Result<Vec<SparklineDataPoint>, ApiError>;
+
+    /// Record a sparkline data point for a metric
+    async fn record_sparkline(&self, metric: &str, value: f64) -> Result<(), ApiError>;
 }
 
 /// Type alias for boxed observability repository
@@ -107,6 +110,14 @@ impl InMemoryObservabilityRepository {
             alert_rules: Mutex::new(HashMap::new()),
             alerts: Mutex::new(Vec::new()),
             sparklines: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// Disable an alert rule by ID (test helper)
+    pub fn disable_alert_rule(&self, id: &str) {
+        let mut rules = self.alert_rules.lock();
+        if let Some(r) = rules.get_mut(id) {
+            r.enabled = false;
         }
     }
 }
@@ -239,5 +250,19 @@ impl ObservabilityRepository for InMemoryObservabilityRepository {
     ) -> Result<Vec<SparklineDataPoint>, ApiError> {
         let sparklines = self.sparklines.lock();
         Ok(sparklines.get(metric).cloned().unwrap_or_default())
+    }
+
+    async fn record_sparkline(&self, metric: &str, value: f64) -> Result<(), ApiError> {
+        let mut sparklines = self.sparklines.lock();
+        let list = sparklines.entry(metric.to_string()).or_default();
+        list.push(SparklineDataPoint {
+            timestamp: chrono::Utc::now(),
+            value,
+        });
+        // Keep last 1000 data points per metric to bound memory
+        if list.len() > 1000 {
+            list.remove(0);
+        }
+        Ok(())
     }
 }

@@ -660,4 +660,21 @@ impl ObservabilityRepository for PostgresObservabilityRepository {
 
         Ok(rows.into_iter().map(Into::into).collect())
     }
+
+    async fn record_sparkline(&self, metric: &str, value: f64) -> Result<(), ApiError> {
+        sqlx::query(
+            r#"
+            INSERT INTO sparklines (metric, value, recorded_at)
+            VALUES ($1, $2, $3)
+            "#,
+        )
+        .bind(metric)
+        .bind(value)
+        .bind(Utc::now())
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Sparkline"))?;
+
+        Ok(())
+    }
 }

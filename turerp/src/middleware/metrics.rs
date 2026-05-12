@@ -1,9 +1,13 @@
 //! Prometheus metrics middleware
 //!
 //! Records HTTP request metrics:
-//! - `http_requests_total` counter (labels: method, path, status)
-//! - `http_request_duration_seconds` histogram (labels: method, path)
+//! - `http_requests_total` counter (labels: method, endpoint, status)
+//! - `http_request_duration_seconds` histogram (labels: method, endpoint)
+//! - `http_request_duration_seconds_p99` gauge (labels: method, endpoint)
 //! - `http_requests_in_flight` gauge (labels: method)
+//!
+//! Endpoint labels are normalized to avoid cardinality explosion:
+//! numeric IDs in paths are replaced with `:id`.
 
 use actix_web::body::MessageBody;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
@@ -30,6 +34,20 @@ impl Default for MetricsMiddleware {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Normalize an HTTP path into a low-cardinality endpoint label.
+///
+/// Replaces trailing numeric segments with `:id` to prevent
+/// unbounded cardinality from IDs in URLs like `/api/v1/invoices/12345`.
+pub fn normalize_endpoint(path: &str) -> String {
+    let mut parts: Vec<&str> = path.split('/').collect();
+    for part in parts.iter_mut() {
+        if part.parse::<u64>().is_ok() || part.parse::<i64>().is_ok() {
+            *part = ":id";
+        }
+    }
+    parts.join("/")
 }
 
 impl<S, B> actix_web::dev::Transform<S, ServiceRequest> for MetricsMiddleware
@@ -70,7 +88,7 @@ where
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let method = req.method().to_string();
-        let path = req.path().to_string();
+        let endpoint = normalize_endpoint(req.path());
 
         // Increment in-flight gauge
         gauge!("http_requests_in_flight", "method" => method.clone()).increment(1);
@@ -94,9 +112,28 @@ where
                 Err(_) => 500,
             };
 
-            counter!("http_requests_total", "method" => method.clone(), "path" => path.clone(), "status" => status.to_string()).increment(1);
-            histogram!("http_request_duration_seconds", "method" => method, "path" => path)
-                .record(elapsed);
+            counter!(
+                "http_requests_total",
+                "method" => method.clone(),
+                "endpoint" => endpoint.clone(),
+                "status" => status.to_string()
+            )
+            .increment(1);
+            histogram!(
+                "http_request_duration_seconds",
+                "method" => method.clone(),
+                "endpoint" => endpoint.clone()
+            )
+            .record(elapsed);
+
+            // P99 gauge — updated directly; BackgroundEvaluator will
+            // read the histogram and compute the true P99 periodically.
+            gauge!(
+                "http_request_duration_seconds_p99",
+                "method" => method,
+                "endpoint" => endpoint
+            )
+            .set(elapsed);
 
             result
         })

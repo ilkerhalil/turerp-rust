@@ -75,10 +75,8 @@ pub async fn health(
 pub async fn health_live(
     observability_service: web::Data<ObservabilityService>,
 ) -> ApiResult<HttpResponse> {
-    match observability_service.get_liveness().await {
-        Ok(summary) => Ok(HttpResponse::Ok().json(summary)),
-        Err(e) => Ok(e.error_response()),
-    }
+    let summary = observability_service.get_liveness().await?;
+    Ok(HttpResponse::Ok().json(summary))
 }
 
 /// Readiness probe
@@ -508,6 +506,98 @@ pub async fn get_sparkline(
     }
 }
 
+/// Get a Grafana dashboard JSON by name.
+///
+/// Serves pre-defined dashboards: `infrastructure`, `application`, `business`.
+#[utoipa::path(
+    get,
+    path = "/api/v1/observability/dashboards/{name}.json",
+    tag = "Observability",
+    params(("name" = String, Path, description = "Dashboard name")),
+    responses(
+        (status = 200, description = "Grafana dashboard JSON", body = crate::domain::observability::model::DashboardJson),
+        (status = 404, description = "Dashboard not found"),
+        (status = 401, description = "Not authenticated"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_dashboard_json(path: web::Path<String>) -> ApiResult<HttpResponse> {
+    let name = path.into_inner();
+    let allowed = ["infrastructure", "application", "business"];
+    if !allowed.contains(&name.as_str()) {
+        return Ok(HttpResponse::NotFound().json(crate::error::ErrorResponse {
+            error: format!("Dashboard '{}' not found", name),
+        }));
+    }
+
+    let file_path = format!("config/grafana/{}.json", name);
+    match tokio::fs::read_to_string(&file_path).await {
+        Ok(content) => {
+            // Validate it's valid JSON
+            match serde_json::from_str::<crate::domain::observability::model::DashboardJson>(
+                &content,
+            ) {
+                Ok(dashboard) => Ok(HttpResponse::Ok().json(dashboard)),
+                Err(_) => {
+                    // If it doesn't match our Rust model, serve raw JSON anyway
+                    Ok(HttpResponse::Ok()
+                        .content_type("application/json")
+                        .body(content))
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to read dashboard {}: {}", file_path, e);
+            Ok(HttpResponse::NotFound().json(crate::error::ErrorResponse {
+                error: format!("Dashboard '{}' not found", name),
+            }))
+        }
+    }
+}
+
+/// Percentiles response for current metric snapshots.
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+pub struct PercentilesResponse {
+    pub p95: f64,
+    pub p99: f64,
+    pub computed_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Get current P95/P99 percentiles for HTTP request duration.
+#[utoipa::path(
+    get,
+    path = "/api/v1/observability/metrics/percentiles",
+    tag = "Observability",
+    responses(
+        (status = 200, description = "Current P95/P99 percentiles", body = PercentilesResponse),
+        (status = 401, description = "Not authenticated"),
+    ),
+    security(("bearer_auth" = []))
+)]
+pub async fn get_percentiles() -> ApiResult<HttpResponse> {
+    let metrics_text = crate::middleware::metrics::render_metrics();
+    let percentiles = crate::common::prometheus_percentile::compute_percentiles(&metrics_text);
+
+    // Find the first http_request_duration_seconds P95/P99
+    let mut p95 = 0.0;
+    let mut p99 = 0.0;
+
+    for (key, value) in &percentiles {
+        if key.starts_with("http_request_duration_seconds") && key.contains("quantile=p95") {
+            p95 = *value;
+        }
+        if key.starts_with("http_request_duration_seconds") && key.contains("quantile=p99") {
+            p99 = *value;
+        }
+    }
+
+    Ok(HttpResponse::Ok().json(PercentilesResponse {
+        p95,
+        p99,
+        computed_at: chrono::Utc::now(),
+    }))
+}
+
 /// Configure observability routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/v1/observability/health").route(web::get().to(health)))
@@ -557,5 +647,13 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         .service(
             web::resource("/v1/observability/sparklines/{metric}")
                 .route(web::get().to(get_sparkline)),
+        )
+        .service(
+            web::resource("/v1/observability/dashboards/{name}.json")
+                .route(web::get().to(get_dashboard_json)),
+        )
+        .service(
+            web::resource("/v1/observability/metrics/percentiles")
+                .route(web::get().to(get_percentiles)),
         );
 }

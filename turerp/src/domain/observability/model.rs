@@ -48,6 +48,10 @@ pub enum SliMetricType {
     Latency,
     ErrorRate,
     Throughput,
+    InvoiceCreationLatency,
+    PaymentSuccessRate,
+    StockUpdateLatency,
+    SalesOrderThroughput,
 }
 
 impl std::fmt::Display for SliMetricType {
@@ -57,6 +61,10 @@ impl std::fmt::Display for SliMetricType {
             SliMetricType::Latency => write!(f, "latency"),
             SliMetricType::ErrorRate => write!(f, "error_rate"),
             SliMetricType::Throughput => write!(f, "throughput"),
+            SliMetricType::InvoiceCreationLatency => write!(f, "invoice_creation_latency"),
+            SliMetricType::PaymentSuccessRate => write!(f, "payment_success_rate"),
+            SliMetricType::StockUpdateLatency => write!(f, "stock_update_latency"),
+            SliMetricType::SalesOrderThroughput => write!(f, "sales_order_throughput"),
         }
     }
 }
@@ -208,4 +216,29 @@ pub struct Alert {
 pub struct SparklineDataPoint {
     pub timestamp: DateTime<Utc>,
     pub value: f64,
+}
+
+/// Snapshot of a single metric value parsed from Prometheus output.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct MetricSnapshot {
+    pub name: String,
+    pub labels: std::collections::HashMap<String, String>,
+    pub value: f64,
+    pub captured_at: DateTime<Utc>,
+}
+
+/// Static Grafana dashboard JSON model served via API.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct DashboardJson {
+    pub name: String,
+    pub title: String,
+    pub panels: Vec<serde_json::Value>,
+    pub tags: Vec<String>,
+}
+
+impl DashboardJson {
+    /// Serialize the dashboard to a JSON string.
+    pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
 }

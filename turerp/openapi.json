@@ -27998,7 +27998,11 @@
           "Availability",
           "Latency",
           "ErrorRate",
-          "Throughput"
+          "Throughput",
+          "InvoiceCreationLatency",
+          "PaymentSuccessRate",
+          "StockUpdateLatency",
+          "SalesOrderThroughput"
         ]
       },
       "SloCompliance": {

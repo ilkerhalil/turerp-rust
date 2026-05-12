@@ -1,0 +1,23 @@
+[alias]
+# Aliases to reduce target/ disk usage.
+# WARNING: Cleaning before every build destroys incremental compilation
+# and makes builds significantly slower. Use only when disk space is critical.
+#
+# Recommended workflow:
+#   ./scripts/cargo-clean-build.sh          # clean + build
+#   ./scripts/cargo-clean-test.sh             # clean + test
+#
+# Or add shell aliases in ~/.bashrc / ~/.zshrc:
+#   alias cargob='cargo clean && cargo build'
+#   alias cargot='cargo clean && cargo test'
+#   alias cargor='cargo clean && cargo run'
+cb = "build"
+
+[profile.dev]
+# Reduce debug binary bloat: split debug info to .dwp files,
+# which are easier to clean and don't bloat every rlib.
+split-debuginfo = "unpacked"
+
+[profile.dev.build-override]
+# Build scripts / proc-macros: no debuginfo at all to save space.
+debug = false
