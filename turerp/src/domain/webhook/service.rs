@@ -317,9 +317,14 @@ fn compute_signature(secret: &str, payload: &str) -> String {
 mod tests {
     use super::*;
 
+    fn test_key() -> [u8; 32] {
+        *b"test-key-for-testing-only-123456"
+    }
+
     fn make_service() -> WebhookService {
-        let wh_repo = Arc::new(crate::domain::webhook::repository::InMemoryWebhookRepository::new())
-            as BoxWebhookRepository;
+        let wh_repo = Arc::new(
+            crate::domain::webhook::repository::InMemoryWebhookRepository::new(test_key()),
+        ) as BoxWebhookRepository;
         let dl_repo =
             Arc::new(crate::domain::webhook::repository::InMemoryWebhookDeliveryRepository::new())
                 as BoxWebhookDeliveryRepository;

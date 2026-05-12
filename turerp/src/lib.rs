@@ -31,6 +31,8 @@ pub mod app {
     use actix_web::web;
     use std::sync::Arc;
 
+    use crate::common::circuit_breaker::CircuitBreakerRegistry;
+    use crate::common::retry::BoxRetryStats;
     use crate::common::{DbRouter, InMemoryDbRouter, ReadAfterWriteMode};
     use crate::common::{
         EventBus, InMemoryEventBus, InMemoryJobScheduler, JobScheduler, NotificationService,
@@ -385,6 +387,8 @@ pub mod app {
         pub db_pool: web::Data<Arc<PgPool>>,
         pub cdc_listener: Option<Arc<crate::common::cdc::CdcListener>>,
         pub import_service: web::Data<dyn crate::common::import::ImportService>,
+        pub circuit_breaker_registry: web::Data<CircuitBreakerRegistry>,
+        pub retry_stats: web::Data<BoxRetryStats>,
     }
 
     /// Accounting & Finance domain services
@@ -725,7 +729,7 @@ pub mod app {
             let edefter_service = crate::domain::edefter::EDefterService::new(edefter_repo);
 
             // Webhooks
-            let webhook_repo = Arc::new(InMemoryWebhookRepository::new()) as BoxWebhookRepository;
+            let webhook_repo = Arc::new(InMemoryWebhookRepository::new(config.encryption_key_bytes())) as BoxWebhookRepository;
             let delivery_repo =
                 Arc::new(InMemoryWebhookDeliveryRepository::new()) as BoxWebhookDeliveryRepository;
             let webhook_service = WebhookService::new(webhook_repo, delivery_repo);
@@ -820,6 +824,12 @@ pub mod app {
                 Arc::new(product_service.clone()),
             );
 
+            // Circuit Breaker Registry
+            let circuit_breaker_registry = CircuitBreakerRegistry::new();
+
+            // Retry Stats
+            let retry_stats: BoxRetryStats = Arc::new(crate::common::retry::RetryStats::new());
+
             (
                 AuthState {
                     auth_service: web::Data::new(auth_service),
@@ -860,6 +870,8 @@ pub mod app {
                     db_pool: web::Data::new(Arc::new(sqlx::PgPool::connect_lazy("postgres://localhost/dummy").expect("Failed to create lazy pool"))),
                     cdc_listener: None,
                     import_service: web::Data::from(import_service),
+                    circuit_breaker_registry: web::Data::new(circuit_breaker_registry),
+                    retry_stats: web::Data::new(retry_stats),
                 },
                 FinanceState {
                     accounting_service: web::Data::new(accounting_service),
@@ -1280,7 +1292,9 @@ pub mod app {
         let edefter_service = crate::domain::edefter::EDefterService::new(edefter_repo);
 
         // Webhooks - PostgreSQL
-        let webhook_repo = PostgresWebhookRepository::new(pool.clone()).into_boxed();
+        let webhook_repo =
+            PostgresWebhookRepository::new(pool.clone(), config.encryption_key_bytes())
+                .into_boxed();
         let delivery_repo = PostgresWebhookDeliveryRepository::new(pool.clone()).into_boxed();
         let webhook_service = WebhookService::new(webhook_repo, delivery_repo);
 
@@ -1330,6 +1344,9 @@ pub mod app {
             Arc::new(InMemorySearchService::new()) as Arc<dyn SearchService>;
 
         let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
+
+        let circuit_breaker_registry = CircuitBreakerRegistry::new();
+        let retry_stats: BoxRetryStats = Arc::new(crate::common::retry::RetryStats::new());
 
         let i18n = I18n::init();
 
@@ -1402,6 +1419,8 @@ pub mod app {
                 db_pool: web::Data::new(pool),
                 cdc_listener: None,
                 import_service: web::Data::from(import_service),
+                circuit_breaker_registry: web::Data::new(circuit_breaker_registry),
+                retry_stats: web::Data::new(retry_stats),
             },
             finance: FinanceState {
                 accounting_service: web::Data::new(accounting_service),

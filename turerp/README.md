@@ -70,9 +70,28 @@ cd turerp
 docker-compose up -d
 # API: http://localhost:8080
 # Swagger UI: http://localhost:8080/swagger-ui/
+# Vault UI: http://localhost:8200
 ```
 
 > **Note**: Docker uses port 8080, local development uses port 8000.
+
+### Vault Local Dev Setup
+
+A HashiCorp Vault dev server is included in `docker-compose.yml` for local secrets management.
+
+```bash
+# Vault starts automatically with docker-compose up -d
+# Root token: myroot
+# VAULT_ADDR: http://localhost:8200
+
+# The init script runs automatically inside the vault container and seeds:
+#   secret/turerp/database  -> url=postgres://postgres:postgres@localhost:5432/turerp
+#   secret/turerp/jwt       -> secret=<random 64-char hex>
+#   secret/turerp/redis     -> url=redis://localhost:6379
+
+# To re-run the init script manually:
+docker exec turerp-vault /vault-init.sh
+```
 
 ### Development Setup
 
