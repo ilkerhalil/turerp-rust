@@ -23,7 +23,9 @@ pub mod file;
 pub mod forecasting;
 pub mod hr;
 pub mod invoice;
+pub mod ip_whitelist;
 pub mod job;
+pub mod ldap;
 pub mod manufacturing;
 pub mod mfa;
 pub mod notification;
@@ -219,6 +221,16 @@ pub use forecasting::repository::{
 };
 pub use forecasting::service::ForecastingService;
 
+// IP Whitelist module re-exports
+pub use ip_whitelist::model::{
+    CreateIpWhitelistEntry, IpWhitelistCheckResult, IpWhitelistEntry, IpWhitelistEntryResponse,
+    UpdateIpWhitelistEntry,
+};
+pub use ip_whitelist::repository::{
+    BoxIpWhitelistRepository, InMemoryIpWhitelistRepository, IpWhitelistRepository,
+};
+pub use ip_whitelist::service::IpWhitelistService;
+
 // Tenant module re-exports
 pub use tenant::model::{generate_db_name, CreateTenant, Tenant, UpdateTenant};
 pub use tenant::repository::{BoxTenantRepository, InMemoryTenantRepository, TenantRepository};
@@ -365,6 +377,16 @@ pub use job::model::{
 };
 pub use job::repository::{BoxJobRepository, InMemoryJobRepository, JobRepository};
 pub use job::service::JobService;
+
+// LDAP module re-exports
+pub use ldap::model::{
+    CreateLdapConfig, LdapConfig, LdapConfigResponse, LdapSyncResult, LdapUser,
+    TestLdapConnectionRequest, UpdateLdapConfig,
+};
+pub use ldap::repository::{
+    BoxLdapConfigRepository, InMemoryLdapConfigRepository, LdapConfigRepository,
+};
+pub use ldap::service::{Ldap3Client, LdapClient, LdapSyncService};
 
 // Test: is file module visible?
 pub type __TestFileVisibility = crate::domain::file::model::FileRecord;

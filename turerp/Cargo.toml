@@ -126,6 +126,16 @@ quick-xml = { version = "0.37", features = ["serialize"] }
 # Mocking for tests
 mockall = "0.12"
 
+# GraphQL
+async-graphql = { version = "7", features = ["chrono", "decimal"] }
+async-graphql-actix-web = "7"
+
+# IP whitelisting
+ipnetwork = "0.20"
+
+# LDAP / Active Directory
+ldap3 = "0.11"
+
 # OpenAPI / Swagger
 utoipa = "4"
 utoipa-swagger-ui = { version = "6", features = ["actix-web"] }

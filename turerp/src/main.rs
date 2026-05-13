@@ -7,9 +7,9 @@ use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
 use turerp::config::Config;
 use turerp::middleware::{
-    audit::spawn_audit_writer, AuditLoggingMiddleware, IdempotencyMiddleware, JwtAuthMiddleware,
-    MetricsMiddleware, RateLimitMiddleware, RequestIdMiddleware, SecurityHeadersMiddleware,
-    TenantMiddleware,
+    audit::spawn_audit_writer, AuditLoggingMiddleware, IdempotencyMiddleware,
+    IpWhitelistMiddleware, JwtAuthMiddleware, MetricsMiddleware, RateLimitMiddleware,
+    RequestIdMiddleware, SecurityHeadersMiddleware, TenantMiddleware,
 };
 
 use tokio::sync::mpsc;
@@ -20,8 +20,9 @@ use turerp::api::{
     v1_crm_configure, v1_currency_configure, v1_custom_fields_configure, v1_dashboard_configure,
     v1_documents_configure, v1_edefter_configure, v1_efatura_configure, v1_events_configure,
     v1_feature_flags_configure, v1_files_configure, v1_forecasting_configure,
-    v1_goods_receipts_configure, v1_hr_configure, v1_import_configure, v1_invoice_configure,
-    v1_jobs_configure, v1_manufacturing_configure, v1_mfa_configure, v1_notifications_configure,
+    v1_goods_receipts_configure, v1_graphql_configure, v1_hr_configure, v1_import_configure,
+    v1_invoice_configure, v1_ip_whitelist_configure, v1_jobs_configure, v1_ldap_configure,
+    v1_manufacturing_configure, v1_mfa_configure, v1_notifications_configure,
     v1_observability_configure, v1_product_variants_configure, v1_project_configure,
     v1_purchase_orders_configure, v1_purchase_requests_configure, v1_rate_limits_configure,
     v1_reports_configure, v1_resilience_configure, v1_sales_configure, v1_search_configure,
@@ -327,6 +328,9 @@ async fn main() -> std::io::Result<()> {
             .wrap(rate_limit_middleware.clone()) // Rate limiting (shared stats)
             .wrap(MetricsMiddleware::new()) // Metrics collection
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
+            .wrap(IpWhitelistMiddleware::new(
+                app_state.admin.ip_whitelist_service.get_ref().clone(),
+            )) // IP whitelist check (after tenant context)
             .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
             .app_data(web::Data::new(app_state.clone())) // Full AppState for health probes
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
@@ -355,6 +359,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.analytics.audit_service.clone())
             .app_data(app_state.admin.settings_service.clone())
             .app_data(app_state.admin.api_key_service.clone())
+            .app_data(app_state.admin.ip_whitelist_service.clone())
             .app_data(app_state.infra.job_scheduler.clone())
             .app_data(app_state.infra.event_bus.clone())
             .app_data(app_state.infra.notification_service.clone())
@@ -387,7 +392,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.commerce.company_service.clone())
             .app_data(app_state.infra.circuit_breaker_registry.clone())
             .app_data(app_state.infra.retry_stats.clone())
-            .app_data(app_state.auth.mfa_service.clone());
+            .app_data(app_state.auth.mfa_service.clone())
+            .app_data(app_state.ldap_service.clone());
 
         #[cfg(not(feature = "postgres"))]
         let app = App::new()
@@ -409,6 +415,9 @@ async fn main() -> std::io::Result<()> {
             .wrap(rate_limit_middleware.clone()) // Rate limiting (shared stats)
             .wrap(MetricsMiddleware::new()) // Metrics collection
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
+            .wrap(IpWhitelistMiddleware::new(
+                app_state.admin.ip_whitelist_service.get_ref().clone(),
+            )) // IP whitelist check (after tenant context)
             .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
             .app_data(web::Data::new(app_state.clone())) // Full AppState for health probes
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
@@ -437,6 +446,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.analytics.audit_service.clone())
             .app_data(app_state.admin.settings_service.clone())
             .app_data(app_state.admin.api_key_service.clone())
+            .app_data(app_state.admin.ip_whitelist_service.clone())
             .app_data(app_state.infra.job_scheduler.clone())
             .app_data(app_state.infra.event_bus.clone())
             .app_data(app_state.infra.notification_service.clone())
@@ -468,7 +478,8 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.commerce.company_service.clone())
             .app_data(app_state.infra.circuit_breaker_registry.clone())
             .app_data(app_state.infra.retry_stats.clone())
-            .app_data(app_state.auth.mfa_service.clone());
+            .app_data(app_state.auth.mfa_service.clone())
+            .app_data(app_state.ldap_service.clone());
 
         app // Health check
             .route("/health", web::get().to(health_check))
@@ -488,6 +499,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_feature_flags_configure)
                     .configure(v1_files_configure)
                     .configure(v1_import_configure)
+                    .configure(v1_ip_whitelist_configure)
                     .configure(v1_mfa_configure)
                     .configure(v1_product_variants_configure)
                     .configure(v1_purchase_requests_configure)
@@ -499,6 +511,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_forecasting_configure)
                     .configure(v1_workflows_configure)
                     .configure(v1_goods_receipts_configure)
+                    .configure(v1_graphql_configure)
                     .configure(v1_cari_configure)
                     .configure(v1_companies_configure)
                     .configure(v1_stock_configure)
@@ -517,6 +530,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_settings_configure)
                     .configure(v1_api_keys_configure)
                     .configure(v1_jobs_configure)
+                    .configure(v1_ldap_configure)
                     .configure(v1_notifications_configure)
                     .configure(v1_observability_configure)
                     .configure(v1_reports_configure)
