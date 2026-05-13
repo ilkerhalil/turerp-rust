@@ -1,0 +1,54 @@
+//! GraphQL API endpoint (v1)
+
+use actix_web::{web, HttpRequest, HttpResponse};
+use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
+
+use crate::app::AppState;
+use crate::graphql::{create_schema, AppSchema, GraphQlContext};
+use crate::middleware::TenantContextExt;
+
+/// Cached GraphQL schema instance
+///
+/// The schema is built once and shared across all requests.
+/// Tenant isolation is enforced per-request via GraphQL context data.
+fn schema() -> &'static AppSchema {
+    use std::sync::OnceLock;
+    static SCHEMA: OnceLock<AppSchema> = OnceLock::new();
+    SCHEMA.get_or_init(create_schema)
+}
+
+/// GraphQL endpoint handler
+///
+/// Extracts tenant_id from the request extensions (set by TenantMiddleware)
+/// and injects it into the GraphQL context along with application state.
+pub async fn graphql_handler(
+    app_state: web::Data<AppState>,
+    req: HttpRequest,
+    gql_req: GraphQLRequest,
+) -> GraphQLResponse {
+    let tenant_id = req.tenant_id().unwrap_or(0);
+    let gctx = GraphQlContext::new(std::sync::Arc::new(app_state.get_ref().clone()), tenant_id);
+
+    schema()
+        .execute(gql_req.into_inner().data(gctx))
+        .await
+        .into()
+}
+
+/// GraphQL Playground endpoint (for development)
+pub async fn graphql_playground() -> HttpResponse {
+    HttpResponse::Ok()
+        .content_type("text/html; charset=utf-8")
+        .body(async_graphql::http::playground_source(
+            async_graphql::http::GraphQLPlaygroundConfig::new("/api/v1/graphql"),
+        ))
+}
+
+/// Configure GraphQL routes
+pub fn configure(cfg: &mut web::ServiceConfig) {
+    cfg.service(
+        web::resource("/v1/graphql")
+            .route(web::post().to(graphql_handler))
+            .route(web::get().to(graphql_playground)),
+    );
+}

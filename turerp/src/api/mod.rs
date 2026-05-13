@@ -34,10 +34,13 @@ pub use v1::feature_flags_configure as v1_feature_flags_configure;
 pub use v1::files_configure as v1_files_configure;
 pub use v1::forecasting_configure as v1_forecasting_configure;
 pub use v1::goods_receipts_configure as v1_goods_receipts_configure;
+pub use v1::graphql_configure as v1_graphql_configure;
 pub use v1::hr_configure as v1_hr_configure;
 pub use v1::import_configure as v1_import_configure;
 pub use v1::invoice_configure as v1_invoice_configure;
+pub use v1::ip_whitelist_configure as v1_ip_whitelist_configure;
 pub use v1::jobs_configure as v1_jobs_configure;
+pub use v1::ldap_configure as v1_ldap_configure;
 pub use v1::manufacturing_configure as v1_manufacturing_configure;
 pub use v1::mfa_configure as v1_mfa_configure;
 pub use v1::notifications_configure as v1_notifications_configure;
@@ -125,6 +128,13 @@ use utoipa::OpenApi;
         crate::api::v1::users::restore_user,
         crate::api::v1::users::list_deleted_users,
         crate::api::v1::users::destroy_user,
+        // LDAP
+        crate::api::v1::ldap::create_ldap_config,
+        crate::api::v1::ldap::get_ldap_config,
+        crate::api::v1::ldap::update_ldap_config,
+        crate::api::v1::ldap::delete_ldap_config,
+        crate::api::v1::ldap::test_ldap_connection,
+        crate::api::v1::ldap::sync_ldap_users,
         // Webhooks
         crate::api::v1::webhooks::create_webhook,
         crate::api::v1::webhooks::list_webhooks,
@@ -538,6 +548,12 @@ use utoipa::OpenApi;
         crate::api::v1::api_keys::list_deleted_api_keys,
         crate::api::v1::api_keys::destroy_api_key,
         crate::api::v1::api_keys::check_scope,
+        // IP Whitelist
+        crate::api::v1::ip_whitelist::list_ip_whitelist,
+        crate::api::v1::ip_whitelist::add_ip_whitelist_entry,
+        crate::api::v1::ip_whitelist::remove_ip_whitelist_entry,
+        crate::api::v1::ip_whitelist::update_ip_whitelist_entry,
+        crate::api::v1::ip_whitelist::get_ip_whitelist_entry,
         // Archive
         crate::api::v1::archive::create_policy,
         crate::api::v1::archive::list_policies,
@@ -750,6 +766,14 @@ use utoipa::OpenApi;
             crate::domain::mfa::model::MfaMethod,
             MessageResponse,
             crate::error::ErrorResponse,
+            // LDAP
+            crate::domain::ldap::model::LdapConfigResponse,
+            crate::domain::ldap::model::LdapSyncResult,
+            crate::domain::ldap::model::LdapUser,
+            crate::domain::ldap::model::CreateLdapConfig,
+            crate::domain::ldap::model::UpdateLdapConfig,
+            crate::domain::ldap::model::TestLdapConnectionRequest,
+            crate::api::v1::ldap::LdapConnectionTestResponse,
             crate::common::PaginationParams,
             // Feature flags
             CreateFeatureFlag,
@@ -765,6 +789,10 @@ use utoipa::OpenApi;
             crate::domain::api_key::model::CreateApiKey,
             crate::domain::api_key::model::UpdateApiKey,
             crate::domain::api_key::model::ApiKeyScope,
+            // IP Whitelist
+            crate::domain::ip_whitelist::model::CreateIpWhitelistEntry,
+            crate::domain::ip_whitelist::model::UpdateIpWhitelistEntry,
+            crate::domain::ip_whitelist::model::IpWhitelistEntryResponse,
             // Archive
             crate::domain::archive::model::ArchivePolicy,
             crate::domain::archive::model::ArchivePolicyResponse,
@@ -1041,7 +1069,9 @@ use utoipa::OpenApi;
         (name = "Custom Fields", description = "Custom field definitions for dynamic module attributes"),
         (name = "Settings", description = "Configuration management endpoints"),
         (name = "Jobs", description = "Background job scheduler endpoints"),
+        (name = "LDAP", description = "LDAP / Active Directory user synchronization and configuration"),
         (name = "API Keys", description = "API key management and scope validation"),
+        (name = "IP Whitelist", description = "Tenant-scoped IP access control with CIDR support"),
         (name = "Archive", description = "Data archiving policies, jobs, and record restoration"),
         (name = "Notifications", description = "In-app notifications, email/SMS sending"),
         (name = "Reports", description = "Report generation and management"),

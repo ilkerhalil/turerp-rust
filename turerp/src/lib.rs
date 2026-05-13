@@ -11,6 +11,7 @@ pub mod config;
 pub mod db;
 pub mod domain;
 pub mod error;
+pub mod graphql;
 pub mod i18n;
 pub mod middleware;
 pub mod utils;
@@ -180,6 +181,9 @@ pub mod app {
     use crate::domain::invoice::repository::{
         InMemoryInvoiceLineRepository, InMemoryInvoiceRepository, InMemoryPaymentRepository,
     };
+    use crate::domain::ldap::repository::InMemoryLdapConfigRepository;
+    use crate::domain::ldap::service::LdapSyncService;
+    use crate::domain::ldap::BoxLdapConfigRepository;
     use crate::domain::manufacturing::repository::{
         InMemoryBillOfMaterialsRepository, InMemoryRoutingRepository, InMemoryWorkOrderRepository,
     };
@@ -375,6 +379,7 @@ pub mod app {
         pub tenant_config_service: web::Data<TenantConfigService>,
         pub settings_service: web::Data<crate::domain::settings::SettingsService>,
         pub api_key_service: web::Data<crate::domain::api_key::ApiKeyService>,
+        pub ip_whitelist_service: web::Data<crate::domain::ip_whitelist::IpWhitelistService>,
     }
 
     /// Infrastructure services
@@ -460,6 +465,7 @@ pub mod app {
         pub assets_service: web::Data<AssetsService>,
         pub feature_service: web::Data<FeatureFlagService>,
         pub observability_service: web::Data<ObservabilityService>,
+        pub ldap_service: web::Data<LdapSyncService>,
         pub i18n: web::Data<I18n>,
     }
 
@@ -691,6 +697,11 @@ pub mod app {
                 as crate::domain::api_key::BoxApiKeyRepository;
             let api_key_service = crate::domain::api_key::ApiKeyService::new(api_key_repo);
 
+            // IP Whitelist
+            let ip_whitelist_repo = Arc::new(crate::domain::ip_whitelist::InMemoryIpWhitelistRepository::new())
+                as crate::domain::ip_whitelist::BoxIpWhitelistRepository;
+            let ip_whitelist_service = crate::domain::ip_whitelist::IpWhitelistService::new(ip_whitelist_repo);
+
             // Job Scheduler
             let job_scheduler = Arc::new(InMemoryJobScheduler::new()) as Arc<dyn JobScheduler>;
 
@@ -844,6 +855,14 @@ pub mod app {
                 Arc::new(product_service.clone()),
             );
 
+            // LDAP
+            let ldap_repo = Arc::new(InMemoryLdapConfigRepository::new()) as BoxLdapConfigRepository;
+            let ldap_service = LdapSyncService::new(
+                ldap_repo,
+                Arc::new(user_service.clone()),
+                config.encryption_key_bytes(),
+            );
+
             // Circuit Breaker Registry
             let circuit_breaker_registry = CircuitBreakerRegistry::new();
 
@@ -877,6 +896,7 @@ pub mod app {
                     tenant_config_service: web::Data::new(tenant_config_service),
                     settings_service: web::Data::new(settings_service),
                     api_key_service: web::Data::new(api_key_service),
+                    ip_whitelist_service: web::Data::new(ip_whitelist_service),
                 },
                 InfraState {
                     job_scheduler: web::Data::from(job_scheduler),
@@ -930,6 +950,7 @@ pub mod app {
                 assets_service,
                 feature_service,
                 observability_service,
+                ldap_service,
             )
         }};
     }
@@ -953,6 +974,7 @@ pub mod app {
             assets_service,
             feature_service,
             observability_service,
+            ldap_service,
         ) = create_in_memory_services!(config);
 
         // Register business metrics subscribers on event bus
@@ -1005,6 +1027,7 @@ pub mod app {
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
             observability_service: web::Data::new(observability_service),
+            ldap_service: web::Data::new(ldap_service),
             i18n: web::Data::new(i18n),
         }
     }
@@ -1263,6 +1286,13 @@ pub mod app {
         let api_key_repo = PostgresApiKeyRepository::new(pool.clone()).into_boxed();
         let api_key_service = crate::domain::api_key::ApiKeyService::new(api_key_repo);
 
+        // IP Whitelist - in-memory (until PostgreSQL repo is implemented)
+        let ip_whitelist_repo =
+            Arc::new(crate::domain::ip_whitelist::InMemoryIpWhitelistRepository::new())
+                as crate::domain::ip_whitelist::BoxIpWhitelistRepository;
+        let ip_whitelist_service =
+            crate::domain::ip_whitelist::IpWhitelistService::new(ip_whitelist_repo);
+
         // Job Scheduler - PostgreSQL
         let job_scheduler = Arc::new(db::job_repository::PostgresJobScheduler::new(pool.clone()))
             as Arc<dyn JobScheduler>;
@@ -1416,6 +1446,14 @@ pub mod app {
             Arc::new(product_service.clone()),
         );
 
+        // LDAP (using in-memory repo until PostgreSQL repo is implemented)
+        let ldap_repo = Arc::new(InMemoryLdapConfigRepository::new()) as BoxLdapConfigRepository;
+        let ldap_service = LdapSyncService::new(
+            ldap_repo,
+            web::Data::new(user_service.clone()),
+            config.encryption_key_bytes(),
+        );
+
         AppState {
             auth: AuthState {
                 auth_service: web::Data::new(auth_service),
@@ -1443,6 +1481,7 @@ pub mod app {
                 tenant_config_service: web::Data::new(tenant_config_service),
                 settings_service: web::Data::new(settings_service),
                 api_key_service: web::Data::new(api_key_service),
+                ip_whitelist_service: web::Data::new(ip_whitelist_service),
             },
             infra: InfraState {
                 job_scheduler: web::Data::from(job_scheduler),
@@ -1495,6 +1534,7 @@ pub mod app {
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
             observability_service: web::Data::new(observability_service),
+            ldap_service: web::Data::new(ldap_service),
             i18n: web::Data::new(i18n),
         }
     }
@@ -1524,6 +1564,7 @@ pub mod app {
             assets_service,
             feature_service,
             observability_service,
+            ldap_service,
         ) = create_in_memory_services!(config);
 
         // For in-memory testing with postgres feature, create a mock pool
@@ -1593,6 +1634,7 @@ pub mod app {
             assets_service: web::Data::new(assets_service),
             feature_service: web::Data::new(feature_service),
             observability_service: web::Data::new(observability_service),
+            ldap_service: web::Data::new(ldap_service),
             i18n: web::Data::new(i18n),
         }
     }
