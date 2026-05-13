@@ -95,6 +95,17 @@ pub use hr::repository::{
     InMemoryEmployeeRepository, LeaveRequestRepository, LeaveTypeRepository, PayrollRepository,
 };
 pub use hr::service::HrService;
+pub use hr::sgk::model::{
+    CreateEmployeeBonus, CreateSgkConfig, CreateSgkEmployeeRegistration, EmployeeBonus,
+    IncomeTaxBracket, MaritalStatus, SgkConfig, SgkEmployeeRegistration, SgkPayrollLineItem,
+    SgkPayrollSummary, UpdateSgkConfig,
+};
+pub use hr::sgk::repository::{
+    BoxEmployeeBonusRepository, BoxSgkConfigRepository, BoxSgkEmployeeRegistrationRepository,
+    EmployeeBonusRepository, InMemoryEmployeeBonusRepository, InMemorySgkConfigRepository,
+    InMemorySgkEmployeeRegistrationRepository, SgkConfigRepository,
+    SgkEmployeeRegistrationRepository,
+};
 
 // Invoice module re-exports
 pub use invoice::model::{

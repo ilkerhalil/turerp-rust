@@ -6,6 +6,7 @@ pub mod attendance;
 pub mod employees;
 pub mod leave;
 pub mod payroll;
+pub mod sgk;
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct ApproveRequest {
@@ -138,5 +139,19 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/hr/payroll/{id}/destroy")
             .route(web::delete().to(payroll::destroy_payroll)),
+    )
+    // SGK Payroll
+    .service(web::resource("/v1/hr/sgk/register").route(web::post().to(sgk::register_sgk_employee)))
+    .service(
+        web::resource("/v1/hr/sgk/calculate").route(web::post().to(sgk::calculate_sgk_payroll)),
+    )
+    .service(web::resource("/v1/hr/sgk/bonus").route(web::post().to(sgk::add_bonus)))
+    .service(
+        web::resource("/v1/hr/sgk/summary/{year}/{month}")
+            .route(web::get().to(sgk::get_payroll_summary)),
+    )
+    .service(
+        web::resource("/v1/hr/sgk/ebildirge/{year}/{month}")
+            .route(web::get().to(sgk::generate_ebildirge)),
     );
 }

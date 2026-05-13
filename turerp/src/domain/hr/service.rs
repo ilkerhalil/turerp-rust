@@ -11,6 +11,9 @@ use crate::domain::hr::repository::{
     BoxAttendanceRepository, BoxEmployeeRepository, BoxLeaveRequestRepository,
     BoxLeaveTypeRepository, BoxPayrollRepository,
 };
+use crate::domain::hr::sgk::calculator::{
+    default_income_tax_brackets_2026, default_sgk_config_2026, PayrollCalculator,
+};
 use crate::error::ApiError;
 
 /// HR service
@@ -38,6 +41,14 @@ impl HrService {
             leave_type_repo,
             payroll_repo,
         }
+    }
+
+    pub fn employee_repo(&self) -> &BoxEmployeeRepository {
+        &self.employee_repo
+    }
+
+    pub fn payroll_repo(&self) -> &BoxPayrollRepository {
+        &self.payroll_repo
     }
 
     // Employee operations
@@ -290,8 +301,25 @@ impl HrService {
 
         let overtime_pay = overtime_hours * (employee.salary / Decimal::new(200, 0)); // Hourly rate
         let gross = employee.salary + overtime_pay;
-        let deductions = gross * Decimal::new(20, 2); // Simplified tax calculation (0.20)
-        let net = gross - deductions;
+        let bonuses = Decimal::ZERO; // TODO: sum period bonuses when bonus repo is wired
+
+        let config = default_sgk_config_2026();
+        let brackets = default_income_tax_brackets_2026();
+        let calculator = PayrollCalculator::new(config, brackets);
+
+        let marital_status = employee.marital_status.as_deref().unwrap_or("single");
+        let line = calculator.gross_to_net(
+            gross,
+            bonuses,
+            marital_status,
+            employee.children_count,
+            employee.spouse_working,
+        );
+
+        let deductions = line.sgk_premium_worker
+            + line.unemployment_premium_worker
+            + line.income_tax
+            + line.stamp_tax;
 
         let payroll = Payroll {
             id: 0,
@@ -302,9 +330,17 @@ impl HrService {
             basic_salary: employee.salary,
             overtime_hours,
             overtime_pay,
-            bonuses: Decimal::ZERO,
+            bonuses,
+            gross_salary: line.gross_salary,
+            sgk_premium: line.sgk_premium_worker,
+            unemployment_premium: line.unemployment_premium_worker,
+            income_tax: line.income_tax,
+            stamp_tax: line.stamp_tax,
+            agi: line.agi,
+            sgk_earnings_base: line.sgk_earnings_base,
+            total_employer_cost: line.employer_cost,
             deductions,
-            net_salary: net,
+            net_salary: line.net_salary,
             status: PayrollStatus::Calculated,
             paid_at: None,
             created_at: chrono::Utc::now(),
@@ -394,6 +430,8 @@ mod tests {
             position: Some("Developer".to_string()),
             hire_date: chrono::Utc::now(),
             salary: Decimal::new(500000, 2), // 5000.00
+            tc_kimlik_no: "12345678901".to_string(),
+            children_count: 0,
         };
         let result = service.create_employee(create).await;
         assert!(result.is_ok());

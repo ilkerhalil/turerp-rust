@@ -1634,6 +1634,8 @@ async fn test_employee_soft_delete_and_restore() {
             "email": format!("sd{}@company.com", unique),
             "hire_date": chrono::Utc::now().to_rfc3339(),
             "salary": "50000.00",
+            "tc_kimlik_no": "12345678901",
+            "children_count": 0,
             "tenant_id": 1
         }))
         .to_request();

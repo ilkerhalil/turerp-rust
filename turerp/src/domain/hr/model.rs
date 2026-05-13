@@ -24,6 +24,12 @@ pub struct Employee {
     pub termination_date: Option<DateTime<Utc>>,
     pub status: EmployeeStatus,
     pub salary: Decimal,
+    pub tc_kimlik_no: String,
+    pub iban: Option<String>,
+    pub sgk_sicil_no: Option<String>,
+    pub marital_status: Option<String>,
+    pub children_count: i32,
+    pub spouse_working: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
@@ -273,6 +279,14 @@ pub struct Payroll {
     pub overtime_hours: Decimal,
     pub overtime_pay: Decimal,
     pub bonuses: Decimal,
+    pub gross_salary: Decimal,
+    pub sgk_premium: Decimal,
+    pub unemployment_premium: Decimal,
+    pub income_tax: Decimal,
+    pub stamp_tax: Decimal,
+    pub agi: Decimal,
+    pub sgk_earnings_base: Decimal,
+    pub total_employer_cost: Decimal,
     pub deductions: Decimal,
     pub net_salary: Decimal,
     pub status: PayrollStatus,
@@ -352,6 +366,8 @@ pub struct CreateEmployee {
     pub position: Option<String>,
     pub hire_date: DateTime<Utc>,
     pub salary: Decimal,
+    pub tc_kimlik_no: String,
+    pub children_count: i32,
 }
 
 impl CreateEmployee {
@@ -371,6 +387,12 @@ impl CreateEmployee {
         }
         if self.salary < Decimal::ZERO {
             errors.push("Salary cannot be negative".to_string());
+        }
+        if self.tc_kimlik_no.trim().is_empty() {
+            errors.push("TC Kimlik No is required".to_string());
+        }
+        if self.children_count < 0 {
+            errors.push("Children count cannot be negative".to_string());
         }
         if errors.is_empty() {
             Ok(())
@@ -460,6 +482,7 @@ pub struct EmployeeResponse {
     pub hire_date: DateTime<Utc>,
     pub status: EmployeeStatus,
     pub salary: Decimal,
+    pub gross_salary: Decimal,
     pub tenant_id: i64,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -483,6 +506,7 @@ impl From<Employee> for EmployeeResponse {
             hire_date: e.hire_date,
             status: e.status,
             salary: e.salary,
+            gross_salary: e.salary,
             tenant_id: e.tenant_id,
             company_id: e.company_id,
             created_at: e.created_at,
@@ -511,6 +535,8 @@ mod tests {
             position: Some("Developer".to_string()),
             hire_date: Utc::now(),
             salary: Decimal::new(500000, 2), // 5000.00
+            tc_kimlik_no: "12345678901".to_string(),
+            children_count: 0,
         };
         assert!(valid.validate().is_ok());
 
@@ -527,6 +553,8 @@ mod tests {
             position: None,
             hire_date: Utc::now(),
             salary: Decimal::new(500000, 2), // 5000.00
+            tc_kimlik_no: "".to_string(),
+            children_count: 0,
         };
         assert!(invalid.validate().is_err());
     }

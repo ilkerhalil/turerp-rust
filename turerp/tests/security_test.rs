@@ -751,6 +751,8 @@ async fn test_normal_user_cannot_create_employee() {
             "email": "fail@company.com",
             "hire_date": chrono::Utc::now().to_rfc3339(),
             "salary": "50000.00",
+            "tc_kimlik_no": "12345678901",
+            "children_count": 0,
             "tenant_id": 1
         }))
         .to_request();
@@ -828,6 +830,8 @@ async fn test_tenant_isolation_employees() {
             "email": "private@t1.com",
             "hire_date": chrono::Utc::now().to_rfc3339(),
             "salary": "50000.00",
+            "tc_kimlik_no": "12345678901",
+            "children_count": 0,
             "tenant_id": 1
         }))
         .to_request();

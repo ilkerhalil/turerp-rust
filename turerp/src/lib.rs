@@ -173,6 +173,10 @@ pub mod app {
         InMemoryAttendanceRepository, InMemoryEmployeeRepository, InMemoryLeaveRequestRepository,
         InMemoryLeaveTypeRepository, InMemoryPayrollRepository,
     };
+    use crate::domain::hr::sgk::repository::{
+        InMemoryEmployeeBonusRepository, InMemorySgkConfigRepository,
+        InMemorySgkEmployeeRegistrationRepository,
+    };
     use crate::domain::invoice::repository::{
         InMemoryInvoiceLineRepository, InMemoryInvoiceRepository, InMemoryPaymentRepository,
     };
@@ -361,6 +365,7 @@ pub mod app {
     pub struct HrState {
         pub hr_service: web::Data<HrService>,
         pub shift_service: web::Data<ShiftService>,
+        pub sgk_payroll_service: web::Data<crate::domain::hr::sgk::service::SgkPayrollService>,
     }
 
     /// Admin domain services
@@ -544,6 +549,20 @@ pub mod app {
                 leave_request_repo,
                 leave_type_repo,
                 payroll_repo,
+            );
+
+            // SGK Payroll
+            let sgk_reg_repo = Arc::new(InMemorySgkEmployeeRegistrationRepository::new())
+                as crate::domain::hr::sgk::repository::BoxSgkEmployeeRegistrationRepository;
+            let sgk_config_repo = Arc::new(InMemorySgkConfigRepository::new())
+                as crate::domain::hr::sgk::repository::BoxSgkConfigRepository;
+            let bonus_repo = Arc::new(InMemoryEmployeeBonusRepository::new())
+                as crate::domain::hr::sgk::repository::BoxEmployeeBonusRepository;
+            let sgk_payroll_service = crate::domain::hr::sgk::service::SgkPayrollService::new(
+                hr_service.clone(),
+                sgk_reg_repo,
+                sgk_config_repo,
+                bonus_repo,
             );
 
             // Accounting
@@ -851,6 +870,7 @@ pub mod app {
                 HrState {
                     hr_service: web::Data::new(hr_service),
                     shift_service: web::Data::new(shift_service),
+                    sgk_payroll_service: web::Data::new(sgk_payroll_service),
                 },
                 AdminState {
                     tenant_service: web::Data::new(tenant_service),
@@ -1087,6 +1107,20 @@ pub mod app {
             leave_request_repo,
             leave_type_repo,
             payroll_repo,
+        );
+
+        // SGK Payroll (using in-memory repos until PostgreSQL repos are implemented)
+        let sgk_reg_repo = Arc::new(InMemorySgkEmployeeRegistrationRepository::new())
+            as crate::domain::hr::sgk::repository::BoxSgkEmployeeRegistrationRepository;
+        let sgk_config_repo = Arc::new(InMemorySgkConfigRepository::new())
+            as crate::domain::hr::sgk::repository::BoxSgkConfigRepository;
+        let bonus_repo = Arc::new(InMemoryEmployeeBonusRepository::new())
+            as crate::domain::hr::sgk::repository::BoxEmployeeBonusRepository;
+        let sgk_payroll_service = crate::domain::hr::sgk::service::SgkPayrollService::new(
+            hr_service.clone(),
+            sgk_reg_repo,
+            sgk_config_repo,
+            bonus_repo,
         );
 
         // Accounting - PostgreSQL
@@ -1402,6 +1436,7 @@ pub mod app {
             hr: HrState {
                 hr_service: web::Data::new(hr_service),
                 shift_service: web::Data::new(shift_service),
+                sgk_payroll_service: web::Data::new(sgk_payroll_service),
             },
             admin: AdminState {
                 tenant_service: web::Data::new(tenant_service),

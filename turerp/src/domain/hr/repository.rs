@@ -113,6 +113,12 @@ pub trait PayrollRepository: Send + Sync {
         start: chrono::DateTime<Utc>,
         end: chrono::DateTime<Utc>,
     ) -> Result<Vec<Payroll>, ApiError>;
+    async fn find_by_employee_and_period(
+        &self,
+        employee_id: i64,
+        period_start: chrono::DateTime<Utc>,
+        period_end: chrono::DateTime<Utc>,
+    ) -> Result<Option<Payroll>, ApiError>;
     async fn update_status(&self, id: i64, status: PayrollStatus) -> Result<Payroll, ApiError>;
     async fn mark_paid(&self, id: i64) -> Result<Payroll, ApiError>;
     /// Soft delete payroll
@@ -184,6 +190,12 @@ impl EmployeeRepository for InMemoryEmployeeRepository {
             termination_date: None,
             status: EmployeeStatus::Active,
             salary: create.salary,
+            tc_kimlik_no: create.tc_kimlik_no,
+            iban: None,
+            sgk_sicil_no: None,
+            marital_status: None,
+            children_count: create.children_count,
+            spouse_working: false,
             created_at: now,
             updated_at: now,
             deleted_at: None,
@@ -827,6 +839,25 @@ impl PayrollRepository for InMemoryPayrollRepository {
             })
             .cloned()
             .collect())
+    }
+
+    async fn find_by_employee_and_period(
+        &self,
+        employee_id: i64,
+        period_start: chrono::DateTime<Utc>,
+        period_end: chrono::DateTime<Utc>,
+    ) -> Result<Option<Payroll>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .records
+            .values()
+            .find(|p| {
+                p.employee_id == employee_id
+                    && p.period_start == period_start
+                    && p.period_end == period_end
+                    && !p.is_deleted()
+            })
+            .cloned())
     }
 
     async fn update_status(&self, id: i64, status: PayrollStatus) -> Result<Payroll, ApiError> {

@@ -5,6 +5,7 @@ pub mod model;
 pub mod postgres_repository;
 pub mod repository;
 pub mod service;
+pub mod sgk;
 
 // Re-exports
 pub use model::{
@@ -25,3 +26,14 @@ pub use repository::{
     LeaveTypeRepository, PayrollRepository,
 };
 pub use service::HrService;
+pub use sgk::model::{
+    CreateEmployeeBonus, CreateSgkConfig, CreateSgkEmployeeRegistration, EmployeeBonus,
+    IncomeTaxBracket, MaritalStatus, SgkConfig, SgkEmployeeRegistration, SgkPayrollLineItem,
+    SgkPayrollSummary, UpdateSgkConfig,
+};
+pub use sgk::repository::{
+    BoxEmployeeBonusRepository, BoxSgkConfigRepository, BoxSgkEmployeeRegistrationRepository,
+    EmployeeBonusRepository, InMemoryEmployeeBonusRepository, InMemorySgkConfigRepository,
+    InMemorySgkEmployeeRegistrationRepository, SgkConfigRepository,
+    SgkEmployeeRegistrationRepository,
+};
