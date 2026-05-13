@@ -340,6 +340,7 @@ pub mod app {
         pub auth_service: web::Data<AuthService>,
         pub user_service: web::Data<UserService>,
         pub jwt_service: web::Data<JwtService>,
+        pub mfa_service: web::Data<MfaService>,
     }
 
     /// Commerce domain services
@@ -835,6 +836,7 @@ pub mod app {
                     auth_service: web::Data::new(auth_service),
                     user_service: web::Data::new(user_service),
                     jwt_service: web::Data::new(jwt_service),
+                    mfa_service: web::Data::new(mfa_service),
                 },
                 CommerceState {
                     cari_service: web::Data::new(cari_service),
@@ -1385,6 +1387,7 @@ pub mod app {
                 auth_service: web::Data::new(auth_service),
                 user_service: web::Data::new(user_service),
                 jwt_service: web::Data::new(jwt_service),
+                mfa_service: web::Data::new(mfa_service),
             },
             commerce: CommerceState {
                 cari_service: web::Data::new(cari_service),

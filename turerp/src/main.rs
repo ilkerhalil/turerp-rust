@@ -383,8 +383,10 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.infra.db_pool.clone())
             .app_data(app_state.infra.import_service.clone())
             .app_data(app_state.commerce.inter_company_service.clone())
+            .app_data(app_state.commerce.company_service.clone())
             .app_data(app_state.infra.circuit_breaker_registry.clone())
-            .app_data(app_state.infra.retry_stats.clone());
+            .app_data(app_state.infra.retry_stats.clone())
+            .app_data(app_state.auth.mfa_service.clone());
 
         #[cfg(not(feature = "postgres"))]
         let app = App::new()
@@ -461,8 +463,10 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.analytics.archive_service.clone())
             .app_data(app_state.infra.import_service.clone())
             .app_data(app_state.commerce.inter_company_service.clone())
+            .app_data(app_state.commerce.company_service.clone())
             .app_data(app_state.infra.circuit_breaker_registry.clone())
-            .app_data(app_state.infra.retry_stats.clone());
+            .app_data(app_state.infra.retry_stats.clone())
+            .app_data(app_state.auth.mfa_service.clone());
 
         app // Health check
             .route("/health", web::get().to(health_check))
