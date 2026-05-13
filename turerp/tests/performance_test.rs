@@ -17,6 +17,9 @@ use turerp::middleware::{
 };
 use turerp::utils::jwt::JwtService;
 
+mod common;
+use common::*;
+
 /// Benchmark: hit the liveness endpoint with sequential requests
 #[actix_web::test]
 async fn test_sequential_health_latency() {
@@ -428,5 +431,53 @@ async fn test_concurrent_next_pending_contention() {
         avg_us < 2000.0,
         "avg latency too high under contention: {:.1} us",
         avg_us
+    );
+}
+
+// ============================================================================
+// Dashboard Load Tests (EPIC #46 acceptance criteria)
+// ============================================================================
+
+/// Benchmark: concurrent dashboard KPI requests under load
+#[actix_web::test]
+async fn test_dashboard_load_under_concurrent_requests() {
+    let app_state = create_test_app_state();
+    let app = test::init_service(build_test_app(&app_state)).await;
+    let (token, _) = register_admin(&app_state, 1).await;
+
+    let count = 50;
+    let start = Instant::now();
+
+    let responses = futures::future::join_all((0..count).map(|_| {
+        let req = test::TestRequest::get()
+            .uri("/api/v1/dashboard/kpis")
+            .insert_header(("Authorization", format!("Bearer {}", token)))
+            .to_request();
+        test::call_service(&app, req)
+    }))
+    .await;
+
+    let elapsed = start.elapsed();
+    let ok_count = responses.iter().filter(|r| r.status().is_success()).count();
+    let avg_ms = elapsed.as_millis() as f64 / count as f64;
+
+    println!(
+        "Dashboard concurrent: {} reqs in {:?} ({} OK, avg {:.3} ms/req)",
+        count, elapsed, ok_count, avg_ms
+    );
+
+    assert_eq!(
+        ok_count, count,
+        "all concurrent dashboard requests should succeed"
+    );
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "dashboard load test exceeded 2 seconds: {:?}",
+        elapsed
+    );
+    assert!(
+        avg_ms < 100.0,
+        "avg dashboard latency too high: {:.3} ms",
+        avg_ms
     );
 }

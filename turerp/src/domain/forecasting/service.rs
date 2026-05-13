@@ -516,6 +516,99 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_forecast_accuracy_mape_under_20_percent() {
+        let repo = InMemoryForecastingRepository::new();
+        let today = Utc::now();
+
+        // Seed product and predictable daily sales: 10 units every day for 30 days
+        repo.seed_product(1, 1, "Widget Predictable");
+        for i in 0..30 {
+            repo.seed_sale(1, 1, dec!(10.0), today - Duration::days(i));
+        }
+        repo.seed_stock_level(1, 1, dec!(100.0), Decimal::ZERO);
+
+        let service = ForecastingService::new(Arc::new(repo) as BoxForecastingRepository);
+
+        let request = ForecastRequest {
+            product_id: 1,
+            warehouse_id: Some(1),
+            periods: 7,
+            period_type: ForecastPeriod::Daily,
+            history_days: 30,
+        };
+
+        let forecast = service.forecast_demand(1, request).await.unwrap();
+
+        // Known actual demand for the next 7 days (same pattern = 10 units/day)
+        let actual_demand = dec!(70.0);
+        let forecasted_demand = forecast.forecasted_quantity;
+
+        let mape = if actual_demand > Decimal::ZERO {
+            ((actual_demand - forecasted_demand).abs() / actual_demand) * dec!(100.0)
+        } else {
+            Decimal::ZERO
+        };
+
+        println!(
+            "MAPE test: actual={}, forecasted={}, mape={:.2}%",
+            actual_demand, forecasted_demand, mape
+        );
+
+        assert!(
+            mape < dec!(20.0),
+            "forecast MAPE {:.2}% exceeds 20% threshold",
+            mape
+        );
+    }
+
+    #[tokio::test]
+    async fn test_forecast_accuracy_with_seasonal_pattern() {
+        let repo = InMemoryForecastingRepository::new();
+        let today = Utc::now();
+
+        // Seed product with alternating sales pattern (10, 12, 10, 12...)
+        repo.seed_product(1, 1, "Widget Seasonal");
+        for i in 0..30 {
+            let qty = if i % 2 == 0 { dec!(10.0) } else { dec!(12.0) };
+            repo.seed_sale(1, 1, qty, today - Duration::days(i));
+        }
+        repo.seed_stock_level(1, 1, dec!(100.0), Decimal::ZERO);
+
+        let service = ForecastingService::new(Arc::new(repo) as BoxForecastingRepository);
+
+        let request = ForecastRequest {
+            product_id: 1,
+            warehouse_id: Some(1),
+            periods: 7,
+            period_type: ForecastPeriod::Daily,
+            history_days: 30,
+        };
+
+        let forecast = service.forecast_demand(1, request).await.unwrap();
+
+        // Actual next 7 days: 10+12+10+12+10+12+10 = 76
+        let actual_demand = dec!(76.0);
+        let forecasted_demand = forecast.forecasted_quantity;
+
+        let mape = if actual_demand > Decimal::ZERO {
+            ((actual_demand - forecasted_demand).abs() / actual_demand) * dec!(100.0)
+        } else {
+            Decimal::ZERO
+        };
+
+        println!(
+            "MAPE seasonal: actual={}, forecasted={}, mape={:.2}%",
+            actual_demand, forecasted_demand, mape
+        );
+
+        assert!(
+            mape < dec!(20.0),
+            "seasonal forecast MAPE {:.2}% exceeds 20% threshold",
+            mape
+        );
+    }
+
+    #[tokio::test]
     async fn test_empty_sales_returns_zero_forecast() {
         let repo = InMemoryForecastingRepository::new();
         repo.seed_product(1, 1, "Widget A");
