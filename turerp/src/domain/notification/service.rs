@@ -13,13 +13,20 @@ use crate::domain::notification::model::{
 use crate::domain::notification::provider::{
     EmailProvider, NoopEmailProvider, NoopSmsProvider, SmsProvider,
 };
+use crate::domain::notification::push_repository::{
+    BoxPushTokenRepository, InMemoryPushTokenRepository,
+};
+use crate::domain::notification::push_service::PushNotificationService;
+use crate::domain::notification::push_token::{
+    DeviceType, PushMessage, PushToken, RegisterPushToken,
+};
 use crate::domain::notification::repository::{
     BoxInAppNotificationRepository, BoxNotificationPreferenceRepository, BoxNotificationRepository,
 };
 use crate::domain::notification::template::TemplateEngine;
 use crate::error::ApiError;
 
-/// Notification service handling delivery across email, SMS, and in-app channels
+/// Notification service handling delivery across email, SMS, in-app, and push channels
 pub struct NotificationService {
     notification_repo: BoxNotificationRepository,
     in_app_repo: BoxInAppNotificationRepository,
@@ -27,6 +34,7 @@ pub struct NotificationService {
     job_scheduler: BoxJobScheduler,
     email_provider: Arc<dyn EmailProvider>,
     sms_provider: Arc<dyn SmsProvider>,
+    push_service: Arc<PushNotificationService>,
     template_engine: parking_lot::RwLock<TemplateEngine>,
 }
 
@@ -38,6 +46,7 @@ impl NotificationService {
         job_scheduler: BoxJobScheduler,
         email_provider: Arc<dyn EmailProvider>,
         sms_provider: Arc<dyn SmsProvider>,
+        push_service: Arc<PushNotificationService>,
     ) -> Self {
         Self {
             notification_repo,
@@ -46,6 +55,7 @@ impl NotificationService {
             job_scheduler,
             email_provider,
             sms_provider,
+            push_service,
             template_engine: parking_lot::RwLock::new(TemplateEngine::new()),
         }
     }
@@ -57,6 +67,8 @@ impl NotificationService {
         preference_repo: BoxNotificationPreferenceRepository,
         job_scheduler: BoxJobScheduler,
     ) -> Self {
+        let push_repo = Arc::new(InMemoryPushTokenRepository::new()) as BoxPushTokenRepository;
+        let push_service = Arc::new(PushNotificationService::new(push_repo));
         Self::new(
             notification_repo,
             in_app_repo,
@@ -64,6 +76,7 @@ impl NotificationService {
             job_scheduler,
             Arc::new(NoopEmailProvider::new()),
             Arc::new(NoopSmsProvider::new()),
+            push_service,
         )
     }
 
@@ -447,6 +460,61 @@ impl NotificationService {
     pub async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.notification_repo.destroy(id, tenant_id).await
     }
+
+    // -----------------------------------------------------------------------
+    // Push notification delegates
+    // -----------------------------------------------------------------------
+
+    /// Register a push token for a user
+    pub async fn register_push_token(
+        &self,
+        tenant_id: i64,
+        token: RegisterPushToken,
+    ) -> Result<PushToken, ApiError> {
+        self.push_service.register_token(tenant_id, token).await
+    }
+
+    /// Unregister a push token for a user by device type
+    pub async fn unregister_push_token(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        device_type: DeviceType,
+    ) -> Result<(), ApiError> {
+        self.push_service
+            .unregister_token(tenant_id, user_id, device_type)
+            .await
+    }
+
+    /// Send a push notification to a user
+    pub async fn send_push_notification(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        message: PushMessage,
+    ) -> Result<(), ApiError> {
+        self.push_service
+            .send_push(tenant_id, user_id, message)
+            .await
+    }
+
+    /// Broadcast a push notification to all active users in a tenant
+    pub async fn broadcast_push_notification(
+        &self,
+        tenant_id: i64,
+        message: PushMessage,
+    ) -> Result<Vec<i64>, ApiError> {
+        self.push_service.send_broadcast(tenant_id, message).await
+    }
+
+    /// Get all active push tokens for a user
+    pub async fn get_user_push_tokens(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+    ) -> Result<Vec<PushToken>, ApiError> {
+        self.push_service.get_user_tokens(tenant_id, user_id).await
+    }
 }
 
 #[cfg(test)]
@@ -675,5 +743,73 @@ mod tests {
         let history = svc.get_history(1, Some(1), None, 10, 0).await.unwrap();
         assert_eq!(history.items.len(), 5);
         assert_eq!(history.total, 5);
+    }
+
+    #[tokio::test]
+    async fn test_register_push_token() {
+        let svc = make_service();
+        let token = RegisterPushToken {
+            user_id: 1,
+            device_type: "ios".to_string(),
+            token: "apns_token_123".to_string(),
+        };
+        let result = svc.register_push_token(1, token).await.unwrap();
+        assert_eq!(result.user_id, 1);
+        assert_eq!(result.device_type, DeviceType::Ios);
+    }
+
+    #[tokio::test]
+    async fn test_send_push_notification() {
+        let svc = make_service();
+        let token = RegisterPushToken {
+            user_id: 1,
+            device_type: "android".to_string(),
+            token: "fcm_token_456".to_string(),
+        };
+        svc.register_push_token(1, token).await.unwrap();
+
+        let message = PushMessage {
+            title: "Test".to_string(),
+            body: "Hello".to_string(),
+            data: None,
+            badge: None,
+            sound: None,
+        };
+        svc.send_push_notification(1, 1, message).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_push_notification() {
+        let svc = make_service();
+        svc.register_push_token(
+            1,
+            RegisterPushToken {
+                user_id: 1,
+                device_type: "ios".to_string(),
+                token: "t1".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        svc.register_push_token(
+            1,
+            RegisterPushToken {
+                user_id: 2,
+                device_type: "android".to_string(),
+                token: "t2".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let message = PushMessage {
+            title: "Broadcast".to_string(),
+            body: "All users".to_string(),
+            data: None,
+            badge: None,
+            sound: None,
+        };
+        let sent_to = svc.broadcast_push_notification(1, message).await.unwrap();
+        assert_eq!(sent_to.len(), 2);
     }
 }
