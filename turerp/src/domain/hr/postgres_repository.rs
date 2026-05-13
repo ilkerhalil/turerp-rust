@@ -1264,6 +1264,38 @@ impl PayrollRepository for PostgresPayrollRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
+    async fn find_by_employee_and_period(
+        &self,
+        employee_id: i64,
+        period_start: DateTime<Utc>,
+        period_end: DateTime<Utc>,
+    ) -> Result<Option<Payroll>, ApiError> {
+        // TODO: expand when schema migration is created
+        let result: Option<PayrollRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, company_id, employee_id, period_start, period_end,
+                   basic_salary, overtime_hours, overtime_pay, bonuses,
+                   deductions, net_salary, status, paid_at, created_at,
+                   deleted_at, deleted_by
+            FROM payrolls
+            WHERE employee_id = $1 AND period_start = $2 AND period_end = $3 AND deleted_at IS NULL
+            "#,
+        )
+        .bind(employee_id)
+        .bind(period_start)
+        .bind(period_end)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!(
+                "Failed to find payroll by employee and period: {}",
+                e
+            ))
+        })?;
+
+        Ok(result.map(|r| r.into()))
+    }
+
     async fn find_by_period(
         &self,
         tenant_id: i64,

@@ -1253,6 +1253,8 @@ async fn test_hr_employee_crud() {
             "email": "john.doe@company.com",
             "hire_date": chrono::Utc::now().to_rfc3339(),
             "salary": "50000.00",
+            "tc_kimlik_no": "12345678901",
+            "children_count": 0,
             "tenant_id": 1
         }))
         .to_request();
@@ -2607,6 +2609,8 @@ async fn test_hr_tenant_isolation() {
             "email": "t1@company.com",
             "hire_date": chrono::Utc::now().to_rfc3339(),
             "salary": "50000.00",
+            "tc_kimlik_no": "12345678901",
+            "children_count": 0,
             "tenant_id": 1
         }))
         .to_request();
