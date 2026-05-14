@@ -12,7 +12,7 @@ services:
       - REDIS_URL=redis://cache:6379
       - RUST_LOG=info
       - PORT=8080
-      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - TURERP_OTLP_ENABLED=true
       - TURERP_OTLP_ENDPOINT=http://aspire-dashboard:4317
       - ASPIRE_DASHBOARD_URL=http://localhost:18888
@@ -86,6 +86,9 @@ services:
       - turerp-network
 
   # Aspire Dashboard for OTLP observability
+  # WARNING: DOTNET_DASHBOARD_UNSECURE_ALLOW_ANONYMOUS disables authentication.
+  # This is acceptable for local development only. In production, remove this
+  # flag and place the dashboard behind an authenticated reverse proxy.
   aspire-dashboard:
     image: mcr.microsoft.com/dotnet/aspire-dashboard:9.0
     ports:

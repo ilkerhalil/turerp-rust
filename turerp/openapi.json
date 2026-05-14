@@ -15372,8 +15372,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Not authenticated"
           }
-        }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
       }
     },
     "/api/v1/observability/health": {

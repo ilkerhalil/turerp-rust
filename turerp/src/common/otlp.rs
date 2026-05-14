@@ -1,6 +1,11 @@
 //! OpenTelemetry OTLP pipeline for Aspire Dashboard integration
 //!
 //! Exports traces, metrics, and logs via OTLP to the Aspire Dashboard.
+//!
+//! # Security Note
+//! OTLP exporters use plain HTTP by default. In production, ensure the OTLP
+//! endpoint is on an encrypted channel (e.g., mTLS sidecar, encrypted overlay
+//! network, or HTTPS with `with_tls_config`).
 
 use opentelemetry::trace::TracerProvider;
 use opentelemetry::{global, KeyValue};
@@ -97,9 +102,9 @@ pub fn create_otlp_log_layer(
 
     let layer = OpenTelemetryTracingBridge::new(&logger_provider);
 
-    // Keep the logger_provider alive for the lifetime of the layer by leaking it
-    // This is a pragmatic choice for a server process where the provider lives
-    // until process termination.
+    // SAFETY: Intentionally leak the logger provider so it outlives the tracing
+    // layer, which borrows it. This is acceptable for a long-running server
+    // process where the provider lives until process termination.
     let _ = Box::leak(Box::new(logger_provider));
 
     Ok(layer)
@@ -172,11 +177,9 @@ pub fn install_otlp_pipeline(endpoint: &str) -> Result<OtlpPipeline, String> {
         .with_batch_exporter(log_exporter)
         .build();
 
-    let _ = Box::leak(Box::new(logger_provider));
-
     Ok(OtlpPipeline {
         _tracer_provider: Some(tracer_provider),
         _meter_provider: Some(meter_provider),
-        _logger_provider: None,
+        _logger_provider: Some(logger_provider),
     })
 }

@@ -248,6 +248,13 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!("Starting Turerp ERP server...");
 
+    // Install OTLP metric exporter when enabled
+    if config.metrics.otlp_enabled {
+        if let Err(e) = turerp::common::otlp::install_otlp_metrics(&config.metrics.otlp_endpoint) {
+            tracing::warn!("Failed to install OTLP metrics exporter: {}", e);
+        }
+    }
+
     // Write OpenAPI spec to file so it stays in sync with the code
     if let Ok(json) = ApiDoc::openapi().to_pretty_json() {
         let spec_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("openapi.json");

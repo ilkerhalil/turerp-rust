@@ -522,9 +522,11 @@ pub struct AspireDashboardUrlResponse {
     tag = "Observability",
     responses(
         (status = 200, description = "Aspire Dashboard URL", body = AspireDashboardUrlResponse),
+        (status = 401, description = "Not authenticated"),
     ),
+    security(("bearer_auth" = []))
 )]
-pub async fn get_aspire_dashboard_url() -> ApiResult<HttpResponse> {
+pub async fn get_aspire_dashboard_url(_admin: AdminUser) -> ApiResult<HttpResponse> {
     let url = std::env::var("ASPIRE_DASHBOARD_URL")
         .unwrap_or_else(|_| "http://localhost:18888".to_string());
     Ok(HttpResponse::Ok().json(AspireDashboardUrlResponse { url }))
