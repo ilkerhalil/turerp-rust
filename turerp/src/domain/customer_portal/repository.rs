@@ -77,7 +77,7 @@ pub type BoxSupportTicketRepository = Arc<dyn SupportTicketRepository>;
 
 struct PortalUserInner {
     users: HashMap<i64, PortalUser>,
-    email_index: HashMap<String, i64>,
+    email_index: HashMap<(i64, String), i64>,
     next_id: AtomicI64,
 }
 
@@ -112,7 +112,10 @@ impl PortalUserRepository for InMemoryPortalUserRepository {
         tenant_id: i64,
     ) -> Result<PortalUser, ApiError> {
         let mut inner = self.inner.lock();
-        if inner.email_index.contains_key(&req.email) {
+        if inner
+            .email_index
+            .contains_key(&(tenant_id, req.email.clone()))
+        {
             return Err(ApiError::Conflict(format!(
                 "Portal user with email '{}' already exists",
                 req.email
@@ -137,7 +140,7 @@ impl PortalUserRepository for InMemoryPortalUserRepository {
             last_login_at: None,
         };
         inner.users.insert(id, user.clone());
-        inner.email_index.insert(req.email, id);
+        inner.email_index.insert((tenant_id, req.email), id);
         Ok(user)
     }
 
@@ -158,7 +161,7 @@ impl PortalUserRepository for InMemoryPortalUserRepository {
         let inner = self.inner.lock();
         Ok(inner
             .email_index
-            .get(email)
+            .get(&(tenant_id, email.to_string()))
             .and_then(|id| inner.users.get(id))
             .filter(|u| u.tenant_id == tenant_id)
             .cloned())
@@ -213,7 +216,7 @@ impl PortalUserRepository for InMemoryPortalUserRepository {
             .remove(&id)
             .filter(|u| u.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Portal user {} not found", id)))?;
-        inner.email_index.remove(&user.email);
+        inner.email_index.remove(&(tenant_id, user.email.clone()));
         Ok(())
     }
 }

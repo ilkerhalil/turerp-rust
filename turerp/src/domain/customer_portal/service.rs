@@ -214,7 +214,7 @@ impl CustomerPortalService {
                 delivery_date: order.delivery_date.map(|d| d.date_naive()),
                 total_amount: order.total_amount,
                 currency: order.currency,
-                item_count: 0,
+                item_count: 0, // TODO: populate from order lines once SalesService exposes them
             })
             .collect();
 
@@ -277,7 +277,7 @@ impl CustomerPortalService {
             }
         }
 
-        views.sort_by(|a, b| b.payment_date.cmp(&a.payment_date));
+        views.sort_by_key(|a| std::cmp::Reverse(a.payment_date));
 
         let total = views.len() as i64;
         let page = pagination.page();

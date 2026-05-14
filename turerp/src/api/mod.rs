@@ -1092,6 +1092,22 @@ use utoipa::OpenApi;
             crate::domain::shift::model::ShiftReportQuery,
             crate::domain::shift::model::OvertimeCalculation,
             crate::api::v1::shifts::CalculateOvertimeRequest,
+            // Customer Portal
+            crate::domain::customer_portal::model::PortalUser,
+            crate::domain::customer_portal::model::PortalAuthResponse,
+            crate::domain::customer_portal::model::SupportTicket,
+            crate::domain::customer_portal::model::CustomerOrderView,
+            crate::domain::customer_portal::model::CustomerInvoiceView,
+            crate::domain::customer_portal::model::CustomerPaymentView,
+            crate::domain::customer_portal::model::PortalPaginationParams,
+            crate::domain::customer_portal::model::CreatePortalUser,
+            crate::domain::customer_portal::model::PortalLoginRequest,
+            crate::domain::customer_portal::model::CreateSupportTicket,
+            crate::domain::customer_portal::model::PortalUserProfile,
+            crate::domain::customer_portal::model::PortalUserStatus,
+            crate::domain::customer_portal::model::SupportTicketStatus,
+            crate::domain::customer_portal::model::TicketPriority,
+            crate::domain::customer_portal::model::TicketCategory,
         )
     ),
     security(

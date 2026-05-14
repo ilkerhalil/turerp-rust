@@ -7243,6 +7243,363 @@
         ]
       }
     },
+    "/api/v1/customer-portal/invoices": {
+      "get": {
+        "tags": [
+          "Customer Portal"
+        ],
+        "summary": "Get invoices for the logged-in customer",
+        "operationId": "get_customer_invoices",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer invoices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.customer_portal.model.PortalPaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/customer-portal/invoices/{id}/pdf": {
+      "get": {
+        "tags": [
+          "Customer Portal"
+        ],
+        "summary": "PDF download for an invoice",
+        "operationId": "get_invoice_pdf",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF bytes"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/customer-portal/login": {
+      "post": {
+        "tags": [
+          "Customer Portal"
+        ],
+        "summary": "Login to customer portal (public)",
+        "operationId": "login_portal_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortalLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.customer_portal.model.PortalAuthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.error.ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customer-portal/orders": {
+      "get": {
+        "tags": [
+          "Customer Portal"
+        ],
+        "summary": "Get order history for the logged-in customer",
+        "operationId": "get_customer_orders",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer orders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.customer_portal.model.PortalPaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/customer-portal/payments": {
+      "get": {
+        "tags": [
+          "Customer Portal"
+        ],
+        "summary": "Get payment history for the logged-in customer",
+        "operationId": "get_customer_payments",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer payments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.customer_portal.model.PortalPaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/customer-portal/register": {
+      "post": {
+        "tags": [
+          "Customer Portal"
+        ],
+        "summary": "Register a new portal user (public)",
+        "operationId": "register_portal_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePortalUser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Portal user registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.customer_portal.model.PortalUser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.error.ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customer-portal/support-tickets": {
+      "get": {
+        "tags": [
+          "Customer Portal"
+        ],
+        "summary": "Get support tickets for the logged-in customer",
+        "operationId": "get_support_tickets",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer support tickets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.customer_portal.model.PortalPaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Customer Portal"
+        ],
+        "summary": "Create a support ticket",
+        "operationId": "create_support_ticket",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSupportTicket"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Ticket created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.customer_portal.model.SupportTicket"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/dashboard/charts/revenue-by-category": {
       "get": {
         "tags": [
@@ -26244,6 +26601,43 @@
           }
         }
       },
+      "CreatePortalUser": {
+        "type": "object",
+        "description": "Create portal user request",
+        "required": [
+          "cari_id",
+          "email",
+          "password",
+          "full_name"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "email": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "timezone": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "CreateReconciliationRule": {
         "type": "object",
         "description": "Data for creating a reconciliation rule",
@@ -26461,6 +26855,30 @@
               }
             ],
             "nullable": true
+          }
+        }
+      },
+      "CreateSupportTicket": {
+        "type": "object",
+        "description": "Create support ticket request",
+        "required": [
+          "subject",
+          "description",
+          "priority",
+          "category"
+        ],
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/TicketCategory"
+          },
+          "description": {
+            "type": "string"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/TicketPriority"
+          },
+          "subject": {
+            "type": "string"
           }
         }
       },
@@ -26759,6 +27177,139 @@
               }
             ],
             "nullable": true
+          }
+        }
+      },
+      "CustomerInvoiceView": {
+        "type": "object",
+        "description": "Customer invoice view (read-only, mapped from Invoice)",
+        "required": [
+          "id",
+          "invoice_number",
+          "invoice_type",
+          "status",
+          "issue_date",
+          "due_date",
+          "total_amount",
+          "paid_amount",
+          "outstanding_amount",
+          "currency"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "due_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invoice_number": {
+            "type": "string"
+          },
+          "invoice_type": {
+            "type": "string"
+          },
+          "issue_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "outstanding_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "paid_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "CustomerOrderView": {
+        "type": "object",
+        "description": "Customer order view (read-only, mapped from SalesOrder)",
+        "required": [
+          "id",
+          "order_number",
+          "status",
+          "order_date",
+          "total_amount",
+          "currency",
+          "item_count"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "delivery_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "item_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "order_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "order_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "CustomerPaymentView": {
+        "type": "object",
+        "description": "Customer payment view (read-only, mapped from Payment)",
+        "required": [
+          "id",
+          "invoice_id",
+          "invoice_number",
+          "amount",
+          "payment_date",
+          "payment_method",
+          "currency"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invoice_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invoice_number": {
+            "type": "string"
+          },
+          "payment_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "payment_method": {
+            "type": "string"
           }
         }
       },
@@ -28675,6 +29226,173 @@
           }
         }
       },
+      "PortalAuthResponse": {
+        "type": "object",
+        "description": "Portal auth response",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "portal_user"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "portal_user": {
+            "$ref": "#/components/schemas/PortalUserProfile"
+          },
+          "token_type": {
+            "type": "string"
+          }
+        }
+      },
+      "PortalLoginRequest": {
+        "type": "object",
+        "description": "Portal login request",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "PortalPaginationParams": {
+        "type": "object",
+        "description": "Pagination parameters for portal endpoints",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "PortalUser": {
+        "type": "object",
+        "description": "Portal user entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "cari_id",
+          "email",
+          "full_name",
+          "language",
+          "timezone",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "email": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "language": {
+            "type": "string"
+          },
+          "last_login_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/PortalUserStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
+      "PortalUserProfile": {
+        "type": "object",
+        "description": "Portal user profile (read-only view for auth response)",
+        "required": [
+          "id",
+          "email",
+          "full_name",
+          "cari_id",
+          "cari_name",
+          "language",
+          "timezone"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cari_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "language": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        }
+      },
+      "PortalUserStatus": {
+        "type": "string",
+        "description": "Portal user status",
+        "enum": [
+          "active",
+          "passive",
+          "blocked"
+        ]
+      },
       "ProcessOutboxResponse": {
         "type": "object",
         "description": "Process outbox response",
@@ -30468,6 +31186,85 @@
           "pastdue"
         ]
       },
+      "SupportTicket": {
+        "type": "object",
+        "description": "Support ticket entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "portal_user_id",
+          "cari_id",
+          "ticket_number",
+          "subject",
+          "description",
+          "status",
+          "priority",
+          "category",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "category": {
+            "$ref": "#/components/schemas/TicketCategory"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "portal_user_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "priority": {
+            "$ref": "#/components/schemas/TicketPriority"
+          },
+          "resolved_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/SupportTicketStatus"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ticket_number": {
+            "type": "string"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
+      "SupportTicketStatus": {
+        "type": "string",
+        "description": "Support ticket status",
+        "enum": [
+          "open",
+          "inprogress",
+          "waitingcustomer",
+          "resolved",
+          "closed"
+        ]
+      },
       "SystemHealthSummary": {
         "type": "object",
         "description": "System-wide health summary",
@@ -30880,6 +31677,28 @@
             "type": "string"
           }
         }
+      },
+      "TicketCategory": {
+        "type": "string",
+        "description": "Ticket category",
+        "enum": [
+          "general",
+          "order",
+          "invoice",
+          "payment",
+          "technical",
+          "complaint"
+        ]
+      },
+      "TicketPriority": {
+        "type": "string",
+        "description": "Ticket priority",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ]
       },
       "TopProduct": {
         "type": "object",
@@ -32416,6 +33235,10 @@
     {
       "name": "Cost Centers",
       "description": "Cost center and profit center management with allocations and profitability reports"
+    },
+    {
+      "name": "Customer Portal",
+      "description": "Self-service portal for customers to view orders, invoices, payments and support tickets"
     },
     {
       "name": "Feature Flags",

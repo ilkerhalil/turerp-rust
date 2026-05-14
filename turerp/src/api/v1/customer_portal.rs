@@ -11,14 +11,14 @@ use crate::domain::customer_portal::model::{
     CreatePortalUser, CreateSupportTicket, PortalLoginRequest, PortalPaginationParams,
 };
 use crate::domain::customer_portal::service::CustomerPortalService;
-use crate::error::ApiResult;
+use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
 use crate::utils::jwt::{JwtService, PortalAuthClaims};
 
-/// Portal user extractor - independently validates portal JWT tokens
-pub struct PortalUser(pub PortalAuthClaims);
+/// Portal auth user extractor - independently validates portal JWT tokens
+pub struct PortalAuthUser(pub PortalAuthClaims);
 
-impl actix_web::FromRequest for PortalUser {
+impl actix_web::FromRequest for PortalAuthUser {
     type Error = actix_web::Error;
     type Future = std::future::Ready<Result<Self, Self::Error>>;
 
@@ -40,7 +40,7 @@ impl actix_web::FromRequest for PortalUser {
             )),
         };
 
-        std::future::ready(result.map(PortalUser))
+        std::future::ready(result.map(PortalAuthUser))
     }
 }
 
@@ -48,7 +48,7 @@ impl actix_web::FromRequest for PortalUser {
 #[utoipa::path(
     post, path = "/api/v1/customer-portal/register", tag = "Customer Portal",
     request_body = CreatePortalUser,
-    responses((status = 201, description = "Portal user registered", body = crate::domain::customer_portal::model::PortalUser), (status = 400, description = "Validation error")),
+    responses((status = 201, description = "Portal user registered", body = crate::domain::customer_portal::model::PortalUser), (status = 400, description = "Validation error", body = crate::error::ErrorResponse)),
 )]
 pub async fn register_portal_user(
     portal_service: web::Data<CustomerPortalService>,
@@ -61,7 +61,7 @@ pub async fn register_portal_user(
     let tenant_id = query
         .get("tenant_id")
         .and_then(|s| s.parse::<i64>().ok())
-        .unwrap_or(1);
+        .ok_or_else(|| ApiError::BadRequest("tenant_id query parameter is required".to_string()))?;
     let request = payload.into_inner();
     match portal_service.register(tenant_id, request).await {
         Ok(response) => Ok(HttpResponse::Created().json(response)),
@@ -73,7 +73,7 @@ pub async fn register_portal_user(
 #[utoipa::path(
     post, path = "/api/v1/customer-portal/login", tag = "Customer Portal",
     request_body = PortalLoginRequest,
-    responses((status = 200, description = "Login successful", body = crate::domain::customer_portal::model::PortalAuthResponse), (status = 401, description = "Invalid credentials")),
+    responses((status = 200, description = "Login successful", body = crate::domain::customer_portal::model::PortalAuthResponse), (status = 401, description = "Invalid credentials", body = crate::error::ErrorResponse)),
 )]
 pub async fn login_portal_user(
     portal_service: web::Data<CustomerPortalService>,
@@ -86,7 +86,7 @@ pub async fn login_portal_user(
     let tenant_id = query
         .get("tenant_id")
         .and_then(|s| s.parse::<i64>().ok())
-        .unwrap_or(1);
+        .ok_or_else(|| ApiError::BadRequest("tenant_id query parameter is required".to_string()))?;
     let request = payload.into_inner();
     match portal_service.login(tenant_id, request).await {
         Ok(response) => Ok(HttpResponse::Ok().json(response)),
@@ -98,11 +98,11 @@ pub async fn login_portal_user(
 #[utoipa::path(
     get, path = "/api/v1/customer-portal/orders", tag = "Customer Portal",
     params(PortalPaginationParams),
-    responses((status = 200, description = "Customer orders"), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "Customer orders", body = crate::domain::customer_portal::model::PortalPaginatedResponse<crate::domain::customer_portal::model::CustomerOrderView>), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_customer_orders(
-    portal_user: PortalUser,
+    portal_user: PortalAuthUser,
     portal_service: web::Data<CustomerPortalService>,
     pagination: web::Query<PortalPaginationParams>,
     locale: Locale,
@@ -124,11 +124,11 @@ pub async fn get_customer_orders(
 #[utoipa::path(
     get, path = "/api/v1/customer-portal/invoices", tag = "Customer Portal",
     params(PortalPaginationParams),
-    responses((status = 200, description = "Customer invoices"), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "Customer invoices", body = crate::domain::customer_portal::model::PortalPaginatedResponse<crate::domain::customer_portal::model::CustomerInvoiceView>), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_customer_invoices(
-    portal_user: PortalUser,
+    portal_user: PortalAuthUser,
     portal_service: web::Data<CustomerPortalService>,
     pagination: web::Query<PortalPaginationParams>,
     locale: Locale,
@@ -150,11 +150,11 @@ pub async fn get_customer_invoices(
 #[utoipa::path(
     get, path = "/api/v1/customer-portal/payments", tag = "Customer Portal",
     params(PortalPaginationParams),
-    responses((status = 200, description = "Customer payments"), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "Customer payments", body = crate::domain::customer_portal::model::PortalPaginatedResponse<crate::domain::customer_portal::model::CustomerPaymentView>), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_customer_payments(
-    portal_user: PortalUser,
+    portal_user: PortalAuthUser,
     portal_service: web::Data<CustomerPortalService>,
     pagination: web::Query<PortalPaginationParams>,
     locale: Locale,
@@ -172,29 +172,34 @@ pub async fn get_customer_payments(
     }
 }
 
-/// Mock PDF download for an invoice (placeholder)
+/// PDF download for an invoice
 #[utoipa::path(
     get, path = "/api/v1/customer-portal/invoices/{id}/pdf", tag = "Customer Portal",
     params(("id" = i64, Path, description = "Invoice ID")),
-    responses((status = 200, description = "PDF placeholder", body = String), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "PDF bytes"), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_invoice_pdf(
-    portal_user: PortalUser,
+    portal_user: PortalAuthUser,
     path: web::Path<i64>,
-    _locale: Locale,
+    portal_service: web::Data<CustomerPortalService>,
+    locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
-    let _i18n = resolve(&i18n);
-    let _invoice_id = path.into_inner();
-    let _cari_id = portal_user.0.cari_id;
-    let _tenant_id = portal_user.0.tenant_id;
+    let i18n = resolve(&i18n);
+    let invoice_id = path.into_inner();
+    let cari_id = portal_user.0.cari_id;
+    let tenant_id = portal_user.0.tenant_id;
 
-    Ok(HttpResponse::Ok().json(serde_json::json!({
-        "message": "PDF generation not yet implemented",
-        "invoice_id": _invoice_id,
-        "format": "application/pdf"
-    })))
+    match portal_service
+        .get_invoice_pdf(invoice_id, cari_id, tenant_id)
+        .await
+    {
+        Ok(pdf_bytes) => Ok(HttpResponse::Ok()
+            .content_type("application/pdf")
+            .body(pdf_bytes)),
+        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
+    }
 }
 
 /// Create a support ticket
@@ -205,7 +210,7 @@ pub async fn get_invoice_pdf(
     security(("bearer_auth" = []))
 )]
 pub async fn create_support_ticket(
-    portal_user: PortalUser,
+    portal_user: PortalAuthUser,
     portal_service: web::Data<CustomerPortalService>,
     payload: web::Json<CreateSupportTicket>,
     locale: Locale,
@@ -214,7 +219,7 @@ pub async fn create_support_ticket(
     let i18n = resolve(&i18n);
     let cari_id = portal_user.0.cari_id;
     let tenant_id = portal_user.0.tenant_id;
-    let portal_user_id = portal_user.0.portal_user_id().unwrap_or(0);
+    let portal_user_id = portal_user.0.portal_user_id()?;
 
     match portal_service
         .create_support_ticket(portal_user_id, cari_id, tenant_id, payload.into_inner())
@@ -229,11 +234,11 @@ pub async fn create_support_ticket(
 #[utoipa::path(
     get, path = "/api/v1/customer-portal/support-tickets", tag = "Customer Portal",
     params(PortalPaginationParams),
-    responses((status = 200, description = "Customer support tickets"), (status = 403, description = "Forbidden")),
+    responses((status = 200, description = "Customer support tickets", body = crate::domain::customer_portal::model::PortalPaginatedResponse<crate::domain::customer_portal::model::SupportTicket>), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_support_tickets(
-    portal_user: PortalUser,
+    portal_user: PortalAuthUser,
     portal_service: web::Data<CustomerPortalService>,
     pagination: web::Query<PortalPaginationParams>,
     locale: Locale,
@@ -241,7 +246,7 @@ pub async fn get_support_tickets(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let tenant_id = portal_user.0.tenant_id;
-    let portal_user_id = portal_user.0.portal_user_id().unwrap_or(0);
+    let portal_user_id = portal_user.0.portal_user_id()?;
 
     match portal_service
         .get_support_tickets(portal_user_id, tenant_id, pagination.into_inner())
