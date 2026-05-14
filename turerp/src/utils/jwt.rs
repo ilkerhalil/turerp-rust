@@ -17,6 +17,8 @@ pub struct AuthClaims {
     pub tenant_id: i64,
     pub username: String,
     pub role: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cari_id: Option<i64>,
     pub exp: i64,
     pub iat: i64,
     pub aud: String,
@@ -37,11 +39,18 @@ impl AuthClaims {
             tenant_id,
             username,
             role: role.to_string(),
+            cari_id: None,
             exp: now + expires_in,
             iat: now,
             aud: "turerp-api".to_string(),
             iss: "turerp-auth".to_string(),
         }
+    }
+
+    /// Set cari_id for portal user claims
+    pub fn with_cari_id(mut self, cari_id: i64) -> Self {
+        self.cari_id = Some(cari_id);
+        self
     }
 
     /// Parse the `sub` claim as a user ID, returning an error on invalid tokens.
@@ -52,7 +61,48 @@ impl AuthClaims {
     }
 }
 
-/// JWT token pair
+/// Portal-specific JWT claims
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PortalAuthClaims {
+    pub sub: String,
+    pub tenant_id: i64,
+    pub cari_id: i64,
+    pub email: String,
+    pub role: String,
+    pub exp: i64,
+    pub iat: i64,
+    pub aud: String,
+    pub iss: String,
+}
+
+impl PortalAuthClaims {
+    pub fn new(
+        portal_user_id: i64,
+        tenant_id: i64,
+        cari_id: i64,
+        email: String,
+        expires_in: i64,
+    ) -> Self {
+        let now = Utc::now().timestamp();
+        Self {
+            sub: portal_user_id.to_string(),
+            tenant_id,
+            cari_id,
+            email,
+            role: "portal".to_string(),
+            exp: now + expires_in,
+            iat: now,
+            aud: "turerp-portal".to_string(),
+            iss: "turerp-auth".to_string(),
+        }
+    }
+
+    pub fn portal_user_id(&self) -> Result<i64, ApiError> {
+        self.sub
+            .parse()
+            .map_err(|_| ApiError::Unauthorized("Invalid portal user ID in token".to_string()))
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TokenPair {
     pub access_token: String,
@@ -173,6 +223,35 @@ impl JwtService {
     #[must_use = "The expiration time should be used for client-side token management"]
     pub fn access_token_expiration(&self) -> i64 {
         self.access_token_expiration
+    }
+
+    /// Encode a portal-specific token
+    pub fn encode_portal_token(&self, claims: &PortalAuthClaims) -> Result<String, ApiError> {
+        encode(
+            &Header::new(self.algorithm),
+            claims,
+            &EncodingKey::from_secret(self.secret.as_bytes()),
+        )
+        .map_err(|e| ApiError::Internal(format!("Failed to encode portal token: {}", e)))
+    }
+
+    /// Decode and validate a portal-specific token
+    pub fn decode_portal_token(&self, token: &str) -> Result<PortalAuthClaims, ApiError> {
+        let mut validation = Validation::new(self.algorithm);
+        validation.set_audience(&["turerp-portal"]);
+        validation.set_issuer(&["turerp-auth"]);
+
+        let token_data: TokenData<PortalAuthClaims> = decode(
+            token,
+            &DecodingKey::from_secret(self.secret.as_bytes()),
+            &validation,
+        )
+        .map_err(|e| match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => ApiError::TokenExpired,
+            _ => ApiError::InvalidToken(e.to_string()),
+        })?;
+
+        Ok(token_data.claims)
     }
 }
 

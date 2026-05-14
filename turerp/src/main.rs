@@ -18,12 +18,12 @@ use turerp::api::{
     v1_audit_configure, v1_auth_configure, v1_bank_configure, v1_barcode_configure,
     v1_cari_configure, v1_chart_of_accounts_configure, v1_companies_configure,
     v1_cost_centers_configure, v1_crm_configure, v1_currency_configure, v1_custom_fields_configure,
-    v1_dashboard_configure, v1_documents_configure, v1_earchive_configure,
-    v1_edefter_blockchain_configure, v1_edefter_configure, v1_efatura_configure,
-    v1_events_configure, v1_feature_flags_configure, v1_files_configure, v1_forecasting_configure,
-    v1_goods_receipts_configure, v1_graphql_configure, v1_hr_configure, v1_import_configure,
-    v1_invoice_configure, v1_ip_whitelist_configure, v1_jobs_configure, v1_ldap_configure,
-    v1_manufacturing_configure, v1_mfa_configure, v1_notifications_configure,
+    v1_customer_portal_configure, v1_dashboard_configure, v1_documents_configure,
+    v1_earchive_configure, v1_edefter_blockchain_configure, v1_edefter_configure,
+    v1_efatura_configure, v1_events_configure, v1_feature_flags_configure, v1_files_configure,
+    v1_forecasting_configure, v1_goods_receipts_configure, v1_graphql_configure, v1_hr_configure,
+    v1_import_configure, v1_invoice_configure, v1_ip_whitelist_configure, v1_jobs_configure,
+    v1_ldap_configure, v1_manufacturing_configure, v1_mfa_configure, v1_notifications_configure,
     v1_observability_configure, v1_product_variants_configure, v1_project_configure,
     v1_purchase_orders_configure, v1_purchase_requests_configure, v1_push_notifications_configure,
     v1_rate_limits_configure, v1_reports_configure, v1_resilience_configure, v1_sales_configure,
@@ -381,6 +381,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.integration.earchive_service.clone())
             .app_data(app_state.integration.edefter_service.clone())
             .app_data(app_state.integration.blockchain_ledger_service.clone())
+            .app_data(app_state.integration.customer_portal_service.clone())
             .app_data(app_state.document.document_service.clone())
             .app_data(app_state.document.dashboard_service.clone())
             .app_data(app_state.document.file_storage.clone())
@@ -471,6 +472,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.integration.earchive_service.clone())
             .app_data(app_state.integration.edefter_service.clone())
             .app_data(app_state.integration.blockchain_ledger_service.clone())
+            .app_data(app_state.integration.customer_portal_service.clone())
             .app_data(app_state.document.document_service.clone())
             .app_data(app_state.document.dashboard_service.clone())
             .app_data(app_state.document.file_storage.clone())
@@ -550,6 +552,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_earchive_configure)
                     .configure(v1_edefter_configure)
                     .configure(v1_edefter_blockchain_configure)
+                    .configure(v1_customer_portal_configure)
                     .configure(v1_webhooks_configure)
                     .configure(v1_archive_configure),
             )

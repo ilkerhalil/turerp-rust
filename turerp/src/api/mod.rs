@@ -26,6 +26,7 @@ pub use v1::cost_centers_configure as v1_cost_centers_configure;
 pub use v1::crm_configure as v1_crm_configure;
 pub use v1::currency_configure as v1_currency_configure;
 pub use v1::custom_fields_configure as v1_custom_fields_configure;
+pub use v1::customer_portal_configure as v1_customer_portal_configure;
 pub use v1::dashboard_configure as v1_dashboard_configure;
 pub use v1::documents_configure as v1_documents_configure;
 pub use v1::earchive_configure as v1_earchive_configure;
@@ -468,6 +469,15 @@ use utoipa::OpenApi;
         crate::api::v1::cost_centers::list_deleted_cost_centers,
         crate::api::v1::cost_centers::destroy_cost_center,
         crate::api::v1::cost_centers::bulk_restore_cost_centers,
+        // Customer Portal
+        crate::api::v1::customer_portal::register_portal_user,
+        crate::api::v1::customer_portal::login_portal_user,
+        crate::api::v1::customer_portal::get_customer_orders,
+        crate::api::v1::customer_portal::get_customer_invoices,
+        crate::api::v1::customer_portal::get_customer_payments,
+        crate::api::v1::customer_portal::get_invoice_pdf,
+        crate::api::v1::customer_portal::create_support_ticket,
+        crate::api::v1::customer_portal::get_support_tickets,
         crate::api::v1::cost_centers::create_allocation,
         crate::api::v1::cost_centers::get_allocations,
         crate::api::v1::cost_centers::get_profitability,
@@ -1082,6 +1092,22 @@ use utoipa::OpenApi;
             crate::domain::shift::model::ShiftReportQuery,
             crate::domain::shift::model::OvertimeCalculation,
             crate::api::v1::shifts::CalculateOvertimeRequest,
+            // Customer Portal
+            crate::domain::customer_portal::model::PortalUser,
+            crate::domain::customer_portal::model::PortalAuthResponse,
+            crate::domain::customer_portal::model::SupportTicket,
+            crate::domain::customer_portal::model::CustomerOrderView,
+            crate::domain::customer_portal::model::CustomerInvoiceView,
+            crate::domain::customer_portal::model::CustomerPaymentView,
+            crate::domain::customer_portal::model::PortalPaginationParams,
+            crate::domain::customer_portal::model::CreatePortalUser,
+            crate::domain::customer_portal::model::PortalLoginRequest,
+            crate::domain::customer_portal::model::CreateSupportTicket,
+            crate::domain::customer_portal::model::PortalUserProfile,
+            crate::domain::customer_portal::model::PortalUserStatus,
+            crate::domain::customer_portal::model::SupportTicketStatus,
+            crate::domain::customer_portal::model::TicketPriority,
+            crate::domain::customer_portal::model::TicketCategory,
         )
     ),
     security(
@@ -1112,6 +1138,7 @@ use utoipa::OpenApi;
         (name = "Products", description = "Product catalog, categories and variants"),
         (name = "Chart of Accounts", description = "Chart of accounts, account tree and trial balance"),
         (name = "Cost Centers", description = "Cost center and profit center management with allocations and profitability reports"),
+        (name = "Customer Portal", description = "Self-service portal for customers to view orders, invoices, payments and support tickets"),
         (name = "Feature Flags", description = "Feature flag management endpoints"),
         (name = "Forecasting", description = "Inventory demand forecasting, reorder suggestions and stock alerts"),
         (name = "Custom Fields", description = "Custom field definitions for dynamic module attributes"),

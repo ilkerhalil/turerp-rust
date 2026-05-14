@@ -19,6 +19,8 @@ pub const PUBLIC_PATHS: &[&str] = &[
     "/api/v1/auth/register",
     "/api/v1/auth/refresh",
     "/api/v1/auth/mfa/verify",
+    "/api/v1/customer-portal/register",
+    "/api/v1/customer-portal/login",
     // Legacy API paths (deprecated)
     "/api/auth/login",
     "/api/auth/register",
@@ -76,7 +78,21 @@ impl JwtAuthMiddleware {
         jwt_service: &JwtService,
     ) -> Result<AuthClaims, ApiError> {
         let token = Self::extract_bearer_token(req)?;
-        let claims = jwt_service.decode_token(&token)?;
+        let claims = jwt_service.decode_token(&token).or_else(|_| {
+            jwt_service
+                .decode_portal_token(&token)
+                .map(|portal_claims| AuthClaims {
+                    sub: portal_claims.sub,
+                    tenant_id: portal_claims.tenant_id,
+                    username: portal_claims.email.clone(),
+                    role: "portal".to_string(),
+                    cari_id: Some(portal_claims.cari_id),
+                    exp: portal_claims.exp,
+                    iat: portal_claims.iat,
+                    aud: portal_claims.aud,
+                    iss: portal_claims.iss,
+                })
+        })?;
         req.extensions_mut().insert(claims.clone());
         Ok(claims)
     }
@@ -210,6 +226,35 @@ impl actix_web::FromRequest for AdminUser {
                 } else {
                     std::future::ready(Err(actix_web::error::ErrorForbidden(
                         "Admin access required",
+                    )))
+                }
+            }
+            Err(e) => std::future::ready(Err(e)),
+        }
+    }
+}
+
+/// Portal user extractor - only allows portal role
+pub struct PortalUser(pub AuthClaims);
+
+impl actix_web::FromRequest for PortalUser {
+    type Error = actix_web::Error;
+    type Future = std::future::Ready<Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
+        let claims = req
+            .extensions()
+            .get::<AuthClaims>()
+            .cloned()
+            .ok_or_else(|| actix_web::error::ErrorUnauthorized("Authentication required"));
+
+        match claims {
+            Ok(claims) => {
+                if claims.role == "portal" {
+                    std::future::ready(Ok(PortalUser(claims)))
+                } else {
+                    std::future::ready(Err(actix_web::error::ErrorForbidden(
+                        "Portal access required",
                     )))
                 }
             }
