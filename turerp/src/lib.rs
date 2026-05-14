@@ -1753,7 +1753,7 @@ pub mod app {
     }
 }
 
-/// Setup logging for the application
+/// Setup logging for the application.
 pub fn setup_logging() {
     use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 

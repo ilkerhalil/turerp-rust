@@ -17,6 +17,7 @@ pub mod inter_company;
 pub mod job_executor;
 pub mod jobs;
 pub mod notifications;
+pub mod otlp;
 pub mod pagination;
 pub mod prometheus_percentile;
 pub mod read_replicas;

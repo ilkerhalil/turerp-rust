@@ -506,53 +506,28 @@ pub async fn get_sparkline(
     }
 }
 
-/// Get a Grafana dashboard JSON by name.
+/// Aspire Dashboard URL response.
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
+pub struct AspireDashboardUrlResponse {
+    pub url: String,
+}
+
+/// Get the Aspire Dashboard URL.
 ///
-/// Serves pre-defined dashboards: `infrastructure`, `application`, `business`.
+/// Returns the URL of the Aspire Dashboard where traces, metrics, and logs
+/// can be viewed in real time.
 #[utoipa::path(
     get,
-    path = "/api/v1/observability/dashboards/{name}.json",
+    path = "/api/v1/observability/dashboard-url",
     tag = "Observability",
-    params(("name" = String, Path, description = "Dashboard name")),
     responses(
-        (status = 200, description = "Grafana dashboard JSON", body = crate::domain::observability::model::DashboardJson),
-        (status = 404, description = "Dashboard not found"),
-        (status = 401, description = "Not authenticated"),
+        (status = 200, description = "Aspire Dashboard URL", body = AspireDashboardUrlResponse),
     ),
-    security(("bearer_auth" = []))
 )]
-pub async fn get_dashboard_json(path: web::Path<String>) -> ApiResult<HttpResponse> {
-    let name = path.into_inner();
-    let allowed = ["infrastructure", "application", "business"];
-    if !allowed.contains(&name.as_str()) {
-        return Ok(HttpResponse::NotFound().json(crate::error::ErrorResponse {
-            error: format!("Dashboard '{}' not found", name),
-        }));
-    }
-
-    let file_path = format!("config/grafana/{}.json", name);
-    match tokio::fs::read_to_string(&file_path).await {
-        Ok(content) => {
-            // Validate it's valid JSON
-            match serde_json::from_str::<crate::domain::observability::model::DashboardJson>(
-                &content,
-            ) {
-                Ok(dashboard) => Ok(HttpResponse::Ok().json(dashboard)),
-                Err(_) => {
-                    // If it doesn't match our Rust model, serve raw JSON anyway
-                    Ok(HttpResponse::Ok()
-                        .content_type("application/json")
-                        .body(content))
-                }
-            }
-        }
-        Err(e) => {
-            tracing::warn!("Failed to read dashboard {}: {}", file_path, e);
-            Ok(HttpResponse::NotFound().json(crate::error::ErrorResponse {
-                error: format!("Dashboard '{}' not found", name),
-            }))
-        }
-    }
+pub async fn get_aspire_dashboard_url() -> ApiResult<HttpResponse> {
+    let url = std::env::var("ASPIRE_DASHBOARD_URL")
+        .unwrap_or_else(|_| "http://localhost:18888".to_string());
+    Ok(HttpResponse::Ok().json(AspireDashboardUrlResponse { url }))
 }
 
 /// Percentiles response for current metric snapshots.
@@ -649,8 +624,8 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
                 .route(web::get().to(get_sparkline)),
         )
         .service(
-            web::resource("/v1/observability/dashboards/{name}.json")
-                .route(web::get().to(get_dashboard_json)),
+            web::resource("/v1/observability/dashboard-url")
+                .route(web::get().to(get_aspire_dashboard_url)),
         )
         .service(
             web::resource("/v1/observability/metrics/percentiles")

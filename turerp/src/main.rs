@@ -13,6 +13,7 @@ use turerp::middleware::{
 };
 
 use tokio::sync::mpsc;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use turerp::api::{
     v1_accounting_configure, v1_api_keys_configure, v1_archive_configure, v1_assets_configure,
     v1_audit_configure, v1_auth_configure, v1_bank_configure, v1_barcode_configure,
@@ -32,7 +33,6 @@ use turerp::api::{
     v1_vendor_portal_configure, v1_webhooks_configure, v1_workflows_configure, ApiDoc,
 };
 use turerp::middleware::audit::{AuditEvent, AUDIT_CHANNEL_CAPACITY};
-use turerp::setup_logging;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -188,8 +188,63 @@ fn configure_cors(cors_config: &turerp::config::CorsConfig) -> Cors {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Setup logging
-    setup_logging();
+    // Load configuration first (needed for OTLP settings before subscriber init)
+    let mut config = Config::new().unwrap_or_else(|e| {
+        eprintln!("Failed to load config from env: {}, using defaults", e);
+        Config::default()
+    });
+
+    // Build subscriber with optional OTLP layers.
+    // OTel trace layer must be added directly to Registry (it implements Layer<Registry>),
+    // then EnvFilter, fmt layer, and log bridge can follow.
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "turerp=debug,actix_web=info".into());
+
+    if config.metrics.otlp_enabled {
+        let trace_result =
+            turerp::common::otlp::create_otlp_trace_layer(&config.metrics.otlp_endpoint);
+        let log_result = turerp::common::otlp::create_otlp_log_layer(&config.metrics.otlp_endpoint);
+
+        match (trace_result, log_result) {
+            (Ok(t), Ok(l)) => {
+                tracing_subscriber::registry()
+                    .with(t)
+                    .with(env_filter)
+                    .with(tracing_subscriber::fmt::layer())
+                    .with(l)
+                    .init();
+            }
+            (Ok(t), Err(e)) => {
+                eprintln!("Failed to create OTLP log layer: {}", e);
+                tracing_subscriber::registry()
+                    .with(t)
+                    .with(env_filter)
+                    .with(tracing_subscriber::fmt::layer())
+                    .init();
+            }
+            (Err(e), Ok(l)) => {
+                eprintln!("Failed to create OTLP trace layer: {}", e);
+                tracing_subscriber::registry()
+                    .with(env_filter)
+                    .with(tracing_subscriber::fmt::layer())
+                    .with(l)
+                    .init();
+            }
+            (Err(e1), Err(e2)) => {
+                eprintln!("Failed to create OTLP trace layer: {}", e1);
+                eprintln!("Failed to create OTLP log layer: {}", e2);
+                tracing_subscriber::registry()
+                    .with(env_filter)
+                    .with(tracing_subscriber::fmt::layer())
+                    .init();
+            }
+        }
+    } else {
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+    }
 
     tracing::info!("Starting Turerp ERP server...");
 
@@ -202,12 +257,6 @@ async fn main() -> std::io::Result<()> {
             tracing::info!("OpenAPI spec written to {}", spec_path.display());
         }
     }
-
-    // Load configuration
-    let mut config = Config::new().unwrap_or_else(|e| {
-        tracing::warn!("Failed to load config from env: {}, using defaults", e);
-        Config::default()
-    });
 
     // Resolve secrets from Vault if enabled
     if config.secrets.vault_enabled {

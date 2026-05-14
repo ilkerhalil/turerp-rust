@@ -232,6 +232,10 @@ pub struct MetricsConfig {
     pub enabled: bool,
     /// Path for the metrics endpoint
     pub path: String,
+    /// OTLP endpoint for Aspire Dashboard (e.g. http://localhost:4317)
+    pub otlp_endpoint: String,
+    /// Whether OTLP export is enabled
+    pub otlp_enabled: bool,
 }
 
 impl Default for MetricsConfig {
@@ -239,6 +243,8 @@ impl Default for MetricsConfig {
         Self {
             enabled: true,
             path: "/metrics".to_string(),
+            otlp_endpoint: "http://localhost:4317".to_string(),
+            otlp_enabled: false,
         }
     }
 }
@@ -253,6 +259,13 @@ impl MetricsConfig {
             path: std::env::var("TURERP_METRICS_PATH")
                 .ok()
                 .unwrap_or_else(|| "/metrics".to_string()),
+            otlp_endpoint: std::env::var("TURERP_OTLP_ENDPOINT")
+                .ok()
+                .unwrap_or_else(|| "http://localhost:4317".to_string()),
+            otlp_enabled: std::env::var("TURERP_OTLP_ENABLED")
+                .ok()
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
         }
     }
 }
