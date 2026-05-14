@@ -18,6 +18,7 @@ pub use v1::assets_configure as v1_assets_configure;
 pub use v1::audit_configure as v1_audit_configure;
 pub use v1::auth_configure as v1_auth_configure;
 pub use v1::bank_configure as v1_bank_configure;
+pub use v1::barcode_configure as v1_barcode_configure;
 pub use v1::cari_configure as v1_cari_configure;
 pub use v1::chart_of_accounts_configure as v1_chart_of_accounts_configure;
 pub use v1::companies_configure as v1_companies_configure;
@@ -27,6 +28,7 @@ pub use v1::currency_configure as v1_currency_configure;
 pub use v1::custom_fields_configure as v1_custom_fields_configure;
 pub use v1::dashboard_configure as v1_dashboard_configure;
 pub use v1::documents_configure as v1_documents_configure;
+pub use v1::earchive_configure as v1_earchive_configure;
 pub use v1::edefter_configure as v1_edefter_configure;
 pub use v1::efatura_configure as v1_efatura_configure;
 pub use v1::events_configure as v1_events_configure;
@@ -49,6 +51,7 @@ pub use v1::product_variants_configure as v1_product_variants_configure;
 pub use v1::project_configure as v1_project_configure;
 pub use v1::purchase_orders_configure as v1_purchase_orders_configure;
 pub use v1::purchase_requests_configure as v1_purchase_requests_configure;
+pub use v1::push_notifications_configure as v1_push_notifications_configure;
 pub use v1::rate_limits_configure as v1_rate_limits_configure;
 pub use v1::reports_configure as v1_reports_configure;
 pub use v1::resilience_configure as v1_resilience_configure;
@@ -119,6 +122,11 @@ use utoipa::OpenApi;
         crate::api::v1::bank::get_rule,
         crate::api::v1::bank::update_rule,
         crate::api::v1::bank::delete_rule,
+        // Barcodes
+        crate::api::v1::barcode::generate_barcode,
+        crate::api::v1::barcode::get_barcode_for_entity,
+        crate::api::v1::barcode::delete_barcode,
+        crate::api::v1::barcode::list_barcodes,
         // Users
         crate::api::v1::users::create_user,
         crate::api::v1::users::get_user,
@@ -591,6 +599,12 @@ use utoipa::OpenApi;
         crate::api::v1::notifications::restore_notification,
         crate::api::v1::notifications::list_deleted_notifications,
         crate::api::v1::notifications::destroy_notification,
+        // Push Notifications
+        crate::api::v1::push_notifications::register_push_token,
+        crate::api::v1::push_notifications::unregister_push_token,
+        crate::api::v1::push_notifications::send_push,
+        crate::api::v1::push_notifications::broadcast_push,
+        crate::api::v1::push_notifications::get_user_push_tokens,
         // Observability
         crate::api::v1::observability::health,
         crate::api::v1::observability::health_live,
@@ -692,6 +706,13 @@ use utoipa::OpenApi;
         crate::api::v1::efatura::send_efatura,
         crate::api::v1::efatura::cancel_efatura,
         crate::api::v1::efatura::check_efatura_status,
+        // e-Archive
+        crate::api::v1::earchive::generate_earchive,
+        crate::api::v1::earchive::list_earchives,
+        crate::api::v1::earchive::get_earchive,
+        crate::api::v1::earchive::sign_earchive,
+        crate::api::v1::earchive::send_earchive,
+        crate::api::v1::earchive::cancel_earchive,
         // e-Defter
         crate::api::v1::edefter::create_period,
         crate::api::v1::edefter::list_periods,
@@ -812,6 +833,13 @@ use utoipa::OpenApi;
             crate::api::v1::notifications::InAppNotificationResponse,
             crate::api::v1::notifications::UnreadCountResponse,
             crate::api::v1::notifications::MarkReadResponse,
+            // Push Notifications
+            crate::api::v1::push_notifications::RegisterPushTokenRequest,
+            crate::api::v1::push_notifications::UnregisterPushTokenRequest,
+            crate::api::v1::push_notifications::SendPushRequest,
+            crate::api::v1::push_notifications::BroadcastPushRequest,
+            crate::api::v1::push_notifications::PushTokenResponse,
+            crate::api::v1::push_notifications::BroadcastResponse,
             // Observability
             crate::domain::observability::model::SystemHealthSummary,
             crate::domain::observability::model::HealthCheckResult,
@@ -909,6 +937,12 @@ use utoipa::OpenApi;
             crate::domain::efatura::model::EFaturaResponse,
             crate::domain::efatura::model::CreateEFatura,
             crate::api::v1::efatura::CancelEFaturaRequest,
+            // e-Archive
+            crate::domain::earchive::model::EarchiveStatus,
+            crate::domain::earchive::model::EarchiveType,
+            crate::domain::earchive::model::EarchiveResponse,
+            crate::domain::earchive::model::CreateEarchiveDocument,
+            crate::domain::earchive::model::GenerateEarchiveRequest,
             // e-Defter
             crate::domain::edefter::model::EDefterStatus,
             crate::domain::edefter::model::LedgerType,
@@ -988,6 +1022,13 @@ use utoipa::OpenApi;
             crate::api::v1::resilience::CircuitBreakerResetResponse,
             crate::api::v1::resilience::RetryStatsResponse,
             crate::api::v1::resilience::ServicePath,
+            // Barcodes
+            crate::domain::barcode::model::BarcodeConfig,
+            crate::domain::barcode::model::BarcodeType,
+            crate::domain::barcode::model::BarcodeResponse,
+            crate::domain::barcode::model::CreateBarcode,
+            crate::domain::barcode::model::GenerateBarcodeRequest,
+            crate::api::v1::barcode::ListBarcodesQuery,
             // Forecasting
             crate::domain::forecasting::model::DemandForecast,
             crate::domain::forecasting::model::DemandDataPoint,
@@ -1045,6 +1086,7 @@ use utoipa::OpenApi;
         (name = "Admin", description = "Administrative endpoints (rate limits, system status)"),
         (name = "Auth", description = "Authentication endpoints (login, register, token refresh)"),
         (name = "Bank", description = "Turkish bank integration, statements, transactions and reconciliation"),
+        (name = "Barcodes", description = "Barcode and QR code generation for products and invoices"),
         (name = "Users", description = "User management endpoints (CRUD operations)"),
         (name = "Tenant", description = "Tenant management and configuration"),
         (name = "Cari", description = "Customer / Vendor accounts"),
@@ -1074,6 +1116,7 @@ use utoipa::OpenApi;
         (name = "IP Whitelist", description = "Tenant-scoped IP access control with CIDR support"),
         (name = "Archive", description = "Data archiving policies, jobs, and record restoration"),
         (name = "Notifications", description = "In-app notifications, email/SMS sending"),
+        (name = "Push Notifications", description = "FCM push notification token management and delivery"),
         (name = "Reports", description = "Report generation and management"),
         (name = "Events", description = "Event bus, outbox pattern, and dead letter queue"),
         (name = "Search", description = "Full-text search across entities"),
@@ -1081,6 +1124,7 @@ use utoipa::OpenApi;
         (name = "Currency", description = "Multi-currency support, exchange rates and conversion"),
         (name = "Dashboard", description = "BI dashboard KPIs, charts and widget management"),
         (name = "e-Fatura", description = "Turkish e-Fatura (electronic invoicing) integration with GIB"),
+        (name = "e-Archive", description = "Turkish e-Arşiv Fatura and E-Serbest Meslek Makbuzu integration with GIB"),
         (name = "e-Defter", description = "Turkish e-Defter (electronic ledger) integration with GIB"),
         (name = "Audit", description = "Audit log retrieval"),
         (name = "Webhooks", description = "Webhook endpoints and delivery management"),

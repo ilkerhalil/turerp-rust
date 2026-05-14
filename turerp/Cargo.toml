@@ -123,6 +123,11 @@ handlebars = "6.0"
 # XML parsing (CAMT.053 / ISO 20022)
 quick-xml = { version = "0.37", features = ["serialize"] }
 
+# Barcode / QR code generation
+barcodes = { version = "0.1", features = ["image"] }
+qrcode = "0.14"
+image = "0.25"
+
 # Mocking for tests
 mockall = "0.12"
 

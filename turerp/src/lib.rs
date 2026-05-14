@@ -58,6 +58,8 @@ pub mod app {
     use crate::domain::auth::AuthService;
     use crate::domain::bank::repository::BoxBankRepository;
     use crate::domain::bank::service::BankService;
+    use crate::domain::barcode::repository::BoxBarcodeRepository;
+    use crate::domain::barcode::service::BarcodeService;
     use crate::domain::cari::repository::BoxCariRepository;
     use crate::domain::cari::service::CariService;
     use crate::domain::chart_of_accounts::repository::BoxChartAccountRepository;
@@ -152,6 +154,7 @@ pub mod app {
     use crate::domain::assets::repository::InMemoryAssetsRepository;
     use crate::domain::audit::repository::InMemoryAuditLogRepository;
     use crate::domain::bank::repository::InMemoryBankRepository;
+    use crate::domain::barcode::repository::InMemoryBarcodeRepository;
     use crate::domain::cari::repository::InMemoryCariRepository;
     use crate::domain::chart_of_accounts::repository::InMemoryChartAccountRepository;
     use crate::domain::company::repository::InMemoryCompanyRepository;
@@ -361,6 +364,7 @@ pub mod app {
         pub sales_service: web::Data<SalesService>,
         pub purchase_service: web::Data<PurchaseService>,
         pub product_service: web::Data<ProductService>,
+        pub barcode_service: web::Data<BarcodeService>,
         pub inter_company_service: web::Data<crate::common::inter_company::InterCompanyService>,
     }
 
@@ -433,6 +437,7 @@ pub mod app {
     #[derive(Clone)]
     pub struct IntegrationState {
         pub efatura_service: web::Data<crate::domain::efatura::EFaturaService>,
+        pub earchive_service: web::Data<crate::domain::earchive::EarchiveService>,
         pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
         pub webhook_service: web::Data<WebhookService>,
         pub workflow_service: web::Data<WorkflowService>,
@@ -646,6 +651,10 @@ pub mod app {
                 ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo)
                     .with_cache(cache_service.clone());
 
+            // Barcode
+            let barcode_repo = Arc::new(InMemoryBarcodeRepository::new()) as BoxBarcodeRepository;
+            let barcode_service = BarcodeService::new(barcode_repo);
+
             // Purchase
             let order_repo =
                 Arc::new(InMemoryPurchaseOrderRepository::new()) as BoxPurchaseOrderRepository;
@@ -753,6 +762,11 @@ pub mod app {
                 Arc::new(crate::common::InMemoryGibGateway::new()) as crate::common::BoxGibGateway;
             let efatura_service =
                 crate::domain::efatura::EFaturaService::new(efatura_repo, gib_gateway);
+
+            // e-Archive
+            let earchive_repo = Arc::new(crate::domain::earchive::InMemoryEarchiveRepository::new())
+                as crate::domain::earchive::BoxEarchiveRepository;
+            let earchive_service = crate::domain::earchive::EarchiveService::new(earchive_repo);
 
             // e-Defter
             let edefter_repo = Arc::new(crate::domain::edefter::InMemoryEDefterRepository::new())
@@ -884,6 +898,7 @@ pub mod app {
                     sales_service: web::Data::new(sales_service),
                     purchase_service: web::Data::new(purchase_service),
                     product_service: web::Data::new(product_service),
+                    barcode_service: web::Data::new(barcode_service),
                     inter_company_service: web::Data::new(inter_company_service),
                 },
                 HrState {
@@ -935,6 +950,7 @@ pub mod app {
                 },
                 IntegrationState {
                     efatura_service: web::Data::new(efatura_service),
+                    earchive_service: web::Data::new(earchive_service),
                     edefter_service: web::Data::new(edefter_service),
                     webhook_service: web::Data::new(webhook_service),
                     workflow_service: web::Data::new(workflow_service),
@@ -1221,6 +1237,10 @@ pub mod app {
             ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo)
                 .with_cache(cache_service.clone());
 
+        // Barcode - using in-memory repo until PostgreSQL repo is implemented
+        let barcode_repo = Arc::new(InMemoryBarcodeRepository::new()) as BoxBarcodeRepository;
+        let barcode_service = BarcodeService::new(barcode_repo);
+
         // Purchase - PostgreSQL
         let order_repo = PostgresPurchaseOrderRepository::new(pool.clone()).into_boxed();
         let order_line_repo = PostgresPurchaseOrderLineRepository::new(pool.clone()).into_boxed();
@@ -1353,6 +1373,11 @@ pub mod app {
         let efatura_service =
             crate::domain::efatura::EFaturaService::new(efatura_repo, gib_gateway);
 
+        // e-Archive - PostgreSQL (using in-memory repo until PostgreSQL repo is implemented)
+        let earchive_repo = Arc::new(crate::domain::earchive::InMemoryEarchiveRepository::new())
+            as crate::domain::earchive::BoxEarchiveRepository;
+        let earchive_service = crate::domain::earchive::EarchiveService::new(earchive_repo);
+
         // e-Defter - PostgreSQL
         let edefter_repo = PostgresEDefterRepository::new(pool.clone()).into_boxed();
         let edefter_service = crate::domain::edefter::EDefterService::new(edefter_repo);
@@ -1469,6 +1494,7 @@ pub mod app {
                 sales_service: web::Data::new(sales_service),
                 purchase_service: web::Data::new(purchase_service),
                 product_service: web::Data::new(product_service),
+                barcode_service: web::Data::new(barcode_service),
                 inter_company_service: web::Data::new(inter_company_service),
             },
             hr: HrState {
@@ -1519,6 +1545,7 @@ pub mod app {
             },
             integration: IntegrationState {
                 efatura_service: web::Data::new(efatura_service),
+                earchive_service: web::Data::new(earchive_service),
                 edefter_service: web::Data::new(edefter_service),
                 webhook_service: web::Data::new(webhook_service),
                 workflow_service: web::Data::new(workflow_service),

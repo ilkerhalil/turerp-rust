@@ -66,8 +66,8 @@ pub use jobs::{
 pub use notifications::{
     BoxNotificationService, EmailTemplate, InAppNotification, InMemoryNotificationService,
     Notification, NotificationChannel, NotificationPreference, NotificationPriority,
-    NotificationRequest, NotificationService, NotificationStatus, ResilientNotificationService,
-    UpdatePreference,
+    NotificationRequest, NotificationService, NotificationStatus, PushMessage, PushToken,
+    ResilientNotificationService, UpdatePreference,
 };
 pub use pagination::{PaginatedResult, PaginationParams};
 pub use prometheus_percentile::{compute_percentiles, parse_histograms_from_text, ParsedHistogram};

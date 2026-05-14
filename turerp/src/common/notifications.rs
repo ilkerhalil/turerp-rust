@@ -197,6 +197,32 @@ pub struct UpdatePreference {
     pub enabled: bool,
 }
 
+// ---------------------------------------------------------------------------
+// Push notification types
+// ---------------------------------------------------------------------------
+
+/// Push token for a device
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PushToken {
+    pub id: i64,
+    pub tenant_id: i64,
+    pub user_id: i64,
+    pub device_type: String,
+    pub token: String,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Push message payload
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PushMessage {
+    pub title: String,
+    pub body: String,
+    pub data: Option<serde_json::Value>,
+    pub badge: Option<i32>,
+    pub sound: Option<String>,
+}
+
 /// Simple template engine using string interpolation
 fn render_template(template: &str, vars: &serde_json::Value) -> String {
     let mut result = template.to_string();
@@ -287,6 +313,47 @@ pub trait NotificationService: Send + Sync {
 
     /// Permanently destroy a soft-deleted notification
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    // Push notification methods
+
+    /// Register a push token for a user
+    async fn register_push_token(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        device_type: String,
+        token: String,
+    ) -> Result<PushToken, ApiError>;
+
+    /// Unregister a push token for a user by device type
+    async fn unregister_push_token(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        device_type: String,
+    ) -> Result<(), ApiError>;
+
+    /// Send a push notification to a user
+    async fn send_push(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        message: PushMessage,
+    ) -> Result<(), ApiError>;
+
+    /// Broadcast a push notification to all active users in a tenant
+    async fn broadcast_push(
+        &self,
+        tenant_id: i64,
+        message: PushMessage,
+    ) -> Result<Vec<i64>, ApiError>;
+
+    /// Get all active push tokens for a user
+    async fn get_user_push_tokens(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+    ) -> Result<Vec<PushToken>, ApiError>;
 }
 
 /// Type alias for boxed notification service
@@ -329,9 +396,11 @@ pub struct InMemoryNotificationService {
     in_app: parking_lot::RwLock<Vec<InAppNotification>>,
     templates: parking_lot::RwLock<Vec<EmailTemplate>>,
     preferences: parking_lot::RwLock<Vec<NotificationPreference>>,
+    push_tokens: parking_lot::RwLock<Vec<PushToken>>,
     next_id: parking_lot::RwLock<i64>,
     next_in_app_id: parking_lot::RwLock<i64>,
     next_pref_id: parking_lot::RwLock<i64>,
+    next_push_id: parking_lot::RwLock<i64>,
 }
 
 impl InMemoryNotificationService {
@@ -341,9 +410,11 @@ impl InMemoryNotificationService {
             in_app: parking_lot::RwLock::new(Vec::new()),
             templates: parking_lot::RwLock::new(default_templates()),
             preferences: parking_lot::RwLock::new(Vec::new()),
+            push_tokens: parking_lot::RwLock::new(Vec::new()),
             next_id: parking_lot::RwLock::new(1),
             next_in_app_id: parking_lot::RwLock::new(1),
             next_pref_id: parking_lot::RwLock::new(1),
+            next_push_id: parking_lot::RwLock::new(1),
         }
     }
 
@@ -366,6 +437,13 @@ impl InMemoryNotificationService {
         let pref_id = *id;
         *id += 1;
         pref_id
+    }
+
+    fn allocate_push_id(&self) -> i64 {
+        let mut id = self.next_push_id.write();
+        let push_id = *id;
+        *id += 1;
+        push_id
     }
 
     fn render_notification(&self, request: &NotificationRequest) -> (String, String) {
@@ -680,6 +758,82 @@ impl NotificationService for InMemoryNotificationService {
             )));
         }
         Ok(())
+    }
+
+    async fn register_push_token(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        device_type: String,
+        token: String,
+    ) -> Result<PushToken, ApiError> {
+        let mut tokens = self.push_tokens.write();
+        let id = self.allocate_push_id();
+        let push_token = PushToken {
+            id,
+            tenant_id,
+            user_id,
+            device_type,
+            token,
+            is_active: true,
+            created_at: Utc::now(),
+        };
+        tokens.push(push_token.clone());
+        Ok(push_token)
+    }
+
+    async fn unregister_push_token(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        device_type: String,
+    ) -> Result<(), ApiError> {
+        let mut tokens = self.push_tokens.write();
+        for t in tokens.iter_mut() {
+            if t.tenant_id == tenant_id && t.user_id == user_id && t.device_type == device_type {
+                t.is_active = false;
+            }
+        }
+        Ok(())
+    }
+
+    async fn send_push(
+        &self,
+        _tenant_id: i64,
+        _user_id: i64,
+        _message: PushMessage,
+    ) -> Result<(), ApiError> {
+        tracing::info!("[MOCK FCM] InMemoryNotificationService send_push");
+        Ok(())
+    }
+
+    async fn broadcast_push(
+        &self,
+        tenant_id: i64,
+        _message: PushMessage,
+    ) -> Result<Vec<i64>, ApiError> {
+        let tokens = self.push_tokens.read();
+        let mut sent_to = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for t in tokens.iter() {
+            if t.tenant_id == tenant_id && t.is_active && seen.insert(t.user_id) {
+                sent_to.push(t.user_id);
+            }
+        }
+        Ok(sent_to)
+    }
+
+    async fn get_user_push_tokens(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+    ) -> Result<Vec<PushToken>, ApiError> {
+        let tokens = self.push_tokens.read();
+        Ok(tokens
+            .iter()
+            .filter(|t| t.tenant_id == tenant_id && t.user_id == user_id && t.is_active)
+            .cloned()
+            .collect())
     }
 }
 
@@ -1012,6 +1166,120 @@ impl NotificationService for crate::domain::notification::service::NotificationS
         crate::domain::notification::service::NotificationService::destroy(self, id, tenant_id)
             .await
     }
+
+    async fn register_push_token(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        device_type: String,
+        token: String,
+    ) -> Result<PushToken, ApiError> {
+        let device_type = device_type
+            .parse::<crate::domain::notification::push_token::DeviceType>()
+            .map_err(|e: String| ApiError::Validation(format!("Invalid device type: {}", e)))?;
+        let result =
+            crate::domain::notification::service::NotificationService::register_push_token(
+                self,
+                tenant_id,
+                crate::domain::notification::push_token::RegisterPushToken {
+                    user_id,
+                    device_type: device_type.to_string(),
+                    token,
+                },
+            )
+            .await?;
+        Ok(PushToken {
+            id: result.id,
+            tenant_id: result.tenant_id,
+            user_id: result.user_id,
+            device_type: result.device_type.to_string(),
+            token: result.token,
+            is_active: result.is_active,
+            created_at: result.created_at,
+        })
+    }
+
+    async fn unregister_push_token(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        device_type: String,
+    ) -> Result<(), ApiError> {
+        let device_type = device_type
+            .parse()
+            .map_err(|e: String| ApiError::Validation(format!("Invalid device type: {}", e)))?;
+        crate::domain::notification::service::NotificationService::unregister_push_token(
+            self,
+            tenant_id,
+            user_id,
+            device_type,
+        )
+        .await
+    }
+
+    async fn send_push(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        message: PushMessage,
+    ) -> Result<(), ApiError> {
+        crate::domain::notification::service::NotificationService::send_push_notification(
+            self,
+            tenant_id,
+            user_id,
+            crate::domain::notification::push_token::PushMessage {
+                title: message.title,
+                body: message.body,
+                data: message.data,
+                badge: message.badge,
+                sound: message.sound,
+            },
+        )
+        .await
+    }
+
+    async fn broadcast_push(
+        &self,
+        tenant_id: i64,
+        message: PushMessage,
+    ) -> Result<Vec<i64>, ApiError> {
+        crate::domain::notification::service::NotificationService::broadcast_push_notification(
+            self,
+            tenant_id,
+            crate::domain::notification::push_token::PushMessage {
+                title: message.title,
+                body: message.body,
+                data: message.data,
+                badge: message.badge,
+                sound: message.sound,
+            },
+        )
+        .await
+    }
+
+    async fn get_user_push_tokens(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+    ) -> Result<Vec<PushToken>, ApiError> {
+        let tokens =
+            crate::domain::notification::service::NotificationService::get_user_push_tokens(
+                self, tenant_id, user_id,
+            )
+            .await?;
+        Ok(tokens
+            .into_iter()
+            .map(|t| PushToken {
+                id: t.id,
+                tenant_id: t.tenant_id,
+                user_id: t.user_id,
+                device_type: t.device_type.to_string(),
+                token: t.token,
+                is_active: t.is_active,
+                created_at: t.created_at,
+            })
+            .collect())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1188,6 +1456,54 @@ impl NotificationService for ResilientNotificationService {
 
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.inner.destroy(id, tenant_id).await
+    }
+
+    async fn register_push_token(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        device_type: String,
+        token: String,
+    ) -> Result<PushToken, ApiError> {
+        self.inner
+            .register_push_token(tenant_id, user_id, device_type, token)
+            .await
+    }
+
+    async fn unregister_push_token(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        device_type: String,
+    ) -> Result<(), ApiError> {
+        self.inner
+            .unregister_push_token(tenant_id, user_id, device_type)
+            .await
+    }
+
+    async fn send_push(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+        message: PushMessage,
+    ) -> Result<(), ApiError> {
+        self.inner.send_push(tenant_id, user_id, message).await
+    }
+
+    async fn broadcast_push(
+        &self,
+        tenant_id: i64,
+        message: PushMessage,
+    ) -> Result<Vec<i64>, ApiError> {
+        self.inner.broadcast_push(tenant_id, message).await
+    }
+
+    async fn get_user_push_tokens(
+        &self,
+        tenant_id: i64,
+        user_id: i64,
+    ) -> Result<Vec<PushToken>, ApiError> {
+        self.inner.get_user_push_tokens(tenant_id, user_id).await
     }
 }
 

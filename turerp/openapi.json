@@ -3492,6 +3492,172 @@
         ]
       }
     },
+    "/api/v1/barcodes": {
+      "get": {
+        "tags": [
+          "barcodes"
+        ],
+        "summary": "List all barcodes for the current tenant with pagination",
+        "operationId": "list_barcodes",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "Items per page",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true,
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of barcodes"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/barcodes/generate": {
+      "post": {
+        "tags": [
+          "barcodes"
+        ],
+        "summary": "Generate a barcode for an entity (admin only)",
+        "operationId": "generate_barcode",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateBarcodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Barcode generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BarcodeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          }
+        }
+      }
+    },
+    "/api/v1/barcodes/{entity_type}/{entity_id}": {
+      "get": {
+        "tags": [
+          "barcodes"
+        ],
+        "summary": "Get barcode for a specific entity",
+        "operationId": "get_barcode_for_entity",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (e.g. product, invoice)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Barcode found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BarcodeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Barcode not found"
+          }
+        }
+      }
+    },
+    "/api/v1/barcodes/{id}": {
+      "delete": {
+        "tags": [
+          "barcodes"
+        ],
+        "summary": "Delete a barcode by ID (admin only)",
+        "operationId": "delete_barcode",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Barcode ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Barcode deleted"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - admin required"
+          },
+          "404": {
+            "description": "Barcode not found"
+          }
+        }
+      }
+    },
     "/api/v1/cari": {
       "get": {
         "tags": [
@@ -7482,6 +7648,262 @@
           },
           "404": {
             "description": "Widget not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/earchive": {
+      "get": {
+        "tags": [
+          "E-Archive"
+        ],
+        "summary": "List E-Archive documents (paginated, optional status filter)",
+        "operationId": "list_earchives",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Filter by status (Draft, Generated, Signed, Sent, Accepted, Rejected, Cancelled)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of E-Archive documents"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/earchive/generate": {
+      "post": {
+        "tags": [
+          "E-Archive"
+        ],
+        "summary": "Generate an E-Archive document from an invoice (requires admin role)",
+        "operationId": "generate_earchive",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateEarchiveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "E-Archive document generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarchiveResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/earchive/{id}": {
+      "get": {
+        "tags": [
+          "E-Archive"
+        ],
+        "summary": "Get an E-Archive document by ID",
+        "operationId": "get_earchive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "E-Archive document ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "E-Archive document found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarchiveResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/earchive/{id}/cancel": {
+      "post": {
+        "tags": [
+          "E-Archive"
+        ],
+        "summary": "Cancel an E-Archive document (requires admin role)",
+        "operationId": "cancel_earchive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "E-Archive document ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "E-Archive document cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarchiveResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/earchive/{id}/send": {
+      "post": {
+        "tags": [
+          "E-Archive"
+        ],
+        "summary": "Send an E-Archive document to GİB (requires admin role)",
+        "operationId": "send_earchive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "E-Archive document ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "E-Archive document sent to GİB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarchiveResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/earchive/{id}/sign": {
+      "post": {
+        "tags": [
+          "E-Archive"
+        ],
+        "summary": "Sign an E-Archive document (requires admin role)",
+        "operationId": "sign_earchive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "E-Archive document ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "E-Archive document signed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EarchiveResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
           }
         },
         "security": [
@@ -13708,6 +14130,174 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/push/broadcast": {
+      "post": {
+        "tags": [
+          "Push Notifications"
+        ],
+        "summary": "Broadcast a push notification to all active users (admin)",
+        "operationId": "broadcast_push",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BroadcastPushRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Push broadcast sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BroadcastResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/push/register": {
+      "post": {
+        "tags": [
+          "Push Notifications"
+        ],
+        "summary": "Register a push token for the current user",
+        "operationId": "register_push_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterPushTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Push token registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/push/send": {
+      "post": {
+        "tags": [
+          "Push Notifications"
+        ],
+        "summary": "Send a push notification to a specific user (admin)",
+        "operationId": "send_push",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendPushRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Push notification sent"
+          },
+          "404": {
+            "description": "User has no active tokens"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/push/tokens": {
+      "get": {
+        "tags": [
+          "Push Notifications"
+        ],
+        "summary": "List push tokens for the current user",
+        "operationId": "get_user_push_tokens",
+        "responses": {
+          "200": {
+            "description": "List of push tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PushTokenResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/notifications/push/unregister": {
+      "delete": {
+        "tags": [
+          "Push Notifications"
+        ],
+        "summary": "Unregister a push token for the current user",
+        "operationId": "unregister_push_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnregisterPushTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Push token unregistered"
+          },
+          "404": {
+            "description": "Token not found"
           }
         },
         "security": [
@@ -23905,6 +24495,97 @@
           }
         }
       },
+      "BarcodeConfig": {
+        "type": "object",
+        "description": "Stored barcode configuration",
+        "required": [
+          "id",
+          "tenant_id",
+          "entity_type",
+          "entity_id",
+          "barcode_type",
+          "code",
+          "created_at"
+        ],
+        "properties": {
+          "barcode_type": {
+            "$ref": "#/components/schemas/BarcodeType"
+          },
+          "code": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "entity_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "image_data": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BarcodeResponse": {
+        "type": "object",
+        "description": "Barcode response for API consumers",
+        "required": [
+          "id",
+          "entity_type",
+          "entity_id",
+          "barcode_type",
+          "code",
+          "created_at"
+        ],
+        "properties": {
+          "barcode_type": {
+            "$ref": "#/components/schemas/BarcodeType"
+          },
+          "code": {
+            "type": "string"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "entity_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "image_url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "BarcodeType": {
+        "type": "string",
+        "description": "Barcode symbology type",
+        "enum": [
+          "Ean13",
+          "Code128",
+          "QrCode",
+          "DataMatrix"
+        ]
+      },
       "BeratInfo": {
         "type": "object",
         "description": "Berat (certificate) information",
@@ -23946,6 +24627,55 @@
           "quarterly",
           "yearly"
         ]
+      },
+      "BroadcastPushRequest": {
+        "type": "object",
+        "description": "Broadcast push notification request",
+        "required": [
+          "title",
+          "body"
+        ],
+        "properties": {
+          "badge": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "body": {
+            "type": "string"
+          },
+          "data": {
+            "nullable": true
+          },
+          "sound": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "BroadcastResponse": {
+        "type": "object",
+        "description": "Sent to response for broadcast",
+        "required": [
+          "sent_to_count",
+          "user_ids"
+        ],
+        "properties": {
+          "sent_to_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "user_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
       },
       "BulkRestoreFailed": {
         "type": "object",
@@ -24908,6 +25638,31 @@
           }
         }
       },
+      "CreateBarcode": {
+        "type": "object",
+        "description": "Request to create a barcode record",
+        "required": [
+          "entity_type",
+          "entity_id",
+          "barcode_type",
+          "code"
+        ],
+        "properties": {
+          "barcode_type": {
+            "$ref": "#/components/schemas/BarcodeType"
+          },
+          "code": {
+            "type": "string"
+          },
+          "entity_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "entity_type": {
+            "type": "string"
+          }
+        }
+      },
       "CreateChartAccount": {
         "type": "object",
         "description": "Data for creating a new chart account",
@@ -25016,6 +25771,27 @@
           },
           "profile_id": {
             "$ref": "#/components/schemas/EFaturaProfile"
+          }
+        }
+      },
+      "CreateEarchiveDocument": {
+        "type": "object",
+        "description": "Create e-archive document request",
+        "required": [
+          "document_type",
+          "xml_content"
+        ],
+        "properties": {
+          "document_type": {
+            "$ref": "#/components/schemas/EarchiveType"
+          },
+          "related_invoice_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "xml_content": {
+            "type": "string"
           }
         }
       },
@@ -26170,6 +26946,69 @@
           "Error"
         ]
       },
+      "EarchiveResponse": {
+        "type": "object",
+        "description": "E-Archive response DTO",
+        "required": [
+          "id",
+          "tenant_id",
+          "document_type",
+          "uuid",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "document_type": {
+            "$ref": "#/components/schemas/EarchiveType"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sent_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/EarchiveStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "uuid": {
+            "type": "string"
+          }
+        }
+      },
+      "EarchiveStatus": {
+        "type": "string",
+        "description": "E-Archive document status",
+        "enum": [
+          "Draft",
+          "Generated",
+          "Signed",
+          "Sent",
+          "Accepted",
+          "Rejected",
+          "Cancelled"
+        ]
+      },
+      "EarchiveType": {
+        "type": "string",
+        "description": "E-Archive document type",
+        "enum": [
+          "EArchiveInvoice",
+          "ESerbestMeslekMakbuzu"
+        ]
+      },
       "EffectiveRateQuery": {
         "type": "object",
         "description": "Query params for getting the effective tax rate",
@@ -26520,6 +27359,60 @@
             "type": "integer",
             "format": "int64",
             "nullable": true
+          }
+        }
+      },
+      "GenerateBarcodeRequest": {
+        "type": "object",
+        "description": "Request to generate a barcode image",
+        "required": [
+          "entity_type",
+          "entity_type_id",
+          "barcode_type",
+          "code"
+        ],
+        "properties": {
+          "barcode_type": {
+            "$ref": "#/components/schemas/BarcodeType"
+          },
+          "code": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "entity_type_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          }
+        }
+      },
+      "GenerateEarchiveRequest": {
+        "type": "object",
+        "description": "Generate e-archive from invoice request",
+        "required": [
+          "invoice_id",
+          "document_type"
+        ],
+        "properties": {
+          "document_type": {
+            "$ref": "#/components/schemas/EarchiveType"
+          },
+          "invoice_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -27247,6 +28140,24 @@
           "KebirDefter"
         ]
       },
+      "ListBarcodesQuery": {
+        "type": "object",
+        "description": "Query params for listing barcodes",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "minimum": 0
+          }
+        }
+      },
       "LoginRequest": {
         "type": "object",
         "description": "Login request",
@@ -27710,6 +28621,45 @@
           }
         }
       },
+      "PushTokenResponse": {
+        "type": "object",
+        "description": "Push token response",
+        "required": [
+          "id",
+          "tenant_id",
+          "user_id",
+          "device_type",
+          "token",
+          "is_active",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "device_type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "token": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "RateLimitDashboardResponse": {
         "type": "object",
         "description": "Overall dashboard response",
@@ -27898,6 +28848,22 @@
         ],
         "properties": {
           "refresh_token": {
+            "type": "string"
+          }
+        }
+      },
+      "RegisterPushTokenRequest": {
+        "type": "object",
+        "description": "Register push token request",
+        "required": [
+          "device_type",
+          "token"
+        ],
+        "properties": {
+          "device_type": {
+            "type": "string"
+          },
+          "token": {
             "type": "string"
           }
         }
@@ -28315,6 +29281,39 @@
             "type": "integer",
             "format": "int64",
             "nullable": true
+          }
+        }
+      },
+      "SendPushRequest": {
+        "type": "object",
+        "description": "Send push notification request",
+        "required": [
+          "user_id",
+          "title",
+          "body"
+        ],
+        "properties": {
+          "badge": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "body": {
+            "type": "string"
+          },
+          "data": {
+            "nullable": true
+          },
+          "sound": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -29781,6 +30780,18 @@
           }
         }
       },
+      "UnregisterPushTokenRequest": {
+        "type": "object",
+        "description": "Unregister push token request",
+        "required": [
+          "device_type"
+        ],
+        "properties": {
+          "device_type": {
+            "type": "string"
+          }
+        }
+      },
       "UpdateApiKey": {
         "type": "object",
         "description": "Update API Key request",
@@ -31163,6 +32174,10 @@
       "description": "Turkish bank integration, statements, transactions and reconciliation"
     },
     {
+      "name": "Barcodes",
+      "description": "Barcode and QR code generation for products and invoices"
+    },
+    {
       "name": "Users",
       "description": "User management endpoints (CRUD operations)"
     },
@@ -31279,6 +32294,10 @@
       "description": "In-app notifications, email/SMS sending"
     },
     {
+      "name": "Push Notifications",
+      "description": "FCM push notification token management and delivery"
+    },
+    {
       "name": "Reports",
       "description": "Report generation and management"
     },
@@ -31305,6 +32324,10 @@
     {
       "name": "e-Fatura",
       "description": "Turkish e-Fatura (electronic invoicing) integration with GIB"
+    },
+    {
+      "name": "e-Archive",
+      "description": "Turkish e-Arşiv Fatura and E-Serbest Meslek Makbuzu integration with GIB"
     },
     {
       "name": "e-Defter",

@@ -7,6 +7,7 @@ pub mod assets;
 pub mod audit;
 pub mod auth;
 pub mod bank;
+pub mod barcode;
 pub mod cari;
 pub mod chart_of_accounts;
 pub mod company;
@@ -16,6 +17,7 @@ pub mod currency;
 pub mod custom_field;
 pub mod dashboard;
 pub mod document;
+pub mod earchive;
 pub mod edefter;
 pub mod efatura;
 pub mod feature;
@@ -69,6 +71,13 @@ pub use project::repository::{
     InMemoryProjectRepository, ProjectRepository, WbsItemRepository,
 };
 pub use project::service::ProjectService;
+
+// Barcode module re-exports
+pub use barcode::model::{
+    BarcodeConfig, BarcodeResponse, BarcodeType, CreateBarcode, GenerateBarcodeRequest,
+};
+pub use barcode::repository::{BarcodeRepository, BoxBarcodeRepository, InMemoryBarcodeRepository};
+pub use barcode::service::BarcodeService;
 
 // Cari module re-exports
 pub use cari::model::{Cari, CariResponse, CariStatus, CariType, CreateCari, UpdateCari};
@@ -328,6 +337,16 @@ pub use efatura::model::{
 };
 pub use efatura::repository::{BoxEFaturaRepository, EFaturaRepository, InMemoryEFaturaRepository};
 pub use efatura::service::EFaturaService;
+
+// e-Archive module re-exports
+pub use earchive::model::{
+    CreateEarchiveDocument, EarchiveDocument, EarchiveResponse, EarchiveStatus, EarchiveType,
+    GenerateEarchiveRequest,
+};
+pub use earchive::repository::{
+    BoxEarchiveRepository, EarchiveRepository, InMemoryEarchiveRepository,
+};
+pub use earchive::service::EarchiveService;
 
 // e-Defter module re-exports
 pub use edefter::gib::{generate_berat_xml, generate_buyuk_defter_xml, generate_yevmiye_xml};

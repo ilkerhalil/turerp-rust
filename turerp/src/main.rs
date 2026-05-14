@@ -15,20 +15,20 @@ use turerp::middleware::{
 use tokio::sync::mpsc;
 use turerp::api::{
     v1_accounting_configure, v1_api_keys_configure, v1_archive_configure, v1_assets_configure,
-    v1_audit_configure, v1_auth_configure, v1_bank_configure, v1_cari_configure,
-    v1_chart_of_accounts_configure, v1_companies_configure, v1_cost_centers_configure,
-    v1_crm_configure, v1_currency_configure, v1_custom_fields_configure, v1_dashboard_configure,
-    v1_documents_configure, v1_edefter_configure, v1_efatura_configure, v1_events_configure,
-    v1_feature_flags_configure, v1_files_configure, v1_forecasting_configure,
-    v1_goods_receipts_configure, v1_graphql_configure, v1_hr_configure, v1_import_configure,
-    v1_invoice_configure, v1_ip_whitelist_configure, v1_jobs_configure, v1_ldap_configure,
-    v1_manufacturing_configure, v1_mfa_configure, v1_notifications_configure,
+    v1_audit_configure, v1_auth_configure, v1_bank_configure, v1_barcode_configure,
+    v1_cari_configure, v1_chart_of_accounts_configure, v1_companies_configure,
+    v1_cost_centers_configure, v1_crm_configure, v1_currency_configure, v1_custom_fields_configure,
+    v1_dashboard_configure, v1_documents_configure, v1_earchive_configure, v1_edefter_configure,
+    v1_efatura_configure, v1_events_configure, v1_feature_flags_configure, v1_files_configure,
+    v1_forecasting_configure, v1_goods_receipts_configure, v1_graphql_configure, v1_hr_configure,
+    v1_import_configure, v1_invoice_configure, v1_ip_whitelist_configure, v1_jobs_configure,
+    v1_ldap_configure, v1_manufacturing_configure, v1_mfa_configure, v1_notifications_configure,
     v1_observability_configure, v1_product_variants_configure, v1_project_configure,
-    v1_purchase_orders_configure, v1_purchase_requests_configure, v1_rate_limits_configure,
-    v1_reports_configure, v1_resilience_configure, v1_sales_configure, v1_search_configure,
-    v1_settings_configure, v1_shifts_configure, v1_stock_configure, v1_subscriptions_configure,
-    v1_tax_configure, v1_tenant_configure, v1_users_configure, v1_webhooks_configure,
-    v1_workflows_configure, ApiDoc,
+    v1_purchase_orders_configure, v1_purchase_requests_configure, v1_push_notifications_configure,
+    v1_rate_limits_configure, v1_reports_configure, v1_resilience_configure, v1_sales_configure,
+    v1_search_configure, v1_settings_configure, v1_shifts_configure, v1_stock_configure,
+    v1_subscriptions_configure, v1_tax_configure, v1_tenant_configure, v1_users_configure,
+    v1_webhooks_configure, v1_workflows_configure, ApiDoc,
 };
 use turerp::middleware::audit::{AuditEvent, AUDIT_CHANNEL_CAPACITY};
 use turerp::setup_logging;
@@ -341,6 +341,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.commerce.stock_service.clone())
             .app_data(app_state.commerce.invoice_service.clone())
             .app_data(app_state.commerce.sales_service.clone())
+            .app_data(app_state.commerce.barcode_service.clone())
             .app_data(app_state.hr.hr_service.clone())
             .app_data(app_state.hr.sgk_payroll_service.clone())
             .app_data(app_state.finance.accounting_service.clone())
@@ -376,6 +377,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.finance.cost_center_service.clone())
             .app_data(app_state.finance.currency_service.clone())
             .app_data(app_state.integration.efatura_service.clone())
+            .app_data(app_state.integration.earchive_service.clone())
             .app_data(app_state.integration.edefter_service.clone())
             .app_data(app_state.document.document_service.clone())
             .app_data(app_state.document.dashboard_service.clone())
@@ -428,6 +430,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.commerce.stock_service.clone())
             .app_data(app_state.commerce.invoice_service.clone())
             .app_data(app_state.commerce.sales_service.clone())
+            .app_data(app_state.commerce.barcode_service.clone())
             .app_data(app_state.hr.hr_service.clone())
             .app_data(app_state.hr.sgk_payroll_service.clone())
             .app_data(app_state.finance.accounting_service.clone())
@@ -463,6 +466,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.finance.cost_center_service.clone())
             .app_data(app_state.finance.currency_service.clone())
             .app_data(app_state.integration.efatura_service.clone())
+            .app_data(app_state.integration.earchive_service.clone())
             .app_data(app_state.integration.edefter_service.clone())
             .app_data(app_state.document.document_service.clone())
             .app_data(app_state.document.dashboard_service.clone())
@@ -492,6 +496,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_auth_configure)
                     .configure(v1_users_configure)
                     .configure(v1_bank_configure)
+                    .configure(v1_barcode_configure)
                     .configure(v1_cost_centers_configure)
                     .configure(v1_currency_configure)
                     .configure(v1_dashboard_configure)
@@ -532,12 +537,14 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_jobs_configure)
                     .configure(v1_ldap_configure)
                     .configure(v1_notifications_configure)
+                    .configure(v1_push_notifications_configure)
                     .configure(v1_observability_configure)
                     .configure(v1_reports_configure)
                     .configure(v1_events_configure)
                     .configure(v1_search_configure)
                     .configure(v1_tax_configure)
                     .configure(v1_efatura_configure)
+                    .configure(v1_earchive_configure)
                     .configure(v1_edefter_configure)
                     .configure(v1_webhooks_configure)
                     .configure(v1_archive_configure),
