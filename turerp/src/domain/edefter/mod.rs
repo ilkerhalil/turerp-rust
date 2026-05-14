@@ -4,6 +4,7 @@
 //! (Gelir İdaresi Başkanlığı), including Yevmiye defteri, Büyük defter,
 //! and Berat signing structures for ledger period management.
 
+pub mod blockchain;
 pub mod gib;
 pub mod model;
 pub mod repository;
@@ -19,3 +20,10 @@ pub use model::{
 };
 pub use repository::{BoxEDefterRepository, EDefterRepository, InMemoryEDefterRepository};
 pub use service::EDefterService;
+
+// Blockchain re-exports
+pub use blockchain::{
+    BlockchainLedgerRepository, BlockchainLedgerService, BoxBlockchainLedgerRepository,
+    BuildMerkleTreeRequest, HashChainEntry, HashChainResponse, InMemoryBlockchainLedgerRepository,
+    LedgerHashState, MerkleNode, MerkleTree, VerifyPeriodRequest, VerifyResult,
+};
