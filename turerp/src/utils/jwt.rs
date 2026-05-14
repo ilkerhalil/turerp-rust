@@ -75,6 +75,20 @@ pub struct PortalAuthClaims {
     pub iss: String,
 }
 
+/// Vendor-specific JWT claims
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct VendorAuthClaims {
+    pub sub: String,
+    pub tenant_id: i64,
+    pub cari_id: i64,
+    pub email: String,
+    pub role: String,
+    pub exp: i64,
+    pub iat: i64,
+    pub aud: String,
+    pub iss: String,
+}
+
 impl PortalAuthClaims {
     pub fn new(
         portal_user_id: i64,
@@ -101,6 +115,35 @@ impl PortalAuthClaims {
         self.sub
             .parse()
             .map_err(|_| ApiError::Unauthorized("Invalid portal user ID in token".to_string()))
+    }
+}
+
+impl VendorAuthClaims {
+    pub fn new(
+        vendor_user_id: i64,
+        tenant_id: i64,
+        cari_id: i64,
+        email: String,
+        expires_in: i64,
+    ) -> Self {
+        let now = Utc::now().timestamp();
+        Self {
+            sub: vendor_user_id.to_string(),
+            tenant_id,
+            cari_id,
+            email,
+            role: "vendor".to_string(),
+            exp: now + expires_in,
+            iat: now,
+            aud: "turerp-vendor".to_string(),
+            iss: "turerp-auth".to_string(),
+        }
+    }
+
+    pub fn vendor_user_id(&self) -> Result<i64, ApiError> {
+        self.sub
+            .parse()
+            .map_err(|_| ApiError::Unauthorized("Invalid vendor user ID in token".to_string()))
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -242,6 +285,35 @@ impl JwtService {
         validation.set_issuer(&["turerp-auth"]);
 
         let token_data: TokenData<PortalAuthClaims> = decode(
+            token,
+            &DecodingKey::from_secret(self.secret.as_bytes()),
+            &validation,
+        )
+        .map_err(|e| match e.kind() {
+            jsonwebtoken::errors::ErrorKind::ExpiredSignature => ApiError::TokenExpired,
+            _ => ApiError::InvalidToken(e.to_string()),
+        })?;
+
+        Ok(token_data.claims)
+    }
+
+    /// Encode a vendor-specific token
+    pub fn encode_vendor_token(&self, claims: &VendorAuthClaims) -> Result<String, ApiError> {
+        encode(
+            &Header::new(self.algorithm),
+            claims,
+            &EncodingKey::from_secret(self.secret.as_bytes()),
+        )
+        .map_err(|e| ApiError::Internal(format!("Failed to encode vendor token: {}", e)))
+    }
+
+    /// Decode and validate a vendor-specific token
+    pub fn decode_vendor_token(&self, token: &str) -> Result<VendorAuthClaims, ApiError> {
+        let mut validation = Validation::new(self.algorithm);
+        validation.set_audience(&["turerp-vendor"]);
+        validation.set_issuer(&["turerp-auth"]);
+
+        let token_data: TokenData<VendorAuthClaims> = decode(
             token,
             &DecodingKey::from_secret(self.secret.as_bytes()),
             &validation,

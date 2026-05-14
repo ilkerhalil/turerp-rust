@@ -223,6 +223,10 @@ pub mod app {
     use crate::domain::tax::repository::{InMemoryTaxPeriodRepository, InMemoryTaxRateRepository};
     use crate::domain::tenant::repository::InMemoryTenantRepository;
     use crate::domain::user::repository::InMemoryUserRepository;
+    use crate::domain::vendor_portal::repository::{
+        InMemoryDeliveryNoteRepository, InMemoryVendorUserRepository,
+    };
+    use crate::domain::vendor_portal::service::VendorPortalService;
     use crate::domain::webhook::repository::{
         InMemoryWebhookDeliveryRepository, InMemoryWebhookRepository,
     };
@@ -446,6 +450,7 @@ pub mod app {
         pub blockchain_ledger_service:
             web::Data<crate::domain::edefter::blockchain::BlockchainLedgerService>,
         pub customer_portal_service: web::Data<CustomerPortalService>,
+        pub vendor_portal_service: web::Data<VendorPortalService>,
         pub webhook_service: web::Data<WebhookService>,
         pub workflow_service: web::Data<WorkflowService>,
     }
@@ -803,6 +808,21 @@ pub mod app {
                 config.jwt.access_token_expiration / 3600,
             );
 
+            // Vendor Portal
+            let vendor_user_repo = Arc::new(InMemoryVendorUserRepository::new())
+                as crate::domain::vendor_portal::BoxVendorUserRepository;
+            let delivery_note_repo = Arc::new(InMemoryDeliveryNoteRepository::new())
+                as crate::domain::vendor_portal::BoxDeliveryNoteRepository;
+            let vendor_portal_service = VendorPortalService::new(
+                vendor_user_repo,
+                delivery_note_repo,
+                Arc::new(cari_service.clone()),
+                Arc::new(purchase_service.clone()),
+                Arc::new(invoice_service.clone()),
+                Arc::new(jwt_service.clone()),
+                config.jwt.access_token_expiration / 3600,
+            );
+
             // Webhooks
             let webhook_repo = Arc::new(InMemoryWebhookRepository::new(config.encryption_key_bytes())) as BoxWebhookRepository;
             let delivery_repo =
@@ -984,6 +1004,7 @@ pub mod app {
                     edefter_service: web::Data::new(edefter_service),
                     blockchain_ledger_service: web::Data::new(blockchain_ledger_service),
                     customer_portal_service: web::Data::new(customer_portal_service),
+                    vendor_portal_service: web::Data::new(vendor_portal_service),
                     webhook_service: web::Data::new(webhook_service),
                     workflow_service: web::Data::new(workflow_service),
                 },
@@ -1230,6 +1251,21 @@ pub mod app {
             portal_ticket_repo,
             Arc::new(cari_service.clone()),
             Arc::new(sales_service.clone()),
+            Arc::new(invoice_service.clone()),
+            Arc::new(jwt_service.clone()),
+            config.jwt.access_token_expiration / 3600,
+        );
+
+        // Vendor Portal - PostgreSQL (using in-memory repos until PostgreSQL repos are implemented)
+        let vendor_user_repo = Arc::new(InMemoryVendorUserRepository::new())
+            as crate::domain::vendor_portal::BoxVendorUserRepository;
+        let delivery_note_repo = Arc::new(InMemoryDeliveryNoteRepository::new())
+            as crate::domain::vendor_portal::BoxDeliveryNoteRepository;
+        let vendor_portal_service = VendorPortalService::new(
+            vendor_user_repo,
+            delivery_note_repo,
+            Arc::new(cari_service.clone()),
+            Arc::new(purchase_service.clone()),
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
@@ -1596,6 +1632,7 @@ pub mod app {
                 edefter_service: web::Data::new(edefter_service),
                 blockchain_ledger_service: web::Data::new(blockchain_ledger_service),
                 customer_portal_service: web::Data::new(customer_portal_service),
+                vendor_portal_service: web::Data::new(vendor_portal_service),
                 webhook_service: web::Data::new(webhook_service),
                 workflow_service: web::Data::new(workflow_service),
             },

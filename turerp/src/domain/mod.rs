@@ -44,6 +44,7 @@ pub mod subscription;
 pub mod tax;
 pub mod tenant;
 pub mod user;
+pub mod vendor_portal;
 pub mod webhook;
 pub mod workflow;
 
@@ -418,6 +419,17 @@ pub use customer_portal::repository::{
     InMemorySupportTicketRepository, PortalUserRepository, SupportTicketRepository,
 };
 pub use customer_portal::service::CustomerPortalService;
+
+// Vendor Portal module re-exports
+pub use vendor_portal::model::{
+    CreateDeliveryNote, CreateVendorUser, DeliveryNote, DeliveryNoteStatus, VendorAuthResponse,
+    VendorLoginRequest, VendorPaginationParams, VendorUser, VendorUserProfile, VendorUserStatus,
+};
+pub use vendor_portal::repository::{
+    BoxDeliveryNoteRepository, BoxVendorUserRepository, DeliveryNoteRepository,
+    InMemoryDeliveryNoteRepository, InMemoryVendorUserRepository, VendorUserRepository,
+};
+pub use vendor_portal::service::VendorPortalService;
 
 // Test: is file module visible?
 pub type __TestFileVisibility = crate::domain::file::model::FileRecord;

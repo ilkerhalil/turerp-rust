@@ -55,6 +55,7 @@ pub mod subscriptions;
 pub mod tax;
 pub mod tenant;
 pub mod users;
+pub mod vendor_portal;
 pub mod webhooks;
 pub mod workflows;
 
@@ -114,5 +115,6 @@ pub use subscriptions::configure as subscriptions_configure;
 pub use tax::configure as tax_configure;
 pub use tenant::configure as tenant_configure;
 pub use users::configure as users_configure;
+pub use vendor_portal::configure as vendor_portal_configure;
 pub use webhooks::configure as webhooks_configure;
 pub use workflows::configure as workflows_configure;

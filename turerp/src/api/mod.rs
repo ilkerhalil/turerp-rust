@@ -66,6 +66,7 @@ pub use v1::subscriptions_configure as v1_subscriptions_configure;
 pub use v1::tax_configure as v1_tax_configure;
 pub use v1::tenant_configure as v1_tenant_configure;
 pub use v1::users_configure as v1_users_configure;
+pub use v1::vendor_portal_configure as v1_vendor_portal_configure;
 pub use v1::webhooks_configure as v1_webhooks_configure;
 pub use v1::workflows_configure as v1_workflows_configure;
 
@@ -478,6 +479,15 @@ use utoipa::OpenApi;
         crate::api::v1::customer_portal::get_invoice_pdf,
         crate::api::v1::customer_portal::create_support_ticket,
         crate::api::v1::customer_portal::get_support_tickets,
+        // Vendor Portal
+        crate::api::v1::vendor_portal::register_vendor_user,
+        crate::api::v1::vendor_portal::login_vendor_user,
+        crate::api::v1::vendor_portal::get_vendor_orders,
+        crate::api::v1::vendor_portal::get_vendor_invoices,
+        crate::api::v1::vendor_portal::get_vendor_payments,
+        crate::api::v1::vendor_portal::get_vendor_invoice_pdf,
+        crate::api::v1::vendor_portal::create_delivery_note,
+        crate::api::v1::vendor_portal::get_delivery_notes,
         crate::api::v1::cost_centers::create_allocation,
         crate::api::v1::cost_centers::get_allocations,
         crate::api::v1::cost_centers::get_profitability,
@@ -1108,6 +1118,20 @@ use utoipa::OpenApi;
             crate::domain::customer_portal::model::SupportTicketStatus,
             crate::domain::customer_portal::model::TicketPriority,
             crate::domain::customer_portal::model::TicketCategory,
+            // Vendor Portal
+            crate::domain::vendor_portal::model::VendorUser,
+            crate::domain::vendor_portal::model::VendorAuthResponse,
+            crate::domain::vendor_portal::model::DeliveryNote,
+            crate::domain::vendor_portal::model::VendorOrderView,
+            crate::domain::vendor_portal::model::VendorInvoiceView,
+            crate::domain::vendor_portal::model::VendorPaymentView,
+            crate::domain::vendor_portal::model::VendorPaginationParams,
+            crate::domain::vendor_portal::model::CreateVendorUser,
+            crate::domain::vendor_portal::model::VendorLoginRequest,
+            crate::domain::vendor_portal::model::CreateDeliveryNote,
+            crate::domain::vendor_portal::model::VendorUserProfile,
+            crate::domain::vendor_portal::model::VendorUserStatus,
+            crate::domain::vendor_portal::model::DeliveryNoteStatus,
         )
     ),
     security(
@@ -1139,6 +1163,7 @@ use utoipa::OpenApi;
         (name = "Chart of Accounts", description = "Chart of accounts, account tree and trial balance"),
         (name = "Cost Centers", description = "Cost center and profit center management with allocations and profitability reports"),
         (name = "Customer Portal", description = "Self-service portal for customers to view orders, invoices, payments and support tickets"),
+        (name = "Vendor Portal", description = "Self-service portal for vendors to view purchase orders, invoices, payments and delivery notes"),
         (name = "Feature Flags", description = "Feature flag management endpoints"),
         (name = "Forecasting", description = "Inventory demand forecasting, reorder suggestions and stock alerts"),
         (name = "Custom Fields", description = "Custom field definitions for dynamic module attributes"),

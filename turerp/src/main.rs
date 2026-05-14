@@ -29,7 +29,7 @@ use turerp::api::{
     v1_rate_limits_configure, v1_reports_configure, v1_resilience_configure, v1_sales_configure,
     v1_search_configure, v1_settings_configure, v1_shifts_configure, v1_stock_configure,
     v1_subscriptions_configure, v1_tax_configure, v1_tenant_configure, v1_users_configure,
-    v1_webhooks_configure, v1_workflows_configure, ApiDoc,
+    v1_vendor_portal_configure, v1_webhooks_configure, v1_workflows_configure, ApiDoc,
 };
 use turerp::middleware::audit::{AuditEvent, AUDIT_CHANNEL_CAPACITY};
 use turerp::setup_logging;
@@ -382,6 +382,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.integration.edefter_service.clone())
             .app_data(app_state.integration.blockchain_ledger_service.clone())
             .app_data(app_state.integration.customer_portal_service.clone())
+            .app_data(app_state.integration.vendor_portal_service.clone())
             .app_data(app_state.document.document_service.clone())
             .app_data(app_state.document.dashboard_service.clone())
             .app_data(app_state.document.file_storage.clone())
@@ -473,6 +474,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.integration.edefter_service.clone())
             .app_data(app_state.integration.blockchain_ledger_service.clone())
             .app_data(app_state.integration.customer_portal_service.clone())
+            .app_data(app_state.integration.vendor_portal_service.clone())
             .app_data(app_state.document.document_service.clone())
             .app_data(app_state.document.dashboard_service.clone())
             .app_data(app_state.document.file_storage.clone())
@@ -553,6 +555,7 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_edefter_configure)
                     .configure(v1_edefter_blockchain_configure)
                     .configure(v1_customer_portal_configure)
+                    .configure(v1_vendor_portal_configure)
                     .configure(v1_webhooks_configure)
                     .configure(v1_archive_configure),
             )
