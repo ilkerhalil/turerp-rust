@@ -8096,6 +8096,129 @@
         ]
       }
     },
+    "/api/v1/edefter/periods/{id}/hash-chain": {
+      "get": {
+        "tags": [
+          "e-Defter Blockchain"
+        ],
+        "summary": "Get the hash chain for a ledger period",
+        "operationId": "get_hash_chain",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hash chain entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HashChainResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}/hash-state": {
+      "get": {
+        "tags": [
+          "e-Defter Blockchain"
+        ],
+        "summary": "Get the ledger hash state for a period",
+        "operationId": "get_hash_state",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Hash state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerHashState"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}/merkle-tree": {
+      "post": {
+        "tags": [
+          "e-Defter Blockchain"
+        ],
+        "summary": "Build and store the Merkle tree for a ledger period (requires admin)",
+        "operationId": "build_merkle_tree",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Merkle tree built",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MerkleTree"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/edefter/periods/{id}/populate": {
       "post": {
         "tags": [
@@ -8289,6 +8412,47 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BalanceCheckResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/edefter/periods/{id}/verify": {
+      "post": {
+        "tags": [
+          "e-Defter Blockchain"
+        ],
+        "summary": "Verify the integrity of a ledger period (requires admin)",
+        "operationId": "verify_period",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Ledger period ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyResult"
                 }
               }
             }

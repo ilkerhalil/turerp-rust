@@ -439,6 +439,8 @@ pub mod app {
         pub efatura_service: web::Data<crate::domain::efatura::EFaturaService>,
         pub earchive_service: web::Data<crate::domain::earchive::EarchiveService>,
         pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
+        pub blockchain_ledger_service:
+            web::Data<crate::domain::edefter::blockchain::BlockchainLedgerService>,
         pub webhook_service: web::Data<WebhookService>,
         pub workflow_service: web::Data<WorkflowService>,
     }
@@ -773,6 +775,14 @@ pub mod app {
                 as crate::domain::edefter::BoxEDefterRepository;
             let edefter_service = crate::domain::edefter::EDefterService::new(edefter_repo);
 
+            // Blockchain Ledger
+            let blockchain_ledger_repo = Arc::new(
+                crate::domain::edefter::blockchain::InMemoryBlockchainLedgerRepository::new(),
+            )
+                as crate::domain::edefter::blockchain::BoxBlockchainLedgerRepository;
+            let blockchain_ledger_service =
+                crate::domain::edefter::blockchain::BlockchainLedgerService::new(blockchain_ledger_repo);
+
             // Webhooks
             let webhook_repo = Arc::new(InMemoryWebhookRepository::new(config.encryption_key_bytes())) as BoxWebhookRepository;
             let delivery_repo =
@@ -952,6 +962,7 @@ pub mod app {
                     efatura_service: web::Data::new(efatura_service),
                     earchive_service: web::Data::new(earchive_service),
                     edefter_service: web::Data::new(edefter_service),
+                    blockchain_ledger_service: web::Data::new(blockchain_ledger_service),
                     webhook_service: web::Data::new(webhook_service),
                     workflow_service: web::Data::new(workflow_service),
                 },
@@ -1547,6 +1558,7 @@ pub mod app {
                 efatura_service: web::Data::new(efatura_service),
                 earchive_service: web::Data::new(earchive_service),
                 edefter_service: web::Data::new(edefter_service),
+                blockchain_ledger_service: web::Data::new(blockchain_ledger_service),
                 webhook_service: web::Data::new(webhook_service),
                 workflow_service: web::Data::new(workflow_service),
             },

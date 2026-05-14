@@ -213,6 +213,16 @@ impl EDefterService {
         let period = self.get_period(period_id, tenant_id).await?;
         Ok(period.status)
     }
+
+    /// Find all Yevmiye entries for a period (for blockchain integration)
+    pub async fn find_entries_for_blockchain(
+        &self,
+        period_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<YevmiyeEntry>, ApiError> {
+        let _period = self.get_period(period_id, tenant_id).await?;
+        self.repo.find_entries(period_id).await
+    }
 }
 
 #[cfg(test)]

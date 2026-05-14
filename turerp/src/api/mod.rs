@@ -29,6 +29,7 @@ pub use v1::custom_fields_configure as v1_custom_fields_configure;
 pub use v1::dashboard_configure as v1_dashboard_configure;
 pub use v1::documents_configure as v1_documents_configure;
 pub use v1::earchive_configure as v1_earchive_configure;
+pub use v1::edefter_blockchain_configure as v1_edefter_blockchain_configure;
 pub use v1::edefter_configure as v1_edefter_configure;
 pub use v1::efatura_configure as v1_efatura_configure;
 pub use v1::events_configure as v1_events_configure;
@@ -724,6 +725,11 @@ use utoipa::OpenApi;
         crate::api::v1::edefter::sign_berat,
         crate::api::v1::edefter::send_to_saklayici,
         crate::api::v1::edefter::check_status,
+        // e-Defter Blockchain
+        crate::api::v1::edefter_blockchain::get_hash_chain,
+        crate::api::v1::edefter_blockchain::build_merkle_tree,
+        crate::api::v1::edefter_blockchain::verify_period,
+        crate::api::v1::edefter_blockchain::get_hash_state,
         // Dashboard
         crate::api::v1::dashboard::get_all_kpis,
         crate::api::v1::dashboard::get_single_kpi,
