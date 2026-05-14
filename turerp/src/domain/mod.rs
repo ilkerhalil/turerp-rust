@@ -15,6 +15,7 @@ pub mod cost_center;
 pub mod crm;
 pub mod currency;
 pub mod custom_field;
+pub mod customer_portal;
 pub mod dashboard;
 pub mod document;
 pub mod earchive;
@@ -406,6 +407,17 @@ pub use ldap::repository::{
     BoxLdapConfigRepository, InMemoryLdapConfigRepository, LdapConfigRepository,
 };
 pub use ldap::service::{Ldap3Client, LdapClient, LdapSyncService};
+
+// Customer Portal module re-exports
+pub use customer_portal::model::{
+    CreatePortalUser, CreateSupportTicket, PortalAuthResponse, PortalLoginRequest,
+    PortalPaginationParams, PortalUser, SupportTicket, SupportTicketStatus,
+};
+pub use customer_portal::repository::{
+    BoxPortalUserRepository, BoxSupportTicketRepository, InMemoryPortalUserRepository,
+    InMemorySupportTicketRepository, PortalUserRepository, SupportTicketRepository,
+};
+pub use customer_portal::service::CustomerPortalService;
 
 // Test: is file module visible?
 pub type __TestFileVisibility = crate::domain::file::model::FileRecord;

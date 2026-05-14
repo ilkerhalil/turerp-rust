@@ -225,6 +225,17 @@ impl InvoiceService {
         self.payment_repo.find_by_invoice(invoice_id).await
     }
 
+    /// Get all payments for a specific cari (customer)
+    pub async fn get_payments_by_cari(&self, cari_id: i64) -> Result<Vec<Payment>, ApiError> {
+        let invoices = self.invoice_repo.find_by_cari(cari_id).await?;
+        let mut all_payments = Vec::new();
+        for invoice in invoices {
+            let mut payments = self.payment_repo.find_by_invoice(invoice.id).await?;
+            all_payments.append(&mut payments);
+        }
+        Ok(all_payments)
+    }
+
     // Utility methods
     /// Search invoices by number or notes (full-text)
     pub async fn search_invoices(

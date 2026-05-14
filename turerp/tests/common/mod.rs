@@ -6,14 +6,15 @@ use turerp::api::{
     auth_configure, users_configure, v1_accounting_configure, v1_assets_configure,
     v1_bank_configure, v1_cari_configure, v1_chart_of_accounts_configure, v1_companies_configure,
     v1_cost_centers_configure, v1_crm_configure, v1_currency_configure, v1_custom_fields_configure,
-    v1_dashboard_configure, v1_efatura_configure, v1_feature_flags_configure, v1_files_configure,
-    v1_goods_receipts_configure, v1_hr_configure, v1_import_configure, v1_invoice_configure,
-    v1_jobs_configure, v1_manufacturing_configure, v1_mfa_configure, v1_notifications_configure,
-    v1_observability_configure, v1_product_variants_configure, v1_project_configure,
-    v1_purchase_orders_configure, v1_purchase_requests_configure, v1_rate_limits_configure,
-    v1_reports_configure, v1_resilience_configure, v1_sales_configure, v1_search_configure,
-    v1_settings_configure, v1_stock_configure, v1_subscriptions_configure, v1_tax_configure,
-    v1_tenant_configure, v1_webhooks_configure, v1_workflows_configure,
+    v1_customer_portal_configure, v1_dashboard_configure, v1_efatura_configure,
+    v1_feature_flags_configure, v1_files_configure, v1_goods_receipts_configure, v1_hr_configure,
+    v1_import_configure, v1_invoice_configure, v1_jobs_configure, v1_manufacturing_configure,
+    v1_mfa_configure, v1_notifications_configure, v1_observability_configure,
+    v1_product_variants_configure, v1_project_configure, v1_purchase_orders_configure,
+    v1_purchase_requests_configure, v1_rate_limits_configure, v1_reports_configure,
+    v1_resilience_configure, v1_sales_configure, v1_search_configure, v1_settings_configure,
+    v1_stock_configure, v1_subscriptions_configure, v1_tax_configure, v1_tenant_configure,
+    v1_webhooks_configure, v1_workflows_configure,
 };
 use turerp::app::create_app_state_in_memory;
 use turerp::config::Config;
@@ -33,6 +34,7 @@ pub fn configure_v1_routes(cfg: &mut web::ServiceConfig) {
         .configure(v1_cost_centers_configure)
         .configure(v1_crm_configure)
         .configure(v1_currency_configure)
+        .configure(v1_customer_portal_configure)
         .configure(v1_custom_fields_configure)
         .configure(v1_dashboard_configure)
         .configure(v1_efatura_configure)
@@ -119,6 +121,7 @@ pub fn build_test_app(
         .app_data(state.commerce.purchase_service.clone())
         .app_data(state.chart_of_accounts_service.clone())
         .app_data(state.finance.tax_service.clone())
+        .app_data(state.integration.customer_portal_service.clone())
         .app_data(state.integration.webhook_service.clone())
         .app_data(state.infra.search_service.clone())
         .app_data(state.infra.report_engine.clone())
