@@ -23016,6 +23016,363 @@
         ]
       }
     },
+    "/api/v1/vendor-portal/delivery-notes": {
+      "get": {
+        "tags": [
+          "Vendor Portal"
+        ],
+        "summary": "Get delivery notes for the logged-in vendor",
+        "operationId": "get_delivery_notes",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vendor delivery notes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.vendor_portal.model.VendorPaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Vendor Portal"
+        ],
+        "summary": "Create a delivery note",
+        "operationId": "create_delivery_note",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeliveryNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Delivery note created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.vendor_portal.model.DeliveryNote"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/vendor-portal/invoices": {
+      "get": {
+        "tags": [
+          "Vendor Portal"
+        ],
+        "summary": "Get invoices for the logged-in vendor",
+        "operationId": "get_vendor_invoices",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vendor invoices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.vendor_portal.model.VendorPaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/vendor-portal/invoices/{id}/pdf": {
+      "get": {
+        "tags": [
+          "Vendor Portal"
+        ],
+        "summary": "PDF download for an invoice",
+        "operationId": "get_vendor_invoice_pdf",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Invoice ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PDF bytes"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/vendor-portal/login": {
+      "post": {
+        "tags": [
+          "Vendor Portal"
+        ],
+        "summary": "Login to vendor portal (public)",
+        "operationId": "login_vendor_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VendorLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.vendor_portal.model.VendorAuthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.error.ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vendor-portal/orders": {
+      "get": {
+        "tags": [
+          "Vendor Portal"
+        ],
+        "summary": "Get purchase order history for the logged-in vendor",
+        "operationId": "get_vendor_orders",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vendor orders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.vendor_portal.model.VendorPaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/vendor-portal/payments": {
+      "get": {
+        "tags": [
+          "Vendor Portal"
+        ],
+        "summary": "Get payment history for the logged-in vendor",
+        "operationId": "get_vendor_payments",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vendor payments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.vendor_portal.model.VendorPaginatedResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/vendor-portal/register": {
+      "post": {
+        "tags": [
+          "Vendor Portal"
+        ],
+        "summary": "Register a new vendor user (public)",
+        "operationId": "register_vendor_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateVendorUser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Vendor user registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.domain.vendor_portal.model.VendorUser"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/crate.error.ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/webhooks": {
       "get": {
         "tags": [
@@ -26278,6 +26635,23 @@
           }
         }
       },
+      "CreateDeliveryNote": {
+        "type": "object",
+        "description": "Create delivery note request",
+        "required": [
+          "purchase_order_id",
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "purchase_order_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "CreateEFatura": {
         "type": "object",
         "description": "Create e-Fatura from an invoice",
@@ -26981,6 +27355,43 @@
           }
         }
       },
+      "CreateVendorUser": {
+        "type": "object",
+        "description": "Create vendor user request",
+        "required": [
+          "cari_id",
+          "email",
+          "password",
+          "full_name"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "email": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string",
+            "nullable": true
+          },
+          "password": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "timezone": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
       "CreateWebhook": {
         "type": "object",
         "description": "DTO for creating a webhook",
@@ -27469,6 +27880,78 @@
             "format": "int64"
           }
         }
+      },
+      "DeliveryNote": {
+        "type": "object",
+        "description": "Delivery note entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "vendor_user_id",
+          "cari_id",
+          "note_number",
+          "purchase_order_id",
+          "description",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "note_number": {
+            "type": "string"
+          },
+          "purchase_order_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "shipped_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeliveryNoteStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "vendor_user_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DeliveryNoteStatus": {
+        "type": "string",
+        "description": "Delivery note status",
+        "enum": [
+          "draft",
+          "shipped",
+          "partialreceived",
+          "received",
+          "cancelled"
+        ]
       },
       "DeliveryStatus": {
         "type": "string",
@@ -32387,6 +32870,306 @@
           }
         }
       },
+      "VendorAuthResponse": {
+        "type": "object",
+        "description": "Vendor auth response",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "vendor_user"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "token_type": {
+            "type": "string"
+          },
+          "vendor_user": {
+            "$ref": "#/components/schemas/VendorUserProfile"
+          }
+        }
+      },
+      "VendorInvoiceView": {
+        "type": "object",
+        "description": "Vendor invoice view (read-only, mapped from Invoice)",
+        "required": [
+          "id",
+          "invoice_number",
+          "invoice_type",
+          "status",
+          "issue_date",
+          "due_date",
+          "total_amount",
+          "paid_amount",
+          "outstanding_amount",
+          "currency"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "due_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invoice_number": {
+            "type": "string"
+          },
+          "invoice_type": {
+            "type": "string"
+          },
+          "issue_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "outstanding_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "paid_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "VendorLoginRequest": {
+        "type": "object",
+        "description": "Vendor login request",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "VendorOrderView": {
+        "type": "object",
+        "description": "Vendor order view (read-only, mapped from PurchaseOrder)",
+        "required": [
+          "id",
+          "order_number",
+          "status",
+          "order_date",
+          "total_amount",
+          "currency",
+          "item_count"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "expected_delivery_date": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NaiveDate"
+              }
+            ],
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "item_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "order_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "order_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "total_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "VendorPaginationParams": {
+        "type": "object",
+        "description": "Pagination parameters for vendor portal endpoints",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "per_page": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "VendorPaymentView": {
+        "type": "object",
+        "description": "Vendor payment view (read-only, mapped from Payment)",
+        "required": [
+          "id",
+          "invoice_id",
+          "invoice_number",
+          "amount",
+          "payment_date",
+          "payment_method",
+          "currency"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invoice_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "invoice_number": {
+            "type": "string"
+          },
+          "payment_date": {
+            "$ref": "#/components/schemas/NaiveDate"
+          },
+          "payment_method": {
+            "type": "string"
+          }
+        }
+      },
+      "VendorUser": {
+        "type": "object",
+        "description": "Vendor user entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "cari_id",
+          "email",
+          "full_name",
+          "language",
+          "timezone",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "email": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "language": {
+            "type": "string"
+          },
+          "last_login_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/VendorUserStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
+      "VendorUserProfile": {
+        "type": "object",
+        "description": "Vendor user profile (read-only view for auth response)",
+        "required": [
+          "id",
+          "email",
+          "full_name",
+          "cari_id",
+          "cari_name",
+          "language",
+          "timezone"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cari_name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "language": {
+            "type": "string"
+          },
+          "timezone": {
+            "type": "string"
+          }
+        }
+      },
+      "VendorUserStatus": {
+        "type": "string",
+        "description": "Vendor user status",
+        "enum": [
+          "active",
+          "passive",
+          "blocked"
+        ]
+      },
       "VerifyMfaRequest": {
         "type": "object",
         "description": "Request to verify MFA code during login",
@@ -33239,6 +34022,10 @@
     {
       "name": "Customer Portal",
       "description": "Self-service portal for customers to view orders, invoices, payments and support tickets"
+    },
+    {
+      "name": "Vendor Portal",
+      "description": "Self-service portal for vendors to view purchase orders, invoices, payments and delivery notes"
     },
     {
       "name": "Feature Flags",

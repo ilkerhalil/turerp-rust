@@ -21,6 +21,8 @@ pub const PUBLIC_PATHS: &[&str] = &[
     "/api/v1/auth/mfa/verify",
     "/api/v1/customer-portal/register",
     "/api/v1/customer-portal/login",
+    "/api/v1/vendor-portal/register",
+    "/api/v1/vendor-portal/login",
     // Legacy API paths (deprecated)
     "/api/auth/login",
     "/api/auth/register",
@@ -78,21 +80,38 @@ impl JwtAuthMiddleware {
         jwt_service: &JwtService,
     ) -> Result<AuthClaims, ApiError> {
         let token = Self::extract_bearer_token(req)?;
-        let claims = jwt_service.decode_token(&token).or_else(|_| {
-            jwt_service
-                .decode_portal_token(&token)
-                .map(|portal_claims| AuthClaims {
-                    sub: portal_claims.sub,
-                    tenant_id: portal_claims.tenant_id,
-                    username: portal_claims.email.clone(),
-                    role: "portal".to_string(),
-                    cari_id: Some(portal_claims.cari_id),
-                    exp: portal_claims.exp,
-                    iat: portal_claims.iat,
-                    aud: portal_claims.aud,
-                    iss: portal_claims.iss,
-                })
-        })?;
+        let claims = jwt_service
+            .decode_token(&token)
+            .or_else(|_| {
+                jwt_service
+                    .decode_portal_token(&token)
+                    .map(|portal_claims| AuthClaims {
+                        sub: portal_claims.sub,
+                        tenant_id: portal_claims.tenant_id,
+                        username: portal_claims.email.clone(),
+                        role: "portal".to_string(),
+                        cari_id: Some(portal_claims.cari_id),
+                        exp: portal_claims.exp,
+                        iat: portal_claims.iat,
+                        aud: portal_claims.aud,
+                        iss: portal_claims.iss,
+                    })
+            })
+            .or_else(|_| {
+                jwt_service
+                    .decode_vendor_token(&token)
+                    .map(|vendor_claims| AuthClaims {
+                        sub: vendor_claims.sub,
+                        tenant_id: vendor_claims.tenant_id,
+                        username: vendor_claims.email.clone(),
+                        role: "vendor".to_string(),
+                        cari_id: Some(vendor_claims.cari_id),
+                        exp: vendor_claims.exp,
+                        iat: vendor_claims.iat,
+                        aud: vendor_claims.aud,
+                        iss: vendor_claims.iss,
+                    })
+            })?;
         req.extensions_mut().insert(claims.clone());
         Ok(claims)
     }
