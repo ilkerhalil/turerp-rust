@@ -310,8 +310,8 @@ impl VendorPortalService {
             ));
         }
 
-        Err(ApiError::Internal(
-            "PDF generation not yet implemented".to_string(),
+        Err(ApiError::NotFound(
+            "Invoice PDF not yet available".to_string(),
         ))
     }
 
