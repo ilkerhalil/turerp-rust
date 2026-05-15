@@ -645,6 +645,7 @@ use utoipa::OpenApi;
         crate::api::v1::observability::resolve_alert,
         crate::api::v1::observability::get_dashboard,
         crate::api::v1::observability::get_sparkline,
+        crate::api::v1::observability::get_aspire_dashboard_url,
         // Reports
         crate::api::v1::reports::generate_report,
         crate::api::v1::reports::list_reports,
@@ -884,6 +885,7 @@ use utoipa::OpenApi;
             crate::api::v1::observability::CreateSloRequest,
             crate::api::v1::observability::CreateAlertRuleRequest,
             crate::api::v1::observability::EvaluateAlertsRequest,
+            crate::api::v1::observability::AspireDashboardUrlResponse,
             crate::domain::observability::service::DashboardSummary,
             crate::domain::notification::model::NotificationResponse,
             crate::domain::notification::model::NotificationPreferenceResponse,

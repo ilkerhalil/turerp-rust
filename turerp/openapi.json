@@ -15354,6 +15354,36 @@
         ]
       }
     },
+    "/api/v1/observability/dashboard-url": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Get the Aspire Dashboard URL.",
+        "description": "Returns the URL of the Aspire Dashboard where traces, metrics, and logs\ncan be viewed in real time.",
+        "operationId": "get_aspire_dashboard_url",
+        "responses": {
+          "200": {
+            "description": "Aspire Dashboard URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AspireDashboardUrlResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/observability/health": {
       "get": {
         "tags": [
@@ -24849,6 +24879,18 @@
           "tenant_id": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "AspireDashboardUrlResponse": {
+        "type": "object",
+        "description": "Aspire Dashboard URL response.",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string"
           }
         }
       },

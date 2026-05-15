@@ -232,6 +232,10 @@ pub struct MetricsConfig {
     pub enabled: bool,
     /// Path for the metrics endpoint
     pub path: String,
+    /// OTLP endpoint for Aspire Dashboard (e.g. http://localhost:4317)
+    pub otlp_endpoint: String,
+    /// Whether OTLP export is enabled
+    pub otlp_enabled: bool,
 }
 
 impl Default for MetricsConfig {
@@ -239,6 +243,8 @@ impl Default for MetricsConfig {
         Self {
             enabled: true,
             path: "/metrics".to_string(),
+            otlp_endpoint: "http://localhost:4317".to_string(),
+            otlp_enabled: false,
         }
     }
 }
@@ -253,6 +259,13 @@ impl MetricsConfig {
             path: std::env::var("TURERP_METRICS_PATH")
                 .ok()
                 .unwrap_or_else(|| "/metrics".to_string()),
+            otlp_endpoint: std::env::var("TURERP_OTLP_ENDPOINT")
+                .ok()
+                .unwrap_or_else(|| "http://localhost:4317".to_string()),
+            otlp_enabled: std::env::var("TURERP_OTLP_ENABLED")
+                .ok()
+                .map(|v| v == "true" || v == "1")
+                .unwrap_or(false),
         }
     }
 }
@@ -463,12 +476,31 @@ impl Default for SecretsConfig {
     }
 }
 
+/// Redact password from a PostgreSQL connection URL to avoid leaking credentials.
+fn redact_password_in_url(url: &str) -> String {
+    // Simple parser for postgres://user:password@host/db
+    if let Some(at_pos) = url.find('@') {
+        if let Some(protocol_end) = url.find("://") {
+            let prefix = &url[..protocol_end + 3];
+            let before_at = &url[protocol_end + 3..at_pos];
+            let after_at = &url[at_pos..];
+            if let Some(colon_pos) = before_at.find(':') {
+                // user:password -> user:****
+                return format!("{}{}:****{}", prefix, &before_at[..colon_pos], after_at);
+            }
+        }
+    }
+    url.to_string()
+}
+
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Redact password from database URL to avoid credential leakage in logs
+        let db_display = redact_password_in_url(&self.database.url);
         write!(
             f,
             "Config(server: {}:{}, db: {})",
-            self.server.host, self.server.port, self.database.url
+            self.server.host, self.server.port, db_display
         )
     }
 }
@@ -558,6 +590,15 @@ impl Config {
                         pattern
                     )));
                 }
+            }
+
+            // Encryption key must not be the hardcoded default
+            if self.encryption_key == "dGVzdC1rZXktZm9yLXRlc3Rpbmctb25seS0xMjM0NTY=" {
+                return Err(ConfigError::Message(
+                    "TURERP_ENCRYPTION_KEY is set to the default test key in production. \
+                     Generate a secure 32-byte base64-encoded key and set TURERP_ENCRYPTION_KEY."
+                        .to_string(),
+                ));
             }
 
             // CORS should not be wildcard in production
@@ -796,6 +837,8 @@ mod tests {
                 allowed_origins: vec!["https://example.com".to_string()],
                 ..Default::default()
             },
+            encryption_key: "YWJiY2NkZGVmZmdnaGhpaWpra2xsbW1ubm9vcHFyc3R1dnd4eXoxMjM0NTY="
+                .to_string(),
             ..Default::default()
         };
 
@@ -816,6 +859,8 @@ mod tests {
                 allowed_origins: vec!["*".to_string()],
                 ..Default::default()
             },
+            encryption_key: "YWJiY2NkZGVmZmdnaGhpaWpra2xsbW1ubm9vcHFyc3R1dnd4eXoxMjM0NTY="
+                .to_string(),
             ..Default::default()
         };
 

@@ -97,6 +97,14 @@ zeroize = "1.8"
 metrics = "0.24"
 metrics-exporter-prometheus = "0.16"
 
+# OpenTelemetry for Aspire Dashboard
+opentelemetry = "0.28"
+opentelemetry_sdk = { version = "0.28", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.28", features = ["trace", "metrics", "logs", "grpc-tonic"] }
+opentelemetry-semantic-conventions = "0.28"
+tracing-opentelemetry = "0.29"
+opentelemetry-appender-tracing = "0.28"
+
 # Precise decimal for financial calculations
 rust_decimal = { version = "1.36", features = ["serde"] }
 rust_decimal_macros = "1.36"
