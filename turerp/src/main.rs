@@ -9,7 +9,7 @@ use turerp::config::Config;
 use turerp::middleware::{
     audit::spawn_audit_writer, AuditLoggingMiddleware, IdempotencyMiddleware,
     IpWhitelistMiddleware, JwtAuthMiddleware, MetricsMiddleware, RateLimitMiddleware,
-    RequestIdMiddleware, SecurityHeadersMiddleware, TenantMiddleware,
+    RequestIdMiddleware, SecurityHeadersMiddleware, TenantMiddleware, TracingMiddleware,
 };
 
 use tokio::sync::mpsc;
@@ -377,6 +377,7 @@ async fn main() -> std::io::Result<()> {
             )) // Security headers
             .wrap(configure_cors(&config.cors)) // CORS handling
             .wrap(middleware::Logger::default()) // Access logging
+            .wrap(TracingMiddleware) // Structured request/response tracing
             .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
             .wrap(JwtAuthMiddleware::new(
                 app_state.auth.jwt_service.get_ref().clone(),
@@ -469,6 +470,7 @@ async fn main() -> std::io::Result<()> {
             )) // Security headers
             .wrap(configure_cors(&config.cors)) // CORS handling
             .wrap(middleware::Logger::default()) // Access logging
+            .wrap(TracingMiddleware) // Structured request/response tracing
             .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
             .wrap(JwtAuthMiddleware::new(
                 app_state.auth.jwt_service.get_ref().clone(),

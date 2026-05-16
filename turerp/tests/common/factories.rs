@@ -14,7 +14,7 @@ pub struct CariBuilder {
 
 impl CariBuilder {
     pub fn new(tenant_id: i64, user_id: i64) -> Self {
-        let unique = uuid::Uuid::new_v4().to_string();
+        let unique = uuid::Uuid::new_v4();
         Self {
             tenant_id,
             user_id,
@@ -77,7 +77,7 @@ pub struct WarehouseBuilder {
 
 impl WarehouseBuilder {
     pub fn new(tenant_id: i64, user_id: i64) -> Self {
-        let unique = uuid::Uuid::new_v4().to_string();
+        let unique = uuid::Uuid::new_v4();
         Self {
             tenant_id,
             user_id,
@@ -141,7 +141,7 @@ pub struct AccountBuilder {
 
 impl AccountBuilder {
     pub fn new(tenant_id: i64, _user_id: i64) -> Self {
-        let unique = uuid::Uuid::new_v4().to_string();
+        let unique = uuid::Uuid::new_v4();
         Self {
             tenant_id,
             user_id: _user_id,
