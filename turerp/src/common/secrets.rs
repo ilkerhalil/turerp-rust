@@ -214,9 +214,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_env_fallback_reads_env_var() {
-        use std::sync::Mutex;
-        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _guard = ENV_LOCK.lock().unwrap();
+        use parking_lot::Mutex;
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+        let _guard = ENV_LOCK.lock();
         let svc = EnvFallbackSecretsService::new("TURERP");
         unsafe {
             std::env::set_var("TURERP_TEST_PATH_TEST_KEY", "my-secret");

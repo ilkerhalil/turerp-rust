@@ -151,10 +151,7 @@ pub fn build_test_app(
 }
 
 pub async fn register_admin(state: &turerp::app::AppState, tenant_id: i64) -> (String, i64) {
-    let username = format!(
-        "admin_{}",
-        chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
-    );
+    let username = format!("admin_{}", uuid::Uuid::new_v4().to_string());
     let user = state
         .auth
         .user_service
@@ -188,7 +185,7 @@ pub async fn register_admin(state: &turerp::app::AppState, tenant_id: i64) -> (S
 #[macro_export]
 macro_rules! register_user {
     ($app:expr, $tenant_id:expr) => {{
-        let username = format!("user_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
+        let username = format!("user_{}", uuid::Uuid::new_v4().to_string());
         let req = test::TestRequest::post()
             .uri("/api/auth/register")
             .set_json(json!({
