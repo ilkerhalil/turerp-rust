@@ -132,7 +132,7 @@ fn build_full_test_app(
 /// Helper macro to create an admin user directly and return (access_token, user_id)
 macro_rules! register_admin {
     ($state:expr, $tenant_id:expr) => {{
-        let username = format!("sdadmin_{}", uuid::Uuid::new_v4().to_string());
+        let username = format!("sdadmin_{}", uuid::Uuid::new_v4());
         let user = $state
             .auth
             .user_service
@@ -165,7 +165,7 @@ macro_rules! register_admin {
 /// Helper macro to register a normal (non-admin) user and return (access_token, user_id)
 macro_rules! register_user {
     ($app:expr, $tenant_id:expr) => {{
-        let username = format!("sduser_{}", uuid::Uuid::new_v4().to_string());
+        let username = format!("sduser_{}", uuid::Uuid::new_v4());
         let req = test::TestRequest::post()
             .uri("/api/auth/register")
             .set_json(json!({
@@ -198,7 +198,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
     let (token, user_id) = register_admin!(&app_state, 1);
 
     // Create cari
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
     let create_req = test::TestRequest::post()
         .uri("/api/v1/cari")
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -336,7 +336,7 @@ async fn test_stock_warehouse_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create warehouse
     let create_req = test::TestRequest::post()
@@ -401,7 +401,7 @@ async fn test_chart_of_accounts_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create chart account
     let create_req = test::TestRequest::post()
@@ -454,7 +454,7 @@ async fn test_project_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create project
     let create_req = test::TestRequest::post()
@@ -518,7 +518,7 @@ async fn test_webhook_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create webhook
     let create_req = test::TestRequest::post()
@@ -606,7 +606,7 @@ async fn test_restore_requires_admin() {
 
     let (admin_token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create and soft delete cari as admin
     let create_req = test::TestRequest::post()
@@ -669,7 +669,7 @@ async fn test_destroy_requires_admin() {
 
     let (admin_token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create and soft delete cari as admin
     let create_req = test::TestRequest::post()
@@ -752,7 +752,7 @@ async fn test_deleted_records_excluded_from_search() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
     let search_term = format!("Searchable{}", unique);
 
     // Create a cari with a searchable name
@@ -819,7 +819,7 @@ async fn test_deleted_records_excluded_from_type_filter() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create a vendor-type cari
     let create_req = test::TestRequest::post()
@@ -870,7 +870,7 @@ async fn test_deleted_records_excluded_from_get_by_id() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create a cari
     let create_req = test::TestRequest::post()
@@ -933,7 +933,7 @@ async fn test_tenant_isolation_deleted_records() {
     let (token1, user_id1) = register_admin!(&app_state, 1);
     let (token2, _user_id2) = register_admin!(&app_state, 2);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Tenant 1 creates and soft deletes a cari
     let create_req = test::TestRequest::post()
@@ -1001,7 +1001,7 @@ async fn test_tenant_isolation_normal_queries_ignore_other_tenant_deleted() {
     let (token1, user_id1) = register_admin!(&app_state, 1);
     let (token2, user_id2) = register_admin!(&app_state, 2);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Tenant 1 creates a cari and soft deletes it
     let create_req = test::TestRequest::post()
@@ -1075,7 +1075,7 @@ async fn test_non_admin_cannot_soft_delete() {
 
     let (admin_token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Admin creates a cari
     let create_req = test::TestRequest::post()
@@ -1189,7 +1189,7 @@ async fn test_soft_delete_sets_deleted_at_and_deleted_by() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create cari
     let create_req = test::TestRequest::post()
@@ -1271,7 +1271,7 @@ async fn test_multiple_domains_support_soft_delete() {
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Test cari soft delete
     let cari_req = test::TestRequest::post()
@@ -1377,7 +1377,7 @@ async fn test_double_soft_delete_idempotent() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create cari
     let create_req = test::TestRequest::post()
@@ -1427,7 +1427,7 @@ async fn test_restore_non_deleted_record_is_idempotent() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create cari (not deleted)
     let create_req = test::TestRequest::post()
@@ -1468,7 +1468,7 @@ async fn test_destroy_without_soft_delete() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create cari (not soft deleted)
     let create_req = test::TestRequest::post()
@@ -1561,7 +1561,7 @@ async fn test_update_deleted_record_behavior() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create cari
     let create_req = test::TestRequest::post()
@@ -1618,7 +1618,7 @@ async fn test_employee_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create employee
     let create_req = test::TestRequest::post()
@@ -1644,9 +1644,9 @@ async fn test_employee_soft_delete_and_restore() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let emp_id = json["id"].as_i64().unwrap();
 
-    // Soft delete (HR uses /soft-delete suffix)
+    // Soft delete
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/hr/employees/{}/soft-delete", emp_id))
+        .uri(&format!("/api/v1/hr/employees/{}", emp_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1692,7 +1692,7 @@ async fn test_crm_lead_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create lead
     let create_req = test::TestRequest::post()
@@ -1766,7 +1766,7 @@ async fn test_asset_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
 
     // Create asset
     let create_req = test::TestRequest::post()
@@ -1848,7 +1848,7 @@ async fn test_soft_delete_then_create_same_code() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = uuid::Uuid::new_v4().to_string();
+    let unique = uuid::Uuid::new_v4();
     let code = format!("REUSE-{}", unique);
 
     // Create cari
@@ -1984,7 +1984,7 @@ async fn test_notification_soft_delete_and_restore_lifecycle() {
     );
 
     // Restore the notification
-    let restore_req = test::TestRequest::post()
+    let restore_req = test::TestRequest::put()
         .uri(&format!(
             "/api/v1/notifications/{}/restore",
             notification_id
@@ -2178,7 +2178,7 @@ async fn test_notification_restore_requires_admin() {
     // Normal user cannot restore
     let (user_token, _) = register_user!(&app, 1);
 
-    let restore_req = test::TestRequest::post()
+    let restore_req = test::TestRequest::put()
         .uri(&format!(
             "/api/v1/notifications/{}/restore",
             notification_id
@@ -2194,7 +2194,7 @@ async fn test_notification_restore_requires_admin() {
     );
 
     // Admin can restore
-    let restore_req = test::TestRequest::post()
+    let restore_req = test::TestRequest::put()
         .uri(&format!(
             "/api/v1/notifications/{}/restore",
             notification_id
@@ -2341,7 +2341,7 @@ async fn test_tenant_isolation_deleted_notifications() {
     );
 
     // Tenant 2 should not be able to restore tenant 1's deleted notification
-    let restore_req = test::TestRequest::post()
+    let restore_req = test::TestRequest::put()
         .uri(&format!(
             "/api/v1/notifications/{}/restore",
             notification_id
@@ -2443,7 +2443,7 @@ async fn test_notification_restore_non_deleted_record_returns_400() {
     let notification_id = json["id"].as_i64().unwrap();
 
     // Try to restore a non-deleted notification
-    let restore_req = test::TestRequest::post()
+    let restore_req = test::TestRequest::put()
         .uri(&format!(
             "/api/v1/notifications/{}/restore",
             notification_id

@@ -60,7 +60,7 @@ async fn create_customer_cari(state: &turerp::app::AppState, tenant_id: i64) -> 
         .cari_service
         .get_ref()
         .create_cari(CreateCari {
-            code: format!("CUST{}", uuid::Uuid::new_v4().to_string()),
+            code: format!("CUST{}", uuid::Uuid::new_v4()),
             name: "Test Customer".to_string(),
             cari_type: CariType::Customer,
             tax_number: Some("1234567890".to_string()),

@@ -434,7 +434,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/{id}", web::delete().to(soft_delete_notification))
             .route("/{id}/read", web::put().to(mark_notification_read))
             .route("/{id}/retry", web::post().to(retry_notification))
-            .route("/{id}/restore", web::post().to(restore_notification))
+            .route("/{id}/restore", web::put().to(restore_notification))
             .route("/{id}/destroy", web::delete().to(destroy_notification)),
     );
 }
