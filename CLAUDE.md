@@ -11,7 +11,7 @@
 - Keep files under 500 lines
 - Validate input at system boundaries
 - NEVER push directly to `main` — always use a feature branch and open a pull request
-- **ALWAYS read `AGENTS.md` before starting a task** — it contains project-specific architecture, domain rules, and Rust best practices that agents must follow
+- **ALWAYS read `AGENTS.md` before starting a task** — it contains the canonical project structure, domain modules, middleware stack, migrations, tests, and Rust best practices
 
 ## Agent Comms (SendMessage-First Coordination)
 
@@ -343,6 +343,8 @@ let user = repo.find_by_id(id).await.unwrap();
 4. **Don't forget tenant isolation** — Always filter by `tenant_id`
 5. **Don't use `.unwrap()` in production** — Handle errors properly
 6. **Don't block async runtime** — Use `tokio::fs` instead of `std::fs`
+7. **Don't forget OpenAPI annotations** — Add `#[utoipa::path(...)]` to every new handler
+8. **Don't forget to register handlers** — Add new handlers to `api/mod.rs` paths list
 
 ## Build & Test
 
@@ -355,6 +357,9 @@ let user = repo.find_by_id(id).await.unwrap();
 cargo clean && cargo test
 cargo clean && cargo clippy -- -D warnings
 cargo fmt --check
+
+# Regenerate OpenAPI spec after adding new endpoints
+cargo run --bin gen_openapi
 ```
 
 ## CLI Quick Reference
