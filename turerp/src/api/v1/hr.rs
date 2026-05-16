@@ -24,7 +24,11 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         web::resource("/v1/hr/employees/deleted")
             .route(web::get().to(employees::list_deleted_employees)),
     )
-    .service(web::resource("/v1/hr/employees/{id}").route(web::get().to(employees::get_employee)))
+    .service(
+        web::resource("/v1/hr/employees/{id}")
+            .route(web::get().to(employees::get_employee))
+            .route(web::delete().to(employees::soft_delete_employee)),
+    )
     .service(
         web::resource("/v1/hr/employees/{id}/status")
             .route(web::put().to(employees::update_employee_status)),
@@ -32,10 +36,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/hr/employees/{id}/terminate")
             .route(web::post().to(employees::terminate_employee)),
-    )
-    .service(
-        web::resource("/v1/hr/employees/{id}/soft-delete")
-            .route(web::delete().to(employees::soft_delete_employee)),
     )
     .service(
         web::resource("/v1/hr/employees/{id}/restore")
