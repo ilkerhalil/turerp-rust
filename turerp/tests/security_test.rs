@@ -121,10 +121,7 @@ macro_rules! test_app {
 /// Helper macro to create an admin user directly and return access token
 macro_rules! sec_register_admin {
     ($state:expr, $tenant_id:expr) => {{
-        let username = format!(
-            "secadmin_{}",
-            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
-        );
+        let username = format!("secadmin_{}", uuid::Uuid::new_v4().to_string());
         let user = $state
             .auth
             .user_service
@@ -157,7 +154,7 @@ macro_rules! sec_register_admin {
 /// Helper macro to register a normal user and return access token
 macro_rules! sec_register_user {
     ($app:expr, $tenant_id:expr) => {{
-        let username = format!("secuser_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
+        let username = format!("secuser_{}", uuid::Uuid::new_v4().to_string());
         let req = test::TestRequest::post()
             .uri("/api/auth/register")
             .set_json(json!({

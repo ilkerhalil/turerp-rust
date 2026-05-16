@@ -132,10 +132,7 @@ fn build_full_test_app(
 /// Helper macro to create an admin user directly and return (access_token, user_id)
 macro_rules! register_admin {
     ($state:expr, $tenant_id:expr) => {{
-        let username = format!(
-            "sdadmin_{}",
-            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
-        );
+        let username = format!("sdadmin_{}", uuid::Uuid::new_v4().to_string());
         let user = $state
             .auth
             .user_service
@@ -168,7 +165,7 @@ macro_rules! register_admin {
 /// Helper macro to register a normal (non-admin) user and return (access_token, user_id)
 macro_rules! register_user {
     ($app:expr, $tenant_id:expr) => {{
-        let username = format!("sduser_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
+        let username = format!("sduser_{}", uuid::Uuid::new_v4().to_string());
         let req = test::TestRequest::post()
             .uri("/api/auth/register")
             .set_json(json!({
@@ -201,7 +198,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
     let (token, user_id) = register_admin!(&app_state, 1);
 
     // Create cari
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
     let create_req = test::TestRequest::post()
         .uri("/api/v1/cari")
         .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -339,7 +336,7 @@ async fn test_stock_warehouse_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create warehouse
     let create_req = test::TestRequest::post()
@@ -404,7 +401,7 @@ async fn test_chart_of_accounts_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create chart account
     let create_req = test::TestRequest::post()
@@ -457,7 +454,7 @@ async fn test_project_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create project
     let create_req = test::TestRequest::post()
@@ -521,7 +518,7 @@ async fn test_webhook_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create webhook
     let create_req = test::TestRequest::post()
@@ -609,7 +606,7 @@ async fn test_restore_requires_admin() {
 
     let (admin_token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create and soft delete cari as admin
     let create_req = test::TestRequest::post()
@@ -672,7 +669,7 @@ async fn test_destroy_requires_admin() {
 
     let (admin_token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create and soft delete cari as admin
     let create_req = test::TestRequest::post()
@@ -755,7 +752,7 @@ async fn test_deleted_records_excluded_from_search() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
     let search_term = format!("Searchable{}", unique);
 
     // Create a cari with a searchable name
@@ -822,7 +819,7 @@ async fn test_deleted_records_excluded_from_type_filter() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create a vendor-type cari
     let create_req = test::TestRequest::post()
@@ -873,7 +870,7 @@ async fn test_deleted_records_excluded_from_get_by_id() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create a cari
     let create_req = test::TestRequest::post()
@@ -936,7 +933,7 @@ async fn test_tenant_isolation_deleted_records() {
     let (token1, user_id1) = register_admin!(&app_state, 1);
     let (token2, _user_id2) = register_admin!(&app_state, 2);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Tenant 1 creates and soft deletes a cari
     let create_req = test::TestRequest::post()
@@ -1004,7 +1001,7 @@ async fn test_tenant_isolation_normal_queries_ignore_other_tenant_deleted() {
     let (token1, user_id1) = register_admin!(&app_state, 1);
     let (token2, user_id2) = register_admin!(&app_state, 2);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Tenant 1 creates a cari and soft deletes it
     let create_req = test::TestRequest::post()
@@ -1078,7 +1075,7 @@ async fn test_non_admin_cannot_soft_delete() {
 
     let (admin_token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Admin creates a cari
     let create_req = test::TestRequest::post()
@@ -1192,7 +1189,7 @@ async fn test_soft_delete_sets_deleted_at_and_deleted_by() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create cari
     let create_req = test::TestRequest::post()
@@ -1274,7 +1271,7 @@ async fn test_multiple_domains_support_soft_delete() {
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Test cari soft delete
     let cari_req = test::TestRequest::post()
@@ -1380,7 +1377,7 @@ async fn test_double_soft_delete_idempotent() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create cari
     let create_req = test::TestRequest::post()
@@ -1430,7 +1427,7 @@ async fn test_restore_non_deleted_record_is_idempotent() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create cari (not deleted)
     let create_req = test::TestRequest::post()
@@ -1471,7 +1468,7 @@ async fn test_destroy_without_soft_delete() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create cari (not soft deleted)
     let create_req = test::TestRequest::post()
@@ -1564,7 +1561,7 @@ async fn test_update_deleted_record_behavior() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create cari
     let create_req = test::TestRequest::post()
@@ -1621,7 +1618,7 @@ async fn test_employee_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create employee
     let create_req = test::TestRequest::post()
@@ -1695,7 +1692,7 @@ async fn test_crm_lead_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create lead
     let create_req = test::TestRequest::post()
@@ -1769,7 +1766,7 @@ async fn test_asset_soft_delete_and_restore() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
 
     // Create asset
     let create_req = test::TestRequest::post()
@@ -1851,7 +1848,7 @@ async fn test_soft_delete_then_create_same_code() {
 
     let (token, user_id) = register_admin!(&app_state, 1);
 
-    let unique = chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0);
+    let unique = uuid::Uuid::new_v4().to_string();
     let code = format!("REUSE-{}", unique);
 
     // Create cari

@@ -60,10 +60,7 @@ async fn create_vendor_cari(state: &turerp::app::AppState, tenant_id: i64) -> i6
         .cari_service
         .get_ref()
         .create_cari(CreateCari {
-            code: format!(
-                "VEND{}",
-                chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
-            ),
+            code: format!("VEND{}", uuid::Uuid::new_v4().to_string()),
             name: "Test Vendor".to_string(),
             cari_type: CariType::Vendor,
             tax_number: Some("9876543210".to_string()),
@@ -667,10 +664,7 @@ async fn test_vendor_register_requires_vendor_cari() {
         .cari_service
         .get_ref()
         .create_cari(CreateCari {
-            code: format!(
-                "CUST{}",
-                chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
-            ),
+            code: format!("CUST{}", uuid::Uuid::new_v4().to_string()),
             name: "Test Customer".to_string(),
             cari_type: CariType::Customer,
             tax_number: Some("1234567890".to_string()),

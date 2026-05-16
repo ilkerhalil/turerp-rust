@@ -46,7 +46,61 @@ static CAMT_REF_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("static regex should compile")
 });
 
-/// Parse MT940 format statement data
+/// Pre-compiled regex set for a bank's XML format.
+struct BankRegexSet {
+    tx_re: Regex,
+    date_re: Regex,
+    desc_re: Regex,
+    amount_re: Regex,
+}
+
+// ---- Is Bankasi (islem, tarih, aciklama, tutar) ----
+static ISBANK_RE: LazyLock<BankRegexSet> = LazyLock::new(|| BankRegexSet {
+    tx_re: Regex::new(r"(?s)<islem>(.*?)</islem>").expect("static regex"),
+    date_re: Regex::new(r"(?s)<tarih>(.*?)</tarih>").expect("static regex"),
+    desc_re: Regex::new(r"(?s)<aciklama>(.*?)</aciklama>").expect("static regex"),
+    amount_re: Regex::new(r"(?s)<tutar>(.*?)</tutar>").expect("static regex"),
+});
+
+// ---- Garanti (transaction, date, description, amount) ----
+static GARANTI_RE: LazyLock<BankRegexSet> = LazyLock::new(|| BankRegexSet {
+    tx_re: Regex::new(r"(?s)<transaction>(.*?)</transaction>").expect("static regex"),
+    date_re: Regex::new(r"(?s)<date>(.*?)</date>").expect("static regex"),
+    desc_re: Regex::new(r"(?s)<description>(.*?)</description>").expect("static regex"),
+    amount_re: Regex::new(r"(?s)<amount>(.*?)</amount>").expect("static regex"),
+});
+
+// ---- Halkbank (hareket, tarih, aciklama, tutar) ----
+static HALKBANK_RE: LazyLock<BankRegexSet> = LazyLock::new(|| BankRegexSet {
+    tx_re: Regex::new(r"(?s)<hareket>(.*?)</hareket>").expect("static regex"),
+    date_re: Regex::new(r"(?s)<tarih>(.*?)</tarih>").expect("static regex"),
+    desc_re: Regex::new(r"(?s)<aciklama>(.*?)</aciklama>").expect("static regex"),
+    amount_re: Regex::new(r"(?s)<tutar>(.*?)</tutar>").expect("static regex"),
+});
+
+// ---- Ziraat (islem, tarih, aciklama, tutar) ----
+static ZIRAAT_RE: LazyLock<BankRegexSet> = LazyLock::new(|| BankRegexSet {
+    tx_re: Regex::new(r"(?s)<islem>(.*?)</islem>").expect("static regex"),
+    date_re: Regex::new(r"(?s)<tarih>(.*?)</tarih>").expect("static regex"),
+    desc_re: Regex::new(r"(?s)<aciklama>(.*?)</aciklama>").expect("static regex"),
+    amount_re: Regex::new(r"(?s)<tutar>(.*?)</tutar>").expect("static regex"),
+});
+
+// ---- Yapi Kredi (transaction, date, description, amount) ----
+static YAPIKREDI_RE: LazyLock<BankRegexSet> = LazyLock::new(|| BankRegexSet {
+    tx_re: Regex::new(r"(?s)<transaction>(.*?)</transaction>").expect("static regex"),
+    date_re: Regex::new(r"(?s)<date>(.*?)</date>").expect("static regex"),
+    desc_re: Regex::new(r"(?s)<description>(.*?)</description>").expect("static regex"),
+    amount_re: Regex::new(r"(?s)<amount>(.*?)</amount>").expect("static regex"),
+});
+
+// ---- Akbank (islem, tarih, aciklama, tutar) ----
+static AKBANK_RE: LazyLock<BankRegexSet> = LazyLock::new(|| BankRegexSet {
+    tx_re: Regex::new(r"(?s)<islem>(.*?)</islem>").expect("static regex"),
+    date_re: Regex::new(r"(?s)<tarih>(.*?)</tarih>").expect("static regex"),
+    desc_re: Regex::new(r"(?s)<aciklama>(.*?)</aciklama>").expect("static regex"),
+    amount_re: Regex::new(r"(?s)<tutar>(.*?)</tutar>").expect("static regex"),
+});
 pub fn parse_mt940(data: &str) -> Vec<ParsedBankTransaction> {
     let mut transactions = Vec::new();
     let mut current_description = String::new();
@@ -222,72 +276,56 @@ pub fn parse_bank_xml(bank_code: BankCode, data: &str) -> Vec<ParsedBankTransact
 }
 
 fn parse_isbank_xml(data: &str) -> Vec<ParsedBankTransaction> {
-    parse_generic_bank_xml(data, "islem", "tarih", "aciklama", "tutar", "TRY")
+    parse_generic_bank_xml(data, &ISBANK_RE, "TRY")
 }
 
 fn parse_garanti_xml(data: &str) -> Vec<ParsedBankTransaction> {
-    parse_generic_bank_xml(data, "transaction", "date", "description", "amount", "TRY")
+    parse_generic_bank_xml(data, &GARANTI_RE, "TRY")
 }
 
 fn parse_halkbank_xml(data: &str) -> Vec<ParsedBankTransaction> {
-    parse_generic_bank_xml(data, "hareket", "tarih", "aciklama", "tutar", "TRY")
+    parse_generic_bank_xml(data, &HALKBANK_RE, "TRY")
 }
 
 fn parse_ziraat_xml(data: &str) -> Vec<ParsedBankTransaction> {
-    parse_generic_bank_xml(data, "islem", "tarih", "aciklama", "tutar", "TRY")
+    parse_generic_bank_xml(data, &ZIRAAT_RE, "TRY")
 }
 
 fn parse_yapikredi_xml(data: &str) -> Vec<ParsedBankTransaction> {
-    parse_generic_bank_xml(data, "transaction", "date", "description", "amount", "TRY")
+    parse_generic_bank_xml(data, &YAPIKREDI_RE, "TRY")
 }
 
 fn parse_akbank_xml(data: &str) -> Vec<ParsedBankTransaction> {
-    parse_generic_bank_xml(data, "islem", "tarih", "aciklama", "tutar", "TRY")
+    parse_generic_bank_xml(data, &AKBANK_RE, "TRY")
 }
 
-/// Generic XML parser for bank-specific formats
+/// Generic XML parser using a pre-compiled regex set.
 fn parse_generic_bank_xml(
     data: &str,
-    tx_tag: &str,
-    date_tag: &str,
-    desc_tag: &str,
-    amount_tag: &str,
+    re: &BankRegexSet,
     default_currency: &str,
 ) -> Vec<ParsedBankTransaction> {
     let mut transactions = Vec::new();
 
-    let tx_re = Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", tx_tag, tx_tag)).unwrap_or_else(|_| {
-        Regex::new(r"(?s)<\w+>(.*?)</\w+>").expect("fallback regex should compile")
-    });
-    let date_re =
-        Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", date_tag, date_tag)).unwrap_or_else(|_| {
-            Regex::new(r"(?s)<\w+>(.*?)</\w+>").expect("fallback regex should compile")
-        });
-    let desc_re =
-        Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", desc_tag, desc_tag)).unwrap_or_else(|_| {
-            Regex::new(r"(?s)<\w+>(.*?)</\w+>").expect("fallback regex should compile")
-        });
-    let amount_re = Regex::new(&format!(r"(?s)<{}>(.*?)</{}>", amount_tag, amount_tag))
-        .unwrap_or_else(|_| {
-            Regex::new(r"(?s)<\w+>(.*?)</\w+>").expect("fallback regex should compile")
-        });
-
-    for tx_caps in tx_re.captures_iter(data) {
+    for tx_caps in re.tx_re.captures_iter(data) {
         let block = tx_caps.get(1).map(|m| m.as_str()).unwrap_or("");
 
-        let date = date_re
+        let date = re
+            .date_re
             .captures(block)
             .and_then(|c| c.get(1))
             .and_then(|m| parse_xml_date(m.as_str()))
             .unwrap_or_else(|| chrono::Utc::now().date_naive());
 
-        let description = desc_re
+        let description = re
+            .desc_re
             .captures(block)
             .and_then(|c| c.get(1))
             .map(|m| m.as_str().trim().to_string())
             .unwrap_or_else(|| "XML Transaction".to_string());
 
-        let (amount, _) = amount_re
+        let (amount, _) = re
+            .amount_re
             .captures(block)
             .and_then(|c| c.get(1))
             .map(|m| {
