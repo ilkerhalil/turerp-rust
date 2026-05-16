@@ -375,21 +375,29 @@ async fn main() -> std::io::Result<()> {
                 &security_headers_config,
                 is_production,
             )) // Security headers
+            .wrap(rate_limit_middleware.clone()) // Rate limiting: outer layer so unauthenticated requests count
             .wrap(configure_cors(&config.cors)) // CORS handling
             .wrap(middleware::Logger::default()) // Access logging
-            .wrap(TracingMiddleware) // Structured request/response tracing
             .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
             .wrap(JwtAuthMiddleware::new(
                 app_state.auth.jwt_service.get_ref().clone(),
             )) // JWT validation
             .wrap(IdempotencyMiddleware::in_memory()) // Idempotency key caching
-            .wrap(rate_limit_middleware.clone()) // Rate limiting (shared stats)
             .wrap(MetricsMiddleware::new()) // Metrics collection
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
-            .wrap(IpWhitelistMiddleware::new(
-                app_state.admin.ip_whitelist_service.get_ref().clone(),
-            )) // IP whitelist check (after tenant context)
-            .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
+            .wrap(
+                IpWhitelistMiddleware::new(app_state.admin.ip_whitelist_service.get_ref().clone())
+                    .with_trusted_proxies(
+                        config
+                            .rate_limit
+                            .trusted_proxies
+                            .iter()
+                            .filter_map(|s| s.parse().ok())
+                            .collect(),
+                    ),
+            ) // IP whitelist check (after tenant context)
+            .wrap(RequestIdMiddleware) // Request ID for tracing
+            .wrap(TracingMiddleware) // Innermost: structured request/response tracing
             .app_data(web::Data::new(app_state.clone())) // Full AppState for health probes
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
             .app_data(app_state.auth.auth_service.clone())
@@ -468,21 +476,29 @@ async fn main() -> std::io::Result<()> {
                 &security_headers_config,
                 is_production,
             )) // Security headers
+            .wrap(rate_limit_middleware.clone()) // Rate limiting: outer layer so unauthenticated requests count
             .wrap(configure_cors(&config.cors)) // CORS handling
             .wrap(middleware::Logger::default()) // Access logging
-            .wrap(TracingMiddleware) // Structured request/response tracing
             .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
             .wrap(JwtAuthMiddleware::new(
                 app_state.auth.jwt_service.get_ref().clone(),
             )) // JWT validation
             .wrap(IdempotencyMiddleware::in_memory()) // Idempotency key caching
-            .wrap(rate_limit_middleware.clone()) // Rate limiting (shared stats)
             .wrap(MetricsMiddleware::new()) // Metrics collection
             .wrap(TenantMiddleware) // Tenant context extraction (after auth)
-            .wrap(IpWhitelistMiddleware::new(
-                app_state.admin.ip_whitelist_service.get_ref().clone(),
-            )) // IP whitelist check (after tenant context)
-            .wrap(RequestIdMiddleware) // Innermost: request ID for tracing
+            .wrap(
+                IpWhitelistMiddleware::new(app_state.admin.ip_whitelist_service.get_ref().clone())
+                    .with_trusted_proxies(
+                        config
+                            .rate_limit
+                            .trusted_proxies
+                            .iter()
+                            .filter_map(|s| s.parse().ok())
+                            .collect(),
+                    ),
+            ) // IP whitelist check (after tenant context)
+            .wrap(RequestIdMiddleware) // Request ID for tracing
+            .wrap(TracingMiddleware) // Innermost: structured request/response tracing
             .app_data(web::Data::new(app_state.clone())) // Full AppState for health probes
             .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
             .app_data(app_state.auth.auth_service.clone())

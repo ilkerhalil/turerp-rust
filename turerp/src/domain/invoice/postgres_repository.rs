@@ -342,7 +342,12 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
+    async fn find_by_tenant(
+        &self,
+        tenant_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError> {
         let rows: Vec<InvoiceRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
@@ -352,9 +357,12 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             FROM invoices
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
+            LIMIT $2 OFFSET $3
             "#,
         )
         .bind(tenant_id)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find invoices by tenant: {}", e)))?;
@@ -634,7 +642,13 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             .ok_or_else(|| ApiError::NotFound("Invoice not found".to_string()))
     }
 
-    async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Invoice>, ApiError> {
+    async fn search(
+        &self,
+        tenant_id: i64,
+        query: &str,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError> {
         let rows: Vec<InvoiceRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
@@ -653,10 +667,13 @@ impl InvoiceRepository for PostgresInvoiceRepository {
                 similarity(unaccent(COALESCE(notes, '')), unaccent($2)),
                 COALESCE(ts_rank_cd(search_vector, plainto_tsquery('turkish', $2), 32), 0.0)
             ) DESC
+            LIMIT $3 OFFSET $4
             "#,
         )
         .bind(tenant_id)
         .bind(query)
+        .bind(limit)
+        .bind(offset)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to search invoices: {}", e)))?;

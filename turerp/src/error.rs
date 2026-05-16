@@ -47,6 +47,9 @@ pub enum ApiError {
 
     #[error("Service unavailable: {0}")]
     ServiceUnavailable(String),
+
+    #[error("Payload too large: {0}")]
+    PayloadTooLarge(String),
 }
 
 /// Error response structure for JSON API responses
@@ -99,6 +102,9 @@ impl ResponseError for ApiError {
                 tracing::warn!("Service unavailable: {}", msg);
                 HttpResponse::ServiceUnavailable().json(ErrorResponse { error: msg.clone() })
             }
+            ApiError::PayloadTooLarge(msg) => {
+                HttpResponse::PayloadTooLarge().json(ErrorResponse { error: msg.clone() })
+            }
             ApiError::Database(msg) => {
                 tracing::error!("Database error: {}", msg);
                 HttpResponse::InternalServerError().json(ErrorResponse {
@@ -147,6 +153,9 @@ impl ApiError {
             }
             ApiError::MfaRequired(_) => i18n.t(locale, "errors.mfa_required"),
             ApiError::ServiceUnavailable(_) => i18n.t(locale, "errors.service_unavailable"),
+            ApiError::PayloadTooLarge(msg) => {
+                i18n.t_args(locale, "errors.payload_too_large", &[("detail", msg)])
+            }
         }
     }
 
@@ -170,6 +179,7 @@ impl ApiError {
             ApiError::Forbidden(_) | ApiError::MfaRequired(_) => HttpResponse::Forbidden(),
             ApiError::BadRequest(_) | ApiError::Validation(_) => HttpResponse::BadRequest(),
             ApiError::Conflict(_) => HttpResponse::Conflict(),
+            ApiError::PayloadTooLarge(_) => HttpResponse::PayloadTooLarge(),
             ApiError::Database(_) | ApiError::Internal(_) => HttpResponse::InternalServerError(),
             ApiError::ServiceUnavailable(_) => HttpResponse::ServiceUnavailable(),
         }

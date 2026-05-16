@@ -11995,6 +11995,30 @@
         ],
         "summary": "Get outstanding invoices",
         "operationId": "get_outstanding_invoices",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Outstanding invoices"
@@ -12014,6 +12038,30 @@
         ],
         "summary": "Get overdue invoices",
         "operationId": "get_overdue_invoices",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Overdue invoices"

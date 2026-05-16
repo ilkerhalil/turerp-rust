@@ -77,7 +77,7 @@ impl InvoiceService {
     }
 
     pub async fn get_invoices_by_tenant(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
-        self.invoice_repo.find_by_tenant(tenant_id).await
+        self.invoice_repo.find_by_tenant(tenant_id, 1000, 0).await
     }
 
     pub async fn get_invoices_by_cari(&self, cari_id: i64) -> Result<Vec<Invoice>, ApiError> {
@@ -242,8 +242,14 @@ impl InvoiceService {
         &self,
         tenant_id: i64,
         query: &str,
+        page: u32,
+        per_page: u32,
     ) -> Result<Vec<Invoice>, ApiError> {
-        self.invoice_repo.search(tenant_id, query).await
+        let limit = (per_page as i64).min(100);
+        let offset = ((page.saturating_sub(1)) * per_page) as i64;
+        self.invoice_repo
+            .search(tenant_id, query, limit, offset)
+            .await
     }
 
     /// Search invoices by number or notes with pagination
@@ -262,8 +268,18 @@ impl InvoiceService {
             .await
     }
 
-    pub async fn get_outstanding_invoices(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
-        let invoices = self.invoice_repo.find_by_tenant(tenant_id).await?;
+    pub async fn get_outstanding_invoices(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<Vec<Invoice>, ApiError> {
+        let limit = per_page as i64;
+        let offset = ((page.saturating_sub(1)) * per_page) as i64;
+        let invoices = self
+            .invoice_repo
+            .find_by_tenant(tenant_id, limit, offset)
+            .await?;
 
         Ok(invoices
             .into_iter()
@@ -271,8 +287,18 @@ impl InvoiceService {
             .collect())
     }
 
-    pub async fn get_overdue_invoices(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
-        let invoices = self.invoice_repo.find_by_tenant(tenant_id).await?;
+    pub async fn get_overdue_invoices(
+        &self,
+        tenant_id: i64,
+        page: u32,
+        per_page: u32,
+    ) -> Result<Vec<Invoice>, ApiError> {
+        let limit = per_page as i64;
+        let offset = ((page.saturating_sub(1)) * per_page) as i64;
+        let invoices = self
+            .invoice_repo
+            .find_by_tenant(tenant_id, limit, offset)
+            .await?;
         let now = chrono::Utc::now();
 
         Ok(invoices

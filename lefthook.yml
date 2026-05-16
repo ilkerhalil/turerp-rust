@@ -2,18 +2,9 @@
 # https://github.com/evilmartians/lefthook
 
 # Pre-commit hooks run before each commit
+# Commands run in parallel by default; keep them independent
 pre-commit:
   commands:
-    clean:
-      run: cargo clean
-      root: turerp/
-      fail_text: |
-        cargo clean failed. Check disk permissions.
-    gen-openapi:
-      run: cargo run --bin gen_openapi && git add openapi.json
-      root: turerp/
-      fail_text: |
-        OpenAPI spec generation failed. Check for schema compilation errors.
     format:
       run: cargo fmt --check
       root: turerp/
@@ -25,21 +16,21 @@ pre-commit:
       root: turerp/
       fail_text: |
         Clippy found issues. Fix them before committing.
+    gen-openapi:
+      run: cargo run --bin gen_openapi && git add openapi.json
+      root: turerp/
+      fail_text: |
+        OpenAPI spec generation failed. Check for schema compilation errors.
 
 # Pre-push hooks run before pushing to remote
 pre-push:
+  parallel: false
   commands:
-    clean:
-      run: cargo clean
-      root: turerp/
-      fail_text: |
-        cargo clean failed. Check disk permissions.
     test:
       run: cargo test --verbose
       root: turerp/
       fail_text: |
         Tests failed. Fix them before pushing.
-
     security:
       # RUSTSEC-2023-0071: rsa Marvin Attack - only affects sqlx-mysql which we don't use
       run: cargo audit --ignore RUSTSEC-2023-0071

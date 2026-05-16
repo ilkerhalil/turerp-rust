@@ -108,7 +108,7 @@ pub struct LocalFileStorage {
 impl LocalFileStorage {
     pub fn new(base_path: impl Into<PathBuf>) -> Self {
         let base = base_path.into();
-        std::fs::create_dir_all(&base).ok();
+        let _ = std::fs::create_dir_all(&base);
         Self {
             base_path: base,
             metadata: parking_lot::RwLock::new(Vec::new()),
@@ -151,12 +151,14 @@ impl FileStorage for LocalFileStorage {
 
         // Create tenant directory
         let tenant_dir = self.tenant_path(upload.tenant_id);
-        std::fs::create_dir_all(&tenant_dir)
+        tokio::fs::create_dir_all(&tenant_dir)
+            .await
             .map_err(|e| format!("Failed to create directory: {}", e))?;
 
         // Write file
         let file_path = tenant_dir.join(format!("{}_{}", id, safe_name));
-        std::fs::write(&file_path, &upload.data)
+        tokio::fs::write(&file_path, &upload.data)
+            .await
             .map_err(|e| format!("Failed to write file: {}", e))?;
 
         let metadata = FileMetadata {
@@ -191,7 +193,9 @@ impl FileStorage for LocalFileStorage {
             .ok_or_else(|| format!("File {} not found", file_id))?;
 
         let file_path = self.tenant_path(tenant_id).join(&meta.filename);
-        std::fs::read(&file_path).map_err(|e| format!("Failed to read file: {}", e))
+        tokio::fs::read(&file_path)
+            .await
+            .map_err(|e| format!("Failed to read file: {}", e))
     }
 
     async fn get_metadata(
@@ -208,19 +212,22 @@ impl FileStorage for LocalFileStorage {
     }
 
     async fn delete(&self, tenant_id: i64, file_id: i64) -> Result<(), String> {
-        let mut metadata = self.metadata.write();
-        let file = metadata
-            .iter_mut()
-            .find(|m| m.id == file_id && m.tenant_id == tenant_id && m.deleted_at.is_none())
-            .ok_or_else(|| format!("File {} not found", file_id))?;
+        let file_path = {
+            let mut metadata = self.metadata.write();
+            let file = metadata
+                .iter_mut()
+                .find(|m| m.id == file_id && m.tenant_id == tenant_id && m.deleted_at.is_none())
+                .ok_or_else(|| format!("File {} not found", file_id))?;
 
-        // Soft delete — keep metadata, mark as deleted
-        file.deleted_at = Some(Utc::now());
+            // Soft delete — keep metadata, mark as deleted
+            file.deleted_at = Some(Utc::now());
 
-        // Optionally remove physical file
-        let safe_name = Self::sanitize_filename(&file.filename);
-        let file_path = self.tenant_path(tenant_id).join(&safe_name);
-        std::fs::remove_file(&file_path).ok();
+            // Optionally remove physical file
+            let safe_name = Self::sanitize_filename(&file.filename);
+            self.tenant_path(tenant_id).join(&safe_name)
+        };
+
+        let _ = tokio::fs::remove_file(&file_path).await;
 
         Ok(())
     }
