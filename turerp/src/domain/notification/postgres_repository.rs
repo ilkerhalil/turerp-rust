@@ -505,6 +505,7 @@ impl InAppNotificationRepository for PostgresInAppNotificationRepository {
             WHERE tenant_id = $1 AND user_id = $2 AND deleted_at IS NULL
                 AND ($3::BOOLEAN = false OR read = false)
             ORDER BY created_at DESC
+            LIMIT 1000
             "#,
         )
         .bind(tenant_id)

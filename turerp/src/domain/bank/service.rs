@@ -1,5 +1,6 @@
 //! Bank service for business logic
 
+use futures::future::join_all;
 use regex::Regex;
 use rust_decimal::Decimal;
 use std::sync::LazyLock;
@@ -364,25 +365,48 @@ impl BankService {
         let unmatched = self.repo.find_all_unmatched_transactions(tenant_id).await?;
         let rules = self.repo.find_active_rules(tenant_id).await?;
 
-        for tx in &unmatched {
-            // Rule 1: Exact reference number match with invoice/payment
-            if let Some(ref _reference) = tx.reference_no {
-                if self.try_match_by_reference(tx, tenant_id).await? {
-                    continue;
-                }
-            }
+        let mut matched = vec![false; unmatched.len()];
 
-            // Rule 2: Amount + date match (within 1 day)
-            if self.try_match_by_amount_date(tx, tenant_id).await? {
+        // Phase 1: parallel reference matching (N+1 → 1 + parallel)
+        let reference_futures: Vec<_> = unmatched
+            .iter()
+            .enumerate()
+            .filter(|(_, tx)| tx.reference_no.is_some())
+            .map(|(i, tx)| async move {
+                let result = self.try_match_by_reference(tx, tenant_id).await;
+                (i, result)
+            })
+            .collect();
+        for (i, result) in join_all(reference_futures).await {
+            if let Ok(true) = result {
+                matched[i] = true;
+            }
+        }
+
+        // Phase 2: parallel amount+date matching for still-unmatched
+        let amount_futures: Vec<_> = unmatched
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !matched[*i])
+            .map(|(i, tx)| async move {
+                let result = self.try_match_by_amount_date(tx, tenant_id).await;
+                (i, result)
+            })
+            .collect();
+        for (i, result) in join_all(amount_futures).await {
+            if let Ok(true) = result {
+                matched[i] = true;
+            }
+        }
+
+        // Phase 3: sequential description + rules for remaining unmatched
+        for (i, tx) in unmatched.iter().enumerate() {
+            if matched[i] {
                 continue;
             }
-
-            // Rule 3: Description contains invoice number
             if self.try_match_by_description(tx, tenant_id).await? {
                 continue;
             }
-
-            // Rule 4: Custom reconciliation rules
             if self.try_match_by_rules(tx, tenant_id, &rules).await? {
                 continue;
             }

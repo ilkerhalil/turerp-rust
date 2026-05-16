@@ -384,6 +384,7 @@ impl DocumentRepository for PostgresDocumentRepository {
             SELECT * FROM documents
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY updated_at DESC
+            LIMIT 1000
             "#,
         )
         .bind(tenant_id)
@@ -504,6 +505,7 @@ impl DocumentRepository for PostgresDocumentRepository {
             SELECT * FROM document_versions
             WHERE document_id = $1 AND tenant_id = $2
             ORDER BY version_number DESC
+            LIMIT 1000
             "#,
         )
         .bind(document_id)
