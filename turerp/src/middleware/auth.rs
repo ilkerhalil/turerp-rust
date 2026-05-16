@@ -31,9 +31,6 @@ pub const PUBLIC_PATHS: &[&str] = &[
     "/health",
     "/health/live",
     "/health/ready",
-    "/metrics",
-    "/swagger-ui",
-    "/api-docs",
 ];
 
 /// JWT authentication middleware
@@ -294,8 +291,8 @@ mod tests {
         assert!(JwtAuthMiddleware::is_public_path("/api/v1/auth/refresh"));
         assert!(JwtAuthMiddleware::is_public_path("/api/auth/login"));
         assert!(JwtAuthMiddleware::is_public_path("/health"));
-        assert!(JwtAuthMiddleware::is_public_path("/swagger-ui/index.html"));
-        assert!(JwtAuthMiddleware::is_public_path("/api-docs/openapi.json"));
+        assert!(!JwtAuthMiddleware::is_public_path("/swagger-ui/index.html"));
+        assert!(!JwtAuthMiddleware::is_public_path("/api-docs/openapi.json"));
         assert!(!JwtAuthMiddleware::is_public_path("/api/v1/users"));
         assert!(!JwtAuthMiddleware::is_public_path("/api/v1/auth/me"));
     }
@@ -364,7 +361,7 @@ mod tests {
     fn test_public_path_edge_cases() {
         assert!(JwtAuthMiddleware::is_public_path("/health"));
         assert!(JwtAuthMiddleware::is_public_path("/api/v1/auth/login"));
-        assert!(JwtAuthMiddleware::is_public_path("/swagger-ui/index.html"));
+        assert!(!JwtAuthMiddleware::is_public_path("/swagger-ui/index.html"));
         assert!(JwtAuthMiddleware::is_public_path(
             "/api/v1/auth/login?redirect=/home"
         ));

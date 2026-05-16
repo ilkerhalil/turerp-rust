@@ -7,7 +7,7 @@ use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
 use turerp::config::Config;
 use turerp::middleware::{
-    audit::spawn_audit_writer, AuditLoggingMiddleware, IdempotencyMiddleware,
+    audit::spawn_audit_writer, AuditLoggingMiddleware, AuthUser, IdempotencyMiddleware,
     IpWhitelistMiddleware, JwtAuthMiddleware, MetricsMiddleware, RateLimitMiddleware,
     RequestIdMiddleware, SecurityHeadersMiddleware, TenantMiddleware, TracingMiddleware,
 };
@@ -139,7 +139,10 @@ async fn health_check(
 }
 
 /// Metrics endpoint - exposes Prometheus-format metrics
-async fn metrics_endpoint() -> actix_web::Result<actix_web::HttpResponse> {
+///
+/// Requires authentication. Prometheus scraper must be configured
+/// with a valid Bearer token.
+async fn metrics_endpoint(_auth_user: AuthUser) -> actix_web::Result<actix_web::HttpResponse> {
     let body = turerp::middleware::render_metrics();
     Ok(actix_web::HttpResponse::Ok()
         .content_type("text/plain; version=0.0.4; charset=utf-8")

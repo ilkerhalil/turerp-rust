@@ -2,6 +2,8 @@
 
 use regex::Regex;
 use rust_decimal::Decimal;
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::LazyLock;
 use validator::Validate;
 
@@ -43,11 +45,15 @@ fn validate_regex_pattern(pattern: &str) -> Result<(), String> {
 #[derive(Clone)]
 pub struct BankService {
     repo: BoxBankRepository,
+    regex_cache: Arc<parking_lot::Mutex<HashMap<String, Regex>>>,
 }
 
 impl BankService {
     pub fn new(repo: BoxBankRepository) -> Self {
-        Self { repo }
+        Self {
+            repo,
+            regex_cache: Arc::new(parking_lot::Mutex::new(HashMap::new())),
+        }
     }
 
     /// Create a new bank account
@@ -549,6 +555,22 @@ impl BankService {
         Ok(false)
     }
 
+    /// Get or compile a regex pattern from cache
+    fn get_cached_regex(&self, pattern: &str) -> Result<regex::Regex, ApiError> {
+        {
+            let cache = self.regex_cache.lock();
+            if let Some(re) = cache.get(pattern) {
+                return Ok(re.clone());
+            }
+        }
+        let re = regex::Regex::new(pattern)
+            .map_err(|e| ApiError::Validation(format!("Invalid regex pattern: {}", e)))?;
+        self.regex_cache
+            .lock()
+            .insert(pattern.to_string(), re.clone());
+        Ok(re)
+    }
+
     async fn try_match_by_rules(
         &self,
         tx: &BankTransaction,
@@ -563,15 +585,13 @@ impl BankService {
             let matched = match rule.match_field {
                 crate::domain::bank::model::MatchField::Description => {
                     validate_regex_pattern(&rule.match_pattern).map_err(ApiError::Validation)?;
-                    let pattern = regex::Regex::new(&rule.match_pattern).ok();
-                    pattern
+                    self.get_cached_regex(&rule.match_pattern)
                         .map(|re| re.is_match(&tx.description))
                         .unwrap_or(false)
                 }
                 crate::domain::bank::model::MatchField::Reference => {
                     validate_regex_pattern(&rule.match_pattern).map_err(ApiError::Validation)?;
-                    let pattern = regex::Regex::new(&rule.match_pattern).ok();
-                    pattern
+                    self.get_cached_regex(&rule.match_pattern)
                         .map(|re| {
                             tx.reference_no
                                 .as_ref()
