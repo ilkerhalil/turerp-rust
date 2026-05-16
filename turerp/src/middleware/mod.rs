@@ -10,6 +10,7 @@ pub mod rate_limit;
 pub mod request_id;
 pub mod security_headers;
 pub mod tenant;
+pub mod tracing;
 
 pub use api_key::{ApiKeyAuth, ApiKeyClaims};
 pub use audit::AuditLoggingMiddleware;
@@ -21,3 +22,4 @@ pub use rate_limit::RateLimitMiddleware;
 pub use request_id::RequestIdMiddleware;
 pub use security_headers::SecurityHeadersMiddleware;
 pub use tenant::{TenantContext, TenantContextExt, TenantMiddleware};
+pub use tracing::TracingMiddleware;
