@@ -5,7 +5,7 @@ use serde_json::json;
 
 /// Register an admin user directly and return (access_token, user_id)
 pub async fn register_admin(state: &turerp::app::AppState, tenant_id: i64) -> (String, i64) {
-    let username = format!("admin_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
+    let username = format!("admin_{}", uuid::Uuid::new_v4());
     let user = state
         .user_service
         .get_ref()
@@ -36,7 +36,7 @@ where
         Error = actix_web::Error,
     >,
 {
-    let username = format!("user_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
+    let username = format!("user_{}", uuid::Uuid::new_v4());
     let req = test::TestRequest::post()
         .uri("/api/auth/register")
         .set_json(json!({

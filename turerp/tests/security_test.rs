@@ -121,10 +121,7 @@ macro_rules! test_app {
 /// Helper macro to create an admin user directly and return access token
 macro_rules! sec_register_admin {
     ($state:expr, $tenant_id:expr) => {{
-        let username = format!(
-            "secadmin_{}",
-            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
-        );
+        let username = format!("secadmin_{}", uuid::Uuid::new_v4());
         let user = $state
             .auth
             .user_service
@@ -157,7 +154,7 @@ macro_rules! sec_register_admin {
 /// Helper macro to register a normal user and return access token
 macro_rules! sec_register_user {
     ($app:expr, $tenant_id:expr) => {{
-        let username = format!("secuser_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
+        let username = format!("secuser_{}", uuid::Uuid::new_v4());
         let req = test::TestRequest::post()
             .uri("/api/auth/register")
             .set_json(json!({
@@ -2046,7 +2043,7 @@ async fn test_normal_user_cannot_restore_notification() {
     // Normal user tries to restore
     let user_token = sec_register_user!(&app, 1);
 
-    let restore_req = test::TestRequest::post()
+    let restore_req = test::TestRequest::put()
         .uri(&format!(
             "/api/v1/notifications/{}/restore",
             notification_id
@@ -2146,7 +2143,7 @@ async fn test_unauthenticated_notification_soft_delete_rejected() {
 
     let endpoints = vec![
         ("DELETE", "/api/v1/notifications/1"),
-        ("POST", "/api/v1/notifications/1/restore"),
+        ("PUT", "/api/v1/notifications/1/restore"),
         ("DELETE", "/api/v1/notifications/1/destroy"),
         ("GET", "/api/v1/notifications/deleted"),
     ];

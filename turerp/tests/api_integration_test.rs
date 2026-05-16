@@ -145,10 +145,7 @@ fn build_full_test_app(
 /// Usage: `let (token, user_id) = register_admin!(&app_state, 1);`
 macro_rules! register_admin {
     ($state:expr, $tenant_id:expr) => {{
-        let username = format!(
-            "admin_{}",
-            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
-        );
+        let username = format!("admin_{}", uuid::Uuid::new_v4());
         let user = $state
             .auth
             .user_service
@@ -182,7 +179,7 @@ macro_rules! register_admin {
 /// Usage: `let (token, user_id) = register_user!(&app, 1);`
 macro_rules! register_user {
     ($app:expr, $tenant_id:expr) => {{
-        let username = format!("user_{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
+        let username = format!("user_{}", uuid::Uuid::new_v4());
         let req = test::TestRequest::post()
             .uri("/api/auth/register")
             .set_json(json!({
@@ -5604,7 +5601,7 @@ async fn test_notification_list_deleted_and_restore() {
         .any(|n| n["id"].as_i64() == Some(notification_id)));
 
     // Restore
-    let restore_req = test::TestRequest::post()
+    let restore_req = test::TestRequest::put()
         .uri(&format!(
             "/api/v1/notifications/{}/restore",
             notification_id
