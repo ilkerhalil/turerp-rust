@@ -28,7 +28,7 @@ pub trait InvoiceRepository: Send + Sync {
         tenant_id: i64,
         number: &str,
     ) -> Result<Option<Invoice>, ApiError>;
-    async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Invoice>, ApiError>;
+    async fn find_by_cari(&self, tenant_id: i64, cari_id: i64) -> Result<Vec<Invoice>, ApiError>;
     async fn find_by_status(
         &self,
         tenant_id: i64,
@@ -303,7 +303,7 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
             .cloned())
     }
 
-    async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Invoice>, ApiError> {
+    async fn find_by_cari(&self, tenant_id: i64, cari_id: i64) -> Result<Vec<Invoice>, ApiError> {
         let inner = self.inner.lock();
         let ids = inner
             .cari_invoices
@@ -313,7 +313,7 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
         Ok(ids
             .iter()
             .filter_map(|id| inner.invoices.get(id).cloned())
-            .filter(|i| !i.is_deleted())
+            .filter(|i| i.tenant_id == tenant_id && !i.is_deleted())
             .collect())
     }
 

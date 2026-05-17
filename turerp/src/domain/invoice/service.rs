@@ -80,8 +80,12 @@ impl InvoiceService {
         self.invoice_repo.find_by_tenant(tenant_id, 1000, 0).await
     }
 
-    pub async fn get_invoices_by_cari(&self, cari_id: i64) -> Result<Vec<Invoice>, ApiError> {
-        self.invoice_repo.find_by_cari(cari_id).await
+    pub async fn get_invoices_by_cari(
+        &self,
+        tenant_id: i64,
+        cari_id: i64,
+    ) -> Result<Vec<Invoice>, ApiError> {
+        self.invoice_repo.find_by_cari(tenant_id, cari_id).await
     }
 
     pub async fn get_invoices_by_status(
@@ -226,8 +230,12 @@ impl InvoiceService {
     }
 
     /// Get all payments for a specific cari (customer)
-    pub async fn get_payments_by_cari(&self, cari_id: i64) -> Result<Vec<Payment>, ApiError> {
-        let invoices = self.invoice_repo.find_by_cari(cari_id).await?;
+    pub async fn get_payments_by_cari(
+        &self,
+        tenant_id: i64,
+        cari_id: i64,
+    ) -> Result<Vec<Payment>, ApiError> {
+        let invoices = self.invoice_repo.find_by_cari(tenant_id, cari_id).await?;
         let invoice_ids: Vec<i64> = invoices.into_iter().map(|i| i.id).collect();
         if invoice_ids.is_empty() {
             return Ok(Vec::new());

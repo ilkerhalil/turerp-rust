@@ -1,6 +1,6 @@
 //! Bank service for business logic
 
-use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use regex::Regex;
 use rust_decimal::Decimal;
 use std::collections::HashMap;
@@ -374,34 +374,52 @@ impl BankService {
         let mut matched = vec![false; unmatched.len()];
 
         // Phase 1: parallel reference matching (N+1 → 1 + parallel)
-        let reference_futures: Vec<_> = unmatched
-            .iter()
-            .enumerate()
-            .filter(|(_, tx)| tx.reference_no.is_some())
-            .map(|(i, tx)| async move {
-                let result = self.try_match_by_reference(tx, tenant_id).await;
-                (i, result)
-            })
-            .collect();
-        for (i, result) in join_all(reference_futures).await {
-            if let Ok(true) = result {
-                matched[i] = true;
+        let reference_results: Vec<_> = stream::iter(
+            unmatched
+                .iter()
+                .enumerate()
+                .filter(|(_, tx)| tx.reference_no.is_some())
+                .map(|(i, tx)| async move {
+                    let result = self.try_match_by_reference(tx, tenant_id).await;
+                    (i, result)
+                }),
+        )
+        .buffer_unordered(10)
+        .collect()
+        .await;
+        for (i, result) in reference_results {
+            match result {
+                Ok(true) => matched[i] = true,
+                Ok(false) => {}
+                Err(e) => {
+                    tracing::error!(tenant_id, transaction_id = unmatched[i].id, error = %e, "Reference match failed");
+                    return Err(e);
+                }
             }
         }
 
         // Phase 2: parallel amount+date matching for still-unmatched
-        let amount_futures: Vec<_> = unmatched
-            .iter()
-            .enumerate()
-            .filter(|(i, _)| !matched[*i])
-            .map(|(i, tx)| async move {
-                let result = self.try_match_by_amount_date(tx, tenant_id).await;
-                (i, result)
-            })
-            .collect();
-        for (i, result) in join_all(amount_futures).await {
-            if let Ok(true) = result {
-                matched[i] = true;
+        let amount_results: Vec<_> = stream::iter(
+            unmatched
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| !matched[*i])
+                .map(|(i, tx)| async move {
+                    let result = self.try_match_by_amount_date(tx, tenant_id).await;
+                    (i, result)
+                }),
+        )
+        .buffer_unordered(10)
+        .collect()
+        .await;
+        for (i, result) in amount_results {
+            match result {
+                Ok(true) => matched[i] = true,
+                Ok(false) => {}
+                Err(e) => {
+                    tracing::error!(tenant_id, transaction_id = unmatched[i].id, error = %e, "Amount/date match failed");
+                    return Err(e);
+                }
             }
         }
 
