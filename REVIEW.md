@@ -16,7 +16,7 @@
 | **Kod Kalitesi** | 0 | 6 | 7 | 3 |
 | **Mimari** | 2 | 4 | 8 | 4 |
 | **Gozlemlenebilirlik** | 1 | 3 | 6 | 5 |
-| **Toplam (benzersiz)** | **8** | **28** | **38** | **20** |
+| **Toplam (benzersiz)** | **8** (3 acik) | **28** (16 acik) | **38** | **20** |
 
 > **Teknik Borc Tahmini:** ~80-120 saat (2-3 hafta, 1 senior developer)
 
@@ -29,11 +29,11 @@
 | 1 | Guvenlik | IP Whitelist Bypass — `X-Forwarded-For` dogrulanmadan kabul ediliyor | `middleware/ip_whitelist.rs:25` | Saldiri yuzeyi tamamen acik |
 | 2 | Gozlemlenebilirlik | TracingMiddleware RequestId'den ONCE — `request_id` bos string loglaniyor | `main.rs:380` | Trace correlation calismiyor |
 | 3 | Mimari | Rate Limit JWT Auth'den SONRA — auth'siz istekler rate limit'e takilmiyor | `main.rs:367` | Brute-force bypass |
-| 4 | Performans | `std::fs::create_dir_all` async icinde — tokio worker bloklaniyor | `file_storage.rs:154` | File upload stall |
-| 5 | Performans | `std::fs::write` async icinde — buyuk upload'lar thread bloklar | `file_storage.rs:159` | DoS |
-| 6 | Performans | `std::fs::read` async icinde — download stall | `file_storage.rs:194` | DoS |
-| 7 | Performans | Unbounded invoice `search()` LIMIT yok — OOM | `invoice/postgres_repo.rs:637` | Memory exhaustion |
-| 8 | Guvenlik | Unbounded multipart file upload — size limit yok | `files.rs:36` | Memory DoS |
+| 4 | Performans | `std::fs::create_dir_all` async icinde — tokio worker bloklaniyor | `file_storage.rs:154` | File upload stall | **Cozuldu (#91)** |
+| 5 | Performans | `std::fs::write` async icinde — buyuk upload'lar thread bloklar | `file_storage.rs:159` | DoS | **Cozuldu (#91)** |
+| 6 | Performans | `std::fs::read` async icinde — download stall | `file_storage.rs:194` | DoS | **Cozuldu (#91)** |
+| 7 | Performans | Unbounded invoice `search()` LIMIT yok — OOM | `invoice/postgres_repo.rs:637` | Memory exhaustion | **Cozuldu (#91)** |
+| 8 | Guvenlik | Unbounded multipart file upload — size limit yok | `files.rs:36` | Memory DoS | **Cozuldu (#91)** |
 
 ---
 
@@ -42,18 +42,18 @@
 ### Guvenlik (3)
 1. Login `tenant_id` default = 1 — sistem tenant'ina brute-force (`auth.rs:65`)
 2. `/metrics` ve `/swagger-ui` auth'siz — attack surface enumeration (`auth.rs:16`)
-3. Runtime regex derleme loop icinde — reconciliation super-linear yavaslar (`bank/service.rs:566`)
+3. ~~Runtime regex derleme loop icinde — reconciliation super-linear yavaslar (`bank/service.rs:566`)~~ **Cozuldu (#91)** — `LazyLock<Regex>` ile compile-time derleme
 
 ### Performans (12)
-4. N+1: `get_payments_by_cari` — 1 + N query (`invoice/service.rs:230`)
-5. N+1: `auto_reconcile` — 1 + 4N query (`bank/service.rs:363`)
-6. LIMIT eksik: `find_by_tenant` — tum tenant invoices RAM'e yukleniyor
-7. LIMIT eksik: `find_by_cari` — tum cari invoices RAM'e
-8. LIMIT eksik: `find_by_status` — tum status invoices RAM'e
-9. LIMIT eksik: `find_deleted` (invoice)
-10. LIMIT eksik: `find_by_user` (notification)
-11. LIMIT eksik: `find_deleted` (document)
-12. LIMIT eksik: `list_versions` (document)
+4. ~~N+1: `get_payments_by_cari` — 1 + N query (`invoice/service.rs:230`)~~ **Cozuldu (#91)** — `find_by_invoices()` batch query
+5. ~~N+1: `auto_reconcile` — 1 + 4N query (`bank/service.rs:363`)~~ **Cozuldu (#91, #92)** — `buffer_unordered(10)` ile paralel + hata propagate
+6. ~~LIMIT eksik: `find_by_tenant` — tum tenant invoices RAM'e yukleniyor~~ **Cozuldu (#91)** — `LIMIT 1000` eklendi
+7. ~~LIMIT eksik: `find_by_cari` — tum cari invoices RAM'e~~ **Cozuldu (#91)** — `LIMIT 1000` + `tenant_id` izolasyonu (#92)
+8. ~~LIMIT eksik: `find_by_status` — tum status invoices RAM'e~~ **Cozuldu (#91)** — `LIMIT 1000` eklendi
+9. ~~LIMIT eksik: `find_deleted` (invoice)~~ **Cozuldu (#91)** — `LIMIT 1000` eklendi
+10. ~~LIMIT eksik: `find_by_user` (notification)~~ **Cozuldu (#91)** — `LIMIT 1000` eklendi
+11. ~~LIMIT eksik: `find_deleted` (document)~~ **Cozuldu (#91)** — `LIMIT 1000` eklendi
+12. ~~LIMIT eksik: `list_versions` (document)~~ **Cozuldu (#91)** — `LIMIT 1000` eklendi
 13. `get_outstanding_invoices` — tum tabloyu RAM'e yukleyip filtreliyor
 14. `get_overdue_invoices` — ayni
 15. `search_invoices` — LIMIT yok, unbounded JSON serialization
@@ -164,16 +164,16 @@
 
 ### Faz 1: Critical (1-2 gun)
 1. [ ] IP Whitelist trusted proxy kontrolu ekle
-2. [ ] `std::fs` -> `tokio::fs` file_storage.rs'te
-3. [ ] File upload size limit ekle (50MB)
-4. [ ] Invoice `search()` ve `find_by_tenant` LIMIT ekle
+2. [x] `std::fs` -> `tokio::fs` file_storage.rs'te — **#91**
+3. [x] File upload size limit ekle (50MB) — **#91**
+4. [x] Invoice `search()` ve `find_by_tenant` LIMIT ekle — **#91**
 5. [ ] TracingMiddleware RequestId'den SONRA tasila
 6. [ ] RateLimitMiddleware en disa tasila
 
 ### Faz 2: High (1 hafta)
-7. [ ] N+1 query'ler JOIN'e cevir (payments, reconcile)
+7. [x] N+1 query'ler JOIN'e cevir (payments, reconcile) — **#91, #92**
 8. [ ] `get_outstanding/overdue` filtre SQL'e it
-9. [ ] Runtime regex pre-compile (bank rules)
+9. [x] Runtime regex pre-compile (bank rules) — **#91**
 10. [ ] Login default tenant_id kaldir
 11. [ ] `/metrics` ve `/swagger-ui` auth altina al
 12. [ ] Vault token `SecretString`
