@@ -130,6 +130,8 @@ pub trait PaymentRepository: Send + Sync {
     async fn create(&self, payment: CreatePayment) -> Result<Payment, ApiError>;
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Payment>, ApiError>;
     async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<Payment>, ApiError>;
+    /// Find payments for multiple invoices in a single query
+    async fn find_by_invoices(&self, invoice_ids: &[i64]) -> Result<Vec<Payment>, ApiError>;
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Soft delete a payment
@@ -792,6 +794,20 @@ impl PaymentRepository for InMemoryPaymentRepository {
             .get(&invoice_id)
             .cloned()
             .unwrap_or_default();
+        Ok(ids
+            .iter()
+            .filter_map(|id| inner.payments.get(id).cloned())
+            .filter(|p| !p.is_deleted())
+            .collect())
+    }
+
+    async fn find_by_invoices(&self, invoice_ids: &[i64]) -> Result<Vec<Payment>, ApiError> {
+        let inner = self.inner.lock();
+        let ids: Vec<i64> = invoice_ids
+            .iter()
+            .filter_map(|invoice_id| inner.invoice_payments.get(invoice_id))
+            .flat_map(|ids| ids.iter().copied())
+            .collect();
         Ok(ids
             .iter()
             .filter_map(|id| inner.payments.get(id).cloned())

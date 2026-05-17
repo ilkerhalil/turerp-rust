@@ -404,6 +404,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             FROM invoices
             WHERE cari_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
+            LIMIT 1000
             "#,
         )
         .bind(cari_id)
@@ -430,6 +431,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             FROM invoices
             WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
+            LIMIT 1000
             "#,
         )
         .bind(tenant_id)
@@ -739,6 +741,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             FROM invoices
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
+            LIMIT 1000
             "#,
         )
         .bind(tenant_id)
@@ -1042,6 +1045,28 @@ impl PaymentRepository for PostgresPaymentRepository {
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find payments by invoice: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_by_invoices(&self, invoice_ids: &[i64]) -> Result<Vec<Payment>, ApiError> {
+        if invoice_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows: Vec<PaymentRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, company_id, invoice_id, amount, payment_date,
+                   payment_method, reference_number, notes, created_at,
+                   deleted_at, deleted_by
+            FROM payments
+            WHERE invoice_id = ANY($1) AND deleted_at IS NULL
+            ORDER BY created_at DESC
+            "#,
+        )
+        .bind(invoice_ids)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find payments by invoices: {}", e)))?;
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
