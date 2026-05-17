@@ -394,7 +394,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_cari(&self, cari_id: i64) -> Result<Vec<Invoice>, ApiError> {
+    async fn find_by_cari(&self, tenant_id: i64, cari_id: i64) -> Result<Vec<Invoice>, ApiError> {
         let rows: Vec<InvoiceRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
@@ -402,15 +402,24 @@ impl InvoiceRepository for PostgresInvoiceRepository {
                    total_amount, paid_amount, currency, notes, created_at, updated_at,
                    deleted_at, deleted_by
             FROM invoices
-            WHERE cari_id = $1 AND deleted_at IS NULL
+            WHERE tenant_id = $1 AND cari_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT 1000
             "#,
         )
+        .bind(tenant_id)
         .bind(cari_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find invoices by cari: {}", e)))?;
+
+        if rows.len() == 1000 {
+            tracing::warn!(
+                tenant_id,
+                cari_id,
+                "find_by_cari result truncated at LIMIT 1000"
+            );
+        }
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
@@ -439,6 +448,14 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find invoices by status: {}", e)))?;
+
+        if rows.len() == 1000 {
+            tracing::warn!(
+                tenant_id,
+                ?status,
+                "find_by_status result truncated at LIMIT 1000"
+            );
+        }
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
@@ -748,6 +765,10 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find deleted invoices: {}", e)))?;
+
+        if rows.len() == 1000 {
+            tracing::warn!(tenant_id, "find_deleted result truncated at LIMIT 1000");
+        }
 
         Ok(rows.into_iter().map(Into::into).collect())
     }

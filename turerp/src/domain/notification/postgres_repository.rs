@@ -515,6 +515,15 @@ impl InAppNotificationRepository for PostgresInAppNotificationRepository {
         .await
         .map_err(|e| map_sqlx_error(e, "InAppNotification"))?;
 
+        if rows.len() == 1000 {
+            tracing::warn!(
+                tenant_id,
+                user_id,
+                unread_only,
+                "find_by_user in_app_notifications truncated at LIMIT 1000"
+            );
+        }
+
         Ok(rows.into_iter().map(Into::into).collect())
     }
 

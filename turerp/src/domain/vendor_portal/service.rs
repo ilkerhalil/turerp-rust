@@ -227,7 +227,10 @@ impl VendorPortalService {
         _tenant_id: i64,
         pagination: VendorPaginationParams,
     ) -> Result<VendorPaginatedResponse<VendorInvoiceView>, ApiError> {
-        let invoices = self.invoice_service.get_invoices_by_cari(cari_id).await?;
+        let invoices = self
+            .invoice_service
+            .get_invoices_by_cari(_tenant_id, cari_id)
+            .await?;
         let total = invoices.len() as i64;
         let page = pagination.page();
         let per_page = pagination.per_page();
@@ -259,7 +262,10 @@ impl VendorPortalService {
         _tenant_id: i64,
         pagination: VendorPaginationParams,
     ) -> Result<VendorPaginatedResponse<VendorPaymentView>, ApiError> {
-        let invoices = self.invoice_service.get_invoices_by_cari(cari_id).await?;
+        let invoices = self
+            .invoice_service
+            .get_invoices_by_cari(_tenant_id, cari_id)
+            .await?;
         let mut views = Vec::new();
 
         for inv in invoices {
@@ -300,7 +306,10 @@ impl VendorPortalService {
         cari_id: i64,
         tenant_id: i64,
     ) -> Result<Vec<u8>, ApiError> {
-        let invoices = self.invoice_service.get_invoices_by_cari(cari_id).await?;
+        let invoices = self
+            .invoice_service
+            .get_invoices_by_cari(tenant_id, cari_id)
+            .await?;
         if !invoices
             .iter()
             .any(|i| i.id == invoice_id && i.tenant_id == tenant_id)

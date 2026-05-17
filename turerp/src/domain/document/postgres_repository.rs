@@ -392,6 +392,10 @@ impl DocumentRepository for PostgresDocumentRepository {
         .await
         .map_err(|e| map_sqlx_error(e, "Document"))?;
 
+        if rows.len() == 1000 {
+            tracing::warn!(tenant_id, "find_deleted documents truncated at LIMIT 1000");
+        }
+
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
@@ -513,6 +517,14 @@ impl DocumentRepository for PostgresDocumentRepository {
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Document"))?;
+
+        if rows.len() == 1000 {
+            tracing::warn!(
+                document_id,
+                tenant_id,
+                "list_versions truncated at LIMIT 1000"
+            );
+        }
 
         Ok(rows.into_iter().map(Into::into).collect())
     }
