@@ -46,7 +46,7 @@ pub async fn register(
     tag = "Auth",
     request_body = LoginRequest,
     params(
-        ("tenant_id" = Option<i64>, Query, description = "Tenant ID (default: 1)")
+        ("tenant_id" = i64, Query, description = "Tenant ID (required)")
     ),
     responses(
         (status = 200, description = "Login successful", body = LoginResponse),
@@ -62,7 +62,9 @@ pub async fn login(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let tenant_id = params.tenant_id.unwrap_or(1);
+    let tenant_id = params
+        .tenant_id
+        .ok_or_else(|| ApiError::BadRequest("tenant_id is required".to_string()))?;
     match auth_service.login(payload.into_inner(), tenant_id).await {
         Ok(response) => Ok(HttpResponse::Ok().json(response)),
         Err(ApiError::MfaRequired(token)) => Ok(HttpResponse::Forbidden().json(
@@ -136,7 +138,7 @@ pub struct LoginParams {
 }
 
 fn default_tenant_id() -> Option<i64> {
-    Some(1)
+    None
 }
 
 /// Configure auth routes for v1 API
