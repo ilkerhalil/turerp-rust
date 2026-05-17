@@ -240,7 +240,8 @@ impl RetryPolicy {
             | ApiError::InvalidCredentials
             | ApiError::TokenExpired
             | ApiError::InvalidToken(_)
-            | ApiError::MfaRequired(_) => false,
+            | ApiError::MfaRequired(_)
+            | ApiError::PayloadTooLarge(_) => false,
         }
     }
 }

@@ -10,6 +10,8 @@ use crate::common::pagination::{default_page, default_per_page};
 use crate::error::{ApiError, ApiResult};
 use crate::middleware::AuthUser;
 
+const MAX_FILE_SIZE: usize = 50 * 1024 * 1024; // 50 MB
+
 /// Query parameters for listing files
 #[derive(Debug, Deserialize)]
 pub struct ListFilesQuery {
@@ -29,6 +31,7 @@ pub struct ListFilesQuery {
     responses(
         (status = 201, description = "File uploaded successfully"),
         (status = 400, description = "Invalid file upload"),
+        (status = 413, description = "File too large"),
         (status = 401, description = "Not authenticated")
     ),
     security(("bearer_auth" = []))
@@ -64,6 +67,11 @@ pub async fn upload_file(
             while let Some(chunk) = field.next().await {
                 let data = chunk.map_err(|e| ApiError::BadRequest(format!("Read error: {}", e)))?;
                 file_data.extend_from_slice(&data);
+                if file_data.len() > MAX_FILE_SIZE {
+                    return Err(ApiError::PayloadTooLarge(
+                        "File size exceeds 50MB limit".to_string(),
+                    ));
+                }
             }
         } else if name == "entity_type" {
             let mut buf = Vec::new();

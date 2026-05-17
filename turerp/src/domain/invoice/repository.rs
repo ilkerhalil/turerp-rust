@@ -17,7 +17,12 @@ use crate::error::ApiError;
 pub trait InvoiceRepository: Send + Sync {
     async fn create(&self, invoice: CreateInvoice) -> Result<Invoice, ApiError>;
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Invoice>, ApiError>;
-    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError>;
+    async fn find_by_tenant(
+        &self,
+        tenant_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError>;
     async fn find_by_number(
         &self,
         tenant_id: i64,
@@ -71,7 +76,13 @@ pub trait InvoiceRepository: Send + Sync {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError>;
 
     /// Search invoices by number or notes
-    async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Invoice>, ApiError>;
+    async fn search(
+        &self,
+        tenant_id: i64,
+        query: &str,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError>;
 
     /// Search invoices with pagination
     async fn search_paginated(
@@ -256,7 +267,12 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
             .cloned())
     }
 
-    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
+    async fn find_by_tenant(
+        &self,
+        tenant_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError> {
         let inner = self.inner.lock();
         let ids = inner
             .tenant_invoices
@@ -267,6 +283,8 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
             .iter()
             .filter_map(|id| inner.invoices.get(id).cloned())
             .filter(|i| !i.is_deleted())
+            .skip(offset as usize)
+            .take(limit as usize)
             .collect())
     }
 
@@ -474,7 +492,13 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
             .collect())
     }
 
-    async fn search(&self, tenant_id: i64, query: &str) -> Result<Vec<Invoice>, ApiError> {
+    async fn search(
+        &self,
+        tenant_id: i64,
+        query: &str,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError> {
         let inner = self.inner.lock();
         let query_lower = query.to_lowercase();
         Ok(inner
@@ -489,6 +513,8 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
                             .map(|n| n.to_lowercase().contains(&query_lower))
                             .unwrap_or(false))
             })
+            .skip(offset as usize)
+            .take(limit as usize)
             .cloned()
             .collect())
     }

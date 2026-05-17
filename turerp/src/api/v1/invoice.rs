@@ -126,18 +126,24 @@ pub async fn get_invoices_by_status(
 /// Get outstanding invoices
 #[utoipa::path(
     get, path = "/api/v1/invoices/outstanding", tag = "Invoice",
+    params(PaginationParams),
     responses((status = 200, description = "Outstanding invoices")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_outstanding_invoices(
     auth_user: AuthUser,
     invoice_service: web::Data<InvoiceService>,
+    pagination: web::Query<PaginationParams>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
     match invoice_service
-        .get_outstanding_invoices(auth_user.0.tenant_id)
+        .get_outstanding_invoices(auth_user.0.tenant_id, pagination.page, pagination.per_page)
         .await
     {
         Ok(invoices) => Ok(HttpResponse::Ok().json(invoices)),
@@ -148,18 +154,24 @@ pub async fn get_outstanding_invoices(
 /// Get overdue invoices
 #[utoipa::path(
     get, path = "/api/v1/invoices/overdue", tag = "Invoice",
+    params(PaginationParams),
     responses((status = 200, description = "Overdue invoices")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_overdue_invoices(
     auth_user: AuthUser,
     invoice_service: web::Data<InvoiceService>,
+    pagination: web::Query<PaginationParams>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    if let Err(e) = pagination.validate() {
+        let err = ApiError::Validation(e.to_string());
+        return Ok(err.to_http_response(i18n, locale.as_str()));
+    }
     match invoice_service
-        .get_overdue_invoices(auth_user.0.tenant_id)
+        .get_overdue_invoices(auth_user.0.tenant_id, pagination.page, pagination.per_page)
         .await
     {
         Ok(invoices) => Ok(HttpResponse::Ok().json(invoices)),
@@ -366,7 +378,7 @@ pub async fn search_invoices(
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
     match invoice_service
-        .search_invoices(auth_user.0.tenant_id, &query.q)
+        .search_invoices(auth_user.0.tenant_id, &query.q, query.page, query.per_page)
         .await
     {
         Ok(invoices) => {
