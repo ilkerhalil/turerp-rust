@@ -26,7 +26,7 @@
 
 | # | Kategori | Bulgu | Dosya | Risk |
 |---|----------|-------|-------|------|
-| 1 | Guvenlik | IP Whitelist trusted proxy kontrolu var ama IP format validation eksik | `middleware/ip_whitelist.rs:154` | Hafifletilmis risk |
+| 1 | Guvenlik | ~~IP Whitelist IP format validation eksik~~ — **Cozuldu (#94)** | `middleware/ip_whitelist.rs:157` | `std::net::IpAddr::parse()` validation eklendi |
 | 2 | Gozlemlenebilirlik | ~~TracingMiddleware RequestId'den ONCE — `request_id` bos string loglaniyor~~ — **Yanlis bulgu** | `main.rs:402-403` | Mevcut siralama dogru; RequestId → Tracing |
 | 3 | Mimari | ~~Rate Limit JWT Auth'den SONRA~~ — **Yanlis bulgu** | `main.rs:381` | Mevcut siralama dogru; RateLimit en dista |
 | 4 | Performans | `std::fs::create_dir_all` async icinde — tokio worker bloklaniyor | `file_storage.rs:154` | File upload stall | **Cozuldu (#91)** |
@@ -56,7 +56,7 @@
 12. ~~LIMIT eksik: `list_versions` (document)~~ **Cozuldu (#91)** — `LIMIT 1000` eklendi
 13. `get_outstanding_invoices` — tum tabloyu RAM'e yukleyip filtreliyor
 14. `get_overdue_invoices` — ayni
-15. `search_invoices` — LIMIT yok, unbounded JSON serialization
+15. ~~`search_invoices` — LIMIT yok~~ — **Yanlis bulgu**, service layer'da LIMIT 100 var, SQL'de LIMIT/OFFSET parametrik
 
 ### Mimari (4)
 16. `domain/mod.rs` God Module — her subdomain'in internal'larini re-export ediyor
@@ -85,7 +85,7 @@
 - Brute-force in-memory (multi-instance calismaz)
 - Refresh token revoke edilemiyor
 - Hardcoded fallback encryption key
-- CORS `*` + `allow_credentials: true`
+- ~~CORS `*` + `allow_credentials: true`~~ — **Cozuldu (#94)** — wildcard origin ile credentials zorla `false`
 
 ### Performans
 - `update_preferences` N+1 bulk upsert
@@ -163,7 +163,7 @@
 ## Onem Sirasina Gore Eylem Plani
 
 ### Faz 1: Critical (1-2 gun)
-1. [ ] IP Whitelist trusted proxy kontrolu ekle
+1. [x] IP Whitelist IP format validation — **#94** — `std::net::IpAddr::parse()` eklendi
 2. [x] `std::fs` -> `tokio::fs` file_storage.rs'te — **#91**
 3. [x] File upload size limit ekle (50MB) — **#91**
 4. [x] Invoice `search()` ve `find_by_tenant` LIMIT ekle — **#91**
@@ -181,7 +181,7 @@
 14. [ ] 173x handler boilerplate generic hale getir
 15. [ ] Postgres feature flag runtime'a cevir
 16. [x] domain/mod.rs re-export'lari daralt — **#93** — 113 re-export kaldırıldı
-17. [ ] Portal servisler trait-based hale getir
+17. [x] Portal servisler trait-based hale getir — **#93** — `CustomerPortal` + `VendorPortal` trait'leri eklendi
 18. [ ] 37 domain icin integration test basla
 19. [x] `#[tracing::instrument]` ekle — **#93** — 16 annotation eklendi (invoice, bank, cari, auth)
 

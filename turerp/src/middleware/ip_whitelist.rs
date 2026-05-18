@@ -153,7 +153,11 @@ impl<S> IpWhitelistMiddlewareService<S> {
                     if let Some(client_ip) = forwarded_str.split(',').next() {
                         let trimmed = client_ip.trim().to_string();
                         if !trimmed.is_empty() {
-                            return Some(trimmed);
+                            // Validate extracted IP format to prevent injection
+                            if trimmed.parse::<std::net::IpAddr>().is_ok() {
+                                return Some(trimmed);
+                            }
+                            tracing::warn!(peer_ip = %peer_ip, forwarded = %trimmed, "Invalid IP format in X-Forwarded-For, falling back to peer IP");
                         }
                     }
                 }
@@ -164,7 +168,11 @@ impl<S> IpWhitelistMiddlewareService<S> {
                 if let Ok(ip) = real_ip.to_str() {
                     let trimmed = ip.trim().to_string();
                     if !trimmed.is_empty() {
-                        return Some(trimmed);
+                        // Validate extracted IP format to prevent injection
+                        if trimmed.parse::<std::net::IpAddr>().is_ok() {
+                            return Some(trimmed);
+                        }
+                        tracing::warn!(peer_ip = %peer_ip, real_ip = %trimmed, "Invalid IP format in X-Real-IP, falling back to peer IP");
                     }
                 }
             }
