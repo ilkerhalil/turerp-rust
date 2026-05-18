@@ -421,7 +421,7 @@ impl From<(Quotation, Vec<QuotationLine>)> for QuotationResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::SoftDeletable;
+
     use chrono::Duration;
     use rust_decimal_macros::dec;
 

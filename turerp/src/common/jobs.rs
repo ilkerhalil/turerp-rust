@@ -773,7 +773,7 @@ mod tests {
             .await
             .unwrap();
         tokio::time::sleep(Duration::from_millis(10)).await;
-        let job2 = scheduler
+        let _job2 = scheduler
             .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
             .await
             .unwrap();

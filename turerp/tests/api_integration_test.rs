@@ -5723,7 +5723,7 @@ async fn test_notification_tenant_isolation() {
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token1, user1_id) = register_admin!(&app_state, 1);
-    let (token2, user2_id) = register_admin!(&app_state, 2);
+    let (token2, _user2_id) = register_admin!(&app_state, 2);
 
     // Tenant 1 sends in-app notification
     let req = test::TestRequest::post()

@@ -360,7 +360,7 @@ impl From<Unit> for UnitResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::SoftDeletable;
+
     use rust_decimal_macros::dec;
 
     #[test]

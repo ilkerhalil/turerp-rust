@@ -351,7 +351,7 @@ impl From<Cari> for CariResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::SoftDeletable;
+
     use rust_decimal_macros::dec;
     use std::str::FromStr;
 

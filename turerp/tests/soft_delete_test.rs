@@ -421,7 +421,7 @@ async fn test_chart_of_accounts_soft_delete_and_restore() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    let coa_id = json["id"].as_i64().unwrap();
+    let _coa_id = json["id"].as_i64().unwrap();
 
     // Soft delete (chart of accounts uses code as path param)
     let delete_req = test::TestRequest::delete()
