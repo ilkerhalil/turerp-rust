@@ -164,7 +164,9 @@ impl Default for CorsConfig {
                 "OPTIONS".to_string(),
             ],
             allowed_headers: vec!["Content-Type".to_string(), "Authorization".to_string()],
-            allow_credentials: true,
+            // Wildcard origin + credentials is insecure per MDN/W3C spec.
+            // When origins contain '*', credentials MUST be false.
+            allow_credentials: false,
             max_age: Some(3600),
         }
     }
@@ -177,12 +179,25 @@ impl CorsConfig {
             .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
             .unwrap_or_default();
 
+        let allowed_origins = if allowed_origins.is_empty() {
+            vec!["*".to_string()]
+        } else {
+            allowed_origins
+        };
+
+        // Wildcard origin + credentials is insecure per MDN/W3C spec.
+        let is_wildcard = allowed_origins.iter().any(|o| o == "*");
+        let allow_credentials = if is_wildcard {
+            false
+        } else {
+            std::env::var("TURERP_CORS_CREDENTIALS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(true)
+        };
+
         Ok(Self {
-            allowed_origins: if allowed_origins.is_empty() {
-                vec!["*".to_string()]
-            } else {
-                allowed_origins
-            },
+            allowed_origins,
             allowed_methods: std::env::var("TURERP_CORS_METHODS")
                 .ok()
                 .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
@@ -199,10 +214,7 @@ impl CorsConfig {
                 .ok()
                 .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
                 .unwrap_or_else(|| vec!["Content-Type".to_string(), "Authorization".to_string()]),
-            allow_credentials: std::env::var("TURERP_CORS_CREDENTIALS")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(true),
+            allow_credentials,
             max_age: std::env::var("TURERP_CORS_MAX_AGE")
                 .ok()
                 .and_then(|v| v.parse().ok()),
@@ -940,7 +952,8 @@ mod tests {
     #[test]
     fn test_cors_credentials_default() {
         let cors = CorsConfig::default();
-        assert!(cors.allow_credentials);
+        // Wildcard origin + credentials is insecure; default disables credentials
+        assert!(!cors.allow_credentials);
     }
 
     #[test]

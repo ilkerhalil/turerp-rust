@@ -978,7 +978,10 @@ pub mod app {
                     search_service: web::Data::from(search_service),
                     rate_limit_stats: web::Data::new(rate_limit_stats),
                     #[cfg(feature = "postgres")]
-                    db_pool: web::Data::new(Arc::new(sqlx::PgPool::connect_lazy("postgres://localhost/dummy").expect("Failed to create lazy pool"))),
+                    db_pool: web::Data::new(Arc::new(sqlx::PgPool::connect_lazy("postgres://localhost/dummy").unwrap_or_else(|e| {
+                        tracing::error!("Failed to create lazy pool: {}", e);
+                        std::process::exit(1);
+                    }))),
                     cdc_listener: None,
                     import_service: web::Data::from(import_service),
                     circuit_breaker_registry: web::Data::new(circuit_breaker_registry),
@@ -1109,11 +1112,10 @@ pub mod app {
     #[cfg(feature = "postgres")]
     pub async fn create_app_state(config: &Config) -> AppState {
         // Create connection pool
-        let pool = Arc::new(
-            db::create_pool(&config.database)
-                .await
-                .expect("Failed to create database pool"),
-        );
+        let pool = Arc::new(db::create_pool(&config.database).await.unwrap_or_else(|e| {
+            tracing::error!("Failed to create database pool: {}", e);
+            std::process::exit(1);
+        }));
 
         let cache_service: Arc<dyn crate::cache::CacheService> = if config.redis.enabled {
             match crate::cache::RedisCacheService::new(&config.redis.url, config.redis.ttl_seconds)
@@ -1134,9 +1136,10 @@ pub mod app {
         };
 
         // Run migrations
-        db::run_migrations(&pool)
-            .await
-            .expect("Failed to run migrations");
+        if let Err(e) = db::run_migrations(&pool).await {
+            tracing::error!("Failed to run migrations: {}", e);
+            std::process::exit(1);
+        }
 
         // Auth & User - PostgreSQL
         let user_repo = PostgresUserRepository::new(pool.clone()).into_boxed();
@@ -1688,7 +1691,10 @@ pub mod app {
         let pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(1)
             .connect_lazy("postgres://localhost/dummy")
-            .expect("Failed to create lazy pool");
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to create lazy pool: {}", e);
+                std::process::exit(1);
+            });
         infra.db_pool = web::Data::new(Arc::new(pool));
 
         // Register webhook subscriber on event bus
