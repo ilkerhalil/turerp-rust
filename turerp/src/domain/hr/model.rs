@@ -518,7 +518,6 @@ impl From<Employee> for EmployeeResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::SoftDeletable;
 
     #[test]
     fn test_create_employee_validation() {

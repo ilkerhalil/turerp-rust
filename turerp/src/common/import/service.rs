@@ -610,9 +610,7 @@ mod tests {
     use crate::domain::cari::repository::InMemoryCariRepository;
     use crate::domain::chart_of_accounts::repository::InMemoryChartAccountRepository;
     use crate::domain::product::repository::InMemoryProductRepository;
-    use crate::domain::stock::repository::{
-        InMemoryStockMovementRepository, InMemoryWarehouseRepository,
-    };
+    use crate::domain::stock::repository::InMemoryStockMovementRepository;
 
     fn create_test_service() -> CsvImportService {
         CsvImportService::new(

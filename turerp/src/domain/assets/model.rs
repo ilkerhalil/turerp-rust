@@ -346,7 +346,6 @@ impl From<Asset> for AssetResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::SoftDeletable;
 
     #[test]
     fn test_asset_status_display() {

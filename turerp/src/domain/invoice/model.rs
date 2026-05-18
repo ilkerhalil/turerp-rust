@@ -341,7 +341,7 @@ impl From<(Invoice, Vec<InvoiceLine>)> for InvoiceResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::SoftDeletable;
+
     use chrono::Utc;
     use rust_decimal_macros::dec;
 

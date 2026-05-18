@@ -67,7 +67,7 @@
 ### Kod Kalitesi (6)
 20. `main.rs` duplicate bootstrap — postgres/non-postgres 110+ satir tekrar
 21. Duplicate `MessageResponse` — hem `users.rs` hem `common/mod.rs`
-22. Startup `.expect()` panics — DB pool/migration hatasi = panic
+22. ~~Startup `.expect()` panics~~ — **Cozuldu (#95)** — `encryption_key_bytes()` ve `create_app_state()` `Result` donuyor
 23. 173x handler boilerplate — her handler'de `match service.await` tekrari
 24. `#[allow(unused_imports)]` suppression — notifications.rs
 25. `#[allow(dead_code)]` — 15+ postgres repo'da
@@ -199,7 +199,7 @@
 ### Faz 4: Low (2-3 gun)
 29. [ ] Dead code temizligi
 30. [ ] Doc comment'lari tamamla
-31. [ ] README badge AGPL yap
+31. [x] README badge AGPL — **Yanlis bulgu**, zaten AGPL-3.0 badge mevcut
 32. [ ] `tests/integration/` dizinini kaldir veya doldur
 
 ---
