@@ -8,6 +8,7 @@ use crate::domain::user::model::{CreateUser, UpdateUser};
 use crate::domain::user::service::UserService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Simple localized success message payload.
@@ -42,10 +43,12 @@ pub async fn create_user(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let create = payload.into_inner();
-    match user_service.create_user(create).await {
-        Ok(user) => Ok(HttpResponse::Created().json(user)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        user_service.create_user(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get user by ID endpoint (requires authentication)
@@ -74,10 +77,12 @@ pub async fn get_user(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let tenant_id = auth_user.0.tenant_id;
-    match user_service.get_user(*path, tenant_id).await {
-        Ok(user) => Ok(HttpResponse::Ok().json(user)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        user_service.get_user(*path, tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all users endpoint (requires authentication)
@@ -107,13 +112,12 @@ pub async fn get_users(
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
     let tenant_id = auth_user.0.tenant_id;
-    match user_service
-        .get_all_users_paginated(tenant_id, pagination.page, pagination.per_page)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        user_service.get_all_users_paginated(tenant_id, pagination.page, pagination.per_page),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update user endpoint (requires authentication, self or admin for role changes)
@@ -163,10 +167,12 @@ pub async fn update_user(
         return Ok(HttpResponse::Forbidden().json(crate::error::ErrorResponse { error: msg }));
     }
 
-    match user_service.update_user(id, tenant_id, update).await {
-        Ok(user) => Ok(HttpResponse::Ok().json(user)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        user_service.update_user(id, tenant_id, update),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete user endpoint (requires admin role)
@@ -238,10 +244,12 @@ pub async fn restore_user(
     let i18n = resolve(&i18n);
     let tenant_id = admin_user.0.tenant_id;
     let id = *path;
-    match user_service.restore_user(id, tenant_id).await {
-        Ok(user) => Ok(HttpResponse::Ok().json(user)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        user_service.restore_user(id, tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List deleted users for a tenant (requires admin role)
@@ -266,10 +274,12 @@ pub async fn list_deleted_users(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let tenant_id = admin_user.0.tenant_id;
-    match user_service.list_deleted_users(tenant_id).await {
-        Ok(users) => Ok(HttpResponse::Ok().json(users)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        user_service.list_deleted_users(tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Permanently destroy a user (requires admin role)

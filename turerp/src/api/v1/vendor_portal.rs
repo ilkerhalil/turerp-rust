@@ -13,6 +13,7 @@ use crate::domain::vendor_portal::model::{
 use crate::domain::vendor_portal::service::VendorPortal;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::utils::jwt::{JwtService, VendorAuthClaims};
 
 /// Vendor auth user extractor - independently validates vendor JWT tokens
@@ -63,10 +64,12 @@ pub async fn register_vendor_user(
         .and_then(|s| s.parse::<i64>().ok())
         .ok_or_else(|| ApiError::BadRequest("tenant_id query parameter is required".to_string()))?;
     let request = payload.into_inner();
-    match vendor_service.register(tenant_id, request).await {
-        Ok(response) => Ok(HttpResponse::Created().json(response)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        vendor_service.register(tenant_id, request),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Login to vendor portal (public)
@@ -88,10 +91,12 @@ pub async fn login_vendor_user(
         .and_then(|s| s.parse::<i64>().ok())
         .ok_or_else(|| ApiError::BadRequest("tenant_id query parameter is required".to_string()))?;
     let request = payload.into_inner();
-    match vendor_service.login(tenant_id, request).await {
-        Ok(response) => Ok(HttpResponse::Ok().json(response)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        vendor_service.login(tenant_id, request),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get purchase order history for the logged-in vendor
@@ -111,13 +116,12 @@ pub async fn get_vendor_orders(
     let i18n = resolve(&i18n);
     let cari_id = vendor_user.0.cari_id;
     let tenant_id = vendor_user.0.tenant_id;
-    match vendor_service
-        .get_orders(cari_id, tenant_id, pagination.into_inner())
-        .await
-    {
-        Ok(orders) => Ok(HttpResponse::Ok().json(orders)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        vendor_service.get_orders(cari_id, tenant_id, pagination.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get invoices for the logged-in vendor
@@ -137,13 +141,12 @@ pub async fn get_vendor_invoices(
     let i18n = resolve(&i18n);
     let cari_id = vendor_user.0.cari_id;
     let tenant_id = vendor_user.0.tenant_id;
-    match vendor_service
-        .get_invoices(cari_id, tenant_id, pagination.into_inner())
-        .await
-    {
-        Ok(invoices) => Ok(HttpResponse::Ok().json(invoices)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        vendor_service.get_invoices(cari_id, tenant_id, pagination.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get payment history for the logged-in vendor
@@ -163,13 +166,12 @@ pub async fn get_vendor_payments(
     let i18n = resolve(&i18n);
     let cari_id = vendor_user.0.cari_id;
     let tenant_id = vendor_user.0.tenant_id;
-    match vendor_service
-        .get_payments(cari_id, tenant_id, pagination.into_inner())
-        .await
-    {
-        Ok(payments) => Ok(HttpResponse::Ok().json(payments)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        vendor_service.get_payments(cari_id, tenant_id, pagination.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// PDF download for an invoice
@@ -221,13 +223,17 @@ pub async fn create_delivery_note(
     let tenant_id = vendor_user.0.tenant_id;
     let vendor_user_id = vendor_user.0.vendor_user_id()?;
 
-    match vendor_service
-        .create_delivery_note(vendor_user_id, cari_id, tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(note) => Ok(HttpResponse::Created().json(note)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        vendor_service.create_delivery_note(
+            vendor_user_id,
+            cari_id,
+            tenant_id,
+            payload.into_inner()
+        ),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get delivery notes for the logged-in vendor
@@ -248,13 +254,12 @@ pub async fn get_delivery_notes(
     let tenant_id = vendor_user.0.tenant_id;
     let vendor_user_id = vendor_user.0.vendor_user_id()?;
 
-    match vendor_service
-        .get_delivery_notes(vendor_user_id, tenant_id, pagination.into_inner())
-        .await
-    {
-        Ok(notes) => Ok(HttpResponse::Ok().json(notes)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        vendor_service.get_delivery_notes(vendor_user_id, tenant_id, pagination.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Configure vendor portal routes for v1 API

@@ -8,6 +8,7 @@ use crate::domain::webhook::model::{CreateWebhook, UpdateWebhook, WebhookRespons
 use crate::domain::webhook::service::WebhookService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create a webhook endpoint (admin only)
@@ -32,16 +33,17 @@ pub async fn create_webhook(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .create_webhook(admin_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(wh) => {
-            let resp: WebhookResponse = wh.into();
-            Ok(HttpResponse::Created().json(resp))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            service
+                .create_webhook(admin_user.0.tenant_id, payload.into_inner())
+                .await
+                .map(|wh| -> WebhookResponse { wh.into() })
+        },
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List webhooks endpoint (authenticated, paginated)
@@ -63,13 +65,17 @@ pub async fn list_webhooks(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.list_webhooks(_auth_user.0.tenant_id).await {
-        Ok(list) => {
-            let resp: Vec<WebhookResponse> = list.into_iter().map(Into::into).collect();
-            Ok(HttpResponse::Ok().json(resp))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            service
+                .list_webhooks(_auth_user.0.tenant_id)
+                .await
+                .map(|list| -> Vec<WebhookResponse> { list.into_iter().map(Into::into).collect() })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get a webhook by ID (authenticated)
@@ -128,16 +134,17 @@ pub async fn update_webhook(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .update_webhook(*path, admin_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(wh) => {
-            let resp: WebhookResponse = wh.into();
-            Ok(HttpResponse::Ok().json(resp))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            service
+                .update_webhook(*path, admin_user.0.tenant_id, payload.into_inner())
+                .await
+                .map(|wh| -> WebhookResponse { wh.into() })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft delete a webhook (admin only)
@@ -162,16 +169,22 @@ pub async fn delete_webhook(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .delete_webhook(*path, admin_user.0.tenant_id, admin_user.0.user_id()?)
-        .await
-    {
-        Ok(()) => {
-            let msg = i18n.t(locale.as_str(), "webhook.deleted");
-            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    let deleted_by = admin_user.0.user_id()?;
+    json_resp!(
+        async {
+            service
+                .delete_webhook(*path, admin_user.0.tenant_id, deleted_by)
+                .await
+                .map(|()| -> MessageResponse {
+                    MessageResponse {
+                        message: i18n.t(locale.as_str(), "webhook.deleted"),
+                    }
+                })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Test a webhook by sending a synthetic event (admin only)
@@ -253,23 +266,26 @@ pub async fn list_deliveries(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match service
-        .list_deliveries(
-            *path,
-            _auth_user.0.tenant_id,
-            pagination.page as i64,
-            pagination.per_page as i64,
-        )
-        .await
-    {
-        Ok(result) => {
-            let mapped: crate::common::PaginatedResult<
-                crate::domain::webhook::model::WebhookDeliveryResponse,
-            > = result.map(Into::into);
-            Ok(HttpResponse::Ok().json(mapped))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            service
+                .list_deliveries(
+                    *path,
+                    _auth_user.0.tenant_id,
+                    pagination.page as i64,
+                    pagination.per_page as i64,
+                )
+                .await
+                .map(
+                    |result| -> crate::common::PaginatedResult<
+                        crate::domain::webhook::model::WebhookDeliveryResponse,
+                    > { result.map(Into::into) },
+                )
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Retry a failed webhook delivery (admin only)
@@ -295,13 +311,21 @@ pub async fn retry_delivery(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.retry_delivery(*path, admin_user.0.tenant_id).await {
-        Ok(delivery) => {
-            let resp: crate::domain::webhook::model::WebhookDeliveryResponse = delivery.into();
-            Ok(HttpResponse::Ok().json(resp))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            service
+                .retry_delivery(*path, admin_user.0.tenant_id)
+                .await
+                .map(
+                    |delivery| -> crate::domain::webhook::model::WebhookDeliveryResponse {
+                        delivery.into()
+                    },
+                )
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Restore a soft-deleted webhook (admin only)
@@ -326,13 +350,21 @@ pub async fn restore_webhook(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.restore_webhook(*path, admin_user.0.tenant_id).await {
-        Ok(()) => {
-            let msg = i18n.t(locale.as_str(), "webhook.restored");
-            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            service
+                .restore_webhook(*path, admin_user.0.tenant_id)
+                .await
+                .map(|()| -> MessageResponse {
+                    MessageResponse {
+                        message: i18n.t(locale.as_str(), "webhook.restored"),
+                    }
+                })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List deleted webhooks for a tenant (admin only)
@@ -354,13 +386,17 @@ pub async fn list_deleted_webhooks(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.list_deleted_webhooks(admin_user.0.tenant_id).await {
-        Ok(list) => {
-            let resp: Vec<WebhookResponse> = list.into_iter().map(Into::into).collect();
-            Ok(HttpResponse::Ok().json(resp))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            service
+                .list_deleted_webhooks(admin_user.0.tenant_id)
+                .await
+                .map(|list| -> Vec<WebhookResponse> { list.into_iter().map(Into::into).collect() })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Permanently destroy a soft-deleted webhook (admin only)
@@ -385,13 +421,21 @@ pub async fn destroy_webhook(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.destroy_webhook(*path, admin_user.0.tenant_id).await {
-        Ok(()) => {
-            let msg = i18n.t(locale.as_str(), "webhook.destroyed");
-            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            service
+                .destroy_webhook(*path, admin_user.0.tenant_id)
+                .await
+                .map(|()| -> MessageResponse {
+                    MessageResponse {
+                        message: i18n.t(locale.as_str(), "webhook.destroyed"),
+                    }
+                })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Configure webhook routes for v1 API

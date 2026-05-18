@@ -8,6 +8,7 @@ use crate::domain::cari::model::{CariResponse, CariType, CreateCari, UpdateCari}
 use crate::domain::cari::service::CariService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create a cari (requires admin role)
@@ -34,10 +35,12 @@ pub async fn create_cari(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match cari_service.create_cari(create).await {
-        Ok(cari) => Ok(HttpResponse::Created().json(cari)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        cari_service.create_cari(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get cari by ID (requires authentication)
@@ -61,10 +64,12 @@ pub async fn get_cari(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match cari_service.get_cari(*path, auth_user.0.tenant_id).await {
-        Ok(cari) => Ok(HttpResponse::Ok().json(cari)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        cari_service.get_cari(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all cari (requires authentication)
@@ -91,13 +96,16 @@ pub async fn get_all_cari(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match cari_service
-        .get_all_cari_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        cari_service.get_all_cari_paginated(
+            auth_user.0.tenant_id,
+            pagination.page,
+            pagination.per_page
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get cari by type (requires authentication)
@@ -125,18 +133,17 @@ pub async fn get_cari_by_type(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match cari_service
-        .get_cari_by_type_paginated(
+    json_resp!(
+        cari_service.get_cari_by_type_paginated(
             path.into_inner(),
             auth_user.0.tenant_id,
             pagination.page,
             pagination.per_page,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Search cari (requires authentication)
@@ -163,13 +170,17 @@ pub async fn search_cari(
         let err = ApiError::Validation(e);
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match cari_service
-        .search_cari_paginated(&query.q, auth_user.0.tenant_id, query.page, query.per_page)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        cari_service.search_cari_paginated(
+            &query.q,
+            auth_user.0.tenant_id,
+            query.page,
+            query.per_page
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update cari (requires admin role)
@@ -196,13 +207,12 @@ pub async fn update_cari(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match cari_service
-        .update_cari(*path, admin_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(cari) => Ok(HttpResponse::Ok().json(cari)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        cari_service.update_cari(*path, admin_user.0.tenant_id, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete cari (requires admin role)

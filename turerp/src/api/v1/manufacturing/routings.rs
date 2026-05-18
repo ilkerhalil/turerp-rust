@@ -7,6 +7,7 @@ use crate::domain::manufacturing::model::{CreateRouting, CreateRoutingOperation}
 use crate::domain::manufacturing::service::ManufacturingService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create routing (requires admin role)
@@ -26,10 +27,12 @@ pub async fn create_routing(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match mfg_service.create_routing(create).await {
-        Ok(routing) => Ok(HttpResponse::Created().json(routing)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.create_routing(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get routing by ID
@@ -47,10 +50,12 @@ pub async fn get_routing(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.get_routing(*path, auth_user.0.tenant_id).await {
-        Ok(routing) => Ok(HttpResponse::Ok().json(routing)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.get_routing(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get routings by product
@@ -68,10 +73,12 @@ pub async fn get_routings_by_product(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.get_routings_by_product(*path).await {
-        Ok(routings) => Ok(HttpResponse::Ok().json(routings)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.get_routings_by_product(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Add routing operation (requires admin role)
@@ -89,13 +96,12 @@ pub async fn add_routing_operation(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service
-        .add_routing_operation(payload.into_inner())
-        .await
-    {
-        Ok(op) => Ok(HttpResponse::Created().json(op)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.add_routing_operation(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Calculate material requirements
@@ -118,13 +124,12 @@ pub async fn calculate_material_requirements(
         let msg = i18n.t(locale.as_str(), "generic.validation_error");
         ApiError::Validation(msg)
     })?;
-    match mfg_service
-        .calculate_material_requirements(*path, quantity)
-        .await
-    {
-        Ok(requirements) => Ok(HttpResponse::Ok().json(requirements)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.calculate_material_requirements(*path, quantity),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft-delete a routing (requires admin role)

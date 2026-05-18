@@ -6,6 +6,7 @@ use crate::domain::hr::model::CreateLeaveRequest;
 use crate::domain::hr::service::HrService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create leave request
@@ -23,10 +24,12 @@ pub async fn create_leave_request(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service.create_leave_request(payload.into_inner()).await {
-        Ok(request) => Ok(HttpResponse::Created().json(request)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.create_leave_request(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get leave requests by employee
@@ -44,10 +47,12 @@ pub async fn get_leave_requests_by_employee(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service.get_leave_requests_by_employee(*path).await {
-        Ok(requests) => Ok(HttpResponse::Ok().json(requests)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.get_leave_requests_by_employee(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Approve leave request (requires admin role)
@@ -66,10 +71,12 @@ pub async fn approve_leave_request(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let approver_id: i64 = admin_user.0.user_id()?;
-    match hr_service.approve_leave_request(*path, approver_id).await {
-        Ok(request) => Ok(HttpResponse::Ok().json(request)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.approve_leave_request(*path, approver_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Reject leave request (requires admin role)
@@ -88,10 +95,12 @@ pub async fn reject_leave_request(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let approver_id: i64 = admin_user.0.user_id()?;
-    match hr_service.reject_leave_request(*path, approver_id).await {
-        Ok(request) => Ok(HttpResponse::Ok().json(request)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.reject_leave_request(*path, approver_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft-delete a leave request (requires admin role)
@@ -170,10 +179,12 @@ pub async fn get_leave_types(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service.get_leave_types(auth_user.0.tenant_id).await {
-        Ok(types) => Ok(HttpResponse::Ok().json(types)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.get_leave_types(auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft-delete a leave type (requires admin role)

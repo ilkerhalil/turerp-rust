@@ -10,6 +10,7 @@ use crate::domain::shift::model::{
 use crate::domain::shift::service::ShiftService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create shift (requires admin role)
@@ -29,10 +30,12 @@ pub async fn create_shift(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match shift_service.create_shift(create).await {
-        Ok(shift) => Ok(HttpResponse::Created().json(shift)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        shift_service.create_shift(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all shifts
@@ -49,13 +52,12 @@ pub async fn get_shifts(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match shift_service
-        .get_shifts_paginated(auth_user.0.tenant_id, query.page, query.per_page)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        shift_service.get_shifts_paginated(auth_user.0.tenant_id, query.page, query.per_page),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get shift by ID
@@ -73,10 +75,12 @@ pub async fn get_shift(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match shift_service.get_shift(*path, auth_user.0.tenant_id).await {
-        Ok(shift) => Ok(HttpResponse::Ok().json(shift)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        shift_service.get_shift(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update shift (requires admin role)
@@ -96,13 +100,12 @@ pub async fn update_shift(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match shift_service
-        .update_shift(*path, admin_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(shift) => Ok(HttpResponse::Ok().json(shift)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        shift_service.update_shift(*path, admin_user.0.tenant_id, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete shift (requires admin role)
@@ -211,10 +214,12 @@ pub async fn create_assignment(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match shift_service.assign_employee(payload.into_inner()).await {
-        Ok(assignment) => Ok(HttpResponse::Created().json(assignment)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        shift_service.assign_employee(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get assignments by employee
@@ -280,10 +285,12 @@ pub async fn clock_in(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match shift_service.clock_in(payload.into_inner()).await {
-        Ok(record) => Ok(HttpResponse::Created().json(record)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        shift_service.clock_in(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Clock out
@@ -301,10 +308,12 @@ pub async fn clock_out(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match shift_service.clock_out(payload.into_inner()).await {
-        Ok(record) => Ok(HttpResponse::Ok().json(record)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        shift_service.clock_out(payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get attendance by employee
@@ -338,13 +347,12 @@ pub async fn generate_report(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match shift_service
-        .generate_shift_report(auth_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(report) => Ok(HttpResponse::Ok().json(report)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        shift_service.generate_shift_report(auth_user.0.tenant_id, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Calculate overtime
@@ -362,19 +370,18 @@ pub async fn calculate_overtime(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match shift_service
-        .calculate_overtime(
+    json_resp!(
+        shift_service.calculate_overtime(
             payload.employee_id,
             payload.period_start,
             payload.period_end,
             payload.expected_hours_per_day,
             payload.overtime_rate,
-        )
-        .await
-    {
-        Ok(calculation) => Ok(HttpResponse::Ok().json(calculation)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]

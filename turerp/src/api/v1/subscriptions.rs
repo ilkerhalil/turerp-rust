@@ -11,6 +11,7 @@ use crate::domain::subscription::model::{
 use crate::domain::subscription::service::SubscriptionService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 // --- Plans (admin only) ---
@@ -39,10 +40,12 @@ pub async fn create_plan(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match subscription_service.create_plan(create).await {
-        Ok(plan) => Ok(HttpResponse::Created().json(plan)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.create_plan(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get subscription plan by ID (requires authentication)
@@ -66,13 +69,12 @@ pub async fn get_plan(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .get_plan(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(plan) => Ok(HttpResponse::Ok().json(plan)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.get_plan(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List all subscription plans (requires authentication)
@@ -121,13 +123,12 @@ pub async fn update_plan(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .update_plan(*path, admin_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(plan) => Ok(HttpResponse::Ok().json(plan)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.update_plan(*path, admin_user.0.tenant_id, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete a subscription plan (admin only)
@@ -190,10 +191,12 @@ pub async fn create_subscription(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = auth_user.0.tenant_id;
-    match subscription_service.create_subscription(create).await {
-        Ok(sub) => Ok(HttpResponse::Created().json(sub)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.create_subscription(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get subscription by ID (requires authentication)
@@ -217,13 +220,12 @@ pub async fn get_subscription(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .get_subscription(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(sub) => Ok(HttpResponse::Ok().json(sub)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.get_subscription(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List all subscriptions (requires authentication)
@@ -274,13 +276,16 @@ pub async fn update_subscription(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .update_subscription(*path, auth_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(sub) => Ok(HttpResponse::Ok().json(sub)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.update_subscription(
+            *path,
+            auth_user.0.tenant_id,
+            payload.into_inner()
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete a subscription (requires authentication)
@@ -339,13 +344,12 @@ pub async fn renew_subscription(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .renew_subscription(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(sub) => Ok(HttpResponse::Ok().json(sub)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.renew_subscription(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get subscriptions due for billing
@@ -396,13 +400,12 @@ pub async fn get_subscription_invoices(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .get_invoices(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(invoices) => Ok(HttpResponse::Ok().json(invoices)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.get_invoices(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Calculate proration for plan change
@@ -429,18 +432,17 @@ pub async fn calculate_proration(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .calculate_proration(
+    json_resp!(
+        subscription_service.calculate_proration(
             *path,
             auth_user.0.tenant_id,
             payload.new_plan_id,
             payload.effective_date,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Handle dunning retry for failed payment
@@ -466,13 +468,12 @@ pub async fn handle_dunning_retry(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .handle_dunning(*path, auth_user.0.tenant_id, payload.invoice_id)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.handle_dunning(*path, auth_user.0.tenant_id, payload.invoice_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get dunning status for a subscription
@@ -523,13 +524,12 @@ pub async fn convert_trial(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .process_trial_conversion(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.process_trial_conversion(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List trial subscriptions
@@ -579,13 +579,12 @@ pub async fn record_usage(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .record_usage(*path, auth_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(record) => Ok(HttpResponse::Created().json(record)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.record_usage(*path, auth_user.0.tenant_id, payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get usage records for a subscription
@@ -638,13 +637,16 @@ pub async fn cancel_subscription(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match subscription_service
-        .cancel_subscription(*path, auth_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        subscription_service.cancel_subscription(
+            *path,
+            auth_user.0.tenant_id,
+            payload.into_inner()
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Request body for dunning retry

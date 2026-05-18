@@ -10,6 +10,7 @@ use crate::domain::tenant::model::{
 use crate::domain::tenant::service::{TenantConfigService, TenantService};
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Simple localized success message payload.
@@ -33,10 +34,12 @@ pub async fn create_tenant(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match tenant_service.create_tenant(payload.into_inner()).await {
-        Ok(tenant) => Ok(HttpResponse::Created().json(tenant)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        tenant_service.create_tenant(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all tenants (requires authentication)
@@ -58,13 +61,12 @@ pub async fn get_tenants(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match tenant_service
-        .get_all_tenants_paginated(pagination.page, pagination.per_page)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        tenant_service.get_all_tenants_paginated(pagination.page, pagination.per_page),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get tenant by ID (requires authentication)
@@ -82,10 +84,12 @@ pub async fn get_tenant(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match tenant_service.get_tenant(*path).await {
-        Ok(tenant) => Ok(HttpResponse::Ok().json(tenant)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        tenant_service.get_tenant(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update tenant (requires admin role)
@@ -105,13 +109,12 @@ pub async fn update_tenant(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match tenant_service
-        .update_tenant(*path, payload.into_inner())
-        .await
-    {
-        Ok(tenant) => Ok(HttpResponse::Ok().json(tenant)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        tenant_service.update_tenant(*path, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete tenant (requires admin role)
@@ -130,13 +133,21 @@ pub async fn delete_tenant(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let deleted_by = admin_user.0.user_id()?;
-    match tenant_service.soft_delete_tenant(*path, deleted_by).await {
-        Ok(()) => {
-            let msg = i18n.t(locale.as_str(), "tenant.deleted");
-            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            tenant_service
+                .soft_delete_tenant(*path, deleted_by)
+                .await
+                .map(|()| -> MessageResponse {
+                    MessageResponse {
+                        message: i18n.t(locale.as_str(), "tenant.deleted"),
+                    }
+                })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Restore a soft-deleted tenant (requires admin role)
@@ -154,10 +165,12 @@ pub async fn restore_tenant(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match tenant_service.restore_tenant(*path).await {
-        Ok(tenant) => Ok(HttpResponse::Ok().json(tenant)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        tenant_service.restore_tenant(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List deleted tenants (requires admin role)
@@ -173,10 +186,12 @@ pub async fn list_deleted_tenants(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match tenant_service.list_deleted_tenants().await {
-        Ok(tenants) => Ok(HttpResponse::Ok().json(tenants)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        tenant_service.list_deleted_tenants(),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Permanently destroy a tenant (requires admin role)
@@ -194,13 +209,21 @@ pub async fn destroy_tenant(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match tenant_service.destroy_tenant(*path).await {
-        Ok(()) => {
-            let msg = i18n.t(locale.as_str(), "tenant.destroyed");
-            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            tenant_service
+                .destroy_tenant(*path)
+                .await
+                .map(|()| -> MessageResponse {
+                    MessageResponse {
+                        message: i18n.t(locale.as_str(), "tenant.destroyed"),
+                    }
+                })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Create tenant config (requires admin role)
@@ -220,10 +243,12 @@ pub async fn create_tenant_config(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match tenant_config_service.set_config(create).await {
-        Ok(config) => Ok(HttpResponse::Created().json(config)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        tenant_config_service.set_config(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all tenant configs for current tenant
@@ -239,13 +264,12 @@ pub async fn get_tenant_configs(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match tenant_config_service
-        .get_all_configs(auth_user.0.tenant_id)
-        .await
-    {
-        Ok(configs) => Ok(HttpResponse::Ok().json(configs)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        tenant_config_service.get_all_configs(auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get tenant config by key or ID
@@ -264,13 +288,12 @@ pub async fn get_tenant_config(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let key = path.into_inner();
-    match tenant_config_service
-        .get_config(auth_user.0.tenant_id, &key)
-        .await
-    {
-        Ok(config) => Ok(HttpResponse::Ok().json(config)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        tenant_config_service.get_config(auth_user.0.tenant_id, &key),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update tenant config (requires admin role)
@@ -294,13 +317,12 @@ pub async fn update_tenant_config(
         let msg = i18n.t(locale.as_str(), "generic.validation_error");
         ApiError::Validation(msg)
     })?;
-    match tenant_config_service
-        .update_config(id, payload.into_inner())
-        .await
-    {
-        Ok(config) => Ok(HttpResponse::Ok().json(config)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        tenant_config_service.update_config(id, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete tenant config (requires admin role)
@@ -322,13 +344,21 @@ pub async fn delete_tenant_config(
         let msg = i18n.t(locale.as_str(), "generic.validation_error");
         ApiError::Validation(msg)
     })?;
-    match tenant_config_service.delete_config(id).await {
-        Ok(()) => {
-            let msg = i18n.t(locale.as_str(), "tenant.config_updated");
-            Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            tenant_config_service
+                .delete_config(id)
+                .await
+                .map(|()| -> MessageResponse {
+                    MessageResponse {
+                        message: i18n.t(locale.as_str(), "tenant.config_updated"),
+                    }
+                })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Configure tenant routes for v1 API

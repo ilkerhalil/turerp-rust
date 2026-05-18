@@ -8,6 +8,7 @@ use crate::common::MessageResponse;
 use crate::domain::purchase::{CreateGoodsReceipt, GoodsReceiptStatus, PurchaseService};
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Request body for updating goods receipt status
@@ -42,10 +43,12 @@ pub async fn create_receipt(
     let tenant_id = auth_user.0.tenant_id;
     let create = payload.into_inner();
 
-    match service.create_goods_receipt(create, tenant_id).await {
-        Ok(receipt) => Ok(HttpResponse::Created().json(receipt)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.create_goods_receipt(create, tenant_id),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get goods receipt by ID endpoint (requires authentication)
@@ -73,13 +76,12 @@ pub async fn get_receipt(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .get_goods_receipt(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(receipt) => Ok(HttpResponse::Ok().json(receipt)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.get_goods_receipt(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get goods receipts by purchase order ID endpoint (requires authentication)
@@ -135,13 +137,12 @@ pub async fn update_receipt_status(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .update_receipt_status(*path, payload.status.clone())
-        .await
-    {
-        Ok(receipt) => Ok(HttpResponse::Ok().json(receipt)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.update_receipt_status(*path, payload.status.clone()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete goods receipt endpoint (requires admin role, soft delete)

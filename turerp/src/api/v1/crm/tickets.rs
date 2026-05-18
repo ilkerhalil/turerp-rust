@@ -8,6 +8,7 @@ use crate::domain::crm::model::{CreateTicket, TicketStatus};
 use crate::domain::crm::service::CrmService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create ticket
@@ -27,10 +28,12 @@ pub async fn create_ticket(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match crm_service.create_ticket(create).await {
-        Ok(ticket) => Ok(HttpResponse::Created().json(ticket)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        crm_service.create_ticket(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all tickets
@@ -47,13 +50,12 @@ pub async fn get_tickets(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match crm_service
-        .get_tickets_paginated(auth_user.0.tenant_id, query.page, query.per_page)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        crm_service.get_tickets_paginated(auth_user.0.tenant_id, query.page, query.per_page),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get ticket by ID
@@ -71,10 +73,12 @@ pub async fn get_ticket(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match crm_service.get_ticket(*path, auth_user.0.tenant_id).await {
-        Ok(ticket) => Ok(HttpResponse::Ok().json(ticket)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        crm_service.get_ticket(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get tickets by status
@@ -93,18 +97,17 @@ pub async fn get_tickets_by_status(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match crm_service
-        .get_tickets_by_status_paginated(
+    json_resp!(
+        crm_service.get_tickets_by_status_paginated(
             auth_user.0.tenant_id,
             path.into_inner(),
             query.page,
             query.per_page,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update ticket status (requires admin role)
@@ -124,13 +127,12 @@ pub async fn update_ticket_status(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match crm_service
-        .update_ticket_status(*path, payload.into_inner().status)
-        .await
-    {
-        Ok(ticket) => Ok(HttpResponse::Ok().json(ticket)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        crm_service.update_ticket_status(*path, payload.into_inner().status),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Resolve ticket (requires admin role)
@@ -148,10 +150,12 @@ pub async fn resolve_ticket(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match crm_service.resolve_ticket(*path).await {
-        Ok(ticket) => Ok(HttpResponse::Ok().json(ticket)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        crm_service.resolve_ticket(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get open tickets count

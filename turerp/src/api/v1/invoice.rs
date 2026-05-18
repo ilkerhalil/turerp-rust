@@ -8,6 +8,7 @@ use crate::domain::invoice::model::{CreateInvoice, InvoiceResponse, InvoiceStatu
 use crate::domain::invoice::service::InvoiceService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create invoice (requires admin role)
@@ -27,10 +28,12 @@ pub async fn create_invoice(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match invoice_service.create_invoice(create).await {
-        Ok(invoice) => Ok(HttpResponse::Created().json(invoice)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        invoice_service.create_invoice(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get invoice by ID
@@ -48,13 +51,12 @@ pub async fn get_invoice(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match invoice_service
-        .get_invoice(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(invoice) => Ok(HttpResponse::Ok().json(invoice)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        invoice_service.get_invoice(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all invoices
@@ -76,17 +78,16 @@ pub async fn get_invoices(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match invoice_service
-        .get_invoices_by_tenant_paginated(
+    json_resp!(
+        invoice_service.get_invoices_by_tenant_paginated(
             auth_user.0.tenant_id,
             pagination.page,
             pagination.per_page,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get invoices by status
@@ -109,18 +110,17 @@ pub async fn get_invoices_by_status(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match invoice_service
-        .get_invoices_by_status_paginated(
+    json_resp!(
+        invoice_service.get_invoices_by_status_paginated(
             auth_user.0.tenant_id,
             path.into_inner(),
             pagination.page,
             pagination.per_page,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get outstanding invoices
@@ -142,13 +142,16 @@ pub async fn get_outstanding_invoices(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match invoice_service
-        .get_outstanding_invoices(auth_user.0.tenant_id, pagination.page, pagination.per_page)
-        .await
-    {
-        Ok(invoices) => Ok(HttpResponse::Ok().json(invoices)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        invoice_service.get_outstanding_invoices(
+            auth_user.0.tenant_id,
+            pagination.page,
+            pagination.per_page
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get overdue invoices
@@ -170,13 +173,16 @@ pub async fn get_overdue_invoices(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match invoice_service
-        .get_overdue_invoices(auth_user.0.tenant_id, pagination.page, pagination.per_page)
-        .await
-    {
-        Ok(invoices) => Ok(HttpResponse::Ok().json(invoices)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        invoice_service.get_overdue_invoices(
+            auth_user.0.tenant_id,
+            pagination.page,
+            pagination.per_page
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update invoice status (requires admin role)
@@ -196,13 +202,16 @@ pub async fn update_invoice_status(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match invoice_service
-        .update_invoice_status(*path, admin_user.0.tenant_id, payload.into_inner().status)
-        .await
-    {
-        Ok(invoice) => Ok(HttpResponse::Ok().json(invoice)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        invoice_service.update_invoice_status(
+            *path,
+            admin_user.0.tenant_id,
+            payload.into_inner().status
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete invoice (requires admin role)
@@ -321,10 +330,12 @@ pub async fn create_payment(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match invoice_service.create_payment(create).await {
-        Ok(payment) => Ok(HttpResponse::Created().json(payment)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        invoice_service.create_payment(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get payments by invoice
@@ -342,10 +353,12 @@ pub async fn get_payments_by_invoice(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match invoice_service.get_payments_by_invoice(*path).await {
-        Ok(payments) => Ok(HttpResponse::Ok().json(payments)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        invoice_service.get_payments_by_invoice(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]

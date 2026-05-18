@@ -12,6 +12,7 @@ use crate::domain::document::model::{
 use crate::domain::document::service::DocumentService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Query parameters for searching documents
@@ -76,10 +77,17 @@ pub async fn create_document(
     let mut create = payload.into_inner();
     create.tenant_id = auth_user.0.tenant_id;
     create.uploaded_by = Some(auth_user.0.user_id()?);
-    match doc_service.create_document(create).await {
-        Ok(doc) => Ok(HttpResponse::Created().json(DocumentResponse::from(doc))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            doc_service
+                .create_document(create)
+                .await
+                .map(|doc| -> DocumentResponse { DocumentResponse::from(doc) })
+        },
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Search documents
@@ -102,13 +110,12 @@ pub async fn search_documents(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let params = query.into_inner().into();
-    match doc_service
-        .search_documents(auth_user.0.tenant_id, params)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        doc_service.search_documents(auth_user.0.tenant_id, params),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get a document by ID
@@ -133,10 +140,17 @@ pub async fn get_document(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match doc_service.get_document(id, auth_user.0.tenant_id).await {
-        Ok(doc) => Ok(HttpResponse::Ok().json(DocumentResponse::from(doc))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            doc_service
+                .get_document(id, auth_user.0.tenant_id)
+                .await
+                .map(|doc| -> DocumentResponse { DocumentResponse::from(doc) })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update a document
@@ -163,13 +177,17 @@ pub async fn update_document(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match doc_service
-        .update_document(id, auth_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(doc) => Ok(HttpResponse::Ok().json(DocumentResponse::from(doc))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            doc_service
+                .update_document(id, auth_user.0.tenant_id, payload.into_inner())
+                .await
+                .map(|doc| -> DocumentResponse { DocumentResponse::from(doc) })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft delete a document
@@ -226,13 +244,17 @@ pub async fn restore_document(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match doc_service
-        .restore_document(id, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(doc) => Ok(HttpResponse::Ok().json(DocumentResponse::from(doc))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            doc_service
+                .restore_document(id, auth_user.0.tenant_id)
+                .await
+                .map(|doc| -> DocumentResponse { DocumentResponse::from(doc) })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List soft-deleted documents
@@ -253,17 +275,19 @@ pub async fn list_deleted_documents(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match doc_service
-        .list_deleted_documents(auth_user.0.tenant_id)
-        .await
-    {
-        Ok(docs) => {
-            let responses: Vec<DocumentResponse> =
-                docs.into_iter().map(DocumentResponse::from).collect();
-            Ok(HttpResponse::Ok().json(responses))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            doc_service
+                .list_deleted_documents(auth_user.0.tenant_id)
+                .await
+                .map(|docs| -> Vec<DocumentResponse> {
+                    docs.into_iter().map(DocumentResponse::from).collect()
+                })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Permanently destroy a document (requires admin role)
@@ -332,13 +356,12 @@ pub async fn bulk_restore_documents(
         )
         .to_http_response(i18n, locale.as_str()));
     }
-    match doc_service
-        .bulk_restore_documents(req.ids, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        doc_service.bulk_restore_documents(req.ids, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 // --- Versions ---
@@ -371,10 +394,12 @@ pub async fn create_version(
     version.document_id = document_id;
     version.tenant_id = auth_user.0.tenant_id;
     version.created_by = Some(auth_user.0.user_id()?);
-    match doc_service.create_version(version).await {
-        Ok(v) => Ok(HttpResponse::Created().json(v)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        doc_service.create_version(version),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List versions for a document
@@ -399,13 +424,12 @@ pub async fn list_versions(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let document_id = path.into_inner();
-    match doc_service
-        .list_versions(document_id, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(versions) => Ok(HttpResponse::Ok().json(versions)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        doc_service.list_versions(document_id, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get a specific version
@@ -430,13 +454,12 @@ pub async fn get_version(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let version_id = path.into_inner();
-    match doc_service
-        .get_version(version_id, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(v) => Ok(HttpResponse::Ok().json(v)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        doc_service.get_version(version_id, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 // --- Categories ---
@@ -464,10 +487,17 @@ pub async fn create_category(
     let i18n = resolve(&i18n);
     let mut category = payload.into_inner();
     category.tenant_id = auth_user.0.tenant_id;
-    match doc_service.create_category(category).await {
-        Ok(cat) => Ok(HttpResponse::Created().json(DocumentCategoryResponse::from(cat))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            doc_service
+                .create_category(category)
+                .await
+                .map(|cat| -> DocumentCategoryResponse { DocumentCategoryResponse::from(cat) })
+        },
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List document categories
@@ -488,16 +518,21 @@ pub async fn list_categories(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match doc_service.list_categories(auth_user.0.tenant_id).await {
-        Ok(cats) => {
-            let responses: Vec<DocumentCategoryResponse> = cats
-                .into_iter()
-                .map(DocumentCategoryResponse::from)
-                .collect();
-            Ok(HttpResponse::Ok().json(responses))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            doc_service
+                .list_categories(auth_user.0.tenant_id)
+                .await
+                .map(|cats| -> Vec<DocumentCategoryResponse> {
+                    cats.into_iter()
+                        .map(DocumentCategoryResponse::from)
+                        .collect()
+                })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get a category by ID
@@ -522,10 +557,17 @@ pub async fn get_category(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match doc_service.get_category(id, auth_user.0.tenant_id).await {
-        Ok(cat) => Ok(HttpResponse::Ok().json(DocumentCategoryResponse::from(cat))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            doc_service
+                .get_category(id, auth_user.0.tenant_id)
+                .await
+                .map(|cat| -> DocumentCategoryResponse { DocumentCategoryResponse::from(cat) })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update a category
@@ -552,13 +594,17 @@ pub async fn update_category(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match doc_service
-        .update_category(id, auth_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(cat) => Ok(HttpResponse::Ok().json(DocumentCategoryResponse::from(cat))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            doc_service
+                .update_category(id, auth_user.0.tenant_id, payload.into_inner())
+                .await
+                .map(|cat| -> DocumentCategoryResponse { DocumentCategoryResponse::from(cat) })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete a category
@@ -619,10 +665,12 @@ pub async fn create_link(
     let mut link = payload.into_inner();
     link.document_id = document_id;
     link.tenant_id = auth_user.0.tenant_id;
-    match doc_service.link_document(link).await {
-        Ok(l) => Ok(HttpResponse::Created().json(l)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        doc_service.link_document(link),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List links for a document
@@ -647,13 +695,12 @@ pub async fn list_document_links(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let document_id = path.into_inner();
-    match doc_service
-        .list_document_links(document_id, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(links) => Ok(HttpResponse::Ok().json(links)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        doc_service.list_document_links(document_id, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Find documents linked to an entity
@@ -688,17 +735,19 @@ pub async fn find_by_entity(
             );
         }
     };
-    match doc_service
-        .find_documents_by_entity(auth_user.0.tenant_id, entity_type, entity_id)
-        .await
-    {
-        Ok(docs) => {
-            let responses: Vec<DocumentResponse> =
-                docs.into_iter().map(DocumentResponse::from).collect();
-            Ok(HttpResponse::Ok().json(responses))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            doc_service
+                .find_documents_by_entity(auth_user.0.tenant_id, entity_type, entity_id)
+                .await
+                .map(|docs| -> Vec<DocumentResponse> {
+                    docs.into_iter().map(DocumentResponse::from).collect()
+                })
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Configure document management routes for v1 API

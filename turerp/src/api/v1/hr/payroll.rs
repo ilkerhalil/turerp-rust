@@ -5,6 +5,7 @@ use actix_web::{web, HttpResponse};
 use crate::domain::hr::service::HrService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Calculate payroll (requires admin role)
@@ -22,18 +23,17 @@ pub async fn calculate_payroll(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service
-        .calculate_payroll(
+    json_resp!(
+        hr_service.calculate_payroll(
             admin_user.0.tenant_id,
             payload.employee_id,
             payload.period_start,
-            payload.period_end,
-        )
-        .await
-    {
-        Ok(payroll) => Ok(HttpResponse::Ok().json(payroll)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+            payload.period_end
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get payroll by employee
@@ -51,10 +51,12 @@ pub async fn get_payroll_by_employee(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service.get_payroll_by_employee(*path).await {
-        Ok(payroll) => Ok(HttpResponse::Ok().json(payroll)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.get_payroll_by_employee(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Mark payroll as paid (requires admin role)
@@ -72,10 +74,12 @@ pub async fn mark_payroll_paid(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service.mark_payroll_paid(*path).await {
-        Ok(payroll) => Ok(HttpResponse::Ok().json(payroll)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.mark_payroll_paid(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft-delete payroll (requires admin role)

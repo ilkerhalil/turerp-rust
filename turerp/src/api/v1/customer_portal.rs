@@ -13,6 +13,7 @@ use crate::domain::customer_portal::model::{
 use crate::domain::customer_portal::service::CustomerPortal;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::utils::jwt::{JwtService, PortalAuthClaims};
 
 /// Portal auth user extractor - independently validates portal JWT tokens
@@ -63,10 +64,12 @@ pub async fn register_portal_user(
         .and_then(|s| s.parse::<i64>().ok())
         .ok_or_else(|| ApiError::BadRequest("tenant_id query parameter is required".to_string()))?;
     let request = payload.into_inner();
-    match portal_service.register(tenant_id, request).await {
-        Ok(response) => Ok(HttpResponse::Created().json(response)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        portal_service.register(tenant_id, request),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Login to customer portal (public)
@@ -88,10 +91,12 @@ pub async fn login_portal_user(
         .and_then(|s| s.parse::<i64>().ok())
         .ok_or_else(|| ApiError::BadRequest("tenant_id query parameter is required".to_string()))?;
     let request = payload.into_inner();
-    match portal_service.login(tenant_id, request).await {
-        Ok(response) => Ok(HttpResponse::Ok().json(response)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        portal_service.login(tenant_id, request),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get order history for the logged-in customer
@@ -111,13 +116,12 @@ pub async fn get_customer_orders(
     let i18n = resolve(&i18n);
     let cari_id = portal_user.0.cari_id;
     let tenant_id = portal_user.0.tenant_id;
-    match portal_service
-        .get_orders(cari_id, tenant_id, pagination.into_inner())
-        .await
-    {
-        Ok(orders) => Ok(HttpResponse::Ok().json(orders)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        portal_service.get_orders(cari_id, tenant_id, pagination.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get invoices for the logged-in customer
@@ -137,13 +141,12 @@ pub async fn get_customer_invoices(
     let i18n = resolve(&i18n);
     let cari_id = portal_user.0.cari_id;
     let tenant_id = portal_user.0.tenant_id;
-    match portal_service
-        .get_invoices(cari_id, tenant_id, pagination.into_inner())
-        .await
-    {
-        Ok(invoices) => Ok(HttpResponse::Ok().json(invoices)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        portal_service.get_invoices(cari_id, tenant_id, pagination.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get payment history for the logged-in customer
@@ -163,13 +166,12 @@ pub async fn get_customer_payments(
     let i18n = resolve(&i18n);
     let cari_id = portal_user.0.cari_id;
     let tenant_id = portal_user.0.tenant_id;
-    match portal_service
-        .get_payments(cari_id, tenant_id, pagination.into_inner())
-        .await
-    {
-        Ok(payments) => Ok(HttpResponse::Ok().json(payments)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        portal_service.get_payments(cari_id, tenant_id, pagination.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// PDF download for an invoice
@@ -221,13 +223,17 @@ pub async fn create_support_ticket(
     let tenant_id = portal_user.0.tenant_id;
     let portal_user_id = portal_user.0.portal_user_id()?;
 
-    match portal_service
-        .create_support_ticket(portal_user_id, cari_id, tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(ticket) => Ok(HttpResponse::Created().json(ticket)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        portal_service.create_support_ticket(
+            portal_user_id,
+            cari_id,
+            tenant_id,
+            payload.into_inner()
+        ),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get support tickets for the logged-in customer
@@ -248,13 +254,12 @@ pub async fn get_support_tickets(
     let tenant_id = portal_user.0.tenant_id;
     let portal_user_id = portal_user.0.portal_user_id()?;
 
-    match portal_service
-        .get_support_tickets(portal_user_id, tenant_id, pagination.into_inner())
-        .await
-    {
-        Ok(tickets) => Ok(HttpResponse::Ok().json(tickets)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        portal_service.get_support_tickets(portal_user_id, tenant_id, pagination.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Configure customer portal routes for v1 API

@@ -9,6 +9,7 @@ use crate::domain::custom_field::model::{
 use crate::domain::custom_field::service::CustomFieldService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::AdminUser;
 
 /// Create a custom field definition (admin only)
@@ -36,10 +37,12 @@ pub async fn create_custom_field(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match service.create(create).await {
-        Ok(def) => Ok(HttpResponse::Created().json(def)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.create(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List custom fields (optionally filtered by module)
@@ -99,10 +102,12 @@ pub async fn get_custom_field(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.get_by_id(*path, admin_user.0.tenant_id).await {
-        Ok(def) => Ok(HttpResponse::Ok().json(def)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.get_by_id(*path, admin_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update a custom field definition (admin only)
@@ -129,13 +134,12 @@ pub async fn update_custom_field(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .update(*path, admin_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(def) => Ok(HttpResponse::Ok().json(def)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.update(*path, admin_user.0.tenant_id, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete a custom field definition (admin only)
@@ -222,10 +226,12 @@ pub async fn list_deleted_custom_fields(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.list_deleted(admin_user.0.tenant_id).await {
-        Ok(defs) => Ok(HttpResponse::Ok().json(defs)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.list_deleted(admin_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Permanently destroy a soft-deleted custom field definition (admin only)
