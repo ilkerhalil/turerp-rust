@@ -11,6 +11,7 @@ use crate::domain::purchase::{
 };
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Query parameters for listing purchase orders (extends pagination with status filter)
@@ -74,10 +75,12 @@ pub async fn create_order(
     let mut create = payload.into_inner();
     create.tenant_id = tenant_id;
 
-    match service.create_purchase_order(create).await {
-        Ok(order) => Ok(HttpResponse::Created().json(order)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.create_purchase_order(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all purchase orders for tenant endpoint (requires authentication)
@@ -215,13 +218,12 @@ pub async fn get_order(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .get_purchase_order(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(order) => Ok(HttpResponse::Ok().json(order)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.get_purchase_order(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update purchase order status endpoint (requires authentication)
@@ -253,10 +255,12 @@ pub async fn update_order_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let status = parse_status(&payload.status)?;
-    match service.update_order_status(*path, status).await {
-        Ok(order) => Ok(HttpResponse::Ok().json(order)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.update_order_status(*path, status),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Request body for updating purchase order status

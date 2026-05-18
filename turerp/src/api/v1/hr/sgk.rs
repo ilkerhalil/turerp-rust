@@ -7,6 +7,7 @@ use crate::domain::hr::sgk::model::{CreateEmployeeBonus, CreateSgkEmployeeRegist
 use crate::domain::hr::sgk::service::SgkPayrollService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Register employee with SGK (requires admin role)
@@ -24,10 +25,12 @@ pub async fn register_sgk_employee(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match sgk_service.register_employee(payload.into_inner()).await {
-        Ok(reg) => Ok(HttpResponse::Created().json(reg)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sgk_service.register_employee(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Calculate SGK-compliant payroll (requires admin role)
@@ -45,18 +48,17 @@ pub async fn calculate_sgk_payroll(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match sgk_service
-        .calculate_sgk_payroll(
+    json_resp!(
+        sgk_service.calculate_sgk_payroll(
             admin_user.0.tenant_id,
             payload.employee_id,
             payload.period_start,
-            payload.period_end,
-        )
-        .await
-    {
-        Ok(payroll) => Ok(HttpResponse::Ok().json(payroll)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+            payload.period_end
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Add a bonus to an employee (requires admin role)
@@ -74,10 +76,12 @@ pub async fn add_bonus(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match sgk_service.add_bonus(payload.into_inner()).await {
-        Ok(bonus) => Ok(HttpResponse::Created().json(bonus)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sgk_service.add_bonus(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get payroll summary for a period (requires auth)
@@ -96,13 +100,12 @@ pub async fn get_payroll_summary(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let (year, month) = path.into_inner();
-    match sgk_service
-        .get_payroll_summary(auth_user.0.tenant_id, year, month)
-        .await
-    {
-        Ok(summary) => Ok(HttpResponse::Ok().json(summary)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sgk_service.get_payroll_summary(auth_user.0.tenant_id, year, month),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Generate e-Bildirge XML for a month (requires admin role)

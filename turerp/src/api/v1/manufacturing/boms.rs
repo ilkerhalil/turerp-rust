@@ -7,6 +7,7 @@ use crate::domain::manufacturing::model::{CreateBillOfMaterials, CreateBillOfMat
 use crate::domain::manufacturing::service::ManufacturingService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create BOM (requires admin role)
@@ -26,10 +27,12 @@ pub async fn create_bom(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match mfg_service.create_bom(create).await {
-        Ok(bom) => Ok(HttpResponse::Created().json(bom)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.create_bom(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get BOM by ID
@@ -47,10 +50,12 @@ pub async fn get_bom(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.get_bom(*path, auth_user.0.tenant_id).await {
-        Ok(bom) => Ok(HttpResponse::Ok().json(bom)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.get_bom(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get BOMs by product
@@ -68,10 +73,12 @@ pub async fn get_boms_by_product(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.get_boms_by_product(*path).await {
-        Ok(boms) => Ok(HttpResponse::Ok().json(boms)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.get_boms_by_product(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Add BOM line (requires admin role)
@@ -89,10 +96,12 @@ pub async fn add_bom_line(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.add_bom_line(payload.into_inner()).await {
-        Ok(line) => Ok(HttpResponse::Created().json(line)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.add_bom_line(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get BOM lines
@@ -110,10 +119,12 @@ pub async fn get_bom_lines(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.get_bom_lines(*path).await {
-        Ok(lines) => Ok(HttpResponse::Ok().json(lines)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.get_bom_lines(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft-delete a BOM (requires admin role)

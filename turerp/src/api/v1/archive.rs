@@ -12,6 +12,7 @@ use crate::domain::archive::model::{
 use crate::domain::archive::service::ArchiveService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Query parameters for listing archive policies
@@ -95,13 +96,12 @@ pub async fn create_policy(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let create = payload.into_inner();
-    match archive_service
-        .create_policy(create, admin_user.0.tenant_id)
-        .await
-    {
-        Ok(policy) => Ok(HttpResponse::Created().json(policy)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        archive_service.create_policy(create, admin_user.0.tenant_id),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List archive policies (paginated)
@@ -120,13 +120,12 @@ pub async fn list_policies(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let q = query.into_inner();
-    match archive_service
-        .list_policies(auth_user.0.tenant_id, q.into())
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        archive_service.list_policies(auth_user.0.tenant_id, q.into()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List active archive policies
@@ -142,13 +141,12 @@ pub async fn list_active_policies(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match archive_service
-        .list_active_policies(auth_user.0.tenant_id)
-        .await
-    {
-        Ok(policies) => Ok(HttpResponse::Ok().json(policies)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        archive_service.list_active_policies(auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get an archive policy by ID
@@ -167,10 +165,12 @@ pub async fn get_policy(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match archive_service.get_policy(id, auth_user.0.tenant_id).await {
-        Ok(policy) => Ok(HttpResponse::Ok().json(policy)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        archive_service.get_policy(id, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update an archive policy (requires admin role)
@@ -192,13 +192,12 @@ pub async fn update_policy(
     let i18n = resolve(&i18n);
     let id = path.into_inner();
     let update = payload.into_inner();
-    match archive_service
-        .update_policy(id, admin_user.0.tenant_id, update)
-        .await
-    {
-        Ok(policy) => Ok(HttpResponse::Ok().json(policy)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        archive_service.update_policy(id, admin_user.0.tenant_id, update),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete an archive policy (requires admin role)
@@ -244,13 +243,12 @@ pub async fn create_job(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let create = payload.into_inner();
-    match archive_service
-        .create_job(create, admin_user.0.tenant_id)
-        .await
-    {
-        Ok(job) => Ok(HttpResponse::Created().json(job)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        archive_service.create_job(create, admin_user.0.tenant_id),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List archive jobs (paginated, optional policy filter)
@@ -280,7 +278,7 @@ pub async fn list_jobs(
     };
 
     match result {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
+        Ok(response) => Ok(HttpResponse::Ok().json(response)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
     }
 }
@@ -301,10 +299,12 @@ pub async fn get_job(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match archive_service.get_job(id, auth_user.0.tenant_id).await {
-        Ok(job) => Ok(HttpResponse::Ok().json(job)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        archive_service.get_job(id, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete an archive job (requires admin role)
@@ -348,13 +348,12 @@ pub async fn list_records(
     let i18n = resolve(&i18n);
     let q = query.into_inner();
     let source_table = q.source_table.clone();
-    match archive_service
-        .list_records(auth_user.0.tenant_id, source_table, q.source_id, q.into())
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        archive_service.list_records(auth_user.0.tenant_id, source_table, q.source_id, q.into()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get an archive record by ID
@@ -373,10 +372,12 @@ pub async fn get_record(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match archive_service.get_record(id, auth_user.0.tenant_id).await {
-        Ok(record) => Ok(HttpResponse::Ok().json(record)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        archive_service.get_record(id, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Restore archived records (requires admin role)

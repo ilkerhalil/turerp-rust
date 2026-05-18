@@ -10,6 +10,7 @@ use crate::domain::manufacturing::model::{
 use crate::domain::manufacturing::service::ManufacturingService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create work order (requires admin role)
@@ -29,10 +30,12 @@ pub async fn create_work_order(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match mfg_service.create_work_order(create).await {
-        Ok(order) => Ok(HttpResponse::Created().json(order)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.create_work_order(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all work orders
@@ -54,17 +57,16 @@ pub async fn get_work_orders(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match mfg_service
-        .get_work_orders_by_tenant_paginated(
+    json_resp!(
+        mfg_service.get_work_orders_by_tenant_paginated(
             auth_user.0.tenant_id,
             pagination.page,
-            pagination.per_page,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+            pagination.per_page
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get work order by ID
@@ -82,13 +84,12 @@ pub async fn get_work_order(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service
-        .get_work_order(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(order) => Ok(HttpResponse::Ok().json(order)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.get_work_order(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update work order status (requires admin role)
@@ -108,13 +109,12 @@ pub async fn update_work_order_status(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service
-        .update_work_order_status(*path, payload.into_inner().status)
-        .await
-    {
-        Ok(order) => Ok(HttpResponse::Ok().json(order)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.update_work_order_status(*path, payload.into_inner().status),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Add work order operation (requires admin role)
@@ -132,13 +132,12 @@ pub async fn add_work_order_operation(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service
-        .add_work_order_operation(payload.into_inner())
-        .await
-    {
-        Ok(op) => Ok(HttpResponse::Created().json(op)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.add_work_order_operation(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get work order operations
@@ -156,10 +155,12 @@ pub async fn get_work_order_operations(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.get_work_order_operations(*path).await {
-        Ok(ops) => Ok(HttpResponse::Ok().json(ops)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.get_work_order_operations(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Add work order material (requires admin role)
@@ -177,13 +178,12 @@ pub async fn add_work_order_material(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service
-        .add_work_order_material(payload.into_inner())
-        .await
-    {
-        Ok(material) => Ok(HttpResponse::Created().json(material)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.add_work_order_material(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get work order materials
@@ -201,10 +201,12 @@ pub async fn get_work_order_materials(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match mfg_service.get_work_order_materials(*path).await {
-        Ok(materials) => Ok(HttpResponse::Ok().json(materials)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        mfg_service.get_work_order_materials(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft-delete a work order (requires admin role)

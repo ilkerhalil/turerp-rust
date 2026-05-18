@@ -12,6 +12,7 @@ use crate::domain::purchase::{
 };
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Query parameters for listing purchase requests (extends pagination with status filter)
@@ -75,10 +76,12 @@ pub async fn create_request(
     let mut create = payload.into_inner();
     create.tenant_id = tenant_id;
 
-    match service.create_purchase_request(create).await {
-        Ok(request) => Ok(HttpResponse::Created().json(request)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.create_purchase_request(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all purchase requests for tenant endpoint (requires authentication)
@@ -195,13 +198,12 @@ pub async fn get_request(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .get_purchase_request(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(request) => Ok(HttpResponse::Ok().json(request)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.get_purchase_request(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update purchase request endpoint (requires authentication)
@@ -232,13 +234,12 @@ pub async fn update_request(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .update_purchase_request(*path, payload.into_inner())
-        .await
-    {
-        Ok(request) => Ok(HttpResponse::Ok().json(request)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.update_purchase_request(*path, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Submit purchase request for approval endpoint (requires authentication)
@@ -266,17 +267,16 @@ pub async fn submit_request(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .update_request_status(
+    json_resp!(
+        service.update_request_status(
             *path,
             PurchaseRequestStatus::PendingApproval,
             auth_user.0.tenant_id,
-        )
-        .await
-    {
-        Ok(request) => Ok(HttpResponse::Ok().json(request)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Approve purchase request endpoint (requires admin role)
@@ -305,17 +305,16 @@ pub async fn approve_request(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .update_request_status(
+    json_resp!(
+        service.update_request_status(
             *path,
             PurchaseRequestStatus::Approved,
             admin_user.0.tenant_id,
-        )
-        .await
-    {
-        Ok(request) => Ok(HttpResponse::Ok().json(request)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Reject purchase request endpoint (requires admin role)
@@ -344,17 +343,16 @@ pub async fn reject_request(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service
-        .update_request_status(
+    json_resp!(
+        service.update_request_status(
             *path,
             PurchaseRequestStatus::Rejected,
             admin_user.0.tenant_id,
-        )
-        .await
-    {
-        Ok(request) => Ok(HttpResponse::Ok().json(request)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete purchase request endpoint (requires admin role, soft delete)

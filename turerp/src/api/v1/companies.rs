@@ -15,6 +15,7 @@ use crate::domain::invoice::model::{InvoiceStatus, InvoiceType};
 use crate::domain::invoice::service::InvoiceService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 // ---------------------------------------------------------------------------
@@ -90,10 +91,12 @@ pub async fn create_company(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match company_service.create_company(create).await {
-        Ok(company) => Ok(HttpResponse::Created().json(company)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        company_service.create_company(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all companies (requires authentication)
@@ -120,13 +123,16 @@ pub async fn get_companies(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match company_service
-        .get_all_companies_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        company_service.get_all_companies_paginated(
+            auth_user.0.tenant_id,
+            pagination.page,
+            pagination.per_page
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get company by ID (requires authentication)
@@ -150,13 +156,12 @@ pub async fn get_company(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match company_service
-        .get_company(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(company) => Ok(HttpResponse::Ok().json(company)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        company_service.get_company(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update a company (requires admin role)
@@ -185,13 +190,12 @@ pub async fn update_company(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let update = payload.into_inner();
-    match company_service
-        .update_company(*path, admin_user.0.tenant_id, update)
-        .await
-    {
-        Ok(company) => Ok(HttpResponse::Ok().json(company)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        company_service.update_company(*path, admin_user.0.tenant_id, update),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft-delete a company (requires admin role)
@@ -249,13 +253,12 @@ pub async fn restore_company(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match company_service
-        .restore_company(*path, admin_user.0.tenant_id)
-        .await
-    {
-        Ok(company) => Ok(HttpResponse::Ok().json(company)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        company_service.restore_company(*path, admin_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List soft-deleted companies (requires admin role)
@@ -277,13 +280,12 @@ pub async fn list_deleted_companies(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match company_service
-        .list_deleted_companies(admin_user.0.tenant_id)
-        .await
-    {
-        Ok(companies) => Ok(HttpResponse::Ok().json(companies)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        company_service.list_deleted_companies(admin_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Permanently delete a company (requires admin role)
@@ -346,18 +348,17 @@ pub async fn create_cross_company_invoice(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match inter_company_service
-        .create_cross_company_invoice(
+    json_resp!(
+        inter_company_service.create_cross_company_invoice(
             admin_user.0.tenant_id,
             req.seller_company_id,
             req.buyer_company_id,
             req.lines,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Created().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Transfer stock between companies (requires admin role)
@@ -391,8 +392,8 @@ pub async fn transfer_stock(
         Ok(id) => id,
         Err(e) => return Ok(e.to_http_response(i18n, locale.as_str())),
     };
-    match inter_company_service
-        .transfer_stock_between_companies(
+    json_resp!(
+        inter_company_service.transfer_stock_between_companies(
             admin_user.0.tenant_id,
             req.from_company_id,
             req.to_company_id,
@@ -400,12 +401,11 @@ pub async fn transfer_stock(
             req.warehouse_id,
             req.quantity,
             user_id,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Created().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Consolidated report across companies (requires authentication)

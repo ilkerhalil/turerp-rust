@@ -7,6 +7,7 @@ use crate::domain::ldap::model::{CreateLdapConfig, TestLdapConnectionRequest, Up
 use crate::domain::ldap::service::LdapSyncService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::AdminUser;
 
 /// Simple localized success message payload.
@@ -41,13 +42,12 @@ pub async fn create_ldap_config(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let tenant_id = admin_user.0.tenant_id;
-    match ldap_service
-        .create_ldap_config(tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(config) => Ok(HttpResponse::Created().json(config)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        ldap_service.create_ldap_config(tenant_id, payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get LDAP configuration (requires authentication)
@@ -108,13 +108,12 @@ pub async fn update_ldap_config(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let tenant_id = admin_user.0.tenant_id;
-    match ldap_service
-        .update_ldap_config(tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(config) => Ok(HttpResponse::Ok().json(config)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        ldap_service.update_ldap_config(tenant_id, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete LDAP configuration (requires admin role)
@@ -221,10 +220,12 @@ pub async fn sync_ldap_users(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let tenant_id = admin_user.0.tenant_id;
-    match ldap_service.sync_users(tenant_id).await {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        ldap_service.sync_users(tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Response for LDAP connection test

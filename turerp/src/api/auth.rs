@@ -7,6 +7,7 @@ use crate::domain::auth::{AuthService, LoginRequest, RefreshTokenRequest, Regist
 use crate::domain::user::service::UserService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::AuthUser;
 use tracing;
 
@@ -20,10 +21,12 @@ pub async fn register(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match auth_service.register(payload.into_inner()).await {
-        Ok(response) => Ok(HttpResponse::Created().json(response)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        auth_service.register(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Login endpoint (public - no authentication required)
@@ -39,10 +42,12 @@ pub async fn login(
     let tenant_id = params
         .tenant_id
         .ok_or_else(|| crate::error::ApiError::BadRequest("tenant_id is required".to_string()))?;
-    match auth_service.login(payload.into_inner(), tenant_id).await {
-        Ok(response) => Ok(HttpResponse::Ok().json(response)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        auth_service.login(payload.into_inner(), tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Refresh token endpoint (public - no authentication required)
@@ -54,10 +59,12 @@ pub async fn refresh_token(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match auth_service.refresh_token(payload.into_inner()).await {
-        Ok(tokens) => Ok(HttpResponse::Ok().json(tokens)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        auth_service.refresh_token(payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get current user endpoint (requires authentication)

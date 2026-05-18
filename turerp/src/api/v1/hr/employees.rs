@@ -7,6 +7,7 @@ use crate::domain::hr::model::{CreateEmployee, EmployeeResponse};
 use crate::domain::hr::service::HrService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create employee (requires admin role)
@@ -26,10 +27,12 @@ pub async fn create_employee(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match hr_service.create_employee(create).await {
-        Ok(employee) => Ok(HttpResponse::Created().json(employee)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.create_employee(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all employees
@@ -46,13 +49,12 @@ pub async fn get_employees(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service
-        .get_employees_paginated(auth_user.0.tenant_id, query.page, query.per_page)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.get_employees_paginated(auth_user.0.tenant_id, query.page, query.per_page),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get employee by ID
@@ -70,10 +72,12 @@ pub async fn get_employee(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service.get_employee(*path, auth_user.0.tenant_id).await {
-        Ok(employee) => Ok(HttpResponse::Ok().json(employee)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.get_employee(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update employee status (requires admin role)
@@ -93,13 +97,12 @@ pub async fn update_employee_status(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service
-        .update_employee_status(*path, payload.into_inner().status)
-        .await
-    {
-        Ok(employee) => Ok(HttpResponse::Ok().json(employee)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.update_employee_status(*path, payload.into_inner().status),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Terminate employee (requires admin role)
@@ -117,10 +120,12 @@ pub async fn terminate_employee(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service.terminate_employee(*path).await {
-        Ok(employee) => Ok(HttpResponse::Ok().json(employee)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.terminate_employee(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft-delete an employee (requires admin role)

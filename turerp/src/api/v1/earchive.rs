@@ -12,6 +12,7 @@ use crate::domain::earchive::model::{EarchiveResponse, EarchiveStatus, GenerateE
 use crate::domain::earchive::service::EarchiveService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Request body for listing E-Archive documents with optional status filter
@@ -36,13 +37,17 @@ pub async fn generate_earchive(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let req = payload.into_inner();
-    match earchive_service
-        .generate_earchive(admin_user.0.tenant_id, req.invoice_id, req.document_type)
-        .await
-    {
-        Ok(doc) => Ok(HttpResponse::Created().json(EarchiveResponse::from(doc))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            earchive_service
+                .generate_earchive(admin_user.0.tenant_id, req.invoice_id, req.document_type)
+                .await
+                .map(EarchiveResponse::from)
+        },
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// List E-Archive documents (paginated, optional status filter)
@@ -67,21 +72,22 @@ pub async fn list_earchives(
     let status_filter = status
         .into_inner()
         .and_then(|s| s.parse::<EarchiveStatus>().ok());
-    match earchive_service
-        .list_documents(
-            auth_user.0.tenant_id,
-            status_filter,
-            pagination.page,
-            pagination.per_page,
-        )
-        .await
-    {
-        Ok(result) => {
-            let mapped = result.map(EarchiveResponse::from);
-            Ok(HttpResponse::Ok().json(mapped))
-        }
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            earchive_service
+                .list_documents(
+                    auth_user.0.tenant_id,
+                    status_filter,
+                    pagination.page,
+                    pagination.per_page,
+                )
+                .await
+                .map(|r| r.map(EarchiveResponse::from))
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get an E-Archive document by ID
@@ -100,13 +106,17 @@ pub async fn get_earchive(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match earchive_service
-        .get_document(auth_user.0.tenant_id, id)
-        .await
-    {
-        Ok(doc) => Ok(HttpResponse::Ok().json(EarchiveResponse::from(doc))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            earchive_service
+                .get_document(auth_user.0.tenant_id, id)
+                .await
+                .map(EarchiveResponse::from)
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Sign an E-Archive document (requires admin role)
@@ -125,13 +135,17 @@ pub async fn sign_earchive(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match earchive_service
-        .sign_document(admin_user.0.tenant_id, id)
-        .await
-    {
-        Ok(doc) => Ok(HttpResponse::Ok().json(EarchiveResponse::from(doc))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            earchive_service
+                .sign_document(admin_user.0.tenant_id, id)
+                .await
+                .map(EarchiveResponse::from)
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Send an E-Archive document to GİB (requires admin role)
@@ -150,13 +164,17 @@ pub async fn send_earchive(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match earchive_service
-        .send_to_gib(admin_user.0.tenant_id, id)
-        .await
-    {
-        Ok(doc) => Ok(HttpResponse::Ok().json(EarchiveResponse::from(doc))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            earchive_service
+                .send_to_gib(admin_user.0.tenant_id, id)
+                .await
+                .map(EarchiveResponse::from)
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Cancel an E-Archive document (requires admin role)
@@ -175,13 +193,17 @@ pub async fn cancel_earchive(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let id = path.into_inner();
-    match earchive_service
-        .cancel_document(admin_user.0.tenant_id, id)
-        .await
-    {
-        Ok(doc) => Ok(HttpResponse::Ok().json(EarchiveResponse::from(doc))),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        async {
+            earchive_service
+                .cancel_document(admin_user.0.tenant_id, id)
+                .await
+                .map(EarchiveResponse::from)
+        },
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Configure E-Archive routes for v1 API

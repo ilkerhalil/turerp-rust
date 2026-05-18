@@ -12,6 +12,7 @@ use crate::domain::bank::model::{
 use crate::domain::bank::service::BankService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create a bank account (requires admin role)
@@ -38,10 +39,12 @@ pub async fn create_account(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match bank_service.create_account(create).await {
-        Ok(account) => Ok(HttpResponse::Created().json(account)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.create_account(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all bank accounts (requires authentication)
@@ -62,10 +65,12 @@ pub async fn get_accounts(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service.get_accounts(auth_user.0.tenant_id).await {
-        Ok(accounts) => Ok(HttpResponse::Ok().json(accounts)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.get_accounts(auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get bank account by ID (requires authentication)
@@ -89,10 +94,12 @@ pub async fn get_account(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service.get_account(*path, auth_user.0.tenant_id).await {
-        Ok(account) => Ok(HttpResponse::Ok().json(account)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.get_account(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update a bank account (requires admin role)
@@ -119,13 +126,12 @@ pub async fn update_account(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service
-        .update_account(*path, admin_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(account) => Ok(HttpResponse::Ok().json(account)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.update_account(*path, admin_user.0.tenant_id, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete a bank account (requires admin role)
@@ -305,13 +311,12 @@ pub async fn get_transactions(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service
-        .get_transactions(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(transactions) => Ok(HttpResponse::Ok().json(transactions)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.get_transactions(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get unmatched transactions for a bank account (requires authentication)
@@ -335,13 +340,12 @@ pub async fn get_unmatched_transactions(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service
-        .get_unmatched_transactions(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(transactions) => Ok(HttpResponse::Ok().json(transactions)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.get_unmatched_transactions(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Manually match a transaction (requires admin role)
@@ -369,13 +373,12 @@ pub async fn match_transaction(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service
-        .manual_match(*path, admin_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(tx) => Ok(HttpResponse::Ok().json(tx)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.manual_match(*path, admin_user.0.tenant_id, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Unmatch a transaction (requires admin role)
@@ -401,13 +404,12 @@ pub async fn unmatch_transaction(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service
-        .unmatch_transaction(*path, admin_user.0.tenant_id)
-        .await
-    {
-        Ok(tx) => Ok(HttpResponse::Ok().json(tx)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.unmatch_transaction(*path, admin_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get reconciliation report (requires authentication)
@@ -428,13 +430,12 @@ pub async fn get_reconciliation_report(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service
-        .get_reconciliation_report(auth_user.0.tenant_id)
-        .await
-    {
-        Ok(report) => Ok(HttpResponse::Ok().json(report)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.get_reconciliation_report(auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Trigger auto-reconciliation (requires admin role)
@@ -456,10 +457,12 @@ pub async fn auto_reconcile(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service.auto_reconcile(admin_user.0.tenant_id).await {
-        Ok(report) => Ok(HttpResponse::Ok().json(report)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.auto_reconcile(admin_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Create a reconciliation rule (requires admin role)
@@ -486,10 +489,12 @@ pub async fn create_rule(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match bank_service.create_rule(create).await {
-        Ok(rule) => Ok(HttpResponse::Created().json(rule)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.create_rule(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all reconciliation rules (requires authentication)
@@ -510,10 +515,12 @@ pub async fn get_rules(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service.get_rules(auth_user.0.tenant_id).await {
-        Ok(rules) => Ok(HttpResponse::Ok().json(rules)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.get_rules(auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get reconciliation rule by ID (requires authentication)
@@ -537,10 +544,12 @@ pub async fn get_rule(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service.get_rule(*path, auth_user.0.tenant_id).await {
-        Ok(rule) => Ok(HttpResponse::Ok().json(rule)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.get_rule(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update a reconciliation rule (requires admin role)
@@ -567,13 +576,12 @@ pub async fn update_rule(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match bank_service
-        .update_rule(*path, admin_user.0.tenant_id, payload.into_inner())
-        .await
-    {
-        Ok(rule) => Ok(HttpResponse::Ok().json(rule)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        bank_service.update_rule(*path, admin_user.0.tenant_id, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete a reconciliation rule (requires admin role)

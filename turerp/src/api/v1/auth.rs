@@ -7,6 +7,7 @@ use crate::domain::auth::{AuthService, LoginRequest, RefreshTokenRequest, Regist
 use crate::domain::user::service::UserService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::AuthUser;
 use tracing;
 
@@ -33,10 +34,12 @@ pub async fn register(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match auth_service.register(payload.into_inner()).await {
-        Ok(response) => Ok(HttpResponse::Created().json(response)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        auth_service.register(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Login endpoint (public - no authentication required)
@@ -99,10 +102,12 @@ pub async fn refresh_token(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match auth_service.refresh_token(payload.into_inner()).await {
-        Ok(tokens) => Ok(HttpResponse::Ok().json(tokens)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        auth_service.refresh_token(payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get current user endpoint (requires authentication)

@@ -6,6 +6,7 @@ use crate::domain::hr::model::CreateAttendance;
 use crate::domain::hr::service::HrService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Record attendance (requires admin role)
@@ -23,10 +24,12 @@ pub async fn record_attendance(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service.record_attendance(payload.into_inner()).await {
-        Ok(attendance) => Ok(HttpResponse::Created().json(attendance)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.record_attendance(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get attendance by employee
@@ -44,10 +47,12 @@ pub async fn get_attendance_by_employee(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match hr_service.get_attendance_by_employee(*path).await {
-        Ok(attendance) => Ok(HttpResponse::Ok().json(attendance)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        hr_service.get_attendance_by_employee(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft-delete attendance (requires admin role)

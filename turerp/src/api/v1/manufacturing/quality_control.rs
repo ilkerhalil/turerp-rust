@@ -9,6 +9,7 @@ use crate::domain::manufacturing::model::{
 use crate::domain::manufacturing::service::QualityControlService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 // --- Inspections ---
@@ -28,11 +29,12 @@ pub async fn create_inspection(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let create = payload.into_inner();
-    match qc_service.create_inspection(create).await {
-        Ok(inspection) => Ok(HttpResponse::Created().json(inspection)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        qc_service.create_inspection(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all inspections for tenant
@@ -48,13 +50,12 @@ pub async fn get_inspections(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match qc_service
-        .get_inspections_by_tenant(auth_user.0.tenant_id)
-        .await
-    {
-        Ok(inspections) => Ok(HttpResponse::Ok().json(inspections)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        qc_service.get_inspections_by_tenant(auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get inspection by ID
@@ -72,13 +73,12 @@ pub async fn get_inspection(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match qc_service
-        .get_inspection(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(inspection) => Ok(HttpResponse::Ok().json(inspection)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        qc_service.get_inspection(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update inspection (requires admin role)
@@ -98,13 +98,12 @@ pub async fn update_inspection(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match qc_service
-        .update_inspection(*path, payload.into_inner())
-        .await
-    {
-        Ok(inspection) => Ok(HttpResponse::Ok().json(inspection)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        qc_service.update_inspection(*path, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete inspection (requires admin role)
@@ -203,11 +202,12 @@ pub async fn create_ncr(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let create = payload.into_inner();
-    match qc_service.create_ncr(create).await {
-        Ok(ncr) => Ok(HttpResponse::Created().json(ncr)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        qc_service.create_ncr(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all NCRs for tenant
@@ -223,10 +223,12 @@ pub async fn get_ncrs(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match qc_service.get_ncrs_by_tenant(auth_user.0.tenant_id).await {
-        Ok(ncrs) => Ok(HttpResponse::Ok().json(ncrs)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        qc_service.get_ncrs_by_tenant(auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get NCR by ID
@@ -244,10 +246,12 @@ pub async fn get_ncr(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match qc_service.get_ncr(*path, auth_user.0.tenant_id).await {
-        Ok(ncr) => Ok(HttpResponse::Ok().json(ncr)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        qc_service.get_ncr(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update NCR (requires admin role)
@@ -267,10 +271,12 @@ pub async fn update_ncr(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match qc_service.update_ncr(*path, payload.into_inner()).await {
-        Ok(ncr) => Ok(HttpResponse::Ok().json(ncr)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        qc_service.update_ncr(*path, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete NCR (requires admin role)

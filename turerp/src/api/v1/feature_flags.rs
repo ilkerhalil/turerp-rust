@@ -7,6 +7,7 @@ use crate::common::MessageResponse;
 use crate::domain::feature::{CreateFeatureFlag, FeatureFlagService, UpdateFeatureFlag};
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create feature flag endpoint (admin only)
@@ -34,10 +35,12 @@ pub async fn create_flag(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match feature_service.create(payload.into_inner()).await {
-        Ok(flag) => Ok(HttpResponse::Created().json(flag)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        feature_service.create(payload.into_inner()),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all feature flags endpoint (authenticated)
@@ -67,13 +70,12 @@ pub async fn get_flags(
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
     let tenant_id = Some(auth_user.0.tenant_id);
-    match feature_service
-        .get_all_paginated(tenant_id, pagination.page, pagination.per_page)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        feature_service.get_all_paginated(tenant_id, pagination.page, pagination.per_page),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get feature flag by ID endpoint (authenticated)
@@ -285,10 +287,12 @@ pub async fn list_deleted_flags(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match feature_service.find_deleted().await {
-        Ok(flags) => Ok(HttpResponse::Ok().json(flags)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        feature_service.find_deleted(),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Permanently destroy soft-deleted feature flag endpoint (admin only)

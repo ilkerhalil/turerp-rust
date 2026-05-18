@@ -6,6 +6,7 @@ use crate::common::MessageResponse;
 use crate::domain::product::{CreateProductVariant, ProductService, UpdateProductVariant};
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 /// Create product variant endpoint (requires admin role)
@@ -41,10 +42,12 @@ pub async fn create_variant(
     let mut create = payload.into_inner();
     create.product_id = product_id; // Ensure product_id matches path
 
-    match service.create_variant(create, admin_user.0.tenant_id).await {
-        Ok(variant) => Ok(HttpResponse::Created().json(variant)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.create_variant(create, admin_user.0.tenant_id),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all variants for a product endpoint (requires authentication)
@@ -73,13 +76,12 @@ pub async fn get_variants_by_product(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     let product_id = path.into_inner();
-    match service
-        .get_variants_by_product(product_id, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(variants) => Ok(HttpResponse::Ok().json(variants)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.get_variants_by_product(product_id, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get product variant by ID endpoint (requires authentication)
@@ -107,10 +109,12 @@ pub async fn get_variant(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.get_variant(*path).await {
-        Ok(variant) => Ok(HttpResponse::Ok().json(variant)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.get_variant(*path),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update product variant endpoint (requires admin role)
@@ -142,10 +146,12 @@ pub async fn update_variant(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match service.update_variant(*path, payload.into_inner()).await {
-        Ok(variant) => Ok(HttpResponse::Ok().json(variant)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        service.update_variant(*path, payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Soft delete product variant endpoint (requires admin role)

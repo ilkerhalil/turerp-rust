@@ -11,6 +11,7 @@ use crate::domain::sales::model::{
 use crate::domain::sales::service::SalesService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
+use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
 
 // --- Sales Orders ---
@@ -32,10 +33,12 @@ pub async fn create_sales_order(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match sales_service.create_sales_order(create).await {
-        Ok(order) => Ok(HttpResponse::Created().json(order)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sales_service.create_sales_order(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all sales orders
@@ -57,13 +60,16 @@ pub async fn get_sales_orders(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match sales_service
-        .get_orders_by_tenant_paginated(auth_user.0.tenant_id, pagination.page, pagination.per_page)
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sales_service.get_orders_by_tenant_paginated(
+            auth_user.0.tenant_id,
+            pagination.page,
+            pagination.per_page
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get sales order by ID
@@ -81,13 +87,12 @@ pub async fn get_sales_order(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match sales_service
-        .get_sales_order(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(order) => Ok(HttpResponse::Ok().json(order)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sales_service.get_sales_order(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get sales orders by status
@@ -110,18 +115,17 @@ pub async fn get_sales_orders_by_status(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match sales_service
-        .get_orders_by_status_paginated(
+    json_resp!(
+        sales_service.get_orders_by_status_paginated(
             auth_user.0.tenant_id,
             path.into_inner(),
             pagination.page,
             pagination.per_page,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update sales order status (requires admin role)
@@ -141,13 +145,12 @@ pub async fn update_sales_order_status(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match sales_service
-        .update_order_status(*path, payload.into_inner().status)
-        .await
-    {
-        Ok(order) => Ok(HttpResponse::Ok().json(order)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sales_service.update_order_status(*path, payload.into_inner().status),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete sales order (requires admin role, soft delete)
@@ -337,10 +340,12 @@ pub async fn create_quotation(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
-    match sales_service.create_quotation(create).await {
-        Ok(quotation) => Ok(HttpResponse::Created().json(quotation)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sales_service.create_quotation(create),
+        HttpResponse::Created,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get all quotations
@@ -362,17 +367,16 @@ pub async fn get_quotations(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match sales_service
-        .get_quotations_by_tenant_paginated(
+    json_resp!(
+        sales_service.get_quotations_by_tenant_paginated(
             auth_user.0.tenant_id,
             pagination.page,
             pagination.per_page,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get quotation by ID
@@ -390,13 +394,12 @@ pub async fn get_quotation(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match sales_service
-        .get_quotation(*path, auth_user.0.tenant_id)
-        .await
-    {
-        Ok(quotation) => Ok(HttpResponse::Ok().json(quotation)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sales_service.get_quotation(*path, auth_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Get quotations by status
@@ -419,18 +422,17 @@ pub async fn get_quotations_by_status(
         let err = ApiError::Validation(e.to_string());
         return Ok(err.to_http_response(i18n, locale.as_str()));
     }
-    match sales_service
-        .get_quotations_by_status_paginated(
+    json_resp!(
+        sales_service.get_quotations_by_status_paginated(
             auth_user.0.tenant_id,
             path.into_inner(),
             pagination.page,
             pagination.per_page,
-        )
-        .await
-    {
-        Ok(result) => Ok(HttpResponse::Ok().json(result)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+        ),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Update quotation status (requires admin role)
@@ -450,13 +452,12 @@ pub async fn update_quotation_status(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match sales_service
-        .update_quotation_status(*path, payload.into_inner().status)
-        .await
-    {
-        Ok(quotation) => Ok(HttpResponse::Ok().json(quotation)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sales_service.update_quotation_status(*path, payload.into_inner().status),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Convert quotation to sales order (requires admin role)
@@ -474,13 +475,12 @@ pub async fn convert_quotation_to_order(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match sales_service
-        .convert_quotation_to_order(*path, admin_user.0.tenant_id)
-        .await
-    {
-        Ok(order) => Ok(HttpResponse::Ok().json(order)),
-        Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
+    json_resp!(
+        sales_service.convert_quotation_to_order(*path, admin_user.0.tenant_id),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
 }
 
 /// Delete quotation (requires admin role, soft delete)
