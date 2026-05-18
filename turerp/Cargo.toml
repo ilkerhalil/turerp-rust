@@ -93,6 +93,9 @@ parking_lot = "0.12"
 # Secure memory zeroing
 zeroize = "1.8"
 
+# Secret management (prevent accidental logging of credentials)
+secrecy = "0.10"
+
 # Metrics
 metrics = "0.24"
 metrics-exporter-prometheus = "0.16"

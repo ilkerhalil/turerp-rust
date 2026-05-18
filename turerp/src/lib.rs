@@ -172,7 +172,9 @@ pub mod app {
     use crate::domain::customer_portal::repository::{
         InMemoryPortalUserRepository, InMemorySupportTicketRepository,
     };
-    use crate::domain::customer_portal::service::CustomerPortalService;
+    use crate::domain::customer_portal::service::{
+        BoxCustomerPortal, CustomerPortal, CustomerPortalService,
+    };
     use crate::domain::dashboard::repository::InMemoryDashboardRepository;
     use crate::domain::document::repository::InMemoryDocumentRepository;
     use crate::domain::feature::repository::InMemoryFeatureFlagRepository;
@@ -226,7 +228,9 @@ pub mod app {
     use crate::domain::vendor_portal::repository::{
         InMemoryDeliveryNoteRepository, InMemoryVendorUserRepository,
     };
-    use crate::domain::vendor_portal::service::VendorPortalService;
+    use crate::domain::vendor_portal::service::{
+        BoxVendorPortal, VendorPortal, VendorPortalService,
+    };
     use crate::domain::webhook::repository::{
         InMemoryWebhookDeliveryRepository, InMemoryWebhookRepository,
     };
@@ -449,8 +453,8 @@ pub mod app {
         pub edefter_service: web::Data<crate::domain::edefter::EDefterService>,
         pub blockchain_ledger_service:
             web::Data<crate::domain::edefter::blockchain::BlockchainLedgerService>,
-        pub customer_portal_service: web::Data<CustomerPortalService>,
-        pub vendor_portal_service: web::Data<VendorPortalService>,
+        pub customer_portal_service: web::Data<dyn CustomerPortal>,
+        pub vendor_portal_service: web::Data<dyn VendorPortal>,
         pub webhook_service: web::Data<WebhookService>,
         pub workflow_service: web::Data<WorkflowService>,
     }
@@ -798,7 +802,7 @@ pub mod app {
                 as crate::domain::customer_portal::BoxPortalUserRepository;
             let ticket_repo = Arc::new(InMemorySupportTicketRepository::new())
                 as crate::domain::customer_portal::BoxSupportTicketRepository;
-            let customer_portal_service = CustomerPortalService::new(
+            let customer_portal_service: BoxCustomerPortal = Arc::new(CustomerPortalService::new(
                 portal_user_repo,
                 ticket_repo,
                 Arc::new(cari_service.clone()),
@@ -806,14 +810,14 @@ pub mod app {
                 Arc::new(invoice_service.clone()),
                 Arc::new(jwt_service.clone()),
                 config.jwt.access_token_expiration / 3600,
-            );
+            ));
 
             // Vendor Portal
             let vendor_user_repo = Arc::new(InMemoryVendorUserRepository::new())
                 as crate::domain::vendor_portal::BoxVendorUserRepository;
             let delivery_note_repo = Arc::new(InMemoryDeliveryNoteRepository::new())
                 as crate::domain::vendor_portal::BoxDeliveryNoteRepository;
-            let vendor_portal_service = VendorPortalService::new(
+            let vendor_portal_service: BoxVendorPortal = Arc::new(VendorPortalService::new(
                 vendor_user_repo,
                 delivery_note_repo,
                 Arc::new(cari_service.clone()),
@@ -821,7 +825,7 @@ pub mod app {
                 Arc::new(invoice_service.clone()),
                 Arc::new(jwt_service.clone()),
                 config.jwt.access_token_expiration / 3600,
-            );
+            ));
 
             // Webhooks
             let webhook_repo = Arc::new(InMemoryWebhookRepository::new(config.encryption_key_bytes())) as BoxWebhookRepository;
@@ -1003,8 +1007,8 @@ pub mod app {
                     earchive_service: web::Data::new(earchive_service),
                     edefter_service: web::Data::new(edefter_service),
                     blockchain_ledger_service: web::Data::new(blockchain_ledger_service),
-                    customer_portal_service: web::Data::new(customer_portal_service),
-                    vendor_portal_service: web::Data::new(vendor_portal_service),
+                    customer_portal_service: web::Data::from(customer_portal_service),
+                    vendor_portal_service: web::Data::from(vendor_portal_service),
                     webhook_service: web::Data::new(webhook_service),
                     workflow_service: web::Data::new(workflow_service),
                 },
@@ -1246,7 +1250,7 @@ pub mod app {
             as crate::domain::customer_portal::BoxPortalUserRepository;
         let portal_ticket_repo = Arc::new(InMemorySupportTicketRepository::new())
             as crate::domain::customer_portal::BoxSupportTicketRepository;
-        let customer_portal_service = CustomerPortalService::new(
+        let customer_portal_service: BoxCustomerPortal = Arc::new(CustomerPortalService::new(
             portal_user_repo,
             portal_ticket_repo,
             Arc::new(cari_service.clone()),
@@ -1254,14 +1258,14 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
-        );
+        ));
 
         // Vendor Portal - PostgreSQL (using in-memory repos until PostgreSQL repos are implemented)
         let vendor_user_repo = Arc::new(InMemoryVendorUserRepository::new())
             as crate::domain::vendor_portal::BoxVendorUserRepository;
         let delivery_note_repo = Arc::new(InMemoryDeliveryNoteRepository::new())
             as crate::domain::vendor_portal::BoxDeliveryNoteRepository;
-        let vendor_portal_service = VendorPortalService::new(
+        let vendor_portal_service: BoxVendorPortal = Arc::new(VendorPortalService::new(
             vendor_user_repo,
             delivery_note_repo,
             Arc::new(cari_service.clone()),
@@ -1269,7 +1273,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
-        );
+        ));
 
         // Chart of Accounts - PostgreSQL
         let chart_account_repo = PostgresChartAccountRepository::new(pool.clone()).into_boxed();
@@ -1631,8 +1635,8 @@ pub mod app {
                 earchive_service: web::Data::new(earchive_service),
                 edefter_service: web::Data::new(edefter_service),
                 blockchain_ledger_service: web::Data::new(blockchain_ledger_service),
-                customer_portal_service: web::Data::new(customer_portal_service),
-                vendor_portal_service: web::Data::new(vendor_portal_service),
+                customer_portal_service: web::Data::from(customer_portal_service),
+                vendor_portal_service: web::Data::from(vendor_portal_service),
                 webhook_service: web::Data::new(webhook_service),
                 workflow_service: web::Data::new(workflow_service),
             },

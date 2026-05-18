@@ -1,5 +1,6 @@
 //! Vendor Portal service
 
+use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::domain::cari::service::CariService;
@@ -17,16 +18,72 @@ use crate::error::ApiError;
 use crate::utils::jwt::{JwtService, VendorAuthClaims};
 use crate::utils::password;
 
+/// Trait for vendor portal operations
+#[async_trait]
+pub trait VendorPortal: Send + Sync {
+    async fn register(&self, tenant_id: i64, req: CreateVendorUser)
+        -> Result<VendorUser, ApiError>;
+    async fn login(
+        &self,
+        tenant_id: i64,
+        req: VendorLoginRequest,
+    ) -> Result<VendorAuthResponse, ApiError>;
+    async fn get_profile(
+        &self,
+        vendor_user_id: i64,
+        tenant_id: i64,
+    ) -> Result<VendorUserProfile, ApiError>;
+    async fn get_orders(
+        &self,
+        cari_id: i64,
+        tenant_id: i64,
+        pagination: VendorPaginationParams,
+    ) -> Result<VendorPaginatedResponse<VendorOrderView>, ApiError>;
+    async fn get_invoices(
+        &self,
+        cari_id: i64,
+        tenant_id: i64,
+        pagination: VendorPaginationParams,
+    ) -> Result<VendorPaginatedResponse<VendorInvoiceView>, ApiError>;
+    async fn get_payments(
+        &self,
+        cari_id: i64,
+        tenant_id: i64,
+        pagination: VendorPaginationParams,
+    ) -> Result<VendorPaginatedResponse<VendorPaymentView>, ApiError>;
+    async fn get_invoice_pdf(
+        &self,
+        invoice_id: i64,
+        cari_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<u8>, ApiError>;
+    async fn create_delivery_note(
+        &self,
+        vendor_user_id: i64,
+        cari_id: i64,
+        tenant_id: i64,
+        req: CreateDeliveryNote,
+    ) -> Result<DeliveryNote, ApiError>;
+    async fn get_delivery_notes(
+        &self,
+        vendor_user_id: i64,
+        tenant_id: i64,
+        pagination: VendorPaginationParams,
+    ) -> Result<VendorPaginatedResponse<DeliveryNote>, ApiError>;
+}
+
+pub type BoxVendorPortal = Arc<dyn VendorPortal>;
+
 /// Vendor portal service
 #[derive(Clone)]
 pub struct VendorPortalService {
-    pub vendor_user_repo: BoxVendorUserRepository,
-    pub delivery_note_repo: BoxDeliveryNoteRepository,
-    pub cari_service: Arc<CariService>,
-    pub purchase_service: Arc<PurchaseService>,
-    pub invoice_service: Arc<InvoiceService>,
-    pub jwt_service: Arc<JwtService>,
-    pub jwt_expiry_hours: i64,
+    vendor_user_repo: BoxVendorUserRepository,
+    delivery_note_repo: BoxDeliveryNoteRepository,
+    cari_service: Arc<CariService>,
+    purchase_service: Arc<PurchaseService>,
+    invoice_service: Arc<InvoiceService>,
+    jwt_service: Arc<JwtService>,
+    jwt_expiry_hours: i64,
 }
 
 impl VendorPortalService {
@@ -50,9 +107,14 @@ impl VendorPortalService {
         }
     }
 
-    // ── Auth ────────────────────────────────────────────────────────────────
+    pub fn decode_vendor_token(&self, token: &str) -> Result<VendorAuthClaims, ApiError> {
+        self.jwt_service.decode_vendor_token(token)
+    }
+}
 
-    pub async fn register(
+#[async_trait]
+impl VendorPortal for VendorPortalService {
+    async fn register(
         &self,
         tenant_id: i64,
         req: CreateVendorUser,
@@ -102,7 +164,7 @@ impl VendorPortalService {
         Ok(user)
     }
 
-    pub async fn login(
+    async fn login(
         &self,
         tenant_id: i64,
         req: VendorLoginRequest,
@@ -135,7 +197,10 @@ impl VendorPortalService {
             user.email.clone(),
             self.jwt_expiry_hours * 3600,
         );
-        let access_token = self.encode_vendor_token(&claims)?;
+        let access_token = self
+            .jwt_service
+            .encode_vendor_token(&claims)
+            .map_err(|e| ApiError::Internal(format!("Token encoding failed: {}", e)))?;
 
         let cari_name = match self.cari_service.get_cari(user.cari_id, tenant_id).await {
             Ok(cari) => cari.name,
@@ -160,7 +225,7 @@ impl VendorPortalService {
         })
     }
 
-    pub async fn get_profile(
+    async fn get_profile(
         &self,
         vendor_user_id: i64,
         tenant_id: i64,
@@ -189,9 +254,7 @@ impl VendorPortalService {
         })
     }
 
-    // ── Data access (delegates to existing services) ───────────────────────
-
-    pub async fn get_orders(
+    async fn get_orders(
         &self,
         cari_id: i64,
         _tenant_id: i64,
@@ -221,7 +284,7 @@ impl VendorPortalService {
         Ok(VendorPaginatedResponse::new(views, total, page, per_page))
     }
 
-    pub async fn get_invoices(
+    async fn get_invoices(
         &self,
         cari_id: i64,
         _tenant_id: i64,
@@ -256,7 +319,7 @@ impl VendorPortalService {
         Ok(VendorPaginatedResponse::new(views, total, page, per_page))
     }
 
-    pub async fn get_payments(
+    async fn get_payments(
         &self,
         cari_id: i64,
         _tenant_id: i64,
@@ -300,7 +363,7 @@ impl VendorPortalService {
         ))
     }
 
-    pub async fn get_invoice_pdf(
+    async fn get_invoice_pdf(
         &self,
         invoice_id: i64,
         cari_id: i64,
@@ -324,9 +387,7 @@ impl VendorPortalService {
         ))
     }
 
-    // ── Delivery notes ──────────────────────────────────────────────────────
-
-    pub async fn create_delivery_note(
+    async fn create_delivery_note(
         &self,
         vendor_user_id: i64,
         cari_id: i64,
@@ -338,7 +399,7 @@ impl VendorPortalService {
             .await
     }
 
-    pub async fn get_delivery_notes(
+    async fn get_delivery_notes(
         &self,
         vendor_user_id: i64,
         tenant_id: i64,
@@ -361,15 +422,5 @@ impl VendorPortalService {
         Ok(VendorPaginatedResponse::new(
             paginated, total, page, per_page,
         ))
-    }
-
-    // ── JWT helpers ─────────────────────────────────────────────────────────
-
-    fn encode_vendor_token(&self, claims: &VendorAuthClaims) -> Result<String, ApiError> {
-        self.jwt_service.encode_vendor_token(claims)
-    }
-
-    pub fn decode_vendor_token(&self, token: &str) -> Result<VendorAuthClaims, ApiError> {
-        self.jwt_service.decode_vendor_token(token)
     }
 }

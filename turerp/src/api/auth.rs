@@ -8,8 +8,10 @@ use crate::domain::user::service::UserService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::AuthUser;
+use tracing;
 
 /// Register endpoint (public - no authentication required)
+#[tracing::instrument(skip(auth_service, _user_service, payload))]
 pub async fn register(
     auth_service: web::Data<AuthService>,
     _user_service: web::Data<UserService>,
@@ -25,6 +27,7 @@ pub async fn register(
 }
 
 /// Login endpoint (public - no authentication required)
+#[tracing::instrument(skip(auth_service, payload, params))]
 pub async fn login(
     auth_service: web::Data<AuthService>,
     payload: web::Json<LoginRequest>,
@@ -33,7 +36,9 @@ pub async fn login(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let tenant_id = params.tenant_id.unwrap_or(1);
+    let tenant_id = params
+        .tenant_id
+        .ok_or_else(|| crate::error::ApiError::BadRequest("tenant_id is required".to_string()))?;
     match auth_service.login(payload.into_inner(), tenant_id).await {
         Ok(response) => Ok(HttpResponse::Ok().json(response)),
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
@@ -41,6 +46,7 @@ pub async fn login(
 }
 
 /// Refresh token endpoint (public - no authentication required)
+#[tracing::instrument(skip(auth_service, payload))]
 pub async fn refresh_token(
     auth_service: web::Data<AuthService>,
     payload: web::Json<RefreshTokenRequest>,
@@ -83,7 +89,7 @@ pub struct LoginParams {
 }
 
 fn default_tenant_id() -> Option<i64> {
-    Some(1)
+    None
 }
 
 /// Configure auth routes

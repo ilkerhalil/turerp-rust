@@ -1,5 +1,6 @@
 //! Customer Portal service
 
+use async_trait::async_trait;
 use std::sync::Arc;
 
 use crate::domain::cari::service::CariService;
@@ -17,16 +18,72 @@ use crate::error::ApiError;
 use crate::utils::jwt::{JwtService, PortalAuthClaims};
 use crate::utils::password;
 
+/// Trait for customer portal operations
+#[async_trait]
+pub trait CustomerPortal: Send + Sync {
+    async fn register(&self, tenant_id: i64, req: CreatePortalUser)
+        -> Result<PortalUser, ApiError>;
+    async fn login(
+        &self,
+        tenant_id: i64,
+        req: PortalLoginRequest,
+    ) -> Result<PortalAuthResponse, ApiError>;
+    async fn get_profile(
+        &self,
+        portal_user_id: i64,
+        tenant_id: i64,
+    ) -> Result<PortalUserProfile, ApiError>;
+    async fn get_orders(
+        &self,
+        cari_id: i64,
+        tenant_id: i64,
+        pagination: PortalPaginationParams,
+    ) -> Result<PortalPaginatedResponse<CustomerOrderView>, ApiError>;
+    async fn get_invoices(
+        &self,
+        cari_id: i64,
+        tenant_id: i64,
+        pagination: PortalPaginationParams,
+    ) -> Result<PortalPaginatedResponse<CustomerInvoiceView>, ApiError>;
+    async fn get_payments(
+        &self,
+        cari_id: i64,
+        tenant_id: i64,
+        pagination: PortalPaginationParams,
+    ) -> Result<PortalPaginatedResponse<CustomerPaymentView>, ApiError>;
+    async fn get_invoice_pdf(
+        &self,
+        invoice_id: i64,
+        cari_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<u8>, ApiError>;
+    async fn create_support_ticket(
+        &self,
+        portal_user_id: i64,
+        cari_id: i64,
+        tenant_id: i64,
+        req: CreateSupportTicket,
+    ) -> Result<SupportTicket, ApiError>;
+    async fn get_support_tickets(
+        &self,
+        portal_user_id: i64,
+        tenant_id: i64,
+        pagination: PortalPaginationParams,
+    ) -> Result<PortalPaginatedResponse<SupportTicket>, ApiError>;
+}
+
+pub type BoxCustomerPortal = Arc<dyn CustomerPortal>;
+
 /// Customer portal service
 #[derive(Clone)]
 pub struct CustomerPortalService {
-    pub portal_user_repo: BoxPortalUserRepository,
-    pub ticket_repo: BoxSupportTicketRepository,
-    pub cari_service: Arc<CariService>,
-    pub sales_service: Arc<SalesService>,
-    pub invoice_service: Arc<InvoiceService>,
-    pub jwt_service: Arc<JwtService>,
-    pub jwt_expiry_hours: i64,
+    portal_user_repo: BoxPortalUserRepository,
+    ticket_repo: BoxSupportTicketRepository,
+    cari_service: Arc<CariService>,
+    sales_service: Arc<SalesService>,
+    invoice_service: Arc<InvoiceService>,
+    jwt_service: Arc<JwtService>,
+    jwt_expiry_hours: i64,
 }
 
 impl CustomerPortalService {
@@ -50,9 +107,14 @@ impl CustomerPortalService {
         }
     }
 
-    // ── Auth ────────────────────────────────────────────────────────────────
+    pub fn decode_portal_token(&self, token: &str) -> Result<PortalAuthClaims, ApiError> {
+        self.jwt_service.decode_portal_token(token)
+    }
+}
 
-    pub async fn register(
+#[async_trait]
+impl CustomerPortal for CustomerPortalService {
+    async fn register(
         &self,
         tenant_id: i64,
         req: CreatePortalUser,
@@ -102,7 +164,7 @@ impl CustomerPortalService {
         Ok(user)
     }
 
-    pub async fn login(
+    async fn login(
         &self,
         tenant_id: i64,
         req: PortalLoginRequest,
@@ -135,7 +197,10 @@ impl CustomerPortalService {
             user.email.clone(),
             self.jwt_expiry_hours * 3600,
         );
-        let access_token = self.encode_portal_token(&claims)?;
+        let access_token = self
+            .jwt_service
+            .encode_portal_token(&claims)
+            .map_err(|e| ApiError::Internal(format!("Token encoding failed: {}", e)))?;
 
         let cari_name = match self.cari_service.get_cari(user.cari_id, tenant_id).await {
             Ok(cari) => cari.name,
@@ -160,7 +225,7 @@ impl CustomerPortalService {
         })
     }
 
-    pub async fn get_profile(
+    async fn get_profile(
         &self,
         portal_user_id: i64,
         tenant_id: i64,
@@ -189,9 +254,7 @@ impl CustomerPortalService {
         })
     }
 
-    // ── Data access (delegates to existing services) ───────────────────────
-
-    pub async fn get_orders(
+    async fn get_orders(
         &self,
         cari_id: i64,
         _tenant_id: i64,
@@ -221,7 +284,7 @@ impl CustomerPortalService {
         Ok(PortalPaginatedResponse::new(views, total, page, per_page))
     }
 
-    pub async fn get_invoices(
+    async fn get_invoices(
         &self,
         cari_id: i64,
         _tenant_id: i64,
@@ -256,7 +319,7 @@ impl CustomerPortalService {
         Ok(PortalPaginatedResponse::new(views, total, page, per_page))
     }
 
-    pub async fn get_payments(
+    async fn get_payments(
         &self,
         cari_id: i64,
         _tenant_id: i64,
@@ -300,7 +363,7 @@ impl CustomerPortalService {
         ))
     }
 
-    pub async fn get_invoice_pdf(
+    async fn get_invoice_pdf(
         &self,
         invoice_id: i64,
         cari_id: i64,
@@ -324,9 +387,7 @@ impl CustomerPortalService {
         ))
     }
 
-    // ── Support tickets ─────────────────────────────────────────────────────
-
-    pub async fn create_support_ticket(
+    async fn create_support_ticket(
         &self,
         portal_user_id: i64,
         cari_id: i64,
@@ -338,7 +399,7 @@ impl CustomerPortalService {
             .await
     }
 
-    pub async fn get_support_tickets(
+    async fn get_support_tickets(
         &self,
         portal_user_id: i64,
         tenant_id: i64,
@@ -361,15 +422,5 @@ impl CustomerPortalService {
         Ok(PortalPaginatedResponse::new(
             paginated, total, page, per_page,
         ))
-    }
-
-    // ── JWT helpers ─────────────────────────────────────────────────────────
-
-    fn encode_portal_token(&self, claims: &PortalAuthClaims) -> Result<String, ApiError> {
-        self.jwt_service.encode_portal_token(claims)
-    }
-
-    pub fn decode_portal_token(&self, token: &str) -> Result<PortalAuthClaims, ApiError> {
-        self.jwt_service.decode_portal_token(token)
     }
 }

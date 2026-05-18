@@ -12,4 +12,4 @@ pub use repository::{
     BoxDeliveryNoteRepository, BoxVendorUserRepository, DeliveryNoteRepository,
     InMemoryDeliveryNoteRepository, InMemoryVendorUserRepository, VendorUserRepository,
 };
-pub use service::VendorPortalService;
+pub use service::{BoxVendorPortal, VendorPortal, VendorPortalService};

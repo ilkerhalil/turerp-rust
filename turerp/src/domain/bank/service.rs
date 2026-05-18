@@ -367,6 +367,7 @@ impl BankService {
     }
 
     /// Auto-reconcile unmatched transactions for a tenant
+    #[tracing::instrument(skip(self), fields(tenant_id = tenant_id))]
     pub async fn auto_reconcile(&self, tenant_id: i64) -> Result<ReconciliationReport, ApiError> {
         let unmatched = self.repo.find_all_unmatched_transactions(tenant_id).await?;
         let rules = self.repo.find_active_rules(tenant_id).await?;

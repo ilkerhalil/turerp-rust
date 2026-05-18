@@ -189,7 +189,7 @@ async fn test_sql_injection_in_login_username() {
 
     for payload in malicious_payloads {
         let req = test::TestRequest::post()
-            .uri("/api/auth/login")
+            .uri("/api/auth/login?tenant_id=1")
             .set_json(json!({
                 "username": payload,
                 "password": "anypassword"
@@ -543,7 +543,7 @@ async fn test_user_cannot_access_other_users_data() {
 
     // Login as user 1
     let login_req = test::TestRequest::post()
-        .uri("/api/auth/login")
+        .uri("/api/auth/login?tenant_id=1")
         .set_json(json!({
             "username": format!("user1_{}", unique_id1),
             "password": password
