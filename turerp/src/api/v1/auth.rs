@@ -8,6 +8,7 @@ use crate::domain::user::service::UserService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::AuthUser;
+use tracing;
 
 /// Register endpoint (public - no authentication required)
 ///
@@ -24,6 +25,7 @@ use crate::middleware::AuthUser;
         (status = 429, description = "Rate limit exceeded")
     )
 )]
+#[tracing::instrument(skip(auth_service, payload))]
 pub async fn register(
     auth_service: web::Data<AuthService>,
     payload: web::Json<RegisterRequest>,
@@ -54,6 +56,7 @@ pub async fn register(
         (status = 429, description = "Rate limit exceeded")
     )
 )]
+#[tracing::instrument(skip(auth_service, payload, params))]
 pub async fn login(
     auth_service: web::Data<AuthService>,
     payload: web::Json<LoginRequest>,
@@ -88,6 +91,7 @@ pub async fn login(
         (status = 401, description = "Invalid refresh token")
     )
 )]
+#[tracing::instrument(skip(auth_service, payload))]
 pub async fn refresh_token(
     auth_service: web::Data<AuthService>,
     payload: web::Json<RefreshTokenRequest>,

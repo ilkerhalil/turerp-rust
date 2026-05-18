@@ -792,6 +792,80 @@ impl InvoiceRepository for PostgresInvoiceRepository {
 
         Ok(())
     }
+
+    async fn find_outstanding(
+        &self,
+        tenant_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError> {
+        let rows: Vec<InvoiceRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
+                   issue_date, due_date, subtotal, tax_amount, discount_amount,
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by
+            FROM invoices
+            WHERE tenant_id = $1 AND deleted_at IS NULL
+              AND paid_amount < total_amount
+              AND status != 'Cancelled'
+            ORDER BY due_date ASC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find outstanding invoices: {}", e)))?;
+
+        if rows.len() == limit as usize {
+            tracing::warn!(
+                tenant_id,
+                limit,
+                "find_outstanding result truncated at LIMIT"
+            );
+        }
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn find_overdue(
+        &self,
+        tenant_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError> {
+        let rows: Vec<InvoiceRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
+                   issue_date, due_date, subtotal, tax_amount, discount_amount,
+                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   deleted_at, deleted_by
+            FROM invoices
+            WHERE tenant_id = $1 AND deleted_at IS NULL
+              AND paid_amount < total_amount
+              AND status != 'Cancelled'
+              AND status != 'Paid'
+              AND due_date < NOW()
+            ORDER BY due_date ASC
+            LIMIT $2 OFFSET $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find overdue invoices: {}", e)))?;
+
+        if rows.len() == limit as usize {
+            tracing::warn!(tenant_id, limit, "find_overdue result truncated at LIMIT");
+        }
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
 }
 
 /// PostgreSQL invoice line repository

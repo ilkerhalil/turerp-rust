@@ -6,6 +6,7 @@ use crate::common::pagination::PaginatedResult;
 use crate::domain::cari::model::{Cari, CariResponse, CreateCari, UpdateCari};
 use crate::domain::cari::repository::BoxCariRepository;
 use crate::error::ApiError;
+use tracing;
 
 /// Cari service
 #[derive(Clone)]
@@ -19,6 +20,7 @@ impl CariService {
     }
 
     /// Create a new cari account
+    #[tracing::instrument(skip(self, create), fields(tenant_id = create.tenant_id))]
     pub async fn create_cari(&self, create: CreateCari) -> Result<CariResponse, ApiError> {
         // Validate input
         create
@@ -44,6 +46,7 @@ impl CariService {
     }
 
     /// Get cari by ID
+    #[tracing::instrument(skip(self), fields(tenant_id = tenant_id))]
     pub async fn get_cari(&self, id: i64, tenant_id: i64) -> Result<CariResponse, ApiError> {
         let cari = self
             .repo
@@ -155,6 +158,7 @@ impl CariService {
     }
 
     /// Update a cari account
+    #[tracing::instrument(skip(self), fields(tenant_id = tenant_id))]
     pub async fn update_cari(
         &self,
         id: i64,

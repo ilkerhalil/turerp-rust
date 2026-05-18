@@ -10,7 +10,7 @@ use actix_web::{dev::Payload, web, HttpRequest, HttpResponse};
 use crate::domain::customer_portal::model::{
     CreatePortalUser, CreateSupportTicket, PortalLoginRequest, PortalPaginationParams,
 };
-use crate::domain::customer_portal::service::CustomerPortalService;
+use crate::domain::customer_portal::service::CustomerPortal;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
 use crate::utils::jwt::{JwtService, PortalAuthClaims};
@@ -51,7 +51,7 @@ impl actix_web::FromRequest for PortalAuthUser {
     responses((status = 201, description = "Portal user registered", body = crate::domain::customer_portal::model::PortalUser), (status = 400, description = "Validation error", body = crate::error::ErrorResponse)),
 )]
 pub async fn register_portal_user(
-    portal_service: web::Data<CustomerPortalService>,
+    portal_service: web::Data<dyn CustomerPortal>,
     payload: web::Json<CreatePortalUser>,
     query: web::Query<HashMap<String, String>>,
     locale: Locale,
@@ -76,7 +76,7 @@ pub async fn register_portal_user(
     responses((status = 200, description = "Login successful", body = crate::domain::customer_portal::model::PortalAuthResponse), (status = 401, description = "Invalid credentials", body = crate::error::ErrorResponse)),
 )]
 pub async fn login_portal_user(
-    portal_service: web::Data<CustomerPortalService>,
+    portal_service: web::Data<dyn CustomerPortal>,
     payload: web::Json<PortalLoginRequest>,
     query: web::Query<HashMap<String, String>>,
     locale: Locale,
@@ -103,7 +103,7 @@ pub async fn login_portal_user(
 )]
 pub async fn get_customer_orders(
     portal_user: PortalAuthUser,
-    portal_service: web::Data<CustomerPortalService>,
+    portal_service: web::Data<dyn CustomerPortal>,
     pagination: web::Query<PortalPaginationParams>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
@@ -129,7 +129,7 @@ pub async fn get_customer_orders(
 )]
 pub async fn get_customer_invoices(
     portal_user: PortalAuthUser,
-    portal_service: web::Data<CustomerPortalService>,
+    portal_service: web::Data<dyn CustomerPortal>,
     pagination: web::Query<PortalPaginationParams>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
@@ -155,7 +155,7 @@ pub async fn get_customer_invoices(
 )]
 pub async fn get_customer_payments(
     portal_user: PortalAuthUser,
-    portal_service: web::Data<CustomerPortalService>,
+    portal_service: web::Data<dyn CustomerPortal>,
     pagination: web::Query<PortalPaginationParams>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
@@ -182,7 +182,7 @@ pub async fn get_customer_payments(
 pub async fn get_invoice_pdf(
     portal_user: PortalAuthUser,
     path: web::Path<i64>,
-    portal_service: web::Data<CustomerPortalService>,
+    portal_service: web::Data<dyn CustomerPortal>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
@@ -211,7 +211,7 @@ pub async fn get_invoice_pdf(
 )]
 pub async fn create_support_ticket(
     portal_user: PortalAuthUser,
-    portal_service: web::Data<CustomerPortalService>,
+    portal_service: web::Data<dyn CustomerPortal>,
     payload: web::Json<CreateSupportTicket>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
@@ -239,7 +239,7 @@ pub async fn create_support_ticket(
 )]
 pub async fn get_support_tickets(
     portal_user: PortalAuthUser,
-    portal_service: web::Data<CustomerPortalService>,
+    portal_service: web::Data<dyn CustomerPortal>,
     pagination: web::Query<PortalPaginationParams>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,

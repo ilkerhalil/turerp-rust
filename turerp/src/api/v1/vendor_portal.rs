@@ -10,7 +10,7 @@ use actix_web::{dev::Payload, web, HttpRequest, HttpResponse};
 use crate::domain::vendor_portal::model::{
     CreateDeliveryNote, CreateVendorUser, VendorLoginRequest, VendorPaginationParams,
 };
-use crate::domain::vendor_portal::service::VendorPortalService;
+use crate::domain::vendor_portal::service::VendorPortal;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
 use crate::utils::jwt::{JwtService, VendorAuthClaims};
@@ -51,7 +51,7 @@ impl actix_web::FromRequest for VendorAuthUser {
     responses((status = 201, description = "Vendor user registered", body = crate::domain::vendor_portal::model::VendorUser), (status = 400, description = "Validation error", body = crate::error::ErrorResponse)),
 )]
 pub async fn register_vendor_user(
-    vendor_service: web::Data<VendorPortalService>,
+    vendor_service: web::Data<dyn VendorPortal>,
     payload: web::Json<CreateVendorUser>,
     query: web::Query<HashMap<String, String>>,
     locale: Locale,
@@ -76,7 +76,7 @@ pub async fn register_vendor_user(
     responses((status = 200, description = "Login successful", body = crate::domain::vendor_portal::model::VendorAuthResponse), (status = 401, description = "Invalid credentials", body = crate::error::ErrorResponse)),
 )]
 pub async fn login_vendor_user(
-    vendor_service: web::Data<VendorPortalService>,
+    vendor_service: web::Data<dyn VendorPortal>,
     payload: web::Json<VendorLoginRequest>,
     query: web::Query<HashMap<String, String>>,
     locale: Locale,
@@ -103,7 +103,7 @@ pub async fn login_vendor_user(
 )]
 pub async fn get_vendor_orders(
     vendor_user: VendorAuthUser,
-    vendor_service: web::Data<VendorPortalService>,
+    vendor_service: web::Data<dyn VendorPortal>,
     pagination: web::Query<VendorPaginationParams>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
@@ -129,7 +129,7 @@ pub async fn get_vendor_orders(
 )]
 pub async fn get_vendor_invoices(
     vendor_user: VendorAuthUser,
-    vendor_service: web::Data<VendorPortalService>,
+    vendor_service: web::Data<dyn VendorPortal>,
     pagination: web::Query<VendorPaginationParams>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
@@ -155,7 +155,7 @@ pub async fn get_vendor_invoices(
 )]
 pub async fn get_vendor_payments(
     vendor_user: VendorAuthUser,
-    vendor_service: web::Data<VendorPortalService>,
+    vendor_service: web::Data<dyn VendorPortal>,
     pagination: web::Query<VendorPaginationParams>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
@@ -182,7 +182,7 @@ pub async fn get_vendor_payments(
 pub async fn get_vendor_invoice_pdf(
     vendor_user: VendorAuthUser,
     path: web::Path<i64>,
-    vendor_service: web::Data<VendorPortalService>,
+    vendor_service: web::Data<dyn VendorPortal>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
@@ -211,7 +211,7 @@ pub async fn get_vendor_invoice_pdf(
 )]
 pub async fn create_delivery_note(
     vendor_user: VendorAuthUser,
-    vendor_service: web::Data<VendorPortalService>,
+    vendor_service: web::Data<dyn VendorPortal>,
     payload: web::Json<CreateDeliveryNote>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
@@ -239,7 +239,7 @@ pub async fn create_delivery_note(
 )]
 pub async fn get_delivery_notes(
     vendor_user: VendorAuthUser,
-    vendor_service: web::Data<VendorPortalService>,
+    vendor_service: web::Data<dyn VendorPortal>,
     pagination: web::Query<VendorPaginationParams>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,

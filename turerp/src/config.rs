@@ -2,6 +2,7 @@
 
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use config::ConfigError;
+use secrecy::SecretString;
 use serde::Deserialize;
 use std::fmt;
 
@@ -382,7 +383,7 @@ pub struct EncryptionConfig {
 pub struct SecretsConfig {
     pub vault_enabled: bool,
     pub vault_addr: String,
-    pub vault_token: String,
+    pub vault_token: SecretString,
     pub vault_mount: String,
     pub fallback_to_env: bool,
 }
@@ -459,7 +460,11 @@ impl SecretsConfig {
             vault_enabled,
             vault_addr: std::env::var("TURERP_VAULT_ADDR")
                 .unwrap_or_else(|_| "http://127.0.0.1:8200".to_string()),
-            vault_token: std::env::var("TURERP_VAULT_TOKEN").unwrap_or_default(),
+            vault_token: SecretString::new(
+                std::env::var("TURERP_VAULT_TOKEN")
+                    .unwrap_or_default()
+                    .into(),
+            ),
             vault_mount: std::env::var("TURERP_VAULT_MOUNT")
                 .unwrap_or_else(|_| "secret".to_string()),
             fallback_to_env: std::env::var("TURERP_VAULT_FALLBACK_TO_ENV")

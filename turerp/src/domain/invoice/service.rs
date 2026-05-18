@@ -7,6 +7,7 @@ use crate::domain::invoice::repository::{
     BoxInvoiceLineRepository, BoxInvoiceRepository, BoxPaymentRepository,
 };
 use crate::error::ApiError;
+use tracing;
 
 /// Invoice service
 #[derive(Clone)]
@@ -30,6 +31,7 @@ impl InvoiceService {
     }
 
     // Invoice operations
+    #[tracing::instrument(skip(self, create), fields(tenant_id = create.tenant_id))]
     pub async fn create_invoice(&self, create: CreateInvoice) -> Result<InvoiceResponse, ApiError> {
         create
             .validate()
@@ -136,6 +138,7 @@ impl InvoiceService {
         self.invoice_repo.update_status(id, tenant_id, status).await
     }
 
+    #[tracing::instrument(skip(self), fields(tenant_id = tenant_id))]
     pub async fn delete_invoice(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         // Delete associated lines first
         self.line_repo.delete_by_invoice(id).await?;
@@ -230,6 +233,7 @@ impl InvoiceService {
     }
 
     /// Get all payments for a specific cari (customer)
+    #[tracing::instrument(skip(self), fields(tenant_id = tenant_id))]
     pub async fn get_payments_by_cari(
         &self,
         tenant_id: i64,
@@ -245,6 +249,7 @@ impl InvoiceService {
 
     // Utility methods
     /// Search invoices by number or notes (full-text)
+    #[tracing::instrument(skip(self), fields(tenant_id = tenant_id))]
     pub async fn search_invoices(
         &self,
         tenant_id: i64,
@@ -275,6 +280,7 @@ impl InvoiceService {
             .await
     }
 
+    #[tracing::instrument(skip(self), fields(tenant_id = tenant_id))]
     pub async fn get_outstanding_invoices(
         &self,
         tenant_id: i64,
@@ -283,17 +289,12 @@ impl InvoiceService {
     ) -> Result<Vec<Invoice>, ApiError> {
         let limit = per_page as i64;
         let offset = ((page.saturating_sub(1)) * per_page) as i64;
-        let invoices = self
-            .invoice_repo
-            .find_by_tenant(tenant_id, limit, offset)
-            .await?;
-
-        Ok(invoices
-            .into_iter()
-            .filter(|i| i.paid_amount < i.total_amount && i.status != InvoiceStatus::Cancelled)
-            .collect())
+        self.invoice_repo
+            .find_outstanding(tenant_id, limit, offset)
+            .await
     }
 
+    #[tracing::instrument(skip(self), fields(tenant_id = tenant_id))]
     pub async fn get_overdue_invoices(
         &self,
         tenant_id: i64,
@@ -302,21 +303,9 @@ impl InvoiceService {
     ) -> Result<Vec<Invoice>, ApiError> {
         let limit = per_page as i64;
         let offset = ((page.saturating_sub(1)) * per_page) as i64;
-        let invoices = self
-            .invoice_repo
-            .find_by_tenant(tenant_id, limit, offset)
-            .await?;
-        let now = chrono::Utc::now();
-
-        Ok(invoices
-            .into_iter()
-            .filter(|i| {
-                i.due_date < now
-                    && i.paid_amount < i.total_amount
-                    && i.status != InvoiceStatus::Cancelled
-                    && i.status != InvoiceStatus::Paid
-            })
-            .collect())
+        self.invoice_repo
+            .find_overdue(tenant_id, limit, offset)
+            .await
     }
 }
 

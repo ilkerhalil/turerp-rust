@@ -12,4 +12,4 @@ pub use repository::{
     BoxPortalUserRepository, BoxSupportTicketRepository, InMemoryPortalUserRepository,
     InMemorySupportTicketRepository, PortalUserRepository, SupportTicketRepository,
 };
-pub use service::CustomerPortalService;
+pub use service::{BoxCustomerPortal, CustomerPortal, CustomerPortalService};

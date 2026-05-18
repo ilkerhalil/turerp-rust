@@ -14,7 +14,7 @@ use turerp::common::{
     DomainEvent, EDefterAccountingSubscriber, EFaturaIntegrationSubscriber, EventBus,
     InMemoryEventBus, TaxPeriodSubscriber,
 };
-use turerp::domain::EFaturaStatus;
+use turerp::domain::efatura::model::EFaturaStatus;
 
 // ---- Domain Event tests ----
 
@@ -556,13 +556,15 @@ use turerp::domain::accounting::model::{
     AccountSubType, AccountType, CreateAccount, CreateJournalEntry, CreateJournalLine,
 };
 use turerp::domain::accounting::repository::{
+    BoxAccountRepository, BoxJournalEntryRepository, BoxJournalLineRepository,
+};
+use turerp::domain::accounting::repository::{
     InMemoryAccountRepository, InMemoryJournalEntryRepository, InMemoryJournalLineRepository,
 };
 use turerp::domain::accounting::service::AccountingService;
 use turerp::domain::chart_of_accounts::model::AccountGroup;
 use turerp::domain::chart_of_accounts::repository::InMemoryChartAccountRepository;
 use turerp::domain::chart_of_accounts::service::ChartOfAccountsService;
-use turerp::domain::{BoxAccountRepository, BoxJournalEntryRepository, BoxJournalLineRepository};
 
 #[tokio::test]
 async fn test_chart_of_accounts_to_accounting_flow() {

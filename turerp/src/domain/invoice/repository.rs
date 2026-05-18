@@ -95,6 +95,22 @@ pub trait InvoiceRepository: Send + Sync {
 
     /// Hard delete an invoice (permanent destruction — admin only)
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+
+    /// Find outstanding invoices (paid_amount < total_amount, not cancelled)
+    async fn find_outstanding(
+        &self,
+        tenant_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError>;
+
+    /// Find overdue invoices (paid_amount < total_amount, not cancelled, not paid, due_date < now)
+    async fn find_overdue(
+        &self,
+        tenant_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError>;
 }
 
 /// Repository trait for InvoiceLine operations.
@@ -576,6 +592,53 @@ impl InvoiceRepository for InMemoryInvoiceRepository {
             v.retain(|&x| x != id);
         });
         Ok(())
+    }
+
+    async fn find_outstanding(
+        &self,
+        tenant_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .invoices
+            .values()
+            .filter(|i| {
+                i.tenant_id == tenant_id
+                    && !i.is_deleted()
+                    && i.paid_amount < i.total_amount
+                    && i.status != InvoiceStatus::Cancelled
+            })
+            .skip(offset as usize)
+            .take(limit as usize)
+            .cloned()
+            .collect())
+    }
+
+    async fn find_overdue(
+        &self,
+        tenant_id: i64,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Invoice>, ApiError> {
+        let now = chrono::Utc::now();
+        let inner = self.inner.lock();
+        Ok(inner
+            .invoices
+            .values()
+            .filter(|i| {
+                i.tenant_id == tenant_id
+                    && !i.is_deleted()
+                    && i.paid_amount < i.total_amount
+                    && i.status != InvoiceStatus::Cancelled
+                    && i.status != InvoiceStatus::Paid
+                    && i.due_date < now
+            })
+            .skip(offset as usize)
+            .take(limit as usize)
+            .cloned()
+            .collect())
     }
 }
 
