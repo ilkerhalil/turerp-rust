@@ -68,7 +68,7 @@
 20. `main.rs` duplicate bootstrap — postgres/non-postgres 110+ satir tekrar
 21. Duplicate `MessageResponse` — hem `users.rs` hem `common/mod.rs`
 22. ~~Startup `.expect()` panics~~ — **Cozuldu (#95)** — `encryption_key_bytes()` ve `create_app_state()` `Result` donuyor
-23. 173x handler boilerplate — her handler'de `match service.await` tekrari
+23. ~~173x handler boilerplate — her handler'de `match service.await` tekrari~~ — **Cozuldu (#97)** — `json_resp!` macro ile 111+ handler refactor edildi, net -689 satir
 24. `#[allow(unused_imports)]` suppression — notifications.rs
 25. `#[allow(dead_code)]` — 15+ postgres repo'da
 
@@ -178,7 +178,7 @@
 11. [x] ~~`/metrics` ve `/swagger-ui` auth altina al~~ — **Yanlis bulgu**, zaten `AuthUser` + `JwtAuthMiddleware` ile korunuyor
 12. [x] Vault token `SecretString` — **#93** — `secrecy::SecretString` kullanılıyor
 13. [x] `main.rs` duplicate bootstrap coz — **#93** — `macro_rules! build_app_core` ile birleştirildi
-14. [ ] 173x handler boilerplate generic hale getir
+14. [x] ~~173x handler boilerplate generic hale getir~~ — **#97** — `json_resp!` macro ile 111+ handler refactor edildi
 15. [ ] Postgres feature flag runtime'a cevir
 16. [x] domain/mod.rs re-export'lari daralt — **#93** — 113 re-export kaldırıldı
 17. [x] Portal servisler trait-based hale getir — **#93** — `CustomerPortal` + `VendorPortal` trait'leri eklendi
