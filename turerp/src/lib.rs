@@ -13,6 +13,7 @@ pub mod domain;
 pub mod error;
 pub mod graphql;
 pub mod i18n;
+mod macros;
 pub mod middleware;
 pub mod utils;
 
@@ -31,6 +32,8 @@ pub use i18n::I18n;
 pub mod app {
     use actix_web::web;
     use std::sync::Arc;
+
+    use crate::ApiError;
 
     use crate::common::circuit_breaker::CircuitBreakerRegistry;
     use crate::common::retry::BoxRetryStats;
@@ -828,7 +831,7 @@ pub mod app {
             ));
 
             // Webhooks
-            let webhook_repo = Arc::new(InMemoryWebhookRepository::new(config.encryption_key_bytes())) as BoxWebhookRepository;
+            let webhook_repo = Arc::new(InMemoryWebhookRepository::new(config.encryption_key_bytes()?)) as BoxWebhookRepository;
             let delivery_repo =
                 Arc::new(InMemoryWebhookDeliveryRepository::new()) as BoxWebhookDeliveryRepository;
             let webhook_service = WebhookService::new(webhook_repo, delivery_repo);
@@ -928,7 +931,7 @@ pub mod app {
             let ldap_service = LdapSyncService::new(
                 ldap_repo,
                 Arc::new(user_service.clone()),
-                config.encryption_key_bytes(),
+                config.encryption_key_bytes()?,
             );
 
             // Circuit Breaker Registry
@@ -1033,7 +1036,7 @@ pub mod app {
 
     /// Create application state with in-memory storage (for development/testing)
     #[cfg(not(feature = "postgres"))]
-    pub fn create_app_state(config: &Config) -> AppState {
+    pub fn create_app_state(config: &Config) -> Result<AppState, ApiError> {
         let (
             auth,
             commerce,
@@ -1087,7 +1090,7 @@ pub mod app {
 
         let i18n = I18n::init();
 
-        AppState {
+        Ok(AppState {
             auth,
             commerce,
             hr,
@@ -1105,12 +1108,12 @@ pub mod app {
             observability_service: web::Data::new(observability_service),
             ldap_service: web::Data::new(ldap_service),
             i18n: web::Data::new(i18n),
-        }
+        })
     }
 
     /// Create application state with PostgreSQL storage (for production)
     #[cfg(feature = "postgres")]
-    pub async fn create_app_state(config: &Config) -> AppState {
+    pub async fn create_app_state(config: &Config) -> Result<AppState, ApiError> {
         // Create connection pool
         let pool = Arc::new(db::create_pool(&config.database).await.unwrap_or_else(|e| {
             tracing::error!("Failed to create database pool: {}", e);
@@ -1136,10 +1139,10 @@ pub mod app {
         };
 
         // Run migrations
-        if let Err(e) = db::run_migrations(&pool).await {
+        db::run_migrations(&pool).await.map_err(|e| {
             tracing::error!("Failed to run migrations: {}", e);
-            std::process::exit(1);
-        }
+            ApiError::Database(format!("Failed to run migrations: {}", e))
+        })?;
 
         // Auth & User - PostgreSQL
         let user_repo = PostgresUserRepository::new(pool.clone()).into_boxed();
@@ -1474,7 +1477,7 @@ pub mod app {
 
         // Webhooks - PostgreSQL
         let webhook_repo =
-            PostgresWebhookRepository::new(pool.clone(), config.encryption_key_bytes())
+            PostgresWebhookRepository::new(pool.clone(), config.encryption_key_bytes()?)
                 .into_boxed();
         let delivery_repo = PostgresWebhookDeliveryRepository::new(pool.clone()).into_boxed();
         let webhook_service = WebhookService::new(webhook_repo, delivery_repo);
@@ -1566,10 +1569,10 @@ pub mod app {
         let ldap_service = LdapSyncService::new(
             ldap_repo,
             web::Data::new(user_service.clone()),
-            config.encryption_key_bytes(),
+            config.encryption_key_bytes()?,
         );
 
-        AppState {
+        Ok(AppState {
             auth: AuthState {
                 auth_service: web::Data::new(auth_service),
                 user_service: web::Data::new(user_service),
@@ -1656,18 +1659,18 @@ pub mod app {
             observability_service: web::Data::new(observability_service),
             ldap_service: web::Data::new(ldap_service),
             i18n: web::Data::new(i18n),
-        }
+        })
     }
 
     /// Create application state with in-memory storage
     #[cfg(not(feature = "postgres"))]
-    pub fn create_app_state_in_memory(config: &Config) -> AppState {
+    pub fn create_app_state_in_memory(config: &Config) -> Result<AppState, ApiError> {
         create_app_state(config)
     }
 
     /// Create application state with in-memory storage (postgres mode - for testing)
     #[cfg(feature = "postgres")]
-    pub fn create_app_state_in_memory(config: &Config) -> AppState {
+    pub fn create_app_state_in_memory(config: &Config) -> Result<AppState, ApiError> {
         let (
             auth,
             commerce,
@@ -1741,7 +1744,7 @@ pub mod app {
 
         let i18n = I18n::init();
 
-        AppState {
+        Ok(AppState {
             auth,
             commerce,
             hr,
@@ -1759,7 +1762,7 @@ pub mod app {
             observability_service: web::Data::new(observability_service),
             ldap_service: web::Data::new(ldap_service),
             i18n: web::Data::new(i18n),
-        }
+        })
     }
 }
 
@@ -1795,7 +1798,7 @@ mod tests {
     #[tokio::test]
     async fn test_app_state_creation() {
         let config = Config::default();
-        let state = app::create_app_state_in_memory(&config);
+        let state = app::create_app_state_in_memory(&config).expect("app state creation failed");
         // Verify services are created
         assert!(std::sync::Arc::strong_count(&state.auth.auth_service) > 0);
         assert!(std::sync::Arc::strong_count(&state.auth.user_service) > 0);

@@ -63,7 +63,7 @@ fn configure_v1_routes(cfg: &mut web::ServiceConfig) {
 /// Create app state with default config for testing
 fn create_test_app_state() -> turerp::app::AppState {
     let config = Config::default();
-    create_app_state_in_memory(&config)
+    create_app_state_in_memory(&config).expect("app state creation failed")
 }
 
 /// Create JWT service for testing from config

@@ -703,14 +703,16 @@ impl Config {
     }
 
     /// Decode the base64-encoded encryption key into a 32-byte array.
-    /// Panics if the key is not valid base64 or not exactly 32 bytes.
-    pub fn encryption_key_bytes(&self) -> [u8; 32] {
-        let decoded = BASE64
-            .decode(&self.encryption_key)
-            .expect("encryption_key must be valid base64");
-        decoded
-            .try_into()
-            .expect("encryption_key must decode to exactly 32 bytes")
+    pub fn encryption_key_bytes(&self) -> Result<[u8; 32], crate::error::ApiError> {
+        let decoded = BASE64.decode(&self.encryption_key).map_err(|e| {
+            crate::error::ApiError::Internal(format!("encryption_key must be valid base64: {}", e))
+        })?;
+        decoded.try_into().map_err(|v: Vec<u8>| {
+            crate::error::ApiError::Internal(format!(
+                "encryption_key must decode to exactly 32 bytes, got {}",
+                v.len()
+            ))
+        })
     }
 }
 

@@ -19,7 +19,7 @@ use turerp::utils::jwt::JwtService;
 
 fn create_test_app_state() -> turerp::app::AppState {
     let config = Config::default();
-    create_app_state_in_memory(&config)
+    create_app_state_in_memory(&config).expect("app state creation failed")
 }
 
 fn build_test_app(

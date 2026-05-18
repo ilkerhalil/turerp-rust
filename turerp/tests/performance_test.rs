@@ -24,7 +24,7 @@ use common::*;
 #[actix_web::test]
 async fn test_sequential_health_latency() {
     let config = Config::default();
-    let app_state = create_app_state_in_memory(&config);
+    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let app = test::init_service(
         App::new()
@@ -71,7 +71,7 @@ async fn test_sequential_health_latency() {
 #[actix_web::test]
 async fn test_concurrent_health_burst() {
     let config = Config::default();
-    let app_state = create_app_state_in_memory(&config);
+    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let app = test::init_service(
         App::new()
@@ -128,7 +128,7 @@ async fn test_concurrent_health_burst() {
 #[actix_web::test]
 async fn test_post_load_json_parsing() {
     let config = Config::default();
-    let app_state = create_app_state_in_memory(&config);
+    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let app = test::init_service(
         App::new()
@@ -181,7 +181,7 @@ async fn test_post_load_json_parsing() {
 #[actix_web::test]
 async fn test_rate_limit_stats_accumulation() {
     let config = Config::default();
-    let app_state = create_app_state_in_memory(&config);
+    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let app = test::init_service(
         App::new()
@@ -238,7 +238,7 @@ fn create_perf_admin_token(jwt: &JwtService) -> String {
 #[actix_web::test]
 async fn test_job_scheduling_throughput() {
     let config = Config::default();
-    let app_state = create_app_state_in_memory(&config);
+    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let jwt = JwtService::new(
         config.jwt.secret.clone(),
@@ -291,7 +291,7 @@ async fn test_job_scheduling_throughput() {
 #[actix_web::test]
 async fn test_concurrent_job_scheduling_burst() {
     let config = Config::default();
-    let app_state = create_app_state_in_memory(&config);
+    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let jwt = JwtService::new(
         config.jwt.secret.clone(),
