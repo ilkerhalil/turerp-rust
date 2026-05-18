@@ -35,7 +35,7 @@ mod tests {
 
     fn test_context(tenant_id: i64) -> GraphQlContext {
         let config = Config::default();
-        let state = create_app_state_in_memory(&config);
+        let state = create_app_state_in_memory(&config).expect("app state creation failed");
         GraphQlContext::new(Arc::new(state), tenant_id)
     }
 

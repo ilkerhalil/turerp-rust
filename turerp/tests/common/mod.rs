@@ -71,7 +71,7 @@ pub fn configure_v1_routes(cfg: &mut web::ServiceConfig) {
 
 pub fn create_test_app_state() -> turerp::app::AppState {
     let config = Config::default();
-    create_app_state_in_memory(&config)
+    create_app_state_in_memory(&config).expect("app state creation failed")
 }
 
 pub fn create_test_jwt_service() -> JwtService {

@@ -323,13 +323,21 @@ async fn main() -> std::io::Result<()> {
     #[cfg(not(feature = "postgres"))]
     let app_state = {
         tracing::info!("Using in-memory storage (development mode)");
-        turerp::app::create_app_state_in_memory(&config)
+        turerp::app::create_app_state_in_memory(&config).unwrap_or_else(|e| {
+            tracing::error!("Failed to create app state: {}", e);
+            std::process::exit(1);
+        })
     };
 
     #[cfg(feature = "postgres")]
     let app_state = {
         tracing::info!("Using PostgreSQL storage (production mode)");
-        turerp::app::create_app_state(&config).await
+        turerp::app::create_app_state(&config)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to create app state: {}", e);
+                std::process::exit(1);
+            })
     };
 
     // Start background job executor
