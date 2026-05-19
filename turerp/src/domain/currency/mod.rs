@@ -4,7 +4,6 @@ pub mod model;
 pub mod repository;
 pub mod service;
 
-#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 
 pub use model::{
@@ -17,5 +16,4 @@ pub use repository::{
 };
 pub use service::CurrencyService;
 
-#[cfg(feature = "postgres")]
 pub use postgres_repository::{PostgresCurrencyRepository, PostgresExchangeRateRepository};

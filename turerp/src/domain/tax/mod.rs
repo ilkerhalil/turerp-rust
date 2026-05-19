@@ -5,7 +5,6 @@
 
 pub mod calculator;
 pub mod model;
-#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 pub mod repository;
 pub mod service;
@@ -18,7 +17,6 @@ pub use model::{
     CreateTaxPeriod, CreateTaxRate, TaxCalculationResult, TaxPeriod, TaxPeriodDetail,
     TaxPeriodResponse, TaxPeriodStatus, TaxRate, TaxRateResponse, TaxType, UpdateTaxRate,
 };
-#[cfg(feature = "postgres")]
 pub use postgres_repository::{PostgresTaxPeriodRepository, PostgresTaxRateRepository};
 pub use repository::{
     BoxTaxPeriodRepository, BoxTaxRateRepository, InMemoryTaxPeriodRepository,

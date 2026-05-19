@@ -4,7 +4,6 @@
 //! and querying for archived data across tenant-scoped tables.
 
 pub mod model;
-#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 pub mod repository;
 pub mod service;
@@ -14,7 +13,6 @@ pub use model::{
     ArchiveRecord, ArchiveRecordResponse, BulkRestoreFailed, BulkRestoreResponse, CreateArchiveJob,
     CreateArchivePolicy, RestoreRequest, UpdateArchivePolicy,
 };
-#[cfg(feature = "postgres")]
 pub use postgres_repository::{
     PostgresArchiveJobRepository, PostgresArchivePolicyRepository, PostgresArchiveRecordRepository,
 };

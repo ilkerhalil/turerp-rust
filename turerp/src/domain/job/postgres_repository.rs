@@ -7,7 +7,7 @@ use sqlx::{FromRow, PgPool};
 
 use crate::db::error::map_sqlx_error;
 use crate::domain::job::model::{
-    CreateJob, CreateJobSchedule, Job, JobCounts, JobPriority, JobSchedule, JobStatus, JobType,
+    CreateJob, CreateJobSchedule, Job, JobCounts, JobSchedule, JobStatus, JobType,
 };
 use crate::error::ApiError;
 
@@ -15,6 +15,7 @@ use crate::error::ApiError;
 #[derive(Debug, FromRow)]
 struct JobRow {
     id: i64,
+    #[allow(dead_code)]
     job_type: String,
     payload: sqlx::types::Json<serde_json::Value>,
     status: String,
@@ -62,6 +63,7 @@ impl TryFrom<JobRow> for Job {
 #[derive(Debug, FromRow)]
 struct JobScheduleRow {
     id: i64,
+    #[allow(dead_code)]
     job_type: String,
     payload: sqlx::types::Json<serde_json::Value>,
     cron_expression: String,

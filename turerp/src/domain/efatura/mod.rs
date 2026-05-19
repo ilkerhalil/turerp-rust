@@ -9,7 +9,6 @@ pub mod repository;
 pub mod service;
 pub mod ubl;
 
-#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 
 // Re-exports

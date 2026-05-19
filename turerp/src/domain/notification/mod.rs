@@ -1,7 +1,6 @@
 //! Notification domain module
 
 pub mod model;
-#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 pub mod provider;
 pub mod push_repository;
@@ -16,7 +15,6 @@ pub use model::{
     NotificationPreference, NotificationPreferenceResponse, NotificationPriority,
     NotificationRequest, NotificationResponse, NotificationStatus, UpdatePreference,
 };
-#[cfg(feature = "postgres")]
 pub use postgres_repository::{
     PostgresInAppNotificationRepository, PostgresNotificationPreferenceRepository,
     PostgresNotificationRepository,

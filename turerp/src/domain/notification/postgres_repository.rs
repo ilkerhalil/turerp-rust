@@ -1,35 +1,25 @@
 //! PostgreSQL notification repository implementations
 
-#[cfg(feature = "postgres")]
 use async_trait::async_trait;
-#[cfg(feature = "postgres")]
 use chrono::{DateTime, Utc};
-#[cfg(feature = "postgres")]
 use sqlx::{FromRow, PgPool};
-#[cfg(feature = "postgres")]
 use std::sync::Arc;
 
-#[cfg(feature = "postgres")]
 use crate::common::PaginatedResult;
-#[cfg(feature = "postgres")]
 use crate::db::error::map_sqlx_error;
-#[cfg(feature = "postgres")]
 use crate::domain::notification::model::{
     InAppNotification, Notification, NotificationChannel, NotificationPreference,
     NotificationStatus, UpdatePreference,
 };
-#[cfg(feature = "postgres")]
 use crate::domain::notification::repository::{
     InAppNotificationRepository, NotificationPreferenceRepository, NotificationRepository,
 };
-#[cfg(feature = "postgres")]
 use crate::error::ApiError;
 
 // ---------------------------------------------------------------------------
 // NotificationRow / Notification conversion
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "postgres")]
 #[derive(Debug, FromRow)]
 struct NotificationRow {
     id: i64,
@@ -55,7 +45,6 @@ struct NotificationRow {
     deleted_by: Option<i64>,
 }
 
-#[cfg(feature = "postgres")]
 impl From<NotificationRow> for Notification {
     fn from(row: NotificationRow) -> Self {
         Self {
@@ -84,7 +73,6 @@ impl From<NotificationRow> for Notification {
     }
 }
 
-#[cfg(feature = "postgres")]
 impl From<NotificationRowWithTotal> for Notification {
     fn from(row: NotificationRowWithTotal) -> Self {
         Self {
@@ -113,7 +101,6 @@ impl From<NotificationRowWithTotal> for Notification {
     }
 }
 
-#[cfg(feature = "postgres")]
 #[derive(Debug, FromRow)]
 struct NotificationRowWithTotal {
     id: i64,
@@ -144,12 +131,10 @@ struct NotificationRowWithTotal {
 // PostgresNotificationRepository
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "postgres")]
 pub struct PostgresNotificationRepository {
     pool: Arc<PgPool>,
 }
 
-#[cfg(feature = "postgres")]
 impl PostgresNotificationRepository {
     pub fn new(pool: Arc<PgPool>) -> Self {
         Self { pool }
@@ -160,7 +145,6 @@ impl PostgresNotificationRepository {
     }
 }
 
-#[cfg(feature = "postgres")]
 #[async_trait]
 impl NotificationRepository for PostgresNotificationRepository {
     async fn create(&self, notification: Notification) -> Result<Notification, ApiError> {
@@ -402,7 +386,6 @@ impl NotificationRepository for PostgresNotificationRepository {
 // InAppNotificationRow / InAppNotification conversion
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "postgres")]
 #[derive(Debug, FromRow)]
 struct InAppNotificationRow {
     id: i64,
@@ -420,7 +403,6 @@ struct InAppNotificationRow {
     deleted_by: Option<i64>,
 }
 
-#[cfg(feature = "postgres")]
 impl From<InAppNotificationRow> for InAppNotification {
     fn from(row: InAppNotificationRow) -> Self {
         Self {
@@ -445,12 +427,10 @@ impl From<InAppNotificationRow> for InAppNotification {
 // PostgresInAppNotificationRepository
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "postgres")]
 pub struct PostgresInAppNotificationRepository {
     pool: Arc<PgPool>,
 }
 
-#[cfg(feature = "postgres")]
 impl PostgresInAppNotificationRepository {
     pub fn new(pool: Arc<PgPool>) -> Self {
         Self { pool }
@@ -461,7 +441,6 @@ impl PostgresInAppNotificationRepository {
     }
 }
 
-#[cfg(feature = "postgres")]
 #[async_trait]
 impl InAppNotificationRepository for PostgresInAppNotificationRepository {
     async fn create(&self, notification: InAppNotification) -> Result<InAppNotification, ApiError> {
@@ -664,7 +643,6 @@ impl InAppNotificationRepository for PostgresInAppNotificationRepository {
 // NotificationPreferenceRow / NotificationPreference conversion
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "postgres")]
 #[derive(Debug, FromRow)]
 struct NotificationPreferenceRow {
     id: i64,
@@ -679,7 +657,6 @@ struct NotificationPreferenceRow {
     deleted_by: Option<i64>,
 }
 
-#[cfg(feature = "postgres")]
 impl From<NotificationPreferenceRow> for NotificationPreference {
     fn from(row: NotificationPreferenceRow) -> Self {
         Self {
@@ -701,12 +678,10 @@ impl From<NotificationPreferenceRow> for NotificationPreference {
 // PostgresNotificationPreferenceRepository
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "postgres")]
 pub struct PostgresNotificationPreferenceRepository {
     pool: Arc<PgPool>,
 }
 
-#[cfg(feature = "postgres")]
 impl PostgresNotificationPreferenceRepository {
     pub fn new(pool: Arc<PgPool>) -> Self {
         Self { pool }
@@ -717,7 +692,6 @@ impl PostgresNotificationPreferenceRepository {
     }
 }
 
-#[cfg(feature = "postgres")]
 #[async_trait]
 impl NotificationPreferenceRepository for PostgresNotificationPreferenceRepository {
     async fn get_preferences(

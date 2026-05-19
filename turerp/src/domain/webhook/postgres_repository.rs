@@ -1,32 +1,22 @@
 //! PostgreSQL webhook repository implementations
 
-#[cfg(feature = "postgres")]
 use async_trait::async_trait;
-#[cfg(feature = "postgres")]
 use chrono::{DateTime, Utc};
-#[cfg(feature = "postgres")]
 use sqlx::{FromRow, PgPool};
-#[cfg(feature = "postgres")]
 use std::sync::Arc;
 
-#[cfg(feature = "postgres")]
 use crate::common::pagination::PaginatedResult;
-#[cfg(feature = "postgres")]
 use crate::db::error::map_sqlx_error;
-#[cfg(feature = "postgres")]
 use crate::domain::webhook::model::{
     CreateWebhook, DeliveryStatus, UpdateWebhook, Webhook, WebhookDelivery, WebhookStatus,
 };
-#[cfg(feature = "postgres")]
 use crate::domain::webhook::repository::{WebhookDeliveryRepository, WebhookRepository};
-#[cfg(feature = "postgres")]
 use crate::error::ApiError;
 
 // ---------------------------------------------------------------------------
 // WebhookRow / Webhook conversion
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "postgres")]
 #[derive(Debug, FromRow)]
 struct WebhookRow {
     id: i64,
@@ -46,7 +36,6 @@ struct WebhookRow {
 // WebhookDeliveryRow / WebhookDelivery conversion
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "postgres")]
 #[derive(Debug, FromRow)]
 struct WebhookDeliveryRow {
     id: i64,
@@ -64,7 +53,6 @@ struct WebhookDeliveryRow {
     delivered_at: Option<DateTime<Utc>>,
 }
 
-#[cfg(feature = "postgres")]
 impl From<WebhookDeliveryRow> for WebhookDelivery {
     fn from(row: WebhookDeliveryRow) -> Self {
         let status = row.status.parse().unwrap_or_else(|e| {
@@ -93,7 +81,6 @@ impl From<WebhookDeliveryRow> for WebhookDelivery {
     }
 }
 
-#[cfg(feature = "postgres")]
 #[derive(Debug, FromRow)]
 struct WebhookDeliveryRowWithTotal {
     id: i64,
@@ -116,13 +103,11 @@ struct WebhookDeliveryRowWithTotal {
 // PostgresWebhookRepository
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "postgres")]
 pub struct PostgresWebhookRepository {
     pool: Arc<PgPool>,
     encryption_key: [u8; 32],
 }
 
-#[cfg(feature = "postgres")]
 impl PostgresWebhookRepository {
     pub fn new(pool: Arc<PgPool>, encryption_key: [u8; 32]) -> Self {
         Self {
@@ -194,7 +179,6 @@ impl PostgresWebhookRepository {
     }
 }
 
-#[cfg(feature = "postgres")]
 #[async_trait]
 impl WebhookRepository for PostgresWebhookRepository {
     async fn create(&self, tenant_id: i64, webhook: CreateWebhook) -> Result<Webhook, ApiError> {
@@ -407,12 +391,10 @@ impl WebhookRepository for PostgresWebhookRepository {
 // PostgresWebhookDeliveryRepository
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "postgres")]
 pub struct PostgresWebhookDeliveryRepository {
     pool: Arc<PgPool>,
 }
 
-#[cfg(feature = "postgres")]
 impl PostgresWebhookDeliveryRepository {
     pub fn new(pool: Arc<PgPool>) -> Self {
         Self { pool }
@@ -423,7 +405,6 @@ impl PostgresWebhookDeliveryRepository {
     }
 }
 
-#[cfg(feature = "postgres")]
 #[async_trait]
 impl WebhookDeliveryRepository for PostgresWebhookDeliveryRepository {
     async fn create(&self, delivery: WebhookDelivery) -> Result<WebhookDelivery, ApiError> {
@@ -615,7 +596,6 @@ impl WebhookDeliveryRepository for PostgresWebhookDeliveryRepository {
     }
 }
 
-#[cfg(feature = "postgres")]
 fn generate_secret() -> String {
     use rand::Rng;
     let mut rng = rand::thread_rng();

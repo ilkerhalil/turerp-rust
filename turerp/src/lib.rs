@@ -7,7 +7,6 @@ pub mod api;
 pub mod cache;
 pub mod common;
 pub mod config;
-#[cfg(feature = "postgres")]
 pub mod db;
 pub mod domain;
 pub mod error;
@@ -239,125 +238,85 @@ pub mod app {
     };
     use crate::domain::workflow::repository::InMemoryWorkflowRepository;
 
-    #[cfg(feature = "postgres")]
     use crate::common::PostgresSearchService;
-    #[cfg(feature = "postgres")]
     use crate::db;
-    #[cfg(feature = "postgres")]
     use crate::domain::accounting::postgres_repository::{
         PostgresAccountRepository, PostgresJournalEntryRepository, PostgresJournalLineRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::api_key::PostgresApiKeyRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::archive::postgres_repository::{
         PostgresArchiveJobRepository, PostgresArchivePolicyRepository,
         PostgresArchiveRecordRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::assets::postgres_repository::{
         PostgresAssetCategoryRepository, PostgresAssetsRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::audit::postgres_repository::PostgresAuditLogRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::bank::postgres_repository::PostgresBankRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::cari::postgres_repository::PostgresCariRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::chart_of_accounts::postgres_repository::PostgresChartAccountRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::company::postgres_repository::PostgresCompanyRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::cost_center::postgres_repository::PostgresCostCenterRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::crm::postgres_repository::{
         PostgresCampaignRepository, PostgresLeadRepository, PostgresOpportunityRepository,
         PostgresTicketRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::currency::postgres_repository::{
         PostgresCurrencyRepository, PostgresExchangeRateRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::custom_field::postgres_repository::PostgresCustomFieldRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::dashboard::postgres_repository::PostgresDashboardRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::document::postgres_repository::PostgresDocumentRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::edefter::postgres_repository::PostgresEDefterRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::efatura::postgres_repository::PostgresEFaturaRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::feature::postgres_repository::PostgresFeatureFlagRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::forecasting::postgres_repository::PostgresForecastingRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::hr::postgres_repository::{
         PostgresAttendanceRepository, PostgresEmployeeRepository, PostgresLeaveRequestRepository,
         PostgresLeaveTypeRepository, PostgresPayrollRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::invoice::postgres_repository::{
         PostgresInvoiceLineRepository, PostgresInvoiceRepository, PostgresPaymentRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::manufacturing::postgres_repository::{
         PostgresBillOfMaterialsRepository, PostgresRoutingRepository, PostgresWorkOrderRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::mfa::postgres_repository::PostgresMfaRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::observability::postgres_repository::PostgresObservabilityRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::product::postgres_repository::{
         PostgresCategoryRepository, PostgresProductRepository, PostgresProductVariantRepository,
         PostgresUnitRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::project::postgres_repository::{
         PostgresProjectCostRepository, PostgresProjectRepository, PostgresWbsItemRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::purchase::postgres_repository::{
         PostgresGoodsReceiptLineRepository, PostgresGoodsReceiptRepository,
         PostgresPurchaseOrderLineRepository, PostgresPurchaseOrderRepository,
         PostgresPurchaseRequestLineRepository, PostgresPurchaseRequestRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::sales::postgres_repository::{
         PostgresQuotationLineRepository, PostgresQuotationRepository,
         PostgresSalesOrderLineRepository, PostgresSalesOrderRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::settings::postgres_repository::PostgresSettingsRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::shift::postgres_repository::{
         PostgresAttendanceRecordRepository, PostgresShiftAssignmentRepository,
         PostgresShiftRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::stock::postgres_repository::{
         PostgresStockLevelRepository, PostgresStockMovementRepository, PostgresWarehouseRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::subscription::postgres_repository::PostgresSubscriptionRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::tax::postgres_repository::{
         PostgresTaxPeriodRepository, PostgresTaxRateRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::tenant::postgres_repository::PostgresTenantRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::user::postgres_repository::PostgresUserRepository;
-    #[cfg(feature = "postgres")]
     use crate::domain::webhook::postgres_repository::{
         PostgresWebhookDeliveryRepository, PostgresWebhookRepository,
     };
-    #[cfg(feature = "postgres")]
     use crate::domain::workflow::postgres_repository::PostgresWorkflowRepository;
-    #[cfg(feature = "postgres")]
     use sqlx::PgPool;
 
     /// Auth domain services
@@ -413,8 +372,7 @@ pub mod app {
         pub cache_service: web::Data<dyn crate::cache::CacheService>,
         pub search_service: web::Data<dyn SearchService>,
         pub rate_limit_stats: web::Data<crate::middleware::rate_limit::RateLimitStatsStore>,
-        #[cfg(feature = "postgres")]
-        pub db_pool: web::Data<Arc<PgPool>>,
+        pub db_pool: Option<web::Data<Arc<PgPool>>>,
         pub cdc_listener: Option<Arc<crate::common::cdc::CdcListener>>,
         pub import_service: web::Data<dyn crate::common::import::ImportService>,
         pub circuit_breaker_registry: web::Data<CircuitBreakerRegistry>,
@@ -980,11 +938,10 @@ pub mod app {
                     cache_service: web::Data::from(cache_service),
                     search_service: web::Data::from(search_service),
                     rate_limit_stats: web::Data::new(rate_limit_stats),
-                    #[cfg(feature = "postgres")]
-                    db_pool: web::Data::new(Arc::new(sqlx::PgPool::connect_lazy("postgres://localhost/dummy").unwrap_or_else(|e| {
+                    db_pool: Some(web::Data::new(Arc::new(sqlx::PgPool::connect_lazy("postgres://localhost/dummy").unwrap_or_else(|e| {
                         tracing::error!("Failed to create lazy pool: {}", e);
                         std::process::exit(1);
-                    }))),
+                    })))),
                     cdc_listener: None,
                     import_service: web::Data::from(import_service),
                     circuit_breaker_registry: web::Data::new(circuit_breaker_registry),
@@ -1034,85 +991,7 @@ pub mod app {
         }};
     }
 
-    /// Create application state with in-memory storage (for development/testing)
-    #[cfg(not(feature = "postgres"))]
-    pub fn create_app_state(config: &Config) -> Result<AppState, ApiError> {
-        let (
-            auth,
-            commerce,
-            hr,
-            admin,
-            infra,
-            finance,
-            project,
-            document,
-            integration,
-            analytics,
-            chart_of_accounts_service,
-            custom_field_service,
-            assets_service,
-            feature_service,
-            observability_service,
-            ldap_service,
-        ) = create_in_memory_services!(config);
-
-        // Register business metrics subscribers on event bus
-        let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
-        futures::executor::block_on(async {
-            let _ = infra
-                .event_bus
-                .subscribe(Arc::new(
-                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
-                        Arc::new(crate::common::AccountingEntrySubscriber),
-                        metrics_recorder.clone(),
-                    ),
-                ))
-                .await;
-            let _ = infra
-                .event_bus
-                .subscribe(Arc::new(
-                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
-                        Arc::new(crate::common::StockDecrementSubscriber),
-                        metrics_recorder.clone(),
-                    ),
-                ))
-                .await;
-            let _ = infra
-                .event_bus
-                .subscribe(Arc::new(
-                    crate::common::business_metrics::InstrumentedEventSubscriber::new(
-                        Arc::new(crate::common::TaxPeriodSubscriber),
-                        metrics_recorder.clone(),
-                    ),
-                ))
-                .await;
-        });
-
-        let i18n = I18n::init();
-
-        Ok(AppState {
-            auth,
-            commerce,
-            hr,
-            admin,
-            infra,
-            finance,
-            project,
-            document,
-            integration,
-            analytics,
-            chart_of_accounts_service: web::Data::new(chart_of_accounts_service),
-            custom_field_service: web::Data::new(custom_field_service),
-            assets_service: web::Data::new(assets_service),
-            feature_service: web::Data::new(feature_service),
-            observability_service: web::Data::new(observability_service),
-            ldap_service: web::Data::new(ldap_service),
-            i18n: web::Data::new(i18n),
-        })
-    }
-
     /// Create application state with PostgreSQL storage (for production)
-    #[cfg(feature = "postgres")]
     pub async fn create_app_state(config: &Config) -> Result<AppState, ApiError> {
         // Create connection pool
         let pool = Arc::new(db::create_pool(&config.database).await.unwrap_or_else(|e| {
@@ -1266,6 +1145,23 @@ pub mod app {
             config.jwt.access_token_expiration / 3600,
         ));
 
+        // Purchase - PostgreSQL
+        let order_repo = PostgresPurchaseOrderRepository::new(pool.clone()).into_boxed();
+        let order_line_repo = PostgresPurchaseOrderLineRepository::new(pool.clone()).into_boxed();
+        let receipt_repo = PostgresGoodsReceiptRepository::new(pool.clone()).into_boxed();
+        let receipt_line_repo = PostgresGoodsReceiptLineRepository::new(pool.clone()).into_boxed();
+        let request_repo = PostgresPurchaseRequestRepository::new(pool.clone()).into_boxed();
+        let request_line_repo =
+            PostgresPurchaseRequestLineRepository::new(pool.clone()).into_boxed();
+        let purchase_service = PurchaseService::with_requests(
+            order_repo,
+            order_line_repo,
+            receipt_repo,
+            receipt_line_repo,
+            request_repo,
+            request_line_repo,
+        );
+
         // Vendor Portal - PostgreSQL (using in-memory repos until PostgreSQL repos are implemented)
         let vendor_user_repo = Arc::new(InMemoryVendorUserRepository::new())
             as crate::domain::vendor_portal::BoxVendorUserRepository;
@@ -1333,23 +1229,6 @@ pub mod app {
         // Barcode - using in-memory repo until PostgreSQL repo is implemented
         let barcode_repo = Arc::new(InMemoryBarcodeRepository::new()) as BoxBarcodeRepository;
         let barcode_service = BarcodeService::new(barcode_repo);
-
-        // Purchase - PostgreSQL
-        let order_repo = PostgresPurchaseOrderRepository::new(pool.clone()).into_boxed();
-        let order_line_repo = PostgresPurchaseOrderLineRepository::new(pool.clone()).into_boxed();
-        let receipt_repo = PostgresGoodsReceiptRepository::new(pool.clone()).into_boxed();
-        let receipt_line_repo = PostgresGoodsReceiptLineRepository::new(pool.clone()).into_boxed();
-        let request_repo = PostgresPurchaseRequestRepository::new(pool.clone()).into_boxed();
-        let request_line_repo =
-            PostgresPurchaseRequestLineRepository::new(pool.clone()).into_boxed();
-        let purchase_service = PurchaseService::with_requests(
-            order_repo,
-            order_line_repo,
-            receipt_repo,
-            receipt_line_repo,
-            request_repo,
-            request_line_repo,
-        );
 
         // Audit - PostgreSQL
         let audit_repo = PostgresAuditLogRepository::new(pool.clone()).into_boxed();
@@ -1474,6 +1353,13 @@ pub mod app {
         // e-Defter - PostgreSQL
         let edefter_repo = PostgresEDefterRepository::new(pool.clone()).into_boxed();
         let edefter_service = crate::domain::edefter::EDefterService::new(edefter_repo);
+        let blockchain_ledger_repo =
+            Arc::new(crate::domain::edefter::blockchain::InMemoryBlockchainLedgerRepository::new())
+                as crate::domain::edefter::blockchain::BoxBlockchainLedgerRepository;
+        let blockchain_ledger_service =
+            crate::domain::edefter::blockchain::service::BlockchainLedgerService::new(
+                blockchain_ledger_repo,
+            );
 
         // Webhooks - PostgreSQL
         let webhook_repo =
@@ -1520,12 +1406,11 @@ pub mod app {
             .await;
 
         // Search
-        #[cfg(feature = "postgres")]
-        let search_service: Arc<dyn SearchService> =
-            Arc::new(PostgresSearchService::new(pool.clone())) as Arc<dyn SearchService>;
-        #[cfg(not(feature = "postgres"))]
-        let search_service: Arc<dyn SearchService> =
-            Arc::new(InMemorySearchService::new()) as Arc<dyn SearchService>;
+        let search_service: Arc<dyn SearchService> = if config.database.url.is_empty() {
+            Arc::new(InMemorySearchService::new()) as Arc<dyn SearchService>
+        } else {
+            Arc::new(PostgresSearchService::new(pool.clone())) as Arc<dyn SearchService>
+        };
 
         let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
 
@@ -1568,7 +1453,7 @@ pub mod app {
         let ldap_repo = Arc::new(InMemoryLdapConfigRepository::new()) as BoxLdapConfigRepository;
         let ldap_service = LdapSyncService::new(
             ldap_repo,
-            web::Data::new(user_service.clone()),
+            Arc::new(user_service.clone()),
             config.encryption_key_bytes()?,
         );
 
@@ -1612,7 +1497,7 @@ pub mod app {
                 cache_service: web::Data::from(cache_service),
                 search_service: web::Data::from(search_service),
                 rate_limit_stats: web::Data::new(rate_limit_stats),
-                db_pool: web::Data::new(pool),
+                db_pool: Some(web::Data::new(pool)),
                 cdc_listener: None,
                 import_service: web::Data::from(import_service),
                 circuit_breaker_registry: web::Data::new(circuit_breaker_registry),
@@ -1662,14 +1547,7 @@ pub mod app {
         })
     }
 
-    /// Create application state with in-memory storage
-    #[cfg(not(feature = "postgres"))]
-    pub fn create_app_state_in_memory(config: &Config) -> Result<AppState, ApiError> {
-        create_app_state(config)
-    }
-
     /// Create application state with in-memory storage (postgres mode - for testing)
-    #[cfg(feature = "postgres")]
     pub fn create_app_state_in_memory(config: &Config) -> Result<AppState, ApiError> {
         let (
             auth,
@@ -1698,7 +1576,7 @@ pub mod app {
                 tracing::error!("Failed to create lazy pool: {}", e);
                 std::process::exit(1);
             });
-        infra.db_pool = web::Data::new(Arc::new(pool));
+        infra.db_pool = Some(web::Data::new(Arc::new(pool)));
 
         // Register webhook subscriber on event bus
         let webhook_service_arc = Arc::new(integration.webhook_service.get_ref().clone());
@@ -1763,6 +1641,17 @@ pub mod app {
             ldap_service: web::Data::new(ldap_service),
             i18n: web::Data::new(i18n),
         })
+    }
+
+    /// Create application state based on runtime configuration
+    pub async fn create_app_state_unified(config: &Config) -> Result<AppState, ApiError> {
+        if config.database.url.is_empty() {
+            tracing::info!("Using in-memory storage (no database URL configured)");
+            Ok(create_app_state_in_memory(config)?)
+        } else {
+            tracing::info!("Using PostgreSQL storage");
+            create_app_state(config).await
+        }
     }
 }
 

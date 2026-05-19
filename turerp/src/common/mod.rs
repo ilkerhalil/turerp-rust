@@ -8,7 +8,6 @@ pub mod cache;
 pub mod cdc;
 pub mod circuit_breaker;
 pub mod events;
-#[cfg(feature = "postgres")]
 pub mod events_postgres;
 pub mod file_storage;
 pub mod gov;
@@ -46,7 +45,6 @@ pub use events::{
     EDefterAccountingSubscriber, EFaturaIntegrationSubscriber, EventBus, EventStatus,
     InMemoryEventBus, OutboxEvent, StockDecrementSubscriber, TaxPeriodSubscriber,
 };
-#[cfg(feature = "postgres")]
 pub use events_postgres::{publish_to_redis_streams, PostgresEventBus};
 pub use file_storage::{
     BoxFileStorage, FileMetadata, FileUpload, LocalFileStorage, PresignedUrl, StorageBackend,
@@ -88,7 +86,6 @@ pub use search::{
     BoxSearchService, InMemorySearchService, SearchDocument, SearchQuery, SearchResult,
     SearchService,
 };
-#[cfg(feature = "postgres")]
 pub use search_postgres::PostgresSearchService;
 pub use secrets::{
     BoxSecretsService, CachedSecretsService, ChainedSecretsService, EnvFallbackSecretsService,

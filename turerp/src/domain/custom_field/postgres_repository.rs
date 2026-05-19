@@ -1,28 +1,20 @@
 //! PostgreSQL implementation of custom field repository
 
-#[cfg(feature = "postgres")]
 use async_trait::async_trait;
-#[cfg(feature = "postgres")]
 use sqlx::PgPool;
-#[cfg(feature = "postgres")]
 use std::sync::Arc;
 
-#[cfg(feature = "postgres")]
 use crate::domain::custom_field::model::{
     CustomFieldDefinition, CustomFieldModule, CustomFieldType,
 };
-#[cfg(feature = "postgres")]
 use crate::domain::custom_field::repository::CustomFieldRepository;
-#[cfg(feature = "postgres")]
 use crate::error::ApiError;
 
 /// PostgreSQL custom field repository
-#[cfg(feature = "postgres")]
 pub struct PostgresCustomFieldRepository {
     pool: Arc<PgPool>,
 }
 
-#[cfg(feature = "postgres")]
 impl PostgresCustomFieldRepository {
     pub fn new(pool: Arc<PgPool>) -> Self {
         Self { pool }
@@ -33,7 +25,6 @@ impl PostgresCustomFieldRepository {
     }
 }
 
-#[cfg(feature = "postgres")]
 #[async_trait]
 impl CustomFieldRepository for PostgresCustomFieldRepository {
     async fn create(&self, def: CustomFieldDefinition) -> Result<CustomFieldDefinition, ApiError> {
@@ -272,7 +263,6 @@ impl CustomFieldRepository for PostgresCustomFieldRepository {
 }
 
 /// Helper struct for sqlx mapping
-#[cfg(feature = "postgres")]
 #[derive(sqlx::FromRow)]
 struct CustomFieldDefinitionRow {
     id: i64,
@@ -291,7 +281,6 @@ struct CustomFieldDefinitionRow {
     deleted_by: Option<i64>,
 }
 
-#[cfg(feature = "postgres")]
 impl CustomFieldDefinitionRow {
     fn into_definition(self) -> CustomFieldDefinition {
         CustomFieldDefinition {

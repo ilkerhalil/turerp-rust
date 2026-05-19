@@ -160,10 +160,6 @@ utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 name = "gen_openapi"
 path = "src/bin/gen_openapi.rs"
 
-[features]
-default = []
-postgres = ["sqlx/runtime-tokio-native-tls"]
-
 [profile.release]
 lto = true
 codegen-units = 1

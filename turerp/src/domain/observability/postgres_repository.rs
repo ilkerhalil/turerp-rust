@@ -98,6 +98,11 @@ fn parse_sli_metric_type(s: &str) -> SliMetricType {
         "availability" => SliMetricType::Availability,
         "latency" => SliMetricType::Latency,
         "error_rate" => SliMetricType::ErrorRate,
+        "throughput" => SliMetricType::Throughput,
+        "invoice_creation_latency" => SliMetricType::InvoiceCreationLatency,
+        "payment_success_rate" => SliMetricType::PaymentSuccessRate,
+        "stock_update_latency" => SliMetricType::StockUpdateLatency,
+        "sales_order_throughput" => SliMetricType::SalesOrderThroughput,
         _ => SliMetricType::Throughput,
     }
 }
@@ -108,6 +113,10 @@ fn sli_metric_type_str(metric_type: SliMetricType) -> &'static str {
         SliMetricType::Latency => "latency",
         SliMetricType::ErrorRate => "error_rate",
         SliMetricType::Throughput => "throughput",
+        SliMetricType::InvoiceCreationLatency => "invoice_creation_latency",
+        SliMetricType::PaymentSuccessRate => "payment_success_rate",
+        SliMetricType::StockUpdateLatency => "stock_update_latency",
+        SliMetricType::SalesOrderThroughput => "sales_order_throughput",
     }
 }
 

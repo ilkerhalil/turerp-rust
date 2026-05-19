@@ -49,86 +49,78 @@ async fn health_live() -> actix_web::Result<actix_web::HttpResponse> {
 }
 
 /// Readiness probe - checks database and cache connectivity
-#[cfg(not(feature = "postgres"))]
 async fn health_ready(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
     let cache = app_state.infra.cache_service.get_ref();
+    let cache_start = std::time::Instant::now();
     let cache_result = cache.health_check().await;
+    let cache_latency_ms = cache_start.elapsed().as_millis();
+    let cache_healthy = cache_result.is_ok();
 
-    match cache_result {
-        Ok(_) => Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
-            "status": "ok",
-            "service": "turerp-erp",
-            "version": env!("CARGO_PKG_VERSION"),
-            "storage": "in-memory",
-            "cache": "healthy"
-        }))),
-        Err(e) => {
-            tracing::error!("Cache health check failed: {}", e);
+    if let Err(ref e) = cache_result {
+        tracing::error!("Cache health check failed: {:?}", e);
+    }
+
+    // Check database if pool is configured
+    if let Some(ref pool) = app_state.infra.db_pool {
+        let db_start = std::time::Instant::now();
+        let db_result = sqlx::query("SELECT 1").execute(&**pool.get_ref()).await;
+        let db_latency_ms = db_start.elapsed().as_millis();
+        let db_healthy = db_result.is_ok();
+
+        if !db_healthy {
+            tracing::error!("Database health check failed: {:?}", db_result.unwrap_err());
+        }
+
+        if db_healthy && cache_healthy {
+            Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
+                "status": "ok",
+                "service": "turerp-erp",
+                "version": env!("CARGO_PKG_VERSION"),
+                "storage": "postgresql",
+                "database": "healthy",
+                "database_latency_ms": db_latency_ms,
+                "cache": "healthy",
+                "cache_latency_ms": cache_latency_ms
+            })))
+        } else {
             Ok(
                 actix_web::HttpResponse::ServiceUnavailable().json(serde_json::json!({
                     "status": "unhealthy",
                     "service": "turerp-erp",
                     "version": env!("CARGO_PKG_VERSION"),
-                    "storage": "in-memory",
-                    "cache": "unhealthy"
+                    "storage": "postgresql",
+                    "database": if db_healthy { "healthy" } else { "unhealthy" },
+                    "database_latency_ms": db_latency_ms,
+                    "cache": if cache_healthy { "healthy" } else { "unhealthy" },
+                    "cache_latency_ms": cache_latency_ms
                 })),
             )
         }
-    }
-}
-
-/// Readiness probe (PostgreSQL mode) - checks database and cache connectivity
-#[cfg(feature = "postgres")]
-async fn health_ready(
-    app_state: web::Data<AppState>,
-) -> actix_web::Result<actix_web::HttpResponse> {
-    let pool: &sqlx::PgPool = app_state.infra.db_pool.as_ref();
-
-    let db_start = std::time::Instant::now();
-    let db_result = sqlx::query("SELECT 1").execute(pool).await;
-    let db_latency_ms = db_start.elapsed().as_millis();
-
-    let cache = app_state.infra.cache_service.get_ref();
-    let cache_start = std::time::Instant::now();
-    let cache_result = cache.health_check().await;
-    let cache_latency_ms = cache_start.elapsed().as_millis();
-
-    let db_healthy = db_result.is_ok();
-    let cache_healthy = cache_result.is_ok();
-
-    if !db_healthy {
-        tracing::error!("Database health check failed: {:?}", db_result.unwrap_err());
-    }
-    if !cache_healthy {
-        tracing::error!("Cache health check failed: {:?}", cache_result.unwrap_err());
-    }
-
-    if db_healthy && cache_healthy {
-        Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
-            "status": "ok",
-            "service": "turerp-erp",
-            "version": env!("CARGO_PKG_VERSION"),
-            "storage": "postgresql",
-            "database": "healthy",
-            "database_latency_ms": db_latency_ms,
-            "cache": "healthy",
-            "cache_latency_ms": cache_latency_ms
-        })))
     } else {
-        Ok(
-            actix_web::HttpResponse::ServiceUnavailable().json(serde_json::json!({
-                "status": "unhealthy",
+        // In-memory mode
+        match cache_result {
+            Ok(_) => Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
+                "status": "ok",
                 "service": "turerp-erp",
                 "version": env!("CARGO_PKG_VERSION"),
-                "storage": "postgresql",
-                "database": if db_healthy { "healthy" } else { "unhealthy" },
-                "database_latency_ms": db_latency_ms,
-                "cache": if cache_healthy { "healthy" } else { "unhealthy" },
-                "cache_latency_ms": cache_latency_ms
-            })),
-        )
+                "storage": "in-memory",
+                "cache": "healthy"
+            }))),
+            Err(e) => {
+                tracing::error!("Cache health check failed: {}", e);
+                Ok(
+                    actix_web::HttpResponse::ServiceUnavailable().json(serde_json::json!({
+                        "status": "unhealthy",
+                        "service": "turerp-erp",
+                        "version": env!("CARGO_PKG_VERSION"),
+                        "storage": "in-memory",
+                        "cache": "unhealthy"
+                    })),
+                )
+            }
+        }
     }
 }
 
@@ -320,25 +312,12 @@ async fn main() -> std::io::Result<()> {
     tracing::info!("Environment: {}", config.environment);
 
     // Create application state with config
-    #[cfg(not(feature = "postgres"))]
-    let app_state = {
-        tracing::info!("Using in-memory storage (development mode)");
-        turerp::app::create_app_state_in_memory(&config).unwrap_or_else(|e| {
+    let app_state = turerp::app::create_app_state_unified(&config)
+        .await
+        .unwrap_or_else(|e| {
             tracing::error!("Failed to create app state: {}", e);
             std::process::exit(1);
-        })
-    };
-
-    #[cfg(feature = "postgres")]
-    let app_state = {
-        tracing::info!("Using PostgreSQL storage (production mode)");
-        turerp::app::create_app_state(&config)
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("Failed to create app state: {}", e);
-                std::process::exit(1);
-            })
-    };
+        });
 
     // Start background job executor
     let job_executor = turerp::common::job_executor::JobExecutor::new(
@@ -482,11 +461,10 @@ async fn main() -> std::io::Result<()> {
     }
 
     HttpServer::new(move || {
-        #[cfg(feature = "postgres")]
-        let app = build_app_core!(App::new()).app_data(app_state.infra.db_pool.clone());
-
-        #[cfg(not(feature = "postgres"))]
-        let app = build_app_core!(App::new());
+        let mut app = build_app_core!(App::new());
+        if let Some(ref pool) = app_state.infra.db_pool {
+            app = app.app_data(pool.clone());
+        }
 
         app // Health check
             .route("/health", web::get().to(health_check))

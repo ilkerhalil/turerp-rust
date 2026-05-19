@@ -15490,6 +15490,9 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "Not ready"
           }
         }
       }
