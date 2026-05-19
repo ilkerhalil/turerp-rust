@@ -10,7 +10,6 @@ pub mod model;
 pub mod repository;
 pub mod service;
 
-#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 
 // Re-exports

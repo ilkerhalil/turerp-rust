@@ -1,7 +1,6 @@
 //! Subscription / SaaS Billing module
 
 pub mod model;
-#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 pub mod repository;
 pub mod service;
@@ -15,7 +14,6 @@ pub use model::{
     SubscriptionPlanResponse, SubscriptionResponse, SubscriptionStatus, TrialConversionResult,
     UpdatePlan, UpdateSubscription, UsageRecord, UsageRecordResponse, UsageRecordType,
 };
-#[cfg(feature = "postgres")]
 pub use postgres_repository::PostgresSubscriptionRepository;
 pub use repository::{
     BoxSubscriptionRepository, InMemorySubscriptionRepository, SubscriptionRepository,

@@ -80,26 +80,6 @@ pub async fn health_live(
 }
 
 /// Readiness probe
-#[cfg(not(feature = "postgres"))]
-#[utoipa::path(
-    get,
-    path = "/api/v1/observability/health/ready",
-    tag = "Observability",
-    responses(
-        (status = 200, description = "Readiness status", body = crate::domain::observability::model::SystemHealthSummary),
-    ),
-)]
-pub async fn health_ready(
-    observability_service: web::Data<ObservabilityService>,
-) -> ApiResult<HttpResponse> {
-    match observability_service.run_health_check(None).await {
-        Ok(summary) => Ok(HttpResponse::Ok().json(summary)),
-        Err(e) => Ok(e.error_response()),
-    }
-}
-
-/// Readiness probe (PostgreSQL)
-#[cfg(feature = "postgres")]
 #[utoipa::path(
     get,
     path = "/api/v1/observability/health/ready",
@@ -113,8 +93,12 @@ pub async fn health_ready(
     observability_service: web::Data<ObservabilityService>,
     app_state: web::Data<crate::app::AppState>,
 ) -> ApiResult<HttpResponse> {
-    let pool: &sqlx::PgPool = app_state.infra.db_pool.as_ref();
-    match observability_service.run_health_check(Some(pool)).await {
+    let pool = app_state
+        .infra
+        .db_pool
+        .as_ref()
+        .map(|p| p.get_ref().as_ref());
+    match observability_service.run_health_check(pool).await {
         Ok(summary) => {
             if summary.overall == crate::domain::observability::model::HealthStatus::Healthy {
                 Ok(HttpResponse::Ok().json(summary))

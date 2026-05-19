@@ -1,7 +1,6 @@
 //! Shift Planning domain module
 
 pub mod model;
-#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 pub mod repository;
 pub mod service;
@@ -12,7 +11,6 @@ pub use model::{
     CreateShift, CreateShiftAssignment, OvertimeCalculation, Shift, ShiftAssignment, ShiftReport,
     ShiftReportQuery, ShiftResponse, ShiftType, UpdateShift,
 };
-#[cfg(feature = "postgres")]
 pub use postgres_repository::{
     PostgresAttendanceRecordRepository, PostgresShiftAssignmentRepository, PostgresShiftRepository,
 };

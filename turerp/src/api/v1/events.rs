@@ -265,7 +265,6 @@ pub async fn get_cdc_status(
     app_state: web::Data<crate::app::AppState>,
 ) -> Result<HttpResponse, ApiError> {
     let _ = &app_state;
-    #[cfg(feature = "postgres")]
     {
         if let Some(ref listener) = app_state.infra.cdc_listener {
             let active = listener.is_active();
@@ -283,14 +282,6 @@ pub async fn get_cdc_status(
                 last_event_time: None,
             }))
         }
-    }
-    #[cfg(not(feature = "postgres"))]
-    {
-        Ok(HttpResponse::Ok().json(CdcStatusResponse {
-            active: false,
-            channels: vec![],
-            last_event_time: None,
-        }))
     }
 }
 

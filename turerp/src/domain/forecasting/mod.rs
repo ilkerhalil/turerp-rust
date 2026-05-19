@@ -4,7 +4,6 @@
 //! and forecast reports using simple statistical methods (moving average).
 
 pub mod model;
-#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 pub mod repository;
 pub mod service;
@@ -15,7 +14,6 @@ pub use model::{
     ReorderRequest, ReorderSuggestion, ReorderUrgency, StockAlert, StockAlertRequest,
     StockAlertType,
 };
-#[cfg(feature = "postgres")]
 pub use postgres_repository::PostgresForecastingRepository;
 pub use repository::{
     BoxForecastingRepository, ForecastProduct, ForecastingRepository, HistoricalSale,

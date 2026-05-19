@@ -1,7 +1,6 @@
 //! Manufacturing domain module
 
 pub mod model;
-#[cfg(feature = "postgres")]
 pub mod postgres_repository;
 pub mod repository;
 pub mod service;
@@ -14,7 +13,6 @@ pub use model::{
     UpdateInspection, UpdateNonConformanceReport, WorkOrder, WorkOrderMaterial, WorkOrderOperation,
     WorkOrderPriority, WorkOrderStatus,
 };
-#[cfg(feature = "postgres")]
 pub use postgres_repository::{
     PostgresBillOfMaterialsRepository, PostgresInspectionRepository, PostgresNcrRepository,
     PostgresRoutingRepository, PostgresWorkOrderRepository,
