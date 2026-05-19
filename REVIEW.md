@@ -179,7 +179,7 @@
 12. [x] Vault token `SecretString` — **#93** — `secrecy::SecretString` kullanılıyor
 13. [x] `main.rs` duplicate bootstrap coz — **#93** — `macro_rules! build_app_core` ile birleştirildi
 14. [x] ~~173x handler boilerplate generic hale getir~~ — **#97** — `json_resp!` macro ile 111+ handler refactor edildi
-15. [ ] Postgres feature flag runtime'a cevir
+15. [x] ~~Postgres feature flag runtime'a cevir~~ — **#98** — `#[cfg(feature = "postgres")]` kaldırıldı, `create_app_state_unified()` runtime seçim yapıyor
 16. [x] domain/mod.rs re-export'lari daralt — **#93** — 113 re-export kaldırıldı
 17. [x] Portal servisler trait-based hale getir — **#93** — `CustomerPortal` + `VendorPortal` trait'leri eklendi
 18. [ ] 37 domain icin integration test basla
