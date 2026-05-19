@@ -20,7 +20,7 @@ use crate::middleware::auth::AdminUser;
     ),
     tag = "IP Whitelist"
 )]
-#[get("/ip-whitelist")]
+#[get("/v1/ip-whitelist")]
 pub async fn list_ip_whitelist(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -53,7 +53,7 @@ pub async fn list_ip_whitelist(
     ),
     tag = "IP Whitelist"
 )]
-#[post("/ip-whitelist")]
+#[post("/v1/ip-whitelist")]
 pub async fn add_ip_whitelist_entry(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -84,7 +84,7 @@ pub async fn add_ip_whitelist_entry(
     ),
     tag = "IP Whitelist"
 )]
-#[delete("/ip-whitelist/{id}")]
+#[delete("/v1/ip-whitelist/{id}")]
 pub async fn remove_ip_whitelist_entry(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -118,7 +118,7 @@ pub async fn remove_ip_whitelist_entry(
     ),
     tag = "IP Whitelist"
 )]
-#[put("/ip-whitelist/{id}")]
+#[put("/v1/ip-whitelist/{id}")]
 pub async fn update_ip_whitelist_entry(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -152,7 +152,7 @@ pub async fn update_ip_whitelist_entry(
     ),
     tag = "IP Whitelist"
 )]
-#[get("/ip-whitelist/{id}")]
+#[get("/v1/ip-whitelist/{id}")]
 pub async fn get_ip_whitelist_entry(
     _admin: AdminUser,
     state: web::Data<AppState>,

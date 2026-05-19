@@ -30,7 +30,7 @@ pub struct ListBarcodesQuery {
     ),
     tag = "barcodes"
 )]
-#[post("/barcodes/generate")]
+#[post("/v1/barcodes/generate")]
 pub async fn generate_barcode(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -63,7 +63,7 @@ pub async fn generate_barcode(
     ),
     tag = "barcodes"
 )]
-#[get("/barcodes/{entity_type}/{entity_id}")]
+#[get("/v1/barcodes/{entity_type}/{entity_id}")]
 pub async fn get_barcode_for_entity(
     state: web::Data<AppState>,
     path: web::Path<(String, i64)>,
@@ -100,7 +100,7 @@ pub async fn get_barcode_for_entity(
     ),
     tag = "barcodes"
 )]
-#[delete("/barcodes/{id}")]
+#[delete("/v1/barcodes/{id}")]
 pub async fn delete_barcode(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -132,7 +132,7 @@ pub async fn delete_barcode(
     ),
     tag = "barcodes"
 )]
-#[get("/barcodes")]
+#[get("/v1/barcodes")]
 pub async fn list_barcodes(
     state: web::Data<AppState>,
     query: web::Query<ListBarcodesQuery>,
