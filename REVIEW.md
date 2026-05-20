@@ -59,18 +59,18 @@
 15. ~~`search_invoices` — LIMIT yok~~ — **Yanlis bulgu**, service layer'da LIMIT 100 var, SQL'de LIMIT/OFFSET parametrik
 
 ### Mimari (4)
-16. `domain/mod.rs` God Module — her subdomain'in internal'larini re-export ediyor
-17. Portal servisler concrete coupling — `CustomerPortalService` direkt `Arc<CariService>`
+16. ~~`domain/mod.rs` God Module~~ — **Kismen Cozuldu (#93)** — 113 re-export kaldırıldı, 47'ye indi, tam temizlik icin #20'deki eksik domain'ler eklendikten sonra
+17. ~~Portal servisler concrete coupling~~ — **Cozuldu (#93)** — `CustomerPortal` + `VendorPortal` trait'leri eklendi
 18. `postgres` feature flag compile-time — runtime storage switch gerekli
 19. Vault token plain `String` — `secrecy::SecretString` kullanilmali
 
 ### Kod Kalitesi (6)
-20. `main.rs` duplicate bootstrap — postgres/non-postgres 110+ satir tekrar
+20. ~~`main.rs` duplicate bootstrap~~ — **Cozuldu (#93)** — `macro_rules! build_app_core` ile birleştirildi
 21. Duplicate `MessageResponse` — hem `users.rs` hem `common/mod.rs`
 22. ~~Startup `.expect()` panics~~ — **Cozuldu (#95)** — `encryption_key_bytes()` ve `create_app_state()` `Result` donuyor
 23. ~~173x handler boilerplate — her handler'de `match service.await` tekrari~~ — **Cozuldu (#97)** — `json_resp!` macro ile 111+ handler refactor edildi, net -689 satir
-24. `#[allow(unused_imports)]` suppression — notifications.rs
-25. `#[allow(dead_code)]` — 15+ postgres repo'da
+24. ~~`#[allow(unused_imports)]` suppression~~ — **Cozuldu (#100)** — kalan suppression yok
+25. ~~`#[allow(dead_code)]` suppressions~~ — **Cozuldu (#100)** — gereksiz suppressions kaldırıldı, sadece 3 yerde DB mapping icin korundu
 
 ### Gozlemlenebilirlik (3)
 26. Zero `#[tracing::instrument]` — DB query'ler, business logic gorunmez
