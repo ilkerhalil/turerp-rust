@@ -1655,19 +1655,6 @@ pub mod app {
     }
 }
 
-/// Setup logging for the application.
-pub fn setup_logging() {
-    use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-    tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "turerp=debug,actix_web=info".into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
