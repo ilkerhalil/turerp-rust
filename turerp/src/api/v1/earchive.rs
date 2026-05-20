@@ -4,8 +4,6 @@
 //! integration with GİB (Gelir Idaresi Baskanligi).
 
 use actix_web::{web, HttpResponse};
-use serde::Deserialize;
-use utoipa::ToSchema;
 
 use crate::common::pagination::PaginationParams;
 use crate::domain::earchive::model::{EarchiveResponse, EarchiveStatus, GenerateEarchiveRequest};
@@ -14,12 +12,6 @@ use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
 use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
-
-/// Request body for listing E-Archive documents with optional status filter
-#[derive(Debug, Deserialize, ToSchema)]
-pub struct ListEarchiveQuery {
-    pub status: Option<String>,
-}
 
 /// Generate an E-Archive document from an invoice (requires admin role)
 #[utoipa::path(

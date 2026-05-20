@@ -2,7 +2,6 @@
 
 use actix_web::{web, HttpResponse};
 use serde::Deserialize;
-use utoipa::ToSchema;
 
 use crate::common::pagination::{default_page, default_per_page, PaginationParams};
 use crate::domain::archive::model::{
@@ -70,12 +69,6 @@ impl From<ListRecordsQuery> for PaginationParams {
             per_page: q.per_page,
         }
     }
-}
-
-/// Query parameters for getting active policies
-#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
-pub struct ActivePoliciesQuery {
-    pub tenant_id: i64,
 }
 
 // ---- Archive Policy Handlers ----

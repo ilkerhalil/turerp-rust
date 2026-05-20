@@ -3,7 +3,7 @@
 use csv::StringRecord;
 use serde::de::DeserializeOwned;
 
-use crate::common::import::model::{ImportError, ImportFormat};
+use crate::common::import::model::ImportFormat;
 use crate::error::ApiError;
 
 /// Parse raw bytes into rows based on format
@@ -111,27 +111,6 @@ pub fn build_json_template(example: serde_json::Value) -> Result<Vec<u8>, ApiErr
     let arr = serde_json::json!([example]);
     serde_json::to_vec_pretty(&arr)
         .map_err(|e| ApiError::Internal(format!("JSON serialization error: {}", e)))
-}
-
-/// Collect all parse errors into a single result
-pub fn collect_parse_errors<T>(
-    results: Vec<Result<(usize, T), ApiError>>,
-) -> (Vec<(usize, T)>, Vec<ImportError>) {
-    let mut rows = Vec::new();
-    let mut errors = Vec::new();
-
-    for result in results {
-        match result {
-            Ok((row, value)) => rows.push((row, value)),
-            Err(e) => errors.push(ImportError {
-                row: 0,
-                field: None,
-                message: e.to_string(),
-            }),
-        }
-    }
-
-    (rows, errors)
 }
 
 /// Write records to CSV bytes

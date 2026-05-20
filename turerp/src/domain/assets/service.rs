@@ -27,17 +27,6 @@ impl AssetsService {
         }
     }
 
-    /// Create assets service with category support
-    pub fn with_categories(
-        asset_repo: Arc<dyn AssetsRepository>,
-        category_repo: Arc<dyn AssetCategoryRepository>,
-    ) -> Self {
-        Self {
-            asset_repo,
-            category_repo: Some(category_repo),
-        }
-    }
-
     /// Create a new asset
     pub async fn create_asset(&self, create: CreateAsset) -> Result<Asset, ApiError> {
         self.asset_repo.create(create).await

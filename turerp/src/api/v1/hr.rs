@@ -8,11 +8,6 @@ pub mod leave;
 pub mod payroll;
 pub mod sgk;
 
-#[derive(serde::Deserialize, utoipa::ToSchema)]
-pub struct ApproveRequest {
-    pub approver_id: Option<i64>,
-}
-
 /// Configure HR routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(

@@ -55,20 +55,6 @@ impl InMemoryLdapConfigRepository {
             }),
         }
     }
-
-    pub fn with_configs(configs: Vec<LdapConfig>) -> Self {
-        let max_id = configs.iter().map(|c| c.id).max().unwrap_or(0);
-        let mut map = HashMap::new();
-        for c in configs {
-            map.insert(c.tenant_id, c);
-        }
-        Self {
-            inner: Mutex::new(InMemoryLdapConfigInner {
-                configs: map,
-                next_id: max_id + 1,
-            }),
-        }
-    }
 }
 
 impl Default for InMemoryLdapConfigRepository {

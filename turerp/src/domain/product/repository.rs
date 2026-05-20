@@ -613,38 +613,6 @@ impl InMemoryUnitRepository {
             }),
         }
     }
-
-    pub fn with_defaults(tenant_id: i64) -> Self {
-        let repo = Self::new();
-        let defaults = vec![
-            (1, tenant_id, "PCS", "Piece", true),
-            (2, tenant_id, "KG", "Kilogram", false),
-            (3, tenant_id, "BOX", "Box", true),
-            (4, tenant_id, "MT", "Meter", false),
-            (5, tenant_id, "L", "Liter", false),
-        ];
-
-        let mut inner = repo.inner.lock();
-        for (id, tid, code, name, is_int) in defaults {
-            inner.units.insert(
-                id,
-                Unit {
-                    id,
-                    tenant_id: tid,
-                    company_id: 0,
-                    code: code.to_string(),
-                    name: name.to_string(),
-                    is_integer: is_int,
-                    created_at: chrono::Utc::now(),
-                    deleted_at: None,
-                    deleted_by: None,
-                },
-            );
-        }
-        inner.next_id = 6;
-        drop(inner);
-        repo
-    }
 }
 
 impl Default for InMemoryUnitRepository {

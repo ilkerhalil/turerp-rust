@@ -2,7 +2,7 @@
 //!
 //! Provides types for data archiving policies, jobs, and archived records.
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -218,15 +218,6 @@ pub struct CreateArchiveJob {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RestoreRequest {
     pub record_ids: Vec<i64>,
-}
-
-/// Query parameters for searching archived records
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct ArchiveQuery {
-    pub source_table: Option<String>,
-    pub source_id: Option<i64>,
-    pub archived_after: Option<NaiveDate>,
-    pub archived_before: Option<NaiveDate>,
 }
 
 /// Failed item in a bulk restore operation

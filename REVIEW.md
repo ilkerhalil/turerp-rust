@@ -189,7 +189,7 @@
 20. [ ] Eksiz PostgreSQL repo'lar implemente et
 21. [ ] URL naming standardize et
 22. [ ] Search endpoint'ler `?q=` query param yap
-23. [ ] `encryption_key_bytes()` Result donsun
+23. [x] ~~`encryption_key_bytes()` Result donsun~~ — **Cozuldu (#100)** — `Result<[u8; 32], ApiError>` donuyor, `.expect()` yok
 24. [ ] `tenant_database_url()` parse et
 25. [ ] Idempotency Redis/Postgres backend yap
 26. [ ] Audit logging auth'dan sonra tasila

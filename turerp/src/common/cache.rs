@@ -172,8 +172,6 @@ pub fn cache_key(namespace: &str, key: &str) -> String {
 /// Common cache namespaces
 pub mod namespaces {
     pub const TENANT_CONFIG: &str = "tenant_config";
-    pub const FEATURE_FLAGS: &str = "feature_flags";
-    pub const USER_PERMISSIONS: &str = "user_perms";
     pub const CARI: &str = "cari";
     pub const PRODUCT: &str = "product";
 }
