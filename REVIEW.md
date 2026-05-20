@@ -66,7 +66,7 @@
 
 ### Kod Kalitesi (6)
 20. ~~`main.rs` duplicate bootstrap~~ — **Cozuldu (#93)** — `macro_rules! build_app_core` ile birleştirildi
-21. Duplicate `MessageResponse` — hem `users.rs` hem `common/mod.rs`
+21. ~~Duplicate `MessageResponse` — hem `users.rs` hem `common/mod.rs`~~ — **Cozuldu (#108)** — `crate::common::MessageResponse` kullaniliyor, users/tenant/ldap'den lokal tanimlar kaldirildi
 22. ~~Startup `.expect()` panics~~ — **Cozuldu (#95)** — `encryption_key_bytes()` ve `create_app_state()` `Result` donuyor
 23. ~~173x handler boilerplate — her handler'de `match service.await` tekrari~~ — **Cozuldu (#97)** — `json_resp!` macro ile 111+ handler refactor edildi, net -689 satir
 24. ~~`#[allow(unused_imports)]` suppression~~ — **Cozuldu (#100)** — kalan suppression yok
@@ -97,8 +97,8 @@
 - Giant `create_in_memory_services!` macro (1000+ satir)
 - ~~`api/mod.rs` 70+ manual re-export~~ — **Cozuldu (#104)** — 58 individual re-export gruplandi, `v1/mod.rs` ara katman kaldırıldı, net -79 satır
 - `TenantMiddleware` `AuthUser`'a erisiyor (coupling)
-- `RateLimitMiddleware` duplicate IP extraction
-- `SearchQuery` her domain'de yeniden implemente
+- ~~`RateLimitMiddleware` duplicate IP extraction~~ — **Cozuldu (#109)** — `is_loopback`, `is_in_trusted_proxies`, ve `extract_client_ip` `common/ip_utils.rs`'te ortaklasildi, rate_limit.rs + ip_whitelist.rs'ten ~60 satir kaldirildi
+- ~~`SearchQuery` her domain'de yeniden implemente~~ — **Cozuldu (#108)** — `PaginatedSearchQuery` `common/pagination.rs`'te ortaklasildi, cari/invoice/products'tan lokal tanimlar kaldirildi
 - ~~`jwt.rs` `Unauthorized` yerine `InvalidToken`~~ — **Cozuldu (#104)** — 3 yerde `ApiError::Unauthorized` → `ApiError::InvalidToken`
 - ~~`block_on` sync setup'ta~~ — **Cozuldu (#104)** — `background_evaluator.rs`'teki test `#[tokio::test]` async yapıldı, `lib.rs`'teki unavoidable `block_on` açıklama eklendi
 
@@ -138,8 +138,8 @@
 - `__TestFileVisibility` artifact prod modulde
 - Restore/destroy HTTP method RPC-style
 - `SecretsConfig::default()` side effect'li
-- Duplicate `MessageResponse`
-- `SearchQuery` local vs common
+- ~~Duplicate `MessageResponse`~~ — **Cozuldu (#108)** — `crate::common::MessageResponse` kullaniliyor
+- ~~`SearchQuery` local vs common~~ — **Cozuldu (#108)** — `PaginatedSearchQuery` `common/pagination.rs`'te ortaklasildi
 
 ---
 
