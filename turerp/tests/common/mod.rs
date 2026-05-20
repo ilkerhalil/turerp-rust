@@ -80,7 +80,10 @@ pub fn configure_v1_routes(cfg: &mut web::ServiceConfig) {
 }
 
 pub fn create_test_app_state() -> turerp::app::AppState {
-    let config = Config::default();
+    let config = Config {
+        encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
+        ..Config::default()
+    };
     create_app_state_in_memory(&config).expect("app state creation failed")
 }
 

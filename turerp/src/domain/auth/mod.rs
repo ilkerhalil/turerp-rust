@@ -1,19 +1,23 @@
 //! Auth service
 
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use utoipa::ToSchema;
 use validator::Validate;
 
 use crate::config::JwtConfig;
+use crate::db::error::map_sqlx_error;
 use crate::domain::mfa::service::MfaService;
 use crate::domain::user::model::{CreateUser, Role, UserResponse};
 use crate::domain::user::service::UserService;
 use crate::error::ApiError;
 use crate::utils::jwt::{JwtService, TokenPair};
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use sqlx::PgPool;
+use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 /// Login request
 #[derive(Debug, Clone, Deserialize, Serialize, validator::Validate, ToSchema)]
@@ -72,12 +76,51 @@ pub struct LoginResponse {
     pub tokens: TokenPair,
 }
 
-/// Login attempt tracker for brute-force protection
-#[derive(Clone)]
-struct LoginAttemptTracker {
-    attempts: u32,
-    locked_until: Option<Instant>,
+/// Logout request
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct LogoutRequest {
+    pub refresh_token: String,
 }
+
+/// Trait for revoked token storage backends
+#[async_trait]
+pub trait RevokedTokenStore: Send + Sync {
+    async fn is_revoked(&self, token_hash: &str) -> bool;
+    async fn revoke(&self, token_hash: &str, _expires_at: DateTime<Utc>) -> Result<(), ApiError>;
+}
+
+/// In-memory revoked token store (for development / single-instance deployment)
+pub struct InMemoryRevokedTokenStore {
+    revoked: Arc<Mutex<HashSet<String>>>,
+}
+
+impl Default for InMemoryRevokedTokenStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InMemoryRevokedTokenStore {
+    pub fn new() -> Self {
+        Self {
+            revoked: Arc::new(Mutex::new(HashSet::new())),
+        }
+    }
+}
+
+#[async_trait]
+impl RevokedTokenStore for InMemoryRevokedTokenStore {
+    async fn is_revoked(&self, token_hash: &str) -> bool {
+        self.revoked.lock().contains(token_hash)
+    }
+
+    async fn revoke(&self, token_hash: &str, _expires_at: DateTime<Utc>) -> Result<(), ApiError> {
+        self.revoked.lock().insert(token_hash.to_string());
+        Ok(())
+    }
+}
+
+pub type BoxRevokedTokenStore = Arc<dyn RevokedTokenStore>;
 
 /// Auth service
 #[derive(Clone)]
@@ -85,7 +128,8 @@ pub struct AuthService {
     user_service: UserService,
     pub jwt_service: JwtService,
     mfa_service: MfaService,
-    login_attempts: Arc<Mutex<HashMap<String, LoginAttemptTracker>>>,
+    pool: Option<Arc<PgPool>>,
+    revoked_token_store: BoxRevokedTokenStore,
 }
 
 impl AuthService {
@@ -93,13 +137,23 @@ impl AuthService {
         user_service: UserService,
         jwt_service: JwtService,
         mfa_service: MfaService,
+        pool: Option<Arc<PgPool>>,
+        revoked_token_store: BoxRevokedTokenStore,
     ) -> Self {
         Self {
             user_service,
             jwt_service,
             mfa_service,
-            login_attempts: Arc::new(Mutex::new(HashMap::new())),
+            pool,
+            revoked_token_store,
         }
+    }
+
+    /// Compute SHA-256 hash of a token for secure storage
+    fn token_hash(token: &str) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(token.as_bytes());
+        format!("{:x}", hasher.finalize())
     }
 
     /// Register a new user
@@ -168,24 +222,28 @@ impl AuthService {
             .validate()
             .map_err(|e| ApiError::Validation(e.to_string()))?;
 
-        // Check if account is temporarily locked
-        {
-            let mut attempts = self.login_attempts.lock();
-            if let Some(tracker) = attempts.get_mut(&request.username) {
-                if let Some(locked_until) = tracker.locked_until {
-                    let now = Instant::now();
-                    if now < locked_until {
-                        let remaining_secs = (locked_until - now).as_secs();
-                        let remaining_mins = (remaining_secs / 60).max(1);
-                        return Err(ApiError::Unauthorized(format!(
-                            "Account temporarily locked due to too many failed attempts. Try again in {} minutes.",
-                            remaining_mins
-                        )));
-                    } else {
-                        // Lock has expired — clear the tracker
-                        tracker.locked_until = None;
-                        tracker.attempts = 0;
-                    }
+        // Check if account is temporarily locked via PostgreSQL
+        if let Some(pool) = &self.pool {
+            let tracker: Option<(chrono::DateTime<chrono::Utc>, i32)> = sqlx::query_as(
+                "SELECT attempted_at, attempt_count FROM login_attempts
+                 WHERE username = $1 AND tenant_id = $2 AND success = false
+                 AND attempted_at > NOW() - INTERVAL '15 minutes'",
+            )
+            .bind(&request.username)
+            .bind(tenant_id)
+            .fetch_optional(pool.as_ref())
+            .await
+            .map_err(|e| map_sqlx_error(e, "login attempt"))?;
+
+            if let Some((attempted_at, attempt_count)) = tracker {
+                if attempt_count >= 5 {
+                    let elapsed = chrono::Utc::now() - attempted_at;
+                    let remaining_secs = (900 - elapsed.num_seconds()).max(0);
+                    let remaining_mins = ((remaining_secs / 60) as u64).max(1);
+                    return Err(ApiError::Unauthorized(format!(
+                        "Account temporarily locked due to too many failed attempts. Try again in {} minutes.",
+                        remaining_mins
+                    )));
                 }
             }
         }
@@ -199,9 +257,14 @@ impl AuthService {
         match user_result {
             Ok(user) => {
                 // Reset failed attempts on successful login
-                {
-                    let mut attempts = self.login_attempts.lock();
-                    attempts.remove(&request.username);
+                if let Some(pool) = &self.pool {
+                    let _ = sqlx::query(
+                        "DELETE FROM login_attempts WHERE username = $1 AND tenant_id = $2",
+                    )
+                    .bind(&request.username)
+                    .bind(tenant_id)
+                    .execute(pool.as_ref())
+                    .await;
                 }
 
                 // Check if MFA is enabled for this user
@@ -242,20 +305,24 @@ impl AuthService {
                 })
             }
             Err(ApiError::InvalidCredentials) => {
-                // Increment failed attempt counter
-                {
-                    let mut attempts = self.login_attempts.lock();
-                    let tracker =
-                        attempts
-                            .entry(request.username.clone())
-                            .or_insert(LoginAttemptTracker {
-                                attempts: 0,
-                                locked_until: None,
-                            });
-                    tracker.attempts += 1;
-                    if tracker.attempts >= 5 {
-                        tracker.locked_until = Some(Instant::now() + Duration::from_secs(900));
-                    }
+                if let Some(pool) = &self.pool {
+                    sqlx::query(
+                        "INSERT INTO login_attempts (username, tenant_id, attempted_at, success, attempt_count)
+                         VALUES ($1, $2, NOW(), false, 1)
+                         ON CONFLICT (username, tenant_id) DO UPDATE SET
+                             attempted_at = NOW(),
+                             success = false,
+                             attempt_count = CASE
+                                 WHEN login_attempts.attempted_at > NOW() - INTERVAL '15 minutes'
+                                 THEN login_attempts.attempt_count + 1
+                                 ELSE 1
+                             END"
+                    )
+                    .bind(&request.username)
+                    .bind(tenant_id)
+                    .execute(pool.as_ref())
+                    .await
+                    .map_err(|e| map_sqlx_error(e, "login attempt"))?;
                 }
                 Err(ApiError::InvalidCredentials)
             }
@@ -265,7 +332,22 @@ impl AuthService {
 
     /// Refresh access token
     pub async fn refresh_token(&self, request: RefreshTokenRequest) -> Result<TokenPair, ApiError> {
+        let hash = Self::token_hash(&request.refresh_token);
+        if self.revoked_token_store.is_revoked(&hash).await {
+            return Err(ApiError::Unauthorized(
+                "Refresh token has been revoked".to_string(),
+            ));
+        }
         self.jwt_service.refresh_tokens(&request.refresh_token)
+    }
+
+    /// Revoke refresh token on logout
+    pub async fn logout(&self, request: LogoutRequest) -> Result<(), ApiError> {
+        let claims = self.jwt_service.decode_token(&request.refresh_token)?;
+        let exp = DateTime::from_timestamp(claims.exp, 0).unwrap_or_else(Utc::now);
+        let hash = Self::token_hash(&request.refresh_token);
+        self.revoked_token_store.revoke(&hash, exp).await?;
+        Ok(())
     }
 
     /// Validate access token
@@ -279,6 +361,8 @@ pub fn create_auth_service(
     user_service: UserService,
     mfa_service: MfaService,
     jwt_config: &JwtConfig,
+    pool: Option<Arc<PgPool>>,
+    revoked_token_store: BoxRevokedTokenStore,
 ) -> AuthService {
     let jwt_service = JwtService::new(
         jwt_config.secret.clone(),
@@ -286,14 +370,31 @@ pub fn create_auth_service(
         jwt_config.refresh_token_expiration,
     );
 
-    AuthService::new(user_service, jwt_service, mfa_service)
+    AuthService::new(
+        user_service,
+        jwt_service,
+        mfa_service,
+        pool,
+        revoked_token_store,
+    )
 }
 
 /// Create auth service with default configuration (dev/testing only)
 #[cfg(any(test, debug_assertions))]
-pub fn create_auth_service_dev(user_service: UserService, mfa_service: MfaService) -> AuthService {
+pub fn create_auth_service_dev(
+    user_service: UserService,
+    mfa_service: MfaService,
+    pool: Option<Arc<PgPool>>,
+    revoked_token_store: BoxRevokedTokenStore,
+) -> AuthService {
     let jwt_config = JwtConfig::dev();
-    create_auth_service(user_service, mfa_service, &jwt_config)
+    create_auth_service(
+        user_service,
+        mfa_service,
+        &jwt_config,
+        pool,
+        revoked_token_store,
+    )
 }
 
 #[cfg(test)]
@@ -314,7 +415,8 @@ mod tests {
         let mfa_repo = Arc::new(InMemoryMfaRepository::new()) as BoxMfaRepository;
         let jwt_service = JwtService::new("test-secret".to_string(), 3600, 86400);
         let mfa_service = MfaService::new(mfa_repo, jwt_service);
-        create_auth_service_dev(user_service, mfa_service)
+        let revoked_store = Arc::new(InMemoryRevokedTokenStore::new()) as BoxRevokedTokenStore;
+        create_auth_service_dev(user_service, mfa_service, None, revoked_store)
     }
 
     #[test]
@@ -505,5 +607,63 @@ mod tests {
         let deserialized: LoginResponse = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.user.username, "testuser");
         assert_eq!(deserialized.tokens.access_token, "access");
+    }
+
+    #[test]
+    fn test_logout_request_serialization() {
+        let req = LogoutRequest {
+            refresh_token: "test-refresh-token".to_string(),
+        };
+        let json = serde_json::to_string(&req).unwrap();
+        assert!(json.contains("test-refresh-token"));
+
+        let deserialized: LogoutRequest = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.refresh_token, "test-refresh-token");
+    }
+
+    #[tokio::test]
+    async fn test_revoked_refresh_token_is_rejected() {
+        let auth_service = create_test_auth_service();
+
+        // Generate valid tokens
+        let tokens = auth_service
+            .jwt_service
+            .generate_tokens(1, 1, "testuser".to_string(), Role::User)
+            .unwrap();
+
+        // Revoke the refresh token by logging out
+        let logout_req = LogoutRequest {
+            refresh_token: tokens.refresh_token.clone(),
+        };
+        auth_service.logout(logout_req).await.unwrap();
+
+        // Attempting to refresh with revoked token should fail
+        let refresh_req = RefreshTokenRequest {
+            refresh_token: tokens.refresh_token.clone(),
+        };
+        let result = auth_service.refresh_token(refresh_req).await;
+        assert!(result.is_err());
+        match result {
+            Err(ApiError::Unauthorized(msg)) => {
+                assert!(msg.contains("revoked"));
+            }
+            _ => panic!("Expected Unauthorized error for revoked token"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_refresh_token_still_valid_when_not_revoked() {
+        let auth_service = create_test_auth_service();
+
+        let tokens = auth_service
+            .jwt_service
+            .generate_tokens(1, 1, "testuser".to_string(), Role::User)
+            .unwrap();
+
+        let refresh_req = RefreshTokenRequest {
+            refresh_token: tokens.refresh_token.clone(),
+        };
+        let result = auth_service.refresh_token(refresh_req).await;
+        assert!(result.is_ok());
     }
 }

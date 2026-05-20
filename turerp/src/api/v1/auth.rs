@@ -3,7 +3,9 @@
 use actix_web::{web, HttpResponse};
 use serde::Deserialize;
 
-use crate::domain::auth::{AuthService, LoginRequest, RefreshTokenRequest, RegisterRequest};
+use crate::domain::auth::{
+    AuthService, LoginRequest, LogoutRequest, RefreshTokenRequest, RegisterRequest,
+};
 use crate::domain::user::service::UserService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
@@ -110,6 +112,35 @@ pub async fn refresh_token(
     )
 }
 
+/// Logout endpoint (revokes refresh token)
+///
+/// Rate limited: 10 requests/minute per IP
+#[utoipa::path(
+    post,
+    path = "/api/v1/auth/logout",
+    tag = "Auth",
+    request_body = LogoutRequest,
+    responses(
+        (status = 200, description = "Logout successful"),
+        (status = 401, description = "Invalid refresh token")
+    )
+)]
+#[tracing::instrument(skip(auth_service, payload))]
+pub async fn logout(
+    auth_service: web::Data<AuthService>,
+    payload: web::Json<LogoutRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    json_resp!(
+        auth_service.logout(payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
+}
+
 /// Get current user endpoint (requires authentication)
 #[utoipa::path(
     get,
@@ -155,5 +186,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/v1/auth/register").route(web::post().to(register)))
         .service(web::resource("/v1/auth/login").route(web::post().to(login)))
         .service(web::resource("/v1/auth/refresh").route(web::post().to(refresh_token)))
+        .service(web::resource("/v1/auth/logout").route(web::post().to(logout)))
         .service(web::resource("/v1/auth/me").route(web::get().to(me)));
 }

@@ -3,7 +3,9 @@
 use actix_web::{web, HttpResponse};
 use serde::Deserialize;
 
-use crate::domain::auth::{AuthService, LoginRequest, RefreshTokenRequest, RegisterRequest};
+use crate::domain::auth::{
+    AuthService, LoginRequest, LogoutRequest, RefreshTokenRequest, RegisterRequest,
+};
 use crate::domain::user::service::UserService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
@@ -67,6 +69,23 @@ pub async fn refresh_token(
     )
 }
 
+/// Logout endpoint (revokes refresh token)
+#[tracing::instrument(skip(auth_service, payload))]
+pub async fn logout(
+    auth_service: web::Data<AuthService>,
+    payload: web::Json<LogoutRequest>,
+    locale: Locale,
+    i18n: Option<web::Data<I18n>>,
+) -> ApiResult<HttpResponse> {
+    let i18n = resolve(&i18n);
+    json_resp!(
+        auth_service.logout(payload.into_inner()),
+        HttpResponse::Ok,
+        i18n,
+        locale.as_str()
+    )
+}
+
 /// Get current user endpoint (requires authentication)
 pub async fn me(
     auth_user: AuthUser,
@@ -104,5 +123,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(web::resource("/auth/register").route(web::post().to(register)))
         .service(web::resource("/auth/login").route(web::post().to(login)))
         .service(web::resource("/auth/refresh").route(web::post().to(refresh_token)))
+        .service(web::resource("/auth/logout").route(web::post().to(logout)))
         .service(web::resource("/auth/me").route(web::get().to(me)));
 }

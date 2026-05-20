@@ -82,9 +82,9 @@
 ## Medium Bulgular (38) — Onemli ama Acil Degil
 
 ### Guvenlik
-- Brute-force in-memory (multi-instance calismaz)
-- Refresh token revoke edilemiyor
-- Hardcoded fallback encryption key
+- ~~Brute-force in-memory (multi-instance calismaz)~~ — **Cozuldu (#103)** — Migration 029 `login_attempts` tablosu, `AuthService` PostgreSQL tabanli kilitleme
+- ~~Refresh token revoke edilemiyor~~ — **Cozuldu (#103)** — `RevokedTokenStore` async trait, `InMemoryRevokedTokenStore`, SHA-256 hash ile token revoke, `POST /api/v1/auth/logout` endpoint
+- ~~Hardcoded fallback encryption key~~ — **Cozuldu (#103)** — `Config::default()` artik hardcoded key icermiyor, validation bos string ve eski default key'i reddediyor
 - ~~CORS `*` + `allow_credentials: true`~~ — **Cozuldu (#94)** — wildcard origin ile credentials zorla `false`
 
 ### Performans

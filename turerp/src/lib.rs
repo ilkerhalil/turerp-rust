@@ -480,10 +480,14 @@ pub mod app {
             let mfa_repo = Arc::new(InMemoryMfaRepository::new())
                 as crate::domain::mfa::repository::BoxMfaRepository;
             let mfa_service = MfaService::new(mfa_repo, jwt_service.clone());
+            let revoked_token_store = Arc::new(crate::domain::auth::InMemoryRevokedTokenStore::new())
+                as crate::domain::auth::BoxRevokedTokenStore;
             let auth_service = AuthService::new(
                 user_service.clone(),
                 jwt_service.clone(),
                 mfa_service.clone(),
+                None,
+                revoked_token_store,
             );
 
             // Cari
@@ -1042,10 +1046,14 @@ pub mod app {
         );
         let mfa_repo = PostgresMfaRepository::new(pool.clone()).into_boxed();
         let mfa_service = MfaService::new(mfa_repo, jwt_service.clone());
+        let revoked_token_store = Arc::new(crate::domain::auth::InMemoryRevokedTokenStore::new())
+            as crate::domain::auth::BoxRevokedTokenStore;
         let auth_service = AuthService::new(
             user_service.clone(),
             jwt_service.clone(),
             mfa_service.clone(),
+            Some(pool.clone()),
+            revoked_token_store,
         );
 
         // Cari - PostgreSQL
@@ -1675,7 +1683,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_app_state_creation() {
-        let config = Config::default();
+        let config = Config {
+            encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
+            ..Config::default()
+        };
         let state = app::create_app_state_in_memory(&config).expect("app state creation failed");
         // Verify services are created
         assert!(std::sync::Arc::strong_count(&state.auth.auth_service) > 0);
