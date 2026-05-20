@@ -48,18 +48,18 @@ impl From<InvoiceRow> for Invoice {
     fn from(row: InvoiceRow) -> Self {
         let invoice_type = row.invoice_type.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid invoice_type '{}' in database: {}, defaulting to SalesInvoice",
-                row.invoice_type,
-                e
+                invoice_type = row.invoice_type,
+                error = %e,
+                "Invalid invoice_type in database, defaulting to SalesInvoice"
             );
             InvoiceType::SalesInvoice
         });
 
         let status = row.status.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid status '{}' in database: {}, defaulting to Draft",
-                row.status,
-                e
+                status = row.status,
+                error = %e,
+                "Invalid status in database, defaulting to Draft"
             );
             InvoiceStatus::Draft
         });
@@ -121,18 +121,18 @@ impl From<InvoiceRowWithTotal> for (Invoice, i64) {
     fn from(row: InvoiceRowWithTotal) -> (Invoice, i64) {
         let invoice_type = row.invoice_type.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid invoice_type '{}' in database: {}, defaulting to SalesInvoice",
-                row.invoice_type,
-                e
+                invoice_type = row.invoice_type,
+                error = %e,
+                "Invalid invoice_type in database, defaulting to SalesInvoice"
             );
             InvoiceType::SalesInvoice
         });
 
         let status = row.status.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid status '{}' in database: {}, defaulting to Draft",
-                row.status,
-                e
+                status = row.status,
+                error = %e,
+                "Invalid status in database, defaulting to Draft"
             );
             InvoiceStatus::Draft
         });

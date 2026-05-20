@@ -390,11 +390,10 @@ async fn main() -> std::io::Result<()> {
                 )) // Security headers
                 .wrap(rate_limit_middleware.clone()) // Rate limiting: outer layer so unauthenticated requests count
                 .wrap(configure_cors(&config.cors)) // CORS handling
-                .wrap(middleware::Logger::default()) // Access logging
-                .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
                 .wrap(JwtAuthMiddleware::new(
                     app_state.auth.jwt_service.get_ref().clone(),
                 )) // JWT validation
+                .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
                 .wrap(idempotency_middleware.clone()) // Idempotency key caching
                 .wrap(MetricsMiddleware::new()) // Metrics collection
                 .wrap(TenantMiddleware) // Tenant context extraction (after auth)

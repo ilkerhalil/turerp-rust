@@ -26,7 +26,7 @@ async fn test_create_cari_success() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(create_cari_payload(user_id))
         .to_request();
 
@@ -47,7 +47,7 @@ async fn test_list_cari_paginated() {
     let (token, user_id) = register_admin(&state, 1).await;
 
     for i in 1..=3 {
-        let req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+        let req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
             .set_json(json!({
                 "code": format!("CARI-{}", uuid::Uuid::new_v4()),
                 "name": format!("Cari {}", i),
@@ -62,7 +62,7 @@ async fn test_list_cari_paginated() {
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/v1/cari?page=1&per_page=2",
+        "/api/v1/caris?page=1&per_page=2",
         &token,
     )
     .to_request();
@@ -83,7 +83,7 @@ async fn test_get_cari_success() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(create_cari_payload(user_id))
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -93,7 +93,7 @@ async fn test_get_cari_success() {
 
     let get_req = auth_request(
         actix_web::http::Method::GET,
-        &format!("/api/v1/cari/{}", id),
+        &format!("/api/v1/caris/{}", id),
         &token,
     )
     .to_request();
@@ -112,7 +112,8 @@ async fn test_get_cari_not_found() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let req = auth_request(actix_web::http::Method::GET, "/api/v1/cari/99999", &token).to_request();
+    let req =
+        auth_request(actix_web::http::Method::GET, "/api/v1/caris/99999", &token).to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
@@ -123,7 +124,7 @@ async fn test_update_cari_success() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(create_cari_payload(user_id))
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -133,7 +134,7 @@ async fn test_update_cari_success() {
 
     let update_req = auth_request(
         actix_web::http::Method::PUT,
-        &format!("/api/v1/cari/{}", id),
+        &format!("/api/v1/caris/{}", id),
         &token,
     )
     .set_json(json!({"name": "Updated Cari"}))
@@ -156,7 +157,7 @@ async fn test_delete_and_restore_cari() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(create_cari_payload(user_id))
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -167,7 +168,7 @@ async fn test_delete_and_restore_cari() {
     // Soft delete
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        &format!("/api/v1/cari/{}", id),
+        &format!("/api/v1/caris/{}", id),
         &token,
     )
     .to_request();
@@ -177,7 +178,7 @@ async fn test_delete_and_restore_cari() {
     // Verify deleted - should return 404
     let get_req = auth_request(
         actix_web::http::Method::GET,
-        &format!("/api/v1/cari/{}", id),
+        &format!("/api/v1/caris/{}", id),
         &token,
     )
     .to_request();
@@ -187,7 +188,7 @@ async fn test_delete_and_restore_cari() {
     // Restore
     let restore_req = auth_request(
         actix_web::http::Method::PUT,
-        &format!("/api/v1/cari/{}/restore", id),
+        &format!("/api/v1/caris/{}/restore", id),
         &token,
     )
     .to_request();
@@ -201,7 +202,7 @@ async fn test_delete_and_restore_cari() {
     // Verify restored
     let get_req = auth_request(
         actix_web::http::Method::GET,
-        &format!("/api/v1/cari/{}", id),
+        &format!("/api/v1/caris/{}", id),
         &token,
     )
     .to_request();
@@ -215,7 +216,7 @@ async fn test_list_deleted_cari() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(create_cari_payload(user_id))
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -226,15 +227,19 @@ async fn test_list_deleted_cari() {
     // Delete
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        &format!("/api/v1/cari/{}", id),
+        &format!("/api/v1/caris/{}", id),
         &token,
     )
     .to_request();
     test::call_service(&app, del_req).await;
 
     // List deleted
-    let list_req =
-        auth_request(actix_web::http::Method::GET, "/api/v1/cari/deleted", &token).to_request();
+    let list_req = auth_request(
+        actix_web::http::Method::GET,
+        "/api/v1/caris/deleted",
+        &token,
+    )
+    .to_request();
     let list_resp = test::call_service(&app, list_req).await;
     assert_eq!(list_resp.status(), StatusCode::OK);
 
@@ -251,7 +256,7 @@ async fn test_destroy_cari_permanently() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(create_cari_payload(user_id))
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -262,7 +267,7 @@ async fn test_destroy_cari_permanently() {
     // Soft delete first
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        &format!("/api/v1/cari/{}", id),
+        &format!("/api/v1/caris/{}", id),
         &token,
     )
     .to_request();
@@ -271,7 +276,7 @@ async fn test_destroy_cari_permanently() {
     // Permanently destroy
     let destroy_req = auth_request(
         actix_web::http::Method::DELETE,
-        &format!("/api/v1/cari/{}/destroy", id),
+        &format!("/api/v1/caris/{}/destroy", id),
         &token,
     )
     .to_request();
@@ -281,7 +286,7 @@ async fn test_destroy_cari_permanently() {
     // Should not be restorable
     let restore_req = auth_request(
         actix_web::http::Method::PUT,
-        &format!("/api/v1/cari/{}/restore", id),
+        &format!("/api/v1/caris/{}/restore", id),
         &token,
     )
     .to_request();
@@ -299,7 +304,7 @@ async fn test_search_cari() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(json!({
             "code": "SEARCH-001",
             "name": "Searchable Cari",
@@ -312,7 +317,7 @@ async fn test_search_cari() {
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/v1/cari/search?q=Searchable",
+        "/api/v1/caris/search?q=Searchable",
         &token,
     )
     .to_request();
@@ -334,7 +339,7 @@ async fn test_cari_unauthorized_without_token() {
     let state = create_test_app_state();
     let app = test::init_service(build_test_app(&state)).await;
 
-    let req = test::TestRequest::get().uri("/api/v1/cari").to_request();
+    let req = test::TestRequest::get().uri("/api/v1/caris").to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }

@@ -203,7 +203,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
     // Create cari
     let unique = uuid::Uuid::new_v4();
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": format!("SD-CARI-{}", unique),
@@ -223,7 +223,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
 
     // Soft delete the cari
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -232,7 +232,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
 
     // Verify cari is NOT found via normal GET
     let get_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -245,7 +245,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
 
     // Verify cari is NOT in normal list
     let list_req = test::TestRequest::get()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -262,7 +262,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
 
     // Verify cari appears in deleted list
     let deleted_req = test::TestRequest::get()
-        .uri("/api/v1/cari/deleted")
+        .uri("/api/v1/caris/deleted")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -280,7 +280,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
 
     // Restore the cari
     let restore_req = test::TestRequest::put()
-        .uri(&format!("/api/v1/cari/{}/restore", cari_id))
+        .uri(&format!("/api/v1/caris/{}/restore", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -289,7 +289,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
 
     // Verify cari is found again after restore
     let get_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -302,7 +302,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
 
     // Verify cari is back in normal list
     let list_req = test::TestRequest::get()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -317,7 +317,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
 
     // Verify cari is NOT in deleted list anymore
     let deleted_req = test::TestRequest::get()
-        .uri("/api/v1/cari/deleted")
+        .uri("/api/v1/caris/deleted")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -577,7 +577,7 @@ async fn test_list_deleted_requires_admin() {
 
     // Admin can list deleted cari
     let req = test::TestRequest::get()
-        .uri("/api/v1/cari/deleted")
+        .uri("/api/v1/caris/deleted")
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .to_request();
 
@@ -590,7 +590,7 @@ async fn test_list_deleted_requires_admin() {
 
     // Normal user cannot list deleted cari
     let req = test::TestRequest::get()
-        .uri("/api/v1/cari/deleted")
+        .uri("/api/v1/caris/deleted")
         .insert_header(("Authorization", format!("Bearer {}", user_token)))
         .to_request();
 
@@ -613,7 +613,7 @@ async fn test_restore_requires_admin() {
 
     // Create and soft delete cari as admin
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .set_json(json!({
             "code": format!("RESTORE-TEST-{}", unique),
@@ -630,7 +630,7 @@ async fn test_restore_requires_admin() {
     let cari_id = json["id"].as_i64().unwrap();
 
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .to_request();
 
@@ -640,7 +640,7 @@ async fn test_restore_requires_admin() {
     let (user_token, _) = register_user!(&app, 1);
 
     let restore_req = test::TestRequest::put()
-        .uri(&format!("/api/v1/cari/{}/restore", cari_id))
+        .uri(&format!("/api/v1/caris/{}/restore", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", user_token)))
         .to_request();
 
@@ -653,7 +653,7 @@ async fn test_restore_requires_admin() {
 
     // Admin can restore
     let restore_req = test::TestRequest::put()
-        .uri(&format!("/api/v1/cari/{}/restore", cari_id))
+        .uri(&format!("/api/v1/caris/{}/restore", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .to_request();
 
@@ -676,7 +676,7 @@ async fn test_destroy_requires_admin() {
 
     // Create and soft delete cari as admin
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .set_json(json!({
             "code": format!("DESTROY-TEST-{}", unique),
@@ -693,7 +693,7 @@ async fn test_destroy_requires_admin() {
     let cari_id = json["id"].as_i64().unwrap();
 
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .to_request();
 
@@ -703,7 +703,7 @@ async fn test_destroy_requires_admin() {
     let (user_token, _) = register_user!(&app, 1);
 
     let destroy_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}/destroy", cari_id))
+        .uri(&format!("/api/v1/caris/{}/destroy", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", user_token)))
         .to_request();
 
@@ -716,7 +716,7 @@ async fn test_destroy_requires_admin() {
 
     // Admin can destroy
     let destroy_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}/destroy", cari_id))
+        .uri(&format!("/api/v1/caris/{}/destroy", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .to_request();
 
@@ -729,7 +729,7 @@ async fn test_destroy_requires_admin() {
 
     // Verify cari is completely gone (even from deleted list)
     let deleted_req = test::TestRequest::get()
-        .uri("/api/v1/cari/deleted")
+        .uri("/api/v1/caris/deleted")
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .to_request();
 
@@ -760,7 +760,7 @@ async fn test_deleted_records_excluded_from_search() {
 
     // Create a cari with a searchable name
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": format!("SRCH-{}", unique),
@@ -778,7 +778,7 @@ async fn test_deleted_records_excluded_from_search() {
 
     // Verify it appears in search before deletion
     let search_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/search?q={}", search_term))
+        .uri(&format!("/api/v1/caris/search?q={}", search_term))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -793,7 +793,7 @@ async fn test_deleted_records_excluded_from_search() {
 
     // Soft delete the cari
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -801,7 +801,7 @@ async fn test_deleted_records_excluded_from_search() {
 
     // Verify it does NOT appear in search after deletion
     let search_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/search?q={}", search_term))
+        .uri(&format!("/api/v1/caris/search?q={}", search_term))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -826,7 +826,7 @@ async fn test_deleted_records_excluded_from_type_filter() {
 
     // Create a vendor-type cari
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": format!("VENDOR-SD-{}", unique),
@@ -844,7 +844,7 @@ async fn test_deleted_records_excluded_from_type_filter() {
 
     // Soft delete
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -852,7 +852,7 @@ async fn test_deleted_records_excluded_from_type_filter() {
 
     // Verify not in vendor-type list
     let type_req = test::TestRequest::get()
-        .uri("/api/v1/cari/type/vendor")
+        .uri("/api/v1/caris/type/vendor")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -877,7 +877,7 @@ async fn test_deleted_records_excluded_from_get_by_id() {
 
     // Create a cari
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": format!("GETBYID-{}", unique),
@@ -895,7 +895,7 @@ async fn test_deleted_records_excluded_from_get_by_id() {
 
     // Verify found before deletion
     let get_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -904,7 +904,7 @@ async fn test_deleted_records_excluded_from_get_by_id() {
 
     // Soft delete
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -912,7 +912,7 @@ async fn test_deleted_records_excluded_from_get_by_id() {
 
     // Verify NOT found after deletion
     let get_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -940,7 +940,7 @@ async fn test_tenant_isolation_deleted_records() {
 
     // Tenant 1 creates and soft deletes a cari
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token1)))
         .set_json(json!({
             "code": format!("T1-SD-{}", unique),
@@ -957,7 +957,7 @@ async fn test_tenant_isolation_deleted_records() {
     let cari_id = json["id"].as_i64().unwrap();
 
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token1)))
         .to_request();
 
@@ -965,7 +965,7 @@ async fn test_tenant_isolation_deleted_records() {
 
     // Tenant 2 should not see tenant 1's deleted records
     let deleted_req = test::TestRequest::get()
-        .uri("/api/v1/cari/deleted")
+        .uri("/api/v1/caris/deleted")
         .insert_header(("Authorization", format!("Bearer {}", token2)))
         .to_request();
 
@@ -983,7 +983,7 @@ async fn test_tenant_isolation_deleted_records() {
 
     // Tenant 2 should not be able to restore tenant 1's deleted record
     let restore_req = test::TestRequest::put()
-        .uri(&format!("/api/v1/cari/{}/restore", cari_id))
+        .uri(&format!("/api/v1/caris/{}/restore", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token2)))
         .to_request();
 
@@ -1008,7 +1008,7 @@ async fn test_tenant_isolation_normal_queries_ignore_other_tenant_deleted() {
 
     // Tenant 1 creates a cari and soft deletes it
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token1)))
         .set_json(json!({
             "code": format!("T1-ISO-{}", unique),
@@ -1025,7 +1025,7 @@ async fn test_tenant_isolation_normal_queries_ignore_other_tenant_deleted() {
     let cari_id = json["id"].as_i64().unwrap();
 
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token1)))
         .to_request();
 
@@ -1033,7 +1033,7 @@ async fn test_tenant_isolation_normal_queries_ignore_other_tenant_deleted() {
 
     // Tenant 2 creates a cari with the same code pattern (different tenant)
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token2)))
         .set_json(json!({
             "code": format!("T2-ISO-{}", unique),
@@ -1048,7 +1048,7 @@ async fn test_tenant_isolation_normal_queries_ignore_other_tenant_deleted() {
 
     // Tenant 2's normal list should only show tenant 2's records
     let list_req = test::TestRequest::get()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token2)))
         .to_request();
 
@@ -1082,7 +1082,7 @@ async fn test_non_admin_cannot_soft_delete() {
 
     // Admin creates a cari
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .set_json(json!({
             "code": format!("NONADMIN-{}", unique),
@@ -1102,7 +1102,7 @@ async fn test_non_admin_cannot_soft_delete() {
     let (user_token, _) = register_user!(&app, 1);
 
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", user_token)))
         .to_request();
 
@@ -1115,7 +1115,7 @@ async fn test_non_admin_cannot_soft_delete() {
 
     // Verify cari still exists (not deleted)
     let get_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .to_request();
 
@@ -1134,10 +1134,10 @@ async fn test_unauthenticated_cannot_access_soft_delete_endpoints() {
 
     // Unauthenticated requests to soft delete endpoints should be rejected
     let endpoints = vec![
-        ("GET", "/api/v1/cari/deleted"),
-        ("PUT", "/api/v1/cari/1/restore"),
-        ("DELETE", "/api/v1/cari/1/destroy"),
-        ("DELETE", "/api/v1/cari/1"),
+        ("GET", "/api/v1/caris/deleted"),
+        ("PUT", "/api/v1/caris/1/restore"),
+        ("DELETE", "/api/v1/caris/1/destroy"),
+        ("DELETE", "/api/v1/caris/1"),
     ];
 
     for (method, path) in endpoints {
@@ -1196,7 +1196,7 @@ async fn test_soft_delete_sets_deleted_at_and_deleted_by() {
 
     // Create cari
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": format!("META-{}", unique),
@@ -1214,7 +1214,7 @@ async fn test_soft_delete_sets_deleted_at_and_deleted_by() {
 
     // Soft delete
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1222,7 +1222,7 @@ async fn test_soft_delete_sets_deleted_at_and_deleted_by() {
 
     // Check deleted list for metadata
     let deleted_req = test::TestRequest::get()
-        .uri("/api/v1/cari/deleted")
+        .uri("/api/v1/caris/deleted")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1245,14 +1245,14 @@ async fn test_soft_delete_sets_deleted_at_and_deleted_by() {
 
     // Restore and verify it reappears in normal queries
     let restore_req = test::TestRequest::put()
-        .uri(&format!("/api/v1/cari/{}/restore", cari_id))
+        .uri(&format!("/api/v1/caris/{}/restore", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
     let _ = test::call_service(&app, restore_req).await;
 
     let get_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1278,7 +1278,7 @@ async fn test_multiple_domains_support_soft_delete() {
 
     // Test cari soft delete
     let cari_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": format!("MULTI-CARI-{}", unique),
@@ -1295,7 +1295,7 @@ async fn test_multiple_domains_support_soft_delete() {
     let cari_id = json["id"].as_i64().unwrap();
 
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1384,7 +1384,7 @@ async fn test_double_soft_delete_idempotent() {
 
     // Create cari
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": format!("DBL-{}", unique),
@@ -1402,7 +1402,7 @@ async fn test_double_soft_delete_idempotent() {
 
     // First soft delete
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1411,7 +1411,7 @@ async fn test_double_soft_delete_idempotent() {
 
     // Second soft delete is idempotent and returns 200
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1434,7 +1434,7 @@ async fn test_restore_non_deleted_record_is_idempotent() {
 
     // Create cari (not deleted)
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": format!("NO-RESTORE-{}", unique),
@@ -1452,7 +1452,7 @@ async fn test_restore_non_deleted_record_is_idempotent() {
 
     // Try to restore a non-deleted record (idempotent - returns 200)
     let restore_req = test::TestRequest::put()
-        .uri(&format!("/api/v1/cari/{}/restore", cari_id))
+        .uri(&format!("/api/v1/caris/{}/restore", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1475,7 +1475,7 @@ async fn test_destroy_without_soft_delete() {
 
     // Create cari (not soft deleted)
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": format!("HARD-DEL-{}", unique),
@@ -1493,7 +1493,7 @@ async fn test_destroy_without_soft_delete() {
 
     // Try to destroy without soft delete first
     let destroy_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}/destroy", cari_id))
+        .uri(&format!("/api/v1/caris/{}/destroy", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1507,7 +1507,7 @@ async fn test_destroy_without_soft_delete() {
 
     // Verify completely gone
     let get_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1524,7 +1524,7 @@ async fn test_soft_delete_nonexistent_record_returns_404() {
 
     // Try to delete a non-existent cari
     let delete_req = test::TestRequest::delete()
-        .uri("/api/v1/cari/999999")
+        .uri("/api/v1/caris/999999")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1545,7 +1545,7 @@ async fn test_restore_nonexistent_record_returns_404() {
 
     // Try to restore a non-existent cari
     let restore_req = test::TestRequest::put()
-        .uri("/api/v1/cari/999999/restore")
+        .uri("/api/v1/caris/999999/restore")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1568,7 +1568,7 @@ async fn test_update_deleted_record_behavior() {
 
     // Create cari
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": format!("UPD-DEL-{}", unique),
@@ -1586,7 +1586,7 @@ async fn test_update_deleted_record_behavior() {
 
     // Soft delete
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1594,7 +1594,7 @@ async fn test_update_deleted_record_behavior() {
 
     // Update on a deleted record: current implementation allows it
     let update_req = test::TestRequest::put()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "name": "Updated After Delete"
@@ -1856,7 +1856,7 @@ async fn test_soft_delete_then_create_same_code() {
 
     // Create cari
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": code.clone(),
@@ -1874,7 +1874,7 @@ async fn test_soft_delete_then_create_same_code() {
 
     // Soft delete it
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -1882,7 +1882,7 @@ async fn test_soft_delete_then_create_same_code() {
 
     // Create another cari with the same code
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": code.clone(),
@@ -2517,7 +2517,7 @@ async fn test_all_soft_delete_endpoints_return_consistent_status_codes() {
     // and 404 on non-existent records
 
     let endpoints = vec![
-        ("/api/v1/cari/999999", "Cari"),
+        ("/api/v1/caris/999999", "Cari"),
         ("/api/v1/stock/warehouses/999999", "Warehouse"),
         ("/api/v1/chart-of-accounts/999999", "Chart of Accounts"),
         ("/api/v1/projects/999999", "Project"),

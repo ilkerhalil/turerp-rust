@@ -38,8 +38,8 @@ impl From<BankAccountRow> for BankAccount {
     fn from(row: BankAccountRow) -> Self {
         let bank_code = row.bank_code.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid bank_code in database: {}, defaulting to Halkbank",
-                e
+                error = %e,
+                "Invalid bank_code in database, defaulting to Halkbank"
             );
             crate::domain::bank::model::BankCode::default()
         });
@@ -79,7 +79,10 @@ struct BankStatementRow {
 impl From<BankStatementRow> for BankStatement {
     fn from(row: BankStatementRow) -> Self {
         let format = row.format.parse().unwrap_or_else(|e| {
-            tracing::warn!("Invalid format in database: {}, defaulting to MT940", e);
+            tracing::warn!(
+                error = %e,
+                "Invalid format in database, defaulting to MT940"
+            );
             StatementFormat::default()
         });
 
@@ -118,8 +121,8 @@ impl From<BankTransactionRow> for BankTransaction {
     fn from(row: BankTransactionRow) -> Self {
         let match_status = row.match_status.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid match_status in database: {}, defaulting to Unmatched",
-                e
+                error = %e,
+                "Invalid match_status in database, defaulting to Unmatched"
             );
             MatchStatus::default()
         });
@@ -162,8 +165,8 @@ impl From<ReconciliationRuleRow> for ReconciliationRule {
     fn from(row: ReconciliationRuleRow) -> Self {
         let match_field = row.match_field.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid match_field in database: {}, defaulting to Description",
-                e
+                error = %e,
+                "Invalid match_field in database, defaulting to Description"
             );
             MatchField::default()
         });
