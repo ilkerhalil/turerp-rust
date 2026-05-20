@@ -3685,7 +3685,7 @@
         }
       }
     },
-    "/api/v1/cari": {
+    "/api/v1/caris": {
       "get": {
         "tags": [
           "Cari"
@@ -3767,7 +3767,7 @@
         ]
       }
     },
-    "/api/v1/cari/deleted": {
+    "/api/v1/caris/deleted": {
       "get": {
         "tags": [
           "Cari"
@@ -3792,7 +3792,7 @@
         ]
       }
     },
-    "/api/v1/cari/search": {
+    "/api/v1/caris/search": {
       "get": {
         "tags": [
           "Cari"
@@ -3847,7 +3847,7 @@
         ]
       }
     },
-    "/api/v1/cari/type/{cari_type}": {
+    "/api/v1/caris/type/{cari_type}": {
       "get": {
         "tags": [
           "Cari"
@@ -3902,7 +3902,7 @@
         ]
       }
     },
-    "/api/v1/cari/{id}": {
+    "/api/v1/caris/{id}": {
       "get": {
         "tags": [
           "Cari"
@@ -4032,7 +4032,7 @@
         ]
       }
     },
-    "/api/v1/cari/{id}/destroy": {
+    "/api/v1/caris/{id}/destroy": {
       "delete": {
         "tags": [
           "Cari"
@@ -4072,7 +4072,7 @@
         ]
       }
     },
-    "/api/v1/cari/{id}/restore": {
+    "/api/v1/caris/{id}/restore": {
       "put": {
         "tags": [
           "Cari"

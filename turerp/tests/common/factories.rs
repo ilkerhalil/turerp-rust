@@ -48,7 +48,7 @@ impl CariBuilder {
         >,
     {
         let req = test::TestRequest::post()
-            .uri("/api/v1/cari")
+            .uri("/api/v1/caris")
             .insert_header(("Authorization", format!("Bearer {}", token)))
             .set_json(json!({
                 "code": self.code,

@@ -174,8 +174,8 @@ impl AuthService {
         // Self-registration defaults to Role::User regardless of requested role.
         let role = if request.role == Some(Role::Admin) {
             tracing::warn!(
-                "Self-registration requested Admin role for tenant {} - forcing User role",
-                tenant_id
+                tenant_id,
+                "Self-registration requested Admin role - forcing User role"
             );
             Some(Role::User)
         } else {

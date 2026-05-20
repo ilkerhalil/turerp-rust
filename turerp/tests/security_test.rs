@@ -265,7 +265,7 @@ async fn test_sql_injection_in_cari_endpoints() {
 
     for malicious_code in malicious_codes {
         let req = test::TestRequest::post()
-            .uri("/api/v1/cari")
+            .uri("/api/v1/caris")
             .insert_header(("Authorization", format!("Bearer {}", token)))
             .set_json(json!({
                 "code": malicious_code,
@@ -303,7 +303,7 @@ async fn test_sql_injection_in_cari_search() {
     for query in malicious_queries {
         let req = test::TestRequest::get()
             .uri(&format!(
-                "/api/v1/cari/search?q={}",
+                "/api/v1/caris/search?q={}",
                 query.replace(' ', "%20").replace('\'', "%27")
             ))
             .insert_header(("Authorization", format!("Bearer {}", token)))
@@ -596,7 +596,7 @@ async fn test_normal_user_cannot_create_cari() {
 
     // Normal user cannot create cari (admin-only)
     let req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "UNAUTH-CUST",
@@ -624,7 +624,7 @@ async fn test_normal_user_cannot_update_cari() {
     let admin_token = sec_register_admin!(&state, 1);
 
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .set_json(json!({
             "code": "UPDATE-TEST",
@@ -644,7 +644,7 @@ async fn test_normal_user_cannot_update_cari() {
     let user_token = sec_register_user!(&app, 1);
 
     let update_req = test::TestRequest::put()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", user_token)))
         .set_json(json!({ "name": "Hacked Name" }))
         .to_request();
@@ -666,7 +666,7 @@ async fn test_normal_user_cannot_delete_cari() {
     let admin_token = sec_register_admin!(&state, 1);
 
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .set_json(json!({
             "code": "DELETE-TEST",
@@ -686,7 +686,7 @@ async fn test_normal_user_cannot_delete_cari() {
     let user_token = sec_register_user!(&app, 1);
 
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", user_token)))
         .to_request();
 
@@ -778,7 +778,7 @@ async fn test_tenant_isolation_cari() {
     let token1 = sec_register_admin!(&state, 1);
 
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token1)))
         .set_json(json!({
             "code": "T1-PRIVATE",
@@ -796,7 +796,7 @@ async fn test_tenant_isolation_cari() {
     let token2 = sec_register_admin!(&state, 2);
 
     let list_req = test::TestRequest::get()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token2)))
         .to_request();
 
@@ -1033,7 +1033,7 @@ async fn test_cari_validation_empty_code() {
 
     // Try to create cari with empty code - should fail validation
     let req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "",
@@ -1061,7 +1061,7 @@ async fn test_cari_validation_empty_name() {
 
     // Try to create cari with empty name - should fail validation
     let req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "VALID-CODE",
@@ -1768,7 +1768,7 @@ async fn test_search_cari_tenant_isolation_security() {
 
     // Admin 1 creates a cari
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", admin1)))
         .set_json(json!({
             "code": "SEC001",
@@ -1784,7 +1784,7 @@ async fn test_search_cari_tenant_isolation_security() {
 
     // Admin 2 searches for it via cari search endpoint
     let search_req = test::TestRequest::get()
-        .uri("/api/v1/cari/search?q=Secure")
+        .uri("/api/v1/caris/search?q=Secure")
         .insert_header(("Authorization", format!("Bearer {}", admin2)))
         .to_request();
 

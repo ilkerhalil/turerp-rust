@@ -14,7 +14,7 @@ use crate::middleware::{AdminUser, AuthUser};
 /// Create a cari (requires admin role)
 #[utoipa::path(
     post,
-    path = "/api/v1/cari",
+    path = "/api/v1/caris",
     tag = "Cari",
     request_body = CreateCari,
     responses(
@@ -46,7 +46,7 @@ pub async fn create_cari(
 /// Get cari by ID (requires authentication)
 #[utoipa::path(
     get,
-    path = "/api/v1/cari/{id}",
+    path = "/api/v1/caris/{id}",
     tag = "Cari",
     params(("id" = i64, Path, description = "Cari ID")),
     responses(
@@ -75,7 +75,7 @@ pub async fn get_cari(
 /// Get all cari (requires authentication)
 #[utoipa::path(
     get,
-    path = "/api/v1/cari",
+    path = "/api/v1/caris",
     tag = "Cari",
     params(PaginationParams),
     responses(
@@ -111,7 +111,7 @@ pub async fn get_all_cari(
 /// Get cari by type (requires authentication)
 #[utoipa::path(
     get,
-    path = "/api/v1/cari/type/{cari_type}",
+    path = "/api/v1/caris/type/{cari_type}",
     tag = "Cari",
     params(("cari_type" = CariType, Path, description = "Cari type filter"), PaginationParams),
     responses(
@@ -149,7 +149,7 @@ pub async fn get_cari_by_type(
 /// Search cari (requires authentication)
 #[utoipa::path(
     get,
-    path = "/api/v1/cari/search",
+    path = "/api/v1/caris/search",
     tag = "Cari",
     params(("q" = String, Query, description = "Search query"), PaginationParams),
     responses(
@@ -186,7 +186,7 @@ pub async fn search_cari(
 /// Update cari (requires admin role)
 #[utoipa::path(
     put,
-    path = "/api/v1/cari/{id}",
+    path = "/api/v1/caris/{id}",
     tag = "Cari",
     params(("id" = i64, Path, description = "Cari ID")),
     request_body = UpdateCari,
@@ -218,7 +218,7 @@ pub async fn update_cari(
 /// Delete cari (requires admin role)
 #[utoipa::path(
     delete,
-    path = "/api/v1/cari/{id}",
+    path = "/api/v1/caris/{id}",
     tag = "Cari",
     params(("id" = i64, Path, description = "Cari ID")),
     responses(
@@ -252,7 +252,7 @@ pub async fn delete_cari(
 /// Restore a soft-deleted cari (admin only)
 #[utoipa::path(
     put,
-    path = "/api/v1/cari/{id}/restore",
+    path = "/api/v1/caris/{id}/restore",
     tag = "Cari",
     params(("id" = i64, Path, description = "Cari ID")),
     responses(
@@ -278,7 +278,7 @@ pub async fn restore_cari(
 /// List soft-deleted cari accounts (admin only)
 #[utoipa::path(
     get,
-    path = "/api/v1/cari/deleted",
+    path = "/api/v1/caris/deleted",
     tag = "Cari",
     responses(
         (status = 200, description = "List of deleted cari accounts"),
@@ -303,7 +303,7 @@ pub async fn list_deleted_cari(
 /// Permanently delete a cari (admin only)
 #[utoipa::path(
     delete,
-    path = "/api/v1/cari/{id}/destroy",
+    path = "/api/v1/caris/{id}/destroy",
     tag = "Cari",
     params(("id" = i64, Path, description = "Cari ID")),
     responses(
@@ -350,19 +350,19 @@ impl SearchQuery {
 /// Configure cari routes for v1 API
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::resource("/v1/cari")
+        web::resource("/v1/caris")
             .route(web::get().to(get_all_cari))
             .route(web::post().to(create_cari)),
     )
-    .service(web::resource("/v1/cari/deleted").route(web::get().to(list_deleted_cari)))
-    .service(web::resource("/v1/cari/search").route(web::get().to(search_cari)))
-    .service(web::resource("/v1/cari/type/{cari_type}").route(web::get().to(get_cari_by_type)))
+    .service(web::resource("/v1/caris/deleted").route(web::get().to(list_deleted_cari)))
+    .service(web::resource("/v1/caris/search").route(web::get().to(search_cari)))
+    .service(web::resource("/v1/caris/type/{cari_type}").route(web::get().to(get_cari_by_type)))
     .service(
-        web::resource("/v1/cari/{id}")
+        web::resource("/v1/caris/{id}")
             .route(web::get().to(get_cari))
             .route(web::put().to(update_cari))
             .route(web::delete().to(delete_cari)),
     )
-    .service(web::resource("/v1/cari/{id}/restore").route(web::put().to(restore_cari)))
-    .service(web::resource("/v1/cari/{id}/destroy").route(web::delete().to(destroy_cari)));
+    .service(web::resource("/v1/caris/{id}/restore").route(web::put().to(restore_cari)))
+    .service(web::resource("/v1/caris/{id}/destroy").route(web::delete().to(destroy_cari)));
 }

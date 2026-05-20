@@ -669,7 +669,7 @@ async fn test_cari_crud() {
 
     // Create cari
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "CUST001",
@@ -691,7 +691,7 @@ async fn test_cari_crud() {
 
     // Get all cari
     let list_req = test::TestRequest::get()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -704,7 +704,7 @@ async fn test_cari_crud() {
 
     // Get cari by ID
     let get_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -717,7 +717,7 @@ async fn test_cari_crud() {
 
     // Update cari
     let update_req = test::TestRequest::put()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "name": "Updated Customer",
@@ -734,7 +734,7 @@ async fn test_cari_crud() {
 
     // Delete cari
     let delete_req = test::TestRequest::delete()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -746,7 +746,7 @@ async fn test_cari_crud() {
 
     // Verify deletion
     let get_req = test::TestRequest::get()
-        .uri(&format!("/api/v1/cari/{}", cari_id))
+        .uri(&format!("/api/v1/caris/{}", cari_id))
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -763,7 +763,7 @@ async fn test_cari_search() {
 
     // Create a cari first
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "VENDOR001",
@@ -778,7 +778,7 @@ async fn test_cari_search() {
 
     // Search
     let search_req = test::TestRequest::get()
-        .uri("/api/v1/cari/search?q=Acme")
+        .uri("/api/v1/caris/search?q=Acme")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -796,7 +796,7 @@ async fn test_cari_write_requires_admin() {
 
     // Try to create cari - should be forbidden (403)
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "CUST002",
@@ -820,7 +820,7 @@ async fn test_cari_read_allows_authenticated() {
     let (admin_token, admin_id) = register_admin!(&app_state, 1);
 
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", admin_token)))
         .set_json(json!({
             "code": "CUST003",
@@ -837,7 +837,7 @@ async fn test_cari_read_allows_authenticated() {
     let (user_token, _) = register_user!(&app, 1);
 
     let list_req = test::TestRequest::get()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", user_token)))
         .to_request();
 
@@ -975,7 +975,7 @@ async fn test_invoice_crud() {
 
     // Create a cari first (invoices need cari_id)
     let cari_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "INV-CUST",
@@ -1107,7 +1107,7 @@ async fn test_sales_order_crud() {
 
     // Create a cari first
     let cari_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "SALES-CUST",
@@ -1190,7 +1190,7 @@ async fn test_sales_quotation_crud() {
 
     // Create a cari first
     let cari_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "QUOTE-CUST",
@@ -2512,7 +2512,7 @@ async fn test_business_endpoints_require_auth() {
 
     // All these endpoints should return 401 without auth
     let protected_endpoints = vec![
-        ("/api/v1/cari", "GET"),
+        ("/api/v1/caris", "GET"),
         ("/api/v1/stock/warehouses", "GET"),
         ("/api/v1/invoices", "GET"),
         ("/api/v1/sales/orders", "GET"),
@@ -2561,7 +2561,7 @@ async fn test_cari_tenant_isolation() {
     let (token1, user_id1) = register_admin!(&app_state, 1);
 
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token1)))
         .set_json(json!({
             "code": "TENANT1-CUST",
@@ -2579,7 +2579,7 @@ async fn test_cari_tenant_isolation() {
     let (token2, _) = register_admin!(&app_state, 2);
 
     let list_req = test::TestRequest::get()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token2)))
         .to_request();
 
@@ -2736,7 +2736,7 @@ async fn test_admin_only_write_endpoints() {
 
     // These write endpoints should all return 403 for non-admin users
     let write_endpoints = vec![
-        ("/api/v1/cari", "POST"),
+        ("/api/v1/caris", "POST"),
         ("/api/v1/stock/warehouses", "POST"),
         ("/api/v1/invoices", "POST"),
         ("/api/v1/sales/orders", "POST"),
@@ -3732,7 +3732,7 @@ async fn test_search_cari_endpoint() {
 
     // Create a cari via the cari API
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "C001",
@@ -3748,7 +3748,7 @@ async fn test_search_cari_endpoint() {
 
     // Create another cari
     let create_req2 = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "C002",
@@ -3764,7 +3764,7 @@ async fn test_search_cari_endpoint() {
 
     // Search via cari search endpoint
     let search_req = test::TestRequest::get()
-        .uri("/api/v1/cari/search?q=Customer")
+        .uri("/api/v1/caris/search?q=Customer")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -3789,7 +3789,7 @@ async fn test_search_cari_fuzzy() {
 
     // Create cari with full name
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "C003",
@@ -3805,7 +3805,7 @@ async fn test_search_cari_fuzzy() {
 
     // Search with partial match via cari endpoint
     let search_req = test::TestRequest::get()
-        .uri("/api/v1/cari/search?q=Micro")
+        .uri("/api/v1/caris/search?q=Micro")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -3830,7 +3830,7 @@ async fn test_search_cari_turkish() {
 
     // Create cari with Turkish name
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "C004",
@@ -3846,7 +3846,7 @@ async fn test_search_cari_turkish() {
 
     // Search with lowercase Turkish i
     let search_req = test::TestRequest::get()
-        .uri("/api/v1/cari/search?q=istanbul")
+        .uri("/api/v1/caris/search?q=istanbul")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .to_request();
 
@@ -3877,7 +3877,7 @@ async fn test_search_cari_tenant_isolation() {
 
     // Create cari in tenant 1
     let create_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token1)))
         .set_json(json!({
             "code": "C005",
@@ -3893,7 +3893,7 @@ async fn test_search_cari_tenant_isolation() {
 
     // Tenant 1 should find it
     let search_req1 = test::TestRequest::get()
-        .uri("/api/v1/cari/search?q=Tenant1")
+        .uri("/api/v1/caris/search?q=Tenant1")
         .insert_header(("Authorization", format!("Bearer {}", token1)))
         .to_request();
 
@@ -3910,7 +3910,7 @@ async fn test_search_cari_tenant_isolation() {
 
     // Tenant 2 should NOT find it
     let search_req2 = test::TestRequest::get()
-        .uri("/api/v1/cari/search?q=Tenant1")
+        .uri("/api/v1/caris/search?q=Tenant1")
         .insert_header(("Authorization", format!("Bearer {}", token2)))
         .to_request();
 
@@ -3935,7 +3935,7 @@ async fn test_search_invoice_endpoint() {
 
     // Create a cari first (invoices need cari_id)
     let cari_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "code": "INV-SEARCH",
@@ -4005,7 +4005,7 @@ async fn test_search_invoice_tenant_isolation() {
 
     // Create cari for tenant 1
     let cari_req = test::TestRequest::post()
-        .uri("/api/v1/cari")
+        .uri("/api/v1/caris")
         .insert_header(("Authorization", format!("Bearer {}", token1)))
         .set_json(json!({
             "code": "T1-INV",

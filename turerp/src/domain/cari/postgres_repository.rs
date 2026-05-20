@@ -47,9 +47,9 @@ impl From<CariRow> for Cari {
         // Parse cari_type with warning for invalid values
         let cari_type = row.cari_type.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid cari_type '{}' in database: {}, defaulting to Customer",
-                row.cari_type,
-                e
+                cari_type = row.cari_type,
+                error = %e,
+                "Invalid cari_type in database, defaulting to Customer"
             );
             CariType::default()
         });
@@ -57,9 +57,9 @@ impl From<CariRow> for Cari {
         // Parse status with warning for invalid values
         let status = row.status.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid status '{}' in database: {}, defaulting to Active",
-                row.status,
-                e
+                status = row.status,
+                error = %e,
+                "Invalid status in database, defaulting to Active"
             );
             CariStatus::default()
         });
@@ -127,18 +127,18 @@ impl From<CariRowWithTotal> for (Cari, i64) {
     fn from(row: CariRowWithTotal) -> (Cari, i64) {
         let cari_type = row.cari_type.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid cari_type '{}' in database: {}, defaulting to Customer",
-                row.cari_type,
-                e
+                cari_type = row.cari_type,
+                error = %e,
+                "Invalid cari_type in database, defaulting to Customer"
             );
             CariType::default()
         });
 
         let status = row.status.parse().unwrap_or_else(|e| {
             tracing::warn!(
-                "Invalid status '{}' in database: {}, defaulting to Active",
-                row.status,
-                e
+                status = row.status,
+                error = %e,
+                "Invalid status in database, defaulting to Active"
             );
             CariStatus::default()
         });

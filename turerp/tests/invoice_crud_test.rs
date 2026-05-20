@@ -17,7 +17,7 @@ async fn test_create_invoice_success() {
     let (token, user_id) = register_admin(&state, 1).await;
 
     // Create a cari first
-    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(json!({
             "code": format!("CARI-{}", uuid::Uuid::new_v4()),
             "name": "Test Cari",
@@ -72,7 +72,7 @@ async fn test_list_invoices_paginated() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(json!({
             "code": format!("CARI-{}", uuid::Uuid::new_v4()),
             "name": "Test Cari",
@@ -129,7 +129,7 @@ async fn test_get_invoice_success() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(json!({
             "code": format!("CARI-{}", uuid::Uuid::new_v4()),
             "name": "Test Cari",
@@ -200,7 +200,7 @@ async fn test_update_invoice_status() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(json!({
             "code": format!("CARI-{}", uuid::Uuid::new_v4()),
             "name": "Test Cari",
@@ -259,7 +259,7 @@ async fn test_delete_and_restore_invoice() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(json!({
             "code": format!("CARI-{}", uuid::Uuid::new_v4()),
             "name": "Test Cari",
@@ -344,7 +344,7 @@ async fn test_list_deleted_invoices() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(json!({
             "code": format!("CARI-{}", uuid::Uuid::new_v4()),
             "name": "Test Cari",
@@ -410,7 +410,7 @@ async fn test_destroy_invoice_permanently() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(json!({
             "code": format!("CARI-{}", uuid::Uuid::new_v4()),
             "name": "Test Cari",
@@ -484,7 +484,7 @@ async fn test_search_invoices() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
-    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/cari", &token)
+    let cari_req = auth_request(actix_web::http::Method::POST, "/api/v1/caris", &token)
         .set_json(json!({
             "code": format!("CARI-{}", uuid::Uuid::new_v4()),
             "name": "Test Cari",
