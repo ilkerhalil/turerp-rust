@@ -54,6 +54,38 @@ impl PaginationParams {
     }
 }
 
+/// Paginated search query parameters (for `?q=` endpoints)
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
+pub struct PaginatedSearchQuery {
+    /// Search query string
+    pub q: String,
+    /// Page number (1-based, default: 1)
+    #[serde(default = "default_page")]
+    pub page: u32,
+    /// Number of items per page (default: 20, max: 100)
+    #[serde(default = "default_per_page")]
+    pub per_page: u32,
+}
+
+impl PaginatedSearchQuery {
+    /// Validate pagination and query parameters
+    pub fn validate(&self) -> Result<(), String> {
+        if self.q.trim().is_empty() {
+            return Err("Search query cannot be empty".to_string());
+        }
+        if self.q.len() > 200 {
+            return Err("Search query must be at most 200 characters".to_string());
+        }
+        if self.page == 0 {
+            return Err("page must be at least 1".to_string());
+        }
+        if self.per_page == 0 || self.per_page > 100 {
+            return Err("per_page must be between 1 and 100".to_string());
+        }
+        Ok(())
+    }
+}
+
 /// Paginated result wrapper
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct PaginatedResult<T> {

@@ -3802,8 +3802,8 @@
         "parameters": [
           {
             "name": "q",
-            "in": "query",
-            "description": "Search query",
+            "in": "path",
+            "description": "Search query string",
             "required": true,
             "schema": {
               "type": "string"

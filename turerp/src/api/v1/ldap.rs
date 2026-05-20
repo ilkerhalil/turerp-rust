@@ -3,18 +3,13 @@
 use actix_web::{web, HttpResponse};
 use serde::Serialize;
 
+use crate::common::MessageResponse;
 use crate::domain::ldap::model::{CreateLdapConfig, TestLdapConnectionRequest, UpdateLdapConfig};
 use crate::domain::ldap::service::LdapSyncService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
 use crate::json_resp;
 use crate::middleware::AdminUser;
-
-/// Simple localized success message payload.
-#[derive(Serialize)]
-pub struct MessageResponse {
-    pub message: String,
-}
 
 /// Create or update LDAP configuration (requires admin role)
 #[utoipa::path(

@@ -2,7 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
-use crate::common::pagination::PaginationParams;
+use crate::common::pagination::{PaginatedSearchQuery, PaginationParams};
 use crate::common::MessageResponse;
 use crate::domain::invoice::model::{CreateInvoice, InvoiceResponse, InvoiceStatus};
 use crate::domain::invoice::service::InvoiceService;
@@ -371,7 +371,7 @@ pub struct UpdateStatusRequest {
     get,
     path = "/api/v1/invoices/search",
     tag = "Invoice",
-    params(("q" = String, Query, description = "Search query")),
+    params(PaginatedSearchQuery),
     responses(
         (status = 200, description = "Search results", body = Vec<InvoiceResponse>),
         (status = 401, description = "Not authenticated")
@@ -381,7 +381,7 @@ pub struct UpdateStatusRequest {
 pub async fn search_invoices(
     auth_user: AuthUser,
     invoice_service: web::Data<InvoiceService>,
-    query: web::Query<SearchQuery>,
+    query: web::Query<PaginatedSearchQuery>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
@@ -405,28 +405,6 @@ pub async fn search_invoices(
             Ok(HttpResponse::Ok().json(responses))
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
-}
-
-#[derive(serde::Deserialize, utoipa::ToSchema)]
-pub struct SearchQuery {
-    pub q: String,
-    #[serde(default = "crate::common::pagination::default_page")]
-    pub page: u32,
-    #[serde(default = "crate::common::pagination::default_per_page")]
-    pub per_page: u32,
-}
-
-impl SearchQuery {
-    /// Validate search query
-    pub fn validate(&self) -> Result<(), String> {
-        if self.q.trim().is_empty() {
-            return Err("Search query cannot be empty".to_string());
-        }
-        if self.q.len() > 200 {
-            return Err("Search query must be at most 200 characters".to_string());
-        }
-        Ok(())
     }
 }
 
