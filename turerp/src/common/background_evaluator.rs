@@ -209,19 +209,7 @@ impl BackgroundEvaluator {
                         && !name.ends_with("_count")
                     {
                         // Simple gauge/counter - record directly
-                        let key = if name.ends_with("_p99") {
-                            let labels = Self::extract_labels(name_and_labels);
-                            if let (Some(method), Some(endpoint)) =
-                                (labels.get("method"), labels.get("endpoint"))
-                            {
-                                format!("{}|method={}|endpoint={}", name, method, endpoint)
-                            } else {
-                                name.to_string()
-                            }
-                        } else {
-                            name.to_string()
-                        };
-                        metrics.insert(key, value);
+                        metrics.insert(name.to_string(), value);
                     }
                 }
             }
@@ -244,6 +232,7 @@ impl BackgroundEvaluator {
     }
 
     /// Extract label key/value pairs from a Prometheus metric line fragment.
+    #[allow(dead_code)]
     fn extract_labels(fragment: &str) -> HashMap<String, String> {
         let mut labels = HashMap::new();
         if let Some(start) = fragment.find('{') {

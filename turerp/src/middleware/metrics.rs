@@ -3,7 +3,6 @@
 //! Records HTTP request metrics:
 //! - `http_requests_total` counter (labels: method, endpoint, status)
 //! - `http_request_duration_seconds` histogram (labels: method, endpoint)
-//! - `http_request_duration_seconds_p99` gauge (labels: method, endpoint)
 //! - `http_requests_in_flight` gauge (labels: method)
 //!
 //! Endpoint labels are normalized to avoid cardinality explosion:
@@ -125,15 +124,6 @@ where
                 "endpoint" => endpoint.clone()
             )
             .record(elapsed);
-
-            // P99 gauge — updated directly; BackgroundEvaluator will
-            // read the histogram and compute the true P99 periodically.
-            gauge!(
-                "http_request_duration_seconds_p99",
-                "method" => method,
-                "endpoint" => endpoint
-            )
-            .set(elapsed);
 
             result
         })
