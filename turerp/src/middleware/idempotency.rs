@@ -8,12 +8,15 @@
 //! Only applies to state-changing methods (POST, PUT, PATCH, DELETE).
 //! GET requests are naturally idempotent and are not cached.
 
+use crate::error::ApiError;
 use actix_web::body::{EitherBody, MessageBody};
 use actix_web::http::header::HeaderName;
 use actix_web::http::StatusCode;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
+use async_trait::async_trait;
 use futures::future::LocalBoxFuture;
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -26,19 +29,54 @@ const MAX_KEY_LENGTH: usize = 255;
 const MAX_CACHE_SIZE: usize = 10_000;
 
 /// A cached idempotent response
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct CachedResponse {
-    status: u16,
-    headers: Vec<(String, String)>,
-    body: Vec<u8>,
-    expires_at: Instant,
+    pub status: u16,
+    pub headers: Vec<(String, String)>,
+    pub body: Vec<u8>,
+    #[serde(with = "instant_serde")]
+    pub expires_at: Instant,
+}
+
+mod instant_serde {
+    use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    pub fn serialize<S>(instant: &Instant, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let system_now = SystemTime::now();
+        let instant_now = Instant::now();
+        let duration = instant.duration_since(instant_now);
+        let system_time = system_now + duration;
+        let secs = system_time
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or(Duration::from_secs(0))
+            .as_secs();
+        secs.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Instant, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let secs: u64 = u64::deserialize(deserializer)?;
+        let target = UNIX_EPOCH + Duration::from_secs(secs);
+        let system_now = SystemTime::now();
+        let duration = target
+            .duration_since(system_now)
+            .unwrap_or(Duration::from_secs(0));
+        Ok(Instant::now() + duration)
+    }
 }
 
 /// Trait for idempotency key storage backends
+#[async_trait]
 pub trait IdempotencyStore: Send + Sync {
-    fn get(&self, key: &str) -> Option<CachedResponse>;
-    fn set(&self, key: &str, response: CachedResponse);
-    fn remove(&self, key: &str);
+    async fn get(&self, key: &str) -> Option<CachedResponse>;
+    async fn set(&self, key: &str, response: CachedResponse);
+    async fn remove(&self, key: &str);
 }
 
 /// In-memory idempotency store (for development / single-instance deployment)
@@ -65,13 +103,14 @@ impl InMemoryIdempotencyStore {
     }
 }
 
+#[async_trait]
 impl IdempotencyStore for InMemoryIdempotencyStore {
-    fn get(&self, key: &str) -> Option<CachedResponse> {
+    async fn get(&self, key: &str) -> Option<CachedResponse> {
         self.evict_expired();
         self.cache.read().get(key).cloned()
     }
 
-    fn set(&self, key: &str, response: CachedResponse) {
+    async fn set(&self, key: &str, response: CachedResponse) {
         self.evict_expired();
         let mut cache = self.cache.write();
         if cache.len() >= MAX_CACHE_SIZE {
@@ -86,12 +125,101 @@ impl IdempotencyStore for InMemoryIdempotencyStore {
         cache.insert(key.to_string(), response);
     }
 
-    fn remove(&self, key: &str) {
+    async fn remove(&self, key: &str) {
         self.cache.write().remove(key);
     }
 }
 
+/// Redis-backed idempotency store for production deployments
+pub struct RedisIdempotencyStore {
+    conn: redis::aio::MultiplexedConnection,
+    key_prefix: String,
+}
+
+impl RedisIdempotencyStore {
+    /// Create a new Redis idempotency store from a URL
+    pub async fn new(url: &str) -> Result<Self, ApiError> {
+        let client = redis::Client::open(url)
+            .map_err(|e| ApiError::Internal(format!("Failed to open Redis connection: {}", e)))?;
+        let conn = client
+            .get_multiplexed_tokio_connection()
+            .await
+            .map_err(|e| ApiError::Internal(format!("Failed to connect to Redis: {}", e)))?;
+        Ok(Self {
+            conn,
+            key_prefix: "idempotency:".to_string(),
+        })
+    }
+
+    /// Set a custom key prefix (useful for multi-tenant deployments)
+    pub fn with_prefix(mut self, prefix: String) -> Self {
+        self.key_prefix = prefix;
+        self
+    }
+}
+
+#[async_trait]
+impl IdempotencyStore for RedisIdempotencyStore {
+    async fn get(&self, key: &str) -> Option<CachedResponse> {
+        let full_key = format!("{}{}", self.key_prefix, key);
+        let mut conn = self.conn.clone();
+        let result: Result<Option<String>, _> = redis::cmd("GET")
+            .arg(&full_key)
+            .query_async(&mut conn)
+            .await;
+        match result {
+            Ok(Some(json)) => serde_json::from_str(&json).ok(),
+            Ok(None) => None,
+            Err(e) => {
+                tracing::warn!("Redis idempotency GET failed for key {}: {}", full_key, e);
+                None
+            }
+        }
+    }
+
+    async fn set(&self, key: &str, response: CachedResponse) {
+        let ttl = response
+            .expires_at
+            .saturating_duration_since(Instant::now())
+            .as_secs();
+        if ttl == 0 {
+            return;
+        }
+        let json = match serde_json::to_string(&response) {
+            Ok(j) => j,
+            Err(e) => {
+                tracing::warn!("Failed to serialize CachedResponse: {}", e);
+                return;
+            }
+        };
+        let full_key = format!("{}{}", self.key_prefix, key);
+        let mut conn = self.conn.clone();
+        if let Err(e) = redis::cmd("SETEX")
+            .arg(&full_key)
+            .arg(ttl)
+            .arg(&json)
+            .query_async::<()>(&mut conn)
+            .await
+        {
+            tracing::warn!("Redis idempotency SETEX failed for key {}: {}", full_key, e);
+        }
+    }
+
+    async fn remove(&self, key: &str) {
+        let full_key = format!("{}{}", self.key_prefix, key);
+        let mut conn = self.conn.clone();
+        if let Err(e) = redis::cmd("DEL")
+            .arg(&full_key)
+            .query_async::<()>(&mut conn)
+            .await
+        {
+            tracing::warn!("Redis idempotency DEL failed for key {}: {}", full_key, e);
+        }
+    }
+}
+
 /// Idempotency key middleware
+#[derive(Clone)]
 pub struct IdempotencyMiddleware {
     store: Arc<dyn IdempotencyStore>,
     ttl: Duration,
@@ -118,7 +246,8 @@ impl IdempotencyMiddleware {
 
 impl<S, B> actix_web::dev::Transform<S, ServiceRequest> for IdempotencyMiddleware
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>
+        + 'static,
     S::Future: 'static,
     B: MessageBody + 'static,
 {
@@ -130,7 +259,7 @@ where
 
     fn new_transform(&self, service: S) -> Self::Future {
         std::future::ready(Ok(IdempotencyMiddlewareService {
-            service,
+            service: Arc::new(service),
             store: self.store.clone(),
             ttl: self.ttl,
         }))
@@ -139,14 +268,15 @@ where
 
 /// Idempotency key middleware service
 pub struct IdempotencyMiddlewareService<S> {
-    service: S,
+    service: Arc<S>,
     store: Arc<dyn IdempotencyStore>,
     ttl: Duration,
 }
 
 impl<S, B> actix_web::dev::Service<ServiceRequest> for IdempotencyMiddlewareService<S>
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>
+        + 'static,
     S::Future: 'static,
     B: MessageBody + 'static,
 {
@@ -155,7 +285,7 @@ where
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(ctx)
+        (*self.service).poll_ready(ctx)
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
@@ -194,33 +324,36 @@ where
         }
 
         let key = idempotency_key.expect("guard ensures Some");
+        let service = self.service.clone();
         let store = self.store.clone();
         let ttl = self.ttl;
 
-        // Check for cached response
-        if let Some(cached) = store.get(&key) {
-            let mut builder = actix_web::HttpResponse::build(
-                StatusCode::from_u16(cached.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-            );
-            for (name, value) in &cached.headers {
-                if let Ok(header_name) = HeaderName::try_from(name.as_str()) {
-                    if let Ok(header_value) =
-                        actix_web::http::header::HeaderValue::from_bytes(value.as_bytes())
-                    {
-                        builder.insert_header((header_name, header_value));
+        // Cache check and service call both happen inside the async block
+        // because store access is now async.
+        Box::pin(async move {
+            // Check for cached response
+            if let Some(cached) = store.get(&key).await {
+                let mut builder = actix_web::HttpResponse::build(
+                    StatusCode::from_u16(cached.status)
+                        .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                );
+                for (name, value) in &cached.headers {
+                    if let Ok(header_name) = HeaderName::try_from(name.as_str()) {
+                        if let Ok(header_value) =
+                            actix_web::http::header::HeaderValue::from_bytes(value.as_bytes())
+                        {
+                            builder.insert_header((header_name, header_value));
+                        }
                     }
                 }
+                builder.insert_header((IDEMPOTENCY_REPLAY_HEADER, "true"));
+                let resp = builder.body(cached.body);
+                let body = resp.map_into_right_body::<B>();
+                return Ok(req.into_response(body));
             }
-            builder.insert_header((IDEMPOTENCY_REPLAY_HEADER, "true"));
-            let resp = builder.body(cached.body);
-            let body = resp.map_into_right_body::<B>();
-            return Box::pin(async move { Ok(req.into_response(body)) });
-        }
 
-        // No cached response — call the service and cache the result
-        let fut = self.service.call(req);
-        Box::pin(async move {
-            let res = fut.await?;
+            // No cached response — call the service and cache the result
+            let res = service.call(req).await?;
             let status = res.status().as_u16();
 
             // Only cache successful responses (2xx)
@@ -246,7 +379,7 @@ where
                     body: Vec::new(), // Body capture requires consuming response
                     expires_at: Instant::now() + ttl,
                 };
-                store.set(&key, cached);
+                store.set(&key, cached).await;
             }
 
             Ok(res.map_into_left_body())
@@ -258,8 +391,8 @@ where
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_in_memory_store_set_and_get() {
+    #[tokio::test]
+    async fn test_in_memory_store_set_and_get() {
         let store = InMemoryIdempotencyStore::new();
         let cached = CachedResponse {
             status: 200,
@@ -268,14 +401,14 @@ mod tests {
             expires_at: Instant::now() + Duration::from_secs(3600),
         };
 
-        store.set("test-key", cached.clone());
-        let result = store.get("test-key");
+        store.set("test-key", cached.clone()).await;
+        let result = store.get("test-key").await;
         assert!(result.is_some());
         assert_eq!(result.unwrap().status, 200);
     }
 
-    #[test]
-    fn test_in_memory_store_expired() {
+    #[tokio::test]
+    async fn test_in_memory_store_expired() {
         let store = InMemoryIdempotencyStore::new();
         let cached = CachedResponse {
             status: 200,
@@ -284,12 +417,12 @@ mod tests {
             expires_at: Instant::now() - Duration::from_secs(1),
         };
 
-        store.set("expired-key", cached);
-        assert!(store.get("expired-key").is_none());
+        store.set("expired-key", cached).await;
+        assert!(store.get("expired-key").await.is_none());
     }
 
-    #[test]
-    fn test_in_memory_store_remove() {
+    #[tokio::test]
+    async fn test_in_memory_store_remove() {
         let store = InMemoryIdempotencyStore::new();
         let cached = CachedResponse {
             status: 200,
@@ -298,14 +431,14 @@ mod tests {
             expires_at: Instant::now() + Duration::from_secs(3600),
         };
 
-        store.set("remove-key", cached);
-        assert!(store.get("remove-key").is_some());
-        store.remove("remove-key");
-        assert!(store.get("remove-key").is_none());
+        store.set("remove-key", cached).await;
+        assert!(store.get("remove-key").await.is_some());
+        store.remove("remove-key").await;
+        assert!(store.get("remove-key").await.is_none());
     }
 
-    #[test]
-    fn test_cache_eviction_on_size() {
+    #[tokio::test]
+    async fn test_cache_eviction_on_size() {
         let store = InMemoryIdempotencyStore::new();
         for i in 0..=MAX_CACHE_SIZE {
             let cached = CachedResponse {
@@ -314,7 +447,7 @@ mod tests {
                 body: Vec::from(format!("body-{i}")),
                 expires_at: Instant::now() + Duration::from_secs(3600),
             };
-            store.set(&format!("key-{i}"), cached);
+            store.set(&format!("key-{i}"), cached).await;
         }
         let cache = store.cache.read();
         assert!(cache.len() <= MAX_CACHE_SIZE);

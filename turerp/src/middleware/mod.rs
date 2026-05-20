@@ -15,7 +15,9 @@ pub mod tracing;
 pub use api_key::{ApiKeyAuth, ApiKeyClaims};
 pub use audit::AuditLoggingMiddleware;
 pub use auth::{get_auth_claims, AdminUser, AuthUser, JwtAuthMiddleware, PortalUser, PUBLIC_PATHS};
-pub use idempotency::IdempotencyMiddleware;
+pub use idempotency::{
+    IdempotencyMiddleware, IdempotencyStore, InMemoryIdempotencyStore, RedisIdempotencyStore,
+};
 pub use ip_whitelist::IpWhitelistMiddleware;
 pub use metrics::{install_metrics_exporter, render_metrics, MetricsMiddleware};
 pub use rate_limit::RateLimitMiddleware;

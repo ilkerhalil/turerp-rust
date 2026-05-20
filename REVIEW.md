@@ -110,7 +110,7 @@
 - `tenant_database_url()` naive string replace
 - IP Whitelist JWT'den sonra
 - Audit logging auth'dan once
-- Idempotency in-memory (scale-out calismaz)
+- ~~Idempotency in-memory (scale-out calismaz)~~ — **Cozuldu** — `RedisIdempotencyStore` eklendi, async trait, main.rs'te Redis enabled ise otomatik inject
 - `InterCompanyService` `common/`da ama 4 domain'e bagli
 - `QualityControlService` yanlis state'te
 - `SGK Payroll` concrete `HrService`'e bagli
@@ -191,7 +191,7 @@
 22. [ ] Search endpoint'ler `?q=` query param yap
 23. [x] ~~`encryption_key_bytes()` Result donsun~~ — **Cozuldu (#100)** — `Result<[u8; 32], ApiError>` donuyor, `.expect()` yok
 24. [x] ~~`tenant_database_url()` parse et~~ — **Cozuldu (#100)** — `url` crate ile proper parsing, query params korunuyor, Result donuyor
-25. [ ] Idempotency Redis/Postgres backend yap
+25. [x] ~~Idempotency Redis/Postgres backend yap~~ — **Cozuldu** — `RedisIdempotencyStore` implemente edildi, `IdempotencyStore` async trait'e cevrildi, main.rs'te `config.redis.enabled == true` ise Redis backend otomatik inject, yoksa in-memory fallback
 26. [ ] Audit logging auth'dan sonra tasila
 27. [ ] Structured logging (field syntax)
 28. [ ] P99 gauge histogram yap
