@@ -54,8 +54,8 @@
 10. ~~LIMIT eksik: `find_by_user` (notification)~~ **Cozuldu (#91)** — `LIMIT 1000` eklendi
 11. ~~LIMIT eksik: `find_deleted` (document)~~ **Cozuldu (#91)** — `LIMIT 1000` eklendi
 12. ~~LIMIT eksik: `list_versions` (document)~~ **Cozuldu (#91)** — `LIMIT 1000` eklendi
-13. `get_outstanding_invoices` — tum tabloyu RAM'e yukleyip filtreliyor
-14. `get_overdue_invoices` — ayni
+13. ~~`get_outstanding_invoices` — tum tabloyu RAM'e yukleyip filtreliyor~~ — **Cozuldu (#93)** — `find_outstanding()` repo metodu SQL'e itildi
+14. ~~`get_overdue_invoices` — ayni~~ — **Cozuldu (#93)** — `find_overdue()` repo metodu SQL'e itildi
 15. ~~`search_invoices` — LIMIT yok~~ — **Yanlis bulgu**, service layer'da LIMIT 100 var, SQL'de LIMIT/OFFSET parametrik
 
 ### Mimari (4)
