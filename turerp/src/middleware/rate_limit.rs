@@ -115,49 +115,6 @@ impl RateLimitMiddleware {
         self.stats = stats;
         self
     }
-
-    /// Extract client IP from X-Forwarded-For or X-Real-IP headers.
-    fn extract_ip_from_headers(req: &ServiceRequest) -> Option<String> {
-        if let Some(forwarded) = req.headers().get("X-Forwarded-For") {
-            if let Ok(forwarded_str) = forwarded.to_str() {
-                if let Some(client_ip) = forwarded_str.split(',').next() {
-                    let trimmed = client_ip.trim().to_string();
-                    if !trimmed.is_empty() {
-                        return Some(trimmed);
-                    }
-                }
-            }
-        }
-
-        if let Some(real_ip) = req.headers().get("X-Real-IP") {
-            if let Ok(ip) = real_ip.to_str() {
-                let trimmed = ip.trim().to_string();
-                if !trimmed.is_empty() {
-                    return Some(trimmed);
-                }
-            }
-        }
-
-        None
-    }
-
-    /// Check if a peer IP is a trusted proxy.
-    /// Loopback addresses are always trusted (useful for local development).
-    fn is_loopback(peer_ip: &str) -> bool {
-        let Ok(parsed) = peer_ip.parse::<IpAddr>() else {
-            return false;
-        };
-        parsed.is_loopback()
-    }
-
-    /// Check if a peer IP is in the trusted proxies list.
-    fn is_in_trusted_proxies(peer_ip: &str, trusted_proxies: &[IpAddr]) -> bool {
-        let Ok(parsed) = peer_ip.parse::<IpAddr>() else {
-            return false;
-        };
-
-        trusted_proxies.contains(&parsed)
-    }
 }
 
 impl Default for RateLimitMiddleware {
@@ -254,34 +211,14 @@ where
 impl<S> RateLimitMiddlewareService<S> {
     /// Get client IP, considering trusted proxies configuration.
     fn get_client_key(&self, req: &ServiceRequest) -> String {
-        let peer_ip = req
-            .connection_info()
-            .peer_addr()
-            .unwrap_or("unknown")
-            .to_string();
-
-        // If we have trusted proxies configured, check if the peer is one
-        if !self.trusted_proxies.is_empty() {
-            if RateLimitMiddleware::is_in_trusted_proxies(&peer_ip, &self.trusted_proxies) {
-                // Peer is a trusted proxy - extract real client IP from headers
-                if let Some(client_ip) = RateLimitMiddleware::extract_ip_from_headers(req) {
-                    return client_ip;
-                }
-            }
-            // Peer is NOT a trusted proxy - use peer IP directly
-            return peer_ip;
-        }
-
-        // No trusted proxies configured - use loopback check only
-        // This path is used when RateLimitMiddleware::new() or with_quota() is called
-        if RateLimitMiddleware::is_loopback(&peer_ip) {
-            // Local/loopback connection - try headers for convenience in dev
-            if let Some(client_ip) = RateLimitMiddleware::extract_ip_from_headers(req) {
-                return client_ip;
-            }
-        }
-
-        peer_ip
+        crate::common::ip_utils::extract_client_ip(req, &self.trusted_proxies).unwrap_or_else(
+            || {
+                req.connection_info()
+                    .peer_addr()
+                    .unwrap_or("unknown")
+                    .to_string()
+            },
+        )
     }
 }
 
@@ -338,30 +275,30 @@ mod tests {
 
     #[test]
     fn test_is_loopback() {
-        assert!(RateLimitMiddleware::is_loopback("127.0.0.1"));
-        assert!(RateLimitMiddleware::is_loopback("::1"));
+        assert!(crate::common::ip_utils::is_loopback("127.0.0.1"));
+        assert!(crate::common::ip_utils::is_loopback("::1"));
     }
 
     #[test]
     fn test_is_not_loopback() {
-        assert!(!RateLimitMiddleware::is_loopback("192.168.1.1"));
-        assert!(!RateLimitMiddleware::is_loopback("10.0.0.1"));
-        assert!(!RateLimitMiddleware::is_loopback("unknown"));
+        assert!(!crate::common::ip_utils::is_loopback("192.168.1.1"));
+        assert!(!crate::common::ip_utils::is_loopback("10.0.0.1"));
+        assert!(!crate::common::ip_utils::is_loopback("unknown"));
     }
 
     #[test]
     fn test_is_in_trusted_proxies() {
         let proxies: Vec<IpAddr> = vec!["10.0.0.1".parse().unwrap(), "10.0.0.2".parse().unwrap()];
-        assert!(RateLimitMiddleware::is_in_trusted_proxies(
+        assert!(crate::common::ip_utils::is_in_trusted_proxies(
             "10.0.0.1", &proxies
         ));
-        assert!(RateLimitMiddleware::is_in_trusted_proxies(
+        assert!(crate::common::ip_utils::is_in_trusted_proxies(
             "10.0.0.2", &proxies
         ));
-        assert!(!RateLimitMiddleware::is_in_trusted_proxies(
+        assert!(!crate::common::ip_utils::is_in_trusted_proxies(
             "10.0.0.3", &proxies
         ));
-        assert!(!RateLimitMiddleware::is_in_trusted_proxies(
+        assert!(!crate::common::ip_utils::is_in_trusted_proxies(
             "invalid", &proxies
         ));
     }

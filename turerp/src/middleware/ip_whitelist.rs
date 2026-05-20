@@ -35,23 +35,6 @@ impl IpWhitelistMiddleware {
         self.trusted_proxies = proxies;
         self
     }
-
-    /// Check if a peer IP is a trusted proxy.
-    /// Loopback addresses are always trusted (useful for local development).
-    fn is_loopback(peer_ip: &str) -> bool {
-        let Ok(parsed) = peer_ip.parse::<IpAddr>() else {
-            return false;
-        };
-        parsed.is_loopback()
-    }
-
-    /// Check if a peer IP is in the trusted proxies list.
-    fn is_in_trusted_proxies(peer_ip: &str, trusted_proxies: &[IpAddr]) -> bool {
-        let Ok(parsed) = peer_ip.parse::<IpAddr>() else {
-            return false;
-        };
-        trusted_proxies.contains(&parsed)
-    }
 }
 
 impl<S, B> actix_web::dev::Transform<S, ServiceRequest> for IpWhitelistMiddleware
@@ -134,52 +117,7 @@ where
 impl<S> IpWhitelistMiddlewareService<S> {
     /// Extract client IP from request, considering trusted proxies.
     fn extract_client_ip(req: &ServiceRequest, trusted_proxies: &[IpAddr]) -> Option<String> {
-        let peer_ip = req
-            .connection_info()
-            .peer_addr()
-            .unwrap_or("unknown")
-            .to_string();
-
-        let may_trust_headers = if !trusted_proxies.is_empty() {
-            IpWhitelistMiddleware::is_in_trusted_proxies(&peer_ip, trusted_proxies)
-        } else {
-            IpWhitelistMiddleware::is_loopback(&peer_ip)
-        };
-
-        if may_trust_headers {
-            // Check X-Forwarded-For first
-            if let Some(forwarded) = req.headers().get("X-Forwarded-For") {
-                if let Ok(forwarded_str) = forwarded.to_str() {
-                    if let Some(client_ip) = forwarded_str.split(',').next() {
-                        let trimmed = client_ip.trim().to_string();
-                        if !trimmed.is_empty() {
-                            // Validate extracted IP format to prevent injection
-                            if trimmed.parse::<std::net::IpAddr>().is_ok() {
-                                return Some(trimmed);
-                            }
-                            tracing::warn!(peer_ip = %peer_ip, forwarded = %trimmed, "Invalid IP format in X-Forwarded-For, falling back to peer IP");
-                        }
-                    }
-                }
-            }
-
-            // Fall back to X-Real-IP
-            if let Some(real_ip) = req.headers().get("X-Real-IP") {
-                if let Ok(ip) = real_ip.to_str() {
-                    let trimmed = ip.trim().to_string();
-                    if !trimmed.is_empty() {
-                        // Validate extracted IP format to prevent injection
-                        if trimmed.parse::<std::net::IpAddr>().is_ok() {
-                            return Some(trimmed);
-                        }
-                        tracing::warn!(peer_ip = %peer_ip, real_ip = %trimmed, "Invalid IP format in X-Real-IP, falling back to peer IP");
-                    }
-                }
-            }
-        }
-
-        // Direct peer IP (not behind a trusted proxy or no forwarding headers)
-        req.connection_info().peer_addr().map(|s| s.to_string())
+        crate::common::ip_utils::extract_client_ip(req, trusted_proxies)
     }
 }
 
@@ -211,30 +149,30 @@ mod tests {
 
     #[test]
     fn test_is_loopback() {
-        assert!(IpWhitelistMiddleware::is_loopback("127.0.0.1"));
-        assert!(IpWhitelistMiddleware::is_loopback("::1"));
+        assert!(crate::common::ip_utils::is_loopback("127.0.0.1"));
+        assert!(crate::common::ip_utils::is_loopback("::1"));
     }
 
     #[test]
     fn test_is_not_loopback() {
-        assert!(!IpWhitelistMiddleware::is_loopback("192.168.1.1"));
-        assert!(!IpWhitelistMiddleware::is_loopback("10.0.0.1"));
-        assert!(!IpWhitelistMiddleware::is_loopback("unknown"));
+        assert!(!crate::common::ip_utils::is_loopback("192.168.1.1"));
+        assert!(!crate::common::ip_utils::is_loopback("10.0.0.1"));
+        assert!(!crate::common::ip_utils::is_loopback("unknown"));
     }
 
     #[test]
     fn test_is_in_trusted_proxies() {
         let proxies: Vec<IpAddr> = vec!["10.0.0.1".parse().unwrap(), "10.0.0.2".parse().unwrap()];
-        assert!(IpWhitelistMiddleware::is_in_trusted_proxies(
+        assert!(crate::common::ip_utils::is_in_trusted_proxies(
             "10.0.0.1", &proxies
         ));
-        assert!(IpWhitelistMiddleware::is_in_trusted_proxies(
+        assert!(crate::common::ip_utils::is_in_trusted_proxies(
             "10.0.0.2", &proxies
         ));
-        assert!(!IpWhitelistMiddleware::is_in_trusted_proxies(
+        assert!(!crate::common::ip_utils::is_in_trusted_proxies(
             "10.0.0.3", &proxies
         ));
-        assert!(!IpWhitelistMiddleware::is_in_trusted_proxies(
+        assert!(!crate::common::ip_utils::is_in_trusted_proxies(
             "invalid", &proxies
         ));
     }
