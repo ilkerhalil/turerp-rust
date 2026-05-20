@@ -215,8 +215,8 @@ impl TenantRepository for InMemoryTenantRepository {
             tenant.name = name;
         }
         if let Some(subdomain) = update.subdomain {
-            tenant.subdomain = subdomain.clone();
             tenant.db_name = crate::domain::tenant::model::generate_db_name(&subdomain);
+            tenant.subdomain = subdomain;
         }
         if let Some(is_active) = update.is_active {
             tenant.is_active = is_active;

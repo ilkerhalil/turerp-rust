@@ -366,7 +366,7 @@ impl SettingsService {
             },
         ];
 
-        let mut created = Vec::new();
+        let mut created = Vec::with_capacity(defaults.len());
         for create in defaults {
             if !self.repo.key_exists(tenant_id, &create.key).await? {
                 created.push(self.repo.create(create).await?);

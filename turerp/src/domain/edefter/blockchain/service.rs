@@ -68,7 +68,7 @@ impl BlockchainLedgerService {
         period_id: i64,
         entries: Vec<YevmiyeEntry>,
     ) -> Result<Vec<HashChainEntry>, ApiError> {
-        let mut chain = Vec::new();
+        let mut chain = Vec::with_capacity(entries.len());
         let mut previous_hash: Option<String> = None;
 
         for entry in entries {

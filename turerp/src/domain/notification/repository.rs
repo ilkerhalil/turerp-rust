@@ -523,7 +523,7 @@ impl NotificationPreferenceRepository for InMemoryNotificationPreferenceReposito
         prefs: Vec<UpdatePreference>,
     ) -> Result<Vec<NotificationPreference>, ApiError> {
         let mut inner = self.inner.write();
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(prefs.len());
 
         for pref in prefs {
             let channel = pref

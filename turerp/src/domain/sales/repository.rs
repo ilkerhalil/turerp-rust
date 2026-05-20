@@ -460,7 +460,7 @@ impl SalesOrderLineRepository for InMemorySalesOrderLineRepository {
         create_lines: Vec<CreateSalesOrderLine>,
     ) -> Result<Vec<SalesOrderLine>, ApiError> {
         let mut inner = self.inner.lock();
-        let mut lines = Vec::new();
+        let mut lines = Vec::with_capacity(create_lines.len());
 
         for (i, create) in create_lines.into_iter().enumerate() {
             let id = inner.next_id;
@@ -838,7 +838,7 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
         create_lines: Vec<CreateQuotationLine>,
     ) -> Result<Vec<QuotationLine>, ApiError> {
         let mut inner = self.inner.lock();
-        let mut lines = Vec::new();
+        let mut lines = Vec::with_capacity(create_lines.len());
 
         for (i, create) in create_lines.into_iter().enumerate() {
             let id = inner.next_id;

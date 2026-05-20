@@ -101,8 +101,8 @@ impl DocumentService {
         ids: Vec<i64>,
         tenant_id: i64,
     ) -> Result<BulkRestoreResponse<DocumentResponse>, ApiError> {
-        let mut restored = Vec::new();
-        let mut failed = Vec::new();
+        let mut restored = Vec::with_capacity(ids.len());
+        let mut failed = Vec::with_capacity(ids.len());
         for id in ids {
             match self.repo.restore(id, tenant_id).await {
                 Ok(doc) => restored.push(DocumentResponse::from(doc)),

@@ -343,7 +343,7 @@ impl SettingsRepository for PostgresSettingsRepository {
         tenant_id: i64,
         updates: Vec<BulkUpdateSettingItem>,
     ) -> Result<Vec<Setting>, ApiError> {
-        let mut updated = Vec::new();
+        let mut updated = Vec::with_capacity(updates.len());
 
         for item in updates {
             let result = sqlx::query_as::<_, SettingRow>(

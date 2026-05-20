@@ -28,11 +28,12 @@ struct TenantRow {
 
 impl From<TenantRow> for Tenant {
     fn from(row: TenantRow) -> Self {
+        let db_name = crate::domain::tenant::model::generate_db_name(&row.subdomain);
         Self {
             id: row.id,
             name: row.name,
-            subdomain: row.subdomain.clone(),
-            db_name: crate::domain::tenant::model::generate_db_name(&row.subdomain),
+            subdomain: row.subdomain,
+            db_name,
             is_active: row.is_active,
             base_currency: row.base_currency,
             supported_currencies: row.supported_currencies,
@@ -62,11 +63,12 @@ struct TenantRowWithTotal {
 
 impl From<TenantRowWithTotal> for (Tenant, i64) {
     fn from(row: TenantRowWithTotal) -> (Tenant, i64) {
+        let db_name = crate::domain::tenant::model::generate_db_name(&row.subdomain);
         let tenant = Tenant {
             id: row.id,
             name: row.name,
-            subdomain: row.subdomain.clone(),
-            db_name: crate::domain::tenant::model::generate_db_name(&row.subdomain),
+            subdomain: row.subdomain,
+            db_name,
             is_active: row.is_active,
             base_currency: row.base_currency,
             supported_currencies: row.supported_currencies,

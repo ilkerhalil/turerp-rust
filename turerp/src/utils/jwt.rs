@@ -51,7 +51,7 @@ impl AuthClaims {
     pub fn user_id(&self) -> Result<i64, ApiError> {
         self.sub
             .parse()
-            .map_err(|_| ApiError::Unauthorized("Invalid user ID in token".to_string()))
+            .map_err(|_| ApiError::InvalidToken("Invalid user ID in token".to_string()))
     }
 }
 
@@ -108,7 +108,7 @@ impl PortalAuthClaims {
     pub fn portal_user_id(&self) -> Result<i64, ApiError> {
         self.sub
             .parse()
-            .map_err(|_| ApiError::Unauthorized("Invalid portal user ID in token".to_string()))
+            .map_err(|_| ApiError::InvalidToken("Invalid portal user ID in token".to_string()))
     }
 }
 
@@ -137,7 +137,7 @@ impl VendorAuthClaims {
     pub fn vendor_user_id(&self) -> Result<i64, ApiError> {
         self.sub
             .parse()
-            .map_err(|_| ApiError::Unauthorized("Invalid vendor user ID in token".to_string()))
+            .map_err(|_| ApiError::InvalidToken("Invalid vendor user ID in token".to_string()))
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]

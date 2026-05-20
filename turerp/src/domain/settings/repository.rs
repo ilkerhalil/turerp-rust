@@ -286,7 +286,7 @@ impl SettingsRepository for InMemorySettingsRepository {
         tenant_id: i64,
         updates: Vec<BulkUpdateSettingItem>,
     ) -> Result<Vec<Setting>, ApiError> {
-        let mut updated = Vec::new();
+        let mut updated = Vec::with_capacity(updates.len());
         let mut inner = self.inner.lock();
 
         for item in updates {
