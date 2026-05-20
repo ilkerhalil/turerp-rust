@@ -141,6 +141,14 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "026_subscriptions",
             sql: include_str!("../../migrations/026_subscriptions.sql"),
         },
+        Migration {
+            version: "027_observability",
+            sql: include_str!("../../migrations/027_observability.sql"),
+        },
+        Migration {
+            version: "028_missing_repos",
+            sql: include_str!("../../migrations/028_missing_repos.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).

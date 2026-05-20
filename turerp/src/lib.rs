@@ -253,6 +253,7 @@ pub mod app {
     };
     use crate::domain::audit::postgres_repository::PostgresAuditLogRepository;
     use crate::domain::bank::postgres_repository::PostgresBankRepository;
+    use crate::domain::barcode::postgres_repository::PostgresBarcodeRepository;
     use crate::domain::cari::postgres_repository::PostgresCariRepository;
     use crate::domain::chart_of_accounts::postgres_repository::PostgresChartAccountRepository;
     use crate::domain::company::postgres_repository::PostgresCompanyRepository;
@@ -265,8 +266,12 @@ pub mod app {
         PostgresCurrencyRepository, PostgresExchangeRateRepository,
     };
     use crate::domain::custom_field::postgres_repository::PostgresCustomFieldRepository;
+    use crate::domain::customer_portal::postgres_repository::{
+        PostgresPortalUserRepository, PostgresSupportTicketRepository,
+    };
     use crate::domain::dashboard::postgres_repository::PostgresDashboardRepository;
     use crate::domain::document::postgres_repository::PostgresDocumentRepository;
+    use crate::domain::earchive::postgres_repository::PostgresEarchiveRepository;
     use crate::domain::edefter::postgres_repository::PostgresEDefterRepository;
     use crate::domain::efatura::postgres_repository::PostgresEFaturaRepository;
     use crate::domain::feature::postgres_repository::PostgresFeatureFlagRepository;
@@ -278,6 +283,7 @@ pub mod app {
     use crate::domain::invoice::postgres_repository::{
         PostgresInvoiceLineRepository, PostgresInvoiceRepository, PostgresPaymentRepository,
     };
+    use crate::domain::ip_whitelist::postgres_repository::PostgresIpWhitelistRepository;
     use crate::domain::manufacturing::postgres_repository::{
         PostgresBillOfMaterialsRepository, PostgresRoutingRepository, PostgresWorkOrderRepository,
     };
@@ -313,6 +319,9 @@ pub mod app {
     };
     use crate::domain::tenant::postgres_repository::PostgresTenantRepository;
     use crate::domain::user::postgres_repository::PostgresUserRepository;
+    use crate::domain::vendor_portal::postgres_repository::{
+        PostgresDeliveryNoteRepository, PostgresVendorUserRepository,
+    };
     use crate::domain::webhook::postgres_repository::{
         PostgresWebhookDeliveryRepository, PostgresWebhookRepository,
     };
@@ -1130,11 +1139,9 @@ pub mod app {
         let ticket_repo = PostgresTicketRepository::new(pool.clone()).into_boxed();
         let crm_service = CrmService::new(lead_repo, opportunity_repo, campaign_repo, ticket_repo);
 
-        // Customer Portal - PostgreSQL (using in-memory repos until PostgreSQL repos are implemented)
-        let portal_user_repo = Arc::new(InMemoryPortalUserRepository::new())
-            as crate::domain::customer_portal::BoxPortalUserRepository;
-        let portal_ticket_repo = Arc::new(InMemorySupportTicketRepository::new())
-            as crate::domain::customer_portal::BoxSupportTicketRepository;
+        // Customer Portal - PostgreSQL
+        let portal_user_repo = PostgresPortalUserRepository::new(pool.clone()).into_boxed();
+        let portal_ticket_repo = PostgresSupportTicketRepository::new(pool.clone()).into_boxed();
         let customer_portal_service: BoxCustomerPortal = Arc::new(CustomerPortalService::new(
             portal_user_repo,
             portal_ticket_repo,
@@ -1162,11 +1169,9 @@ pub mod app {
             request_line_repo,
         );
 
-        // Vendor Portal - PostgreSQL (using in-memory repos until PostgreSQL repos are implemented)
-        let vendor_user_repo = Arc::new(InMemoryVendorUserRepository::new())
-            as crate::domain::vendor_portal::BoxVendorUserRepository;
-        let delivery_note_repo = Arc::new(InMemoryDeliveryNoteRepository::new())
-            as crate::domain::vendor_portal::BoxDeliveryNoteRepository;
+        // Vendor Portal - PostgreSQL
+        let vendor_user_repo = PostgresVendorUserRepository::new(pool.clone()).into_boxed();
+        let delivery_note_repo = PostgresDeliveryNoteRepository::new(pool.clone()).into_boxed();
         let vendor_portal_service: BoxVendorPortal = Arc::new(VendorPortalService::new(
             vendor_user_repo,
             delivery_note_repo,
@@ -1226,8 +1231,8 @@ pub mod app {
             ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo)
                 .with_cache(cache_service.clone());
 
-        // Barcode - using in-memory repo until PostgreSQL repo is implemented
-        let barcode_repo = Arc::new(InMemoryBarcodeRepository::new()) as BoxBarcodeRepository;
+        // Barcode - PostgreSQL
+        let barcode_repo = PostgresBarcodeRepository::new(pool.clone()).into_boxed();
         let barcode_service = BarcodeService::new(barcode_repo);
 
         // Audit - PostgreSQL
@@ -1278,10 +1283,8 @@ pub mod app {
         let api_key_repo = PostgresApiKeyRepository::new(pool.clone()).into_boxed();
         let api_key_service = crate::domain::api_key::ApiKeyService::new(api_key_repo);
 
-        // IP Whitelist - in-memory (until PostgreSQL repo is implemented)
-        let ip_whitelist_repo =
-            Arc::new(crate::domain::ip_whitelist::InMemoryIpWhitelistRepository::new())
-                as crate::domain::ip_whitelist::BoxIpWhitelistRepository;
+        // IP Whitelist - PostgreSQL
+        let ip_whitelist_repo = PostgresIpWhitelistRepository::new(pool.clone()).into_boxed();
         let ip_whitelist_service =
             crate::domain::ip_whitelist::IpWhitelistService::new(ip_whitelist_repo);
 
@@ -1345,9 +1348,8 @@ pub mod app {
         let efatura_service =
             crate::domain::efatura::EFaturaService::new(efatura_repo, gib_gateway);
 
-        // e-Archive - PostgreSQL (using in-memory repo until PostgreSQL repo is implemented)
-        let earchive_repo = Arc::new(crate::domain::earchive::InMemoryEarchiveRepository::new())
-            as crate::domain::earchive::BoxEarchiveRepository;
+        // e-Archive - PostgreSQL
+        let earchive_repo = PostgresEarchiveRepository::new(pool.clone()).into_boxed();
         let earchive_service = crate::domain::earchive::EarchiveService::new(earchive_repo);
 
         // e-Defter - PostgreSQL

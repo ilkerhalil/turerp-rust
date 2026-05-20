@@ -103,7 +103,7 @@
 - `block_on` sync setup'ta
 
 ### Mimari
-- Eksiz PostgreSQL repo'lar (barcode, ip_whitelist, earchive, portal servisler)
+- ~~Eksiz PostgreSQL repo'lar (barcode, ip_whitelist, earchive, portal servisler)~~ — **Cozuldu (#102)** — `PostgresBarcodeRepository`, `PostgresIpWhitelistRepository`, `PostgresEarchiveRepository`, `PostgresPortalUserRepository`, `PostgresSupportTicketRepository`, `PostgresVendorUserRepository`, `PostgresDeliveryNoteRepository` implemente edildi, migration 028 eklendi, `lib.rs` wiring tamamlandi
 - URL naming tutarsiz (`/cari` singular, `/invoices` plural)
 - Search endpoint'ler `?q=` query param olmali
 - `encryption_key_bytes()` `.expect()` panic
@@ -186,7 +186,7 @@
 19. [x] `#[tracing::instrument]` ekle — **#93** — 16 annotation eklendi (invoice, bank, cari, auth)
 
 ### Faz 3: Medium (1-2 hafta)
-20. [ ] Eksiz PostgreSQL repo'lar implemente et
+20. [x] Eksiz PostgreSQL repo'lar implemente et — **Cozuldu (#102)** — 7 repo + migration 028 + lib.rs wiring
 21. [ ] URL naming standardize et
 22. [ ] Search endpoint'ler `?q=` query param yap
 23. [x] ~~`encryption_key_bytes()` Result donsun~~ — **Cozuldu (#100)** — `Result<[u8; 32], ApiError>` donuyor, `.expect()` yok
