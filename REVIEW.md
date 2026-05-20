@@ -90,17 +90,17 @@
 ### Performans
 - `update_preferences` N+1 bulk upsert
 - `SELECT *` document repo'larda (genis tablolar)
-- `subdomain.clone()` gereksiz allocation
-- `Vec::new()` yerine `with_capacity`
+- ~~`subdomain.clone()` gereksiz allocation~~ — **Cozuldu (#104)** — `tenant/postgres_repository.rs` ve `tenant/repository.rs`'te 3 clone kaldırıldı, String move yapıldı
+- ~~`Vec::new()` yerine `with_capacity`~~ — **Cozuldu (#104)** — 24 yerde `Vec::with_capacity()` eklendi, 18 dosya
 
 ### Kod Kalitesi
 - Giant `create_in_memory_services!` macro (1000+ satir)
-- `api/mod.rs` 70+ manual re-export
+- ~~`api/mod.rs` 70+ manual re-export~~ — **Cozuldu (#104)** — 58 individual re-export gruplandi, `v1/mod.rs` ara katman kaldırıldı, net -79 satır
 - `TenantMiddleware` `AuthUser`'a erisiyor (coupling)
 - `RateLimitMiddleware` duplicate IP extraction
 - `SearchQuery` her domain'de yeniden implemente
-- `jwt.rs` `Unauthorized` yerine `InvalidToken`
-- `block_on` sync setup'ta
+- ~~`jwt.rs` `Unauthorized` yerine `InvalidToken`~~ — **Cozuldu (#104)** — 3 yerde `ApiError::Unauthorized` → `ApiError::InvalidToken`
+- ~~`block_on` sync setup'ta~~ — **Cozuldu (#104)** — `background_evaluator.rs`'teki test `#[tokio::test]` async yapıldı, `lib.rs`'teki unavoidable `block_on` açıklama eklendi
 
 ### Mimari
 - ~~Eksiz PostgreSQL repo'lar (barcode, ip_whitelist, earchive, portal servisler)~~ — **Cozuldu (#102)** — `PostgresBarcodeRepository`, `PostgresIpWhitelistRepository`, `PostgresEarchiveRepository`, `PostgresPortalUserRepository`, `PostgresSupportTicketRepository`, `PostgresVendorUserRepository`, `PostgresDeliveryNoteRepository` implemente edildi, migration 028 eklendi, `lib.rs` wiring tamamlandi

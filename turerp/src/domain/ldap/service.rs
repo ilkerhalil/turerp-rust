@@ -124,7 +124,7 @@ impl LdapClient for Ldap3Client {
             .success()
             .map_err(|e| ApiError::Internal(format!("LDAP search error: {}", e)))?;
 
-        let mut users = Vec::new();
+        let mut users = Vec::with_capacity(entries.len());
         for entry in entries {
             let search_entry = ldap3::SearchEntry::construct(entry);
             let attrs = &search_entry.attrs;

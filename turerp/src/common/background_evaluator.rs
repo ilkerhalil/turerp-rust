@@ -277,12 +277,12 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_read_prometheus_metrics_parses_lines() {
+    #[tokio::test]
+    async fn test_read_prometheus_metrics_parses_lines() {
         // This function reads from the global metrics registry.
         // The exact contents depend on which metrics are registered,
         // so we only verify it does not panic and returns a map.
-        let metrics = futures::executor::block_on(BackgroundEvaluator::read_prometheus_metrics());
+        let metrics = BackgroundEvaluator::read_prometheus_metrics().await;
         // Throughput is always inserted even when zero.
         assert!(metrics.contains_key("throughput"));
     }

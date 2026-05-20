@@ -648,7 +648,7 @@ impl NotificationService for InMemoryNotificationService {
         prefs: Vec<UpdatePreference>,
     ) -> Result<Vec<NotificationPreference>, ApiError> {
         let mut preferences = self.preferences.write();
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(prefs.len());
 
         for pref in prefs {
             let channel = pref
@@ -813,7 +813,7 @@ impl NotificationService for InMemoryNotificationService {
         _message: PushMessage,
     ) -> Result<Vec<i64>, ApiError> {
         let tokens = self.push_tokens.read();
-        let mut sent_to = Vec::new();
+        let mut sent_to = Vec::with_capacity(tokens.len());
         let mut seen = std::collections::HashSet::new();
         for t in tokens.iter() {
             if t.tenant_id == tenant_id && t.is_active && seen.insert(t.user_id) {

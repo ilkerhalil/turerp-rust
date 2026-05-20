@@ -23,8 +23,9 @@ pub fn parse_camt053(xml: &str) -> Result<CamtStatement, ApiError> {
 
     let account_iban = stmt.acct.id.iban.unwrap_or_default();
 
-    let mut entries = Vec::new();
-    for ntry in stmt.ntry.unwrap_or_default() {
+    let ntry_list = stmt.ntry.unwrap_or_default();
+    let mut entries = Vec::with_capacity(ntry_list.len());
+    for ntry in ntry_list {
         if let Some(entry) = convert_entry(&ntry) {
             entries.push(entry);
         }

@@ -126,7 +126,7 @@ impl PushNotificationService {
         message: PushMessage,
     ) -> Result<Vec<i64>, ApiError> {
         let tokens = self.repo.find_all_for_tenant(tenant_id).await?;
-        let mut sent_to = Vec::new();
+        let mut sent_to = Vec::with_capacity(tokens.len());
         let mut seen_users = std::collections::HashSet::new();
 
         for token in tokens {

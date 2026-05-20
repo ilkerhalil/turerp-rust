@@ -11,64 +11,45 @@ pub use auth::configure as auth_configure;
 pub use users::configure as users_configure;
 
 // V1 re-exports
-pub use v1::accounting_configure as v1_accounting_configure;
-pub use v1::api_keys_configure as v1_api_keys_configure;
-pub use v1::archive_configure as v1_archive_configure;
-pub use v1::assets_configure as v1_assets_configure;
-pub use v1::audit_configure as v1_audit_configure;
-pub use v1::auth_configure as v1_auth_configure;
-pub use v1::bank_configure as v1_bank_configure;
-pub use v1::barcode_configure as v1_barcode_configure;
-pub use v1::cari_configure as v1_cari_configure;
-pub use v1::chart_of_accounts_configure as v1_chart_of_accounts_configure;
-pub use v1::companies_configure as v1_companies_configure;
-pub use v1::cost_centers_configure as v1_cost_centers_configure;
-pub use v1::crm_configure as v1_crm_configure;
-pub use v1::currency_configure as v1_currency_configure;
-pub use v1::custom_fields_configure as v1_custom_fields_configure;
-pub use v1::customer_portal_configure as v1_customer_portal_configure;
-pub use v1::dashboard_configure as v1_dashboard_configure;
-pub use v1::documents_configure as v1_documents_configure;
-pub use v1::earchive_configure as v1_earchive_configure;
-pub use v1::edefter_blockchain_configure as v1_edefter_blockchain_configure;
-pub use v1::edefter_configure as v1_edefter_configure;
-pub use v1::efatura_configure as v1_efatura_configure;
-pub use v1::events_configure as v1_events_configure;
-pub use v1::feature_flags_configure as v1_feature_flags_configure;
-pub use v1::files_configure as v1_files_configure;
-pub use v1::forecasting_configure as v1_forecasting_configure;
-pub use v1::goods_receipts_configure as v1_goods_receipts_configure;
-pub use v1::graphql_configure as v1_graphql_configure;
-pub use v1::hr_configure as v1_hr_configure;
-pub use v1::import_configure as v1_import_configure;
-pub use v1::invoice_configure as v1_invoice_configure;
-pub use v1::ip_whitelist_configure as v1_ip_whitelist_configure;
-pub use v1::jobs_configure as v1_jobs_configure;
-pub use v1::ldap_configure as v1_ldap_configure;
-pub use v1::manufacturing_configure as v1_manufacturing_configure;
-pub use v1::mfa_configure as v1_mfa_configure;
-pub use v1::notifications_configure as v1_notifications_configure;
-pub use v1::observability_configure as v1_observability_configure;
-pub use v1::product_variants_configure as v1_product_variants_configure;
-pub use v1::project_configure as v1_project_configure;
-pub use v1::purchase_orders_configure as v1_purchase_orders_configure;
-pub use v1::purchase_requests_configure as v1_purchase_requests_configure;
-pub use v1::push_notifications_configure as v1_push_notifications_configure;
-pub use v1::rate_limits_configure as v1_rate_limits_configure;
-pub use v1::reports_configure as v1_reports_configure;
-pub use v1::resilience_configure as v1_resilience_configure;
-pub use v1::sales_configure as v1_sales_configure;
-pub use v1::search_configure as v1_search_configure;
-pub use v1::settings_configure as v1_settings_configure;
-pub use v1::shifts_configure as v1_shifts_configure;
-pub use v1::stock_configure as v1_stock_configure;
-pub use v1::subscriptions_configure as v1_subscriptions_configure;
-pub use v1::tax_configure as v1_tax_configure;
-pub use v1::tenant_configure as v1_tenant_configure;
-pub use v1::users_configure as v1_users_configure;
-pub use v1::vendor_portal_configure as v1_vendor_portal_configure;
-pub use v1::webhooks_configure as v1_webhooks_configure;
-pub use v1::workflows_configure as v1_workflows_configure;
+pub use v1::{
+    accounting::configure as v1_accounting_configure, api_keys::configure as v1_api_keys_configure,
+    archive::configure as v1_archive_configure, assets::configure as v1_assets_configure,
+    audit::configure as v1_audit_configure, auth::configure as v1_auth_configure,
+    bank::configure as v1_bank_configure, barcode::configure as v1_barcode_configure,
+    cari::configure as v1_cari_configure,
+    chart_of_accounts::configure as v1_chart_of_accounts_configure,
+    companies::configure as v1_companies_configure,
+    cost_centers::configure as v1_cost_centers_configure, crm::configure as v1_crm_configure,
+    currency::configure as v1_currency_configure,
+    custom_fields::configure as v1_custom_fields_configure,
+    customer_portal::configure as v1_customer_portal_configure,
+    dashboard::configure as v1_dashboard_configure, documents::configure as v1_documents_configure,
+    earchive::configure as v1_earchive_configure, edefter::configure as v1_edefter_configure,
+    edefter_blockchain::configure as v1_edefter_blockchain_configure,
+    efatura::configure as v1_efatura_configure, events::configure as v1_events_configure,
+    feature_flags::configure as v1_feature_flags_configure, files::configure as v1_files_configure,
+    forecasting::configure as v1_forecasting_configure,
+    goods_receipts::configure as v1_goods_receipts_configure,
+    graphql::configure as v1_graphql_configure, hr::configure as v1_hr_configure,
+    import::configure as v1_import_configure, invoice::configure as v1_invoice_configure,
+    ip_whitelist::configure as v1_ip_whitelist_configure, jobs::configure as v1_jobs_configure,
+    ldap::configure as v1_ldap_configure, manufacturing::configure as v1_manufacturing_configure,
+    mfa::configure as v1_mfa_configure, notifications::configure as v1_notifications_configure,
+    observability::configure as v1_observability_configure,
+    product_variants::configure as v1_product_variants_configure,
+    project::configure as v1_project_configure,
+    purchase_orders::configure as v1_purchase_orders_configure,
+    purchase_requests::configure as v1_purchase_requests_configure,
+    push_notifications::configure as v1_push_notifications_configure,
+    rate_limits::configure as v1_rate_limits_configure, reports::configure as v1_reports_configure,
+    resilience::configure as v1_resilience_configure, sales::configure as v1_sales_configure,
+    search::configure as v1_search_configure, settings::configure as v1_settings_configure,
+    shifts::configure as v1_shifts_configure, stock::configure as v1_stock_configure,
+    subscriptions::configure as v1_subscriptions_configure, tax::configure as v1_tax_configure,
+    tenant::configure as v1_tenant_configure, users::configure as v1_users_configure,
+    vendor_portal::configure as v1_vendor_portal_configure,
+    webhooks::configure as v1_webhooks_configure, workflows::configure as v1_workflows_configure,
+};
 
 use crate::common::MessageResponse;
 use crate::domain::auth::{

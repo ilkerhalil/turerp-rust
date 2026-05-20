@@ -716,7 +716,7 @@ impl JournalLineRepository for InMemoryJournalLineRepository {
         }
 
         let mut inner = self.inner.lock();
-        let mut lines = Vec::new();
+        let mut lines = Vec::with_capacity(create_lines.len());
 
         for create in create_lines {
             let id = inner.next_id;

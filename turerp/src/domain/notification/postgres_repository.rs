@@ -745,7 +745,7 @@ impl NotificationPreferenceRepository for PostgresNotificationPreferenceReposito
         user_id: i64,
         prefs: Vec<UpdatePreference>,
     ) -> Result<Vec<NotificationPreference>, ApiError> {
-        let mut results = Vec::new();
+        let mut results = Vec::with_capacity(prefs.len());
 
         for pref in prefs {
             let channel: crate::common::notifications::NotificationChannel =

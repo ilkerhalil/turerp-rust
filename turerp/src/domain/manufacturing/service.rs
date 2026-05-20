@@ -195,7 +195,7 @@ impl ManufacturingService {
         match bom {
             Some(bom) => {
                 let lines = self.bom_repo.get_lines(bom.id).await?;
-                let mut requirements = Vec::new();
+                let mut requirements = Vec::with_capacity(lines.len());
                 for line in lines {
                     let scrap_factor =
                         Decimal::ONE + (line.scrap_percentage / Decimal::ONE_HUNDRED);

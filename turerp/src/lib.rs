@@ -1589,6 +1589,8 @@ pub mod app {
         infra.db_pool = Some(web::Data::new(Arc::new(pool)));
 
         // Register webhook subscriber on event bus
+        // `block_on` is required here because `create_app_state_in_memory` is a synchronous
+        // function, but `subscribe()` is async. This is the minimal unavoidable scope.
         let webhook_service_arc = Arc::new(integration.webhook_service.get_ref().clone());
         futures::executor::block_on(async {
             infra

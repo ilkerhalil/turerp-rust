@@ -239,7 +239,7 @@ impl ObservabilityService {
     /// Evaluate SLO compliance for all SLOs
     pub async fn evaluate_slo_compliance(&self) -> Result<Vec<SloCompliance>, ApiError> {
         let slos = self.repo.list_slos().await?;
-        let mut compliance_list = Vec::new();
+        let mut compliance_list = Vec::with_capacity(slos.len());
 
         for slo in slos {
             let measurements = self
@@ -349,7 +349,7 @@ impl ObservabilityService {
         metrics: &HashMap<String, f64>,
     ) -> Result<Vec<Alert>, ApiError> {
         let rules = self.repo.list_alert_rules().await?;
-        let mut new_alerts = Vec::new();
+        let mut new_alerts = Vec::with_capacity(rules.len());
 
         for rule in rules {
             if !rule.enabled {

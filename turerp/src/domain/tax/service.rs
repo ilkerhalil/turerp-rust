@@ -108,8 +108,8 @@ impl TaxService {
         ids: Vec<i64>,
         tenant_id: i64,
     ) -> Result<(Vec<TaxRate>, Vec<(i64, String)>), ApiError> {
-        let mut restored = Vec::new();
-        let mut failed = Vec::new();
+        let mut restored = Vec::with_capacity(ids.len());
+        let mut failed = Vec::with_capacity(ids.len());
         for id in ids {
             match self.rate_repo.restore(id, tenant_id).await {
                 Ok(rate) => restored.push(rate),
@@ -295,8 +295,8 @@ impl TaxService {
         ids: Vec<i64>,
         tenant_id: i64,
     ) -> Result<(Vec<TaxPeriod>, Vec<(i64, String)>), ApiError> {
-        let mut restored = Vec::new();
-        let mut failed = Vec::new();
+        let mut restored = Vec::with_capacity(ids.len());
+        let mut failed = Vec::with_capacity(ids.len());
         for id in ids {
             match self.period_repo.restore(id, tenant_id).await {
                 Ok(period) => restored.push(period),
