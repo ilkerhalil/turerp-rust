@@ -120,7 +120,7 @@
 - Duplicate logging (actix Logger + TracingMiddleware)
 - Domain log'lari string interpolation (structured field yok)
 - DB error log'larinda tenant_id/user_id context yok
-- P99 gauge gercek percentile degil
+- ~~P99 gauge gercek percentile degil~~ — **Cozuldu (#106)** — Yanlis `gauge!().set(elapsed)` kaldırıldı, `http_request_duration_seconds` histogram üzerinden `compute_percentiles()` ile gercek P99 hesaplanıyor
 - Metrics test global OnceLock'e bagimli
 - README MIT badge ama Cargo.toml AGPL-3.0
 
@@ -187,13 +187,13 @@
 
 ### Faz 3: Medium (1-2 hafta)
 20. [x] Eksiz PostgreSQL repo'lar implemente et — **Cozuldu (#102)** — 7 repo + migration 028 + lib.rs wiring
-21. [ ] URL naming standardize et
+21. [x] URL naming standardize et — **Cozuldu (#105)** — `/cari` → `/caris`, 10 utoipa annotation + 7 actix route + 6 test dosyasi
 22. [ ] Search endpoint'ler `?q=` query param yap
 23. [x] ~~`encryption_key_bytes()` Result donsun~~ — **Cozuldu (#100)** — `Result<[u8; 32], ApiError>` donuyor, `.expect()` yok
 24. [x] ~~`tenant_database_url()` parse et~~ — **Cozuldu (#100)** — `url` crate ile proper parsing, query params korunuyor, Result donuyor
 25. [x] ~~Idempotency Redis/Postgres backend yap~~ — **Cozuldu** — `RedisIdempotencyStore` implemente edildi, `IdempotencyStore` async trait'e cevrildi, main.rs'te `config.redis.enabled == true` ise Redis backend otomatik inject, yoksa in-memory fallback
-26. [ ] Audit logging auth'dan sonra tasila
-27. [ ] Structured logging (field syntax)
+26. [x] Audit logging auth'dan sonra tasila — **Cozuldu (#105)** — `JwtAuthMiddleware` → `AuditLoggingMiddleware` sirasi degisti, audit log'lar artik auth claim'leri ile
+27. [x] Structured logging (field syntax) — **Cozuldu (#105)** — 13 log donusumu, 4 domain (invoice, bank, cari postgres repo + auth mod.rs)
 28. [ ] P99 gauge histogram yap
 
 ### Faz 4: Low (2-3 gun)
