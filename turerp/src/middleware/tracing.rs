@@ -58,6 +58,12 @@ where
             .cloned()
             .unwrap_or_default();
 
+        let (tenant_id, user_id) = req
+            .extensions()
+            .get::<crate::utils::jwt::AuthClaims>()
+            .map(|c| (Some(c.tenant_id), Some(c.sub.clone())))
+            .unwrap_or((None, None));
+
         let start = Instant::now();
         let fut = self.service.call(req);
 
@@ -75,6 +81,8 @@ where
                             status = status,
                             duration_ms = %format!("{:.3}", elapsed_ms),
                             request_id = %request_id,
+                            tenant_id = ?tenant_id,
+                            user_id = ?user_id,
                             "request completed with server error"
                         );
                     } else if status >= 400 {
@@ -84,6 +92,8 @@ where
                             status = status,
                             duration_ms = %format!("{:.3}", elapsed_ms),
                             request_id = %request_id,
+                            tenant_id = ?tenant_id,
+                            user_id = ?user_id,
                             "request completed with client error"
                         );
                     } else {
@@ -93,6 +103,8 @@ where
                             status = status,
                             duration_ms = %format!("{:.3}", elapsed_ms),
                             request_id = %request_id,
+                            tenant_id = ?tenant_id,
+                            user_id = ?user_id,
                             "request completed"
                         );
                     }
@@ -104,6 +116,8 @@ where
                         error = %e,
                         duration_ms = %format!("{:.3}", elapsed_ms),
                         request_id = %request_id,
+                        tenant_id = ?tenant_id,
+                        user_id = ?user_id,
                         "request failed"
                     );
                 }

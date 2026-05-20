@@ -116,6 +116,31 @@ impl RateLimitMiddleware {
         self
     }
 
+    /// Extract client IP from X-Forwarded-For or X-Real-IP headers.
+    fn extract_ip_from_headers(req: &ServiceRequest) -> Option<String> {
+        if let Some(forwarded) = req.headers().get("X-Forwarded-For") {
+            if let Ok(forwarded_str) = forwarded.to_str() {
+                if let Some(client_ip) = forwarded_str.split(',').next() {
+                    let trimmed = client_ip.trim().to_string();
+                    if !trimmed.is_empty() {
+                        return Some(trimmed);
+                    }
+                }
+            }
+        }
+
+        if let Some(real_ip) = req.headers().get("X-Real-IP") {
+            if let Ok(ip) = real_ip.to_str() {
+                let trimmed = ip.trim().to_string();
+                if !trimmed.is_empty() {
+                    return Some(trimmed);
+                }
+            }
+        }
+
+        None
+    }
+
     /// Check if a peer IP is a trusted proxy.
     /// Loopback addresses are always trusted (useful for local development).
     fn is_loopback(peer_ip: &str) -> bool {
@@ -239,26 +264,8 @@ impl<S> RateLimitMiddlewareService<S> {
         if !self.trusted_proxies.is_empty() {
             if RateLimitMiddleware::is_in_trusted_proxies(&peer_ip, &self.trusted_proxies) {
                 // Peer is a trusted proxy - extract real client IP from headers
-                if let Some(forwarded) = req.headers().get("X-Forwarded-For") {
-                    if let Ok(forwarded_str) = forwarded.to_str() {
-                        // X-Forwarded-For: client, proxy1, proxy2
-                        // The leftmost value is the original client
-                        if let Some(client_ip) = forwarded_str.split(',').next() {
-                            let trimmed = client_ip.trim().to_string();
-                            if !trimmed.is_empty() {
-                                return trimmed;
-                            }
-                        }
-                    }
-                }
-
-                if let Some(real_ip) = req.headers().get("X-Real-IP") {
-                    if let Ok(ip) = real_ip.to_str() {
-                        let trimmed = ip.trim().to_string();
-                        if !trimmed.is_empty() {
-                            return trimmed;
-                        }
-                    }
+                if let Some(client_ip) = RateLimitMiddleware::extract_ip_from_headers(req) {
+                    return client_ip;
                 }
             }
             // Peer is NOT a trusted proxy - use peer IP directly
@@ -269,21 +276,8 @@ impl<S> RateLimitMiddlewareService<S> {
         // This path is used when RateLimitMiddleware::new() or with_quota() is called
         if RateLimitMiddleware::is_loopback(&peer_ip) {
             // Local/loopback connection - try headers for convenience in dev
-            if let Some(forwarded) = req.headers().get("X-Forwarded-For") {
-                if let Ok(forwarded_str) = forwarded.to_str() {
-                    if let Some(client_ip) = forwarded_str.split(',').next() {
-                        let trimmed = client_ip.trim().to_string();
-                        if !trimmed.is_empty() {
-                            return trimmed;
-                        }
-                    }
-                }
-            }
-
-            if let Some(real_ip) = req.headers().get("X-Real-IP") {
-                if let Ok(ip) = real_ip.to_str() {
-                    return ip.to_string();
-                }
+            if let Some(client_ip) = RateLimitMiddleware::extract_ip_from_headers(req) {
+                return client_ip;
             }
         }
 

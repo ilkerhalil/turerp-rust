@@ -48,5 +48,6 @@ pub mod vendor_portal;
 pub mod webhook;
 pub mod workflow;
 
+#[cfg(test)]
 // Test: is file module visible?
 pub type __TestFileVisibility = crate::domain::file::model::FileRecord;

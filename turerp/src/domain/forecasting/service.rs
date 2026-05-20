@@ -549,9 +549,11 @@ mod tests {
             Decimal::ZERO
         };
 
-        println!(
+        tracing::debug!(
             "MAPE test: actual={}, forecasted={}, mape={:.2}%",
-            actual_demand, forecasted_demand, mape
+            actual_demand,
+            forecasted_demand,
+            mape
         );
 
         assert!(
@@ -596,9 +598,11 @@ mod tests {
             Decimal::ZERO
         };
 
-        println!(
+        tracing::debug!(
             "MAPE seasonal: actual={}, forecasted={}, mape={:.2}%",
-            actual_demand, forecasted_demand, mape
+            actual_demand,
+            forecasted_demand,
+            mape
         );
 
         assert!(
