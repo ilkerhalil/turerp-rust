@@ -110,6 +110,10 @@ impl JwtAuthMiddleware {
                     })
             })?;
         req.extensions_mut().insert(claims.clone());
+        req.extensions_mut()
+            .insert(crate::middleware::tenant::TenantContext {
+                tenant_id: claims.tenant_id,
+            });
         Ok(claims)
     }
 }

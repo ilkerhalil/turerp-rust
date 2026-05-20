@@ -7,8 +7,6 @@ use actix_web::body::MessageBody;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, HttpMessage};
 use futures::future::LocalBoxFuture;
 
-use crate::utils::jwt::AuthClaims;
-
 /// Tenant context extracted from the request
 #[derive(Debug, Clone)]
 pub struct TenantContext {
@@ -18,9 +16,9 @@ pub struct TenantContext {
 /// Tenant middleware for extracting tenant context
 ///
 /// This middleware:
-/// 1. Extracts tenant_id from authenticated user (if present)
-/// 2. Stores tenant context in request extensions
-/// 3. Makes tenant_id available to downstream handlers
+/// 1. Checks if tenant context was already set by upstream auth middleware
+/// 2. Falls back to X-Tenant-ID header for service-to-service calls
+/// 3. Stores tenant context in request extensions
 pub struct TenantMiddleware;
 
 impl TenantMiddleware {
@@ -32,12 +30,12 @@ impl TenantMiddleware {
     /// Extract tenant context from request
     ///
     /// Attempts to get tenant_id from:
-    /// 1. AuthUser extension (from JWT claims)
+    /// 1. Existing TenantContext extension (set by auth middleware)
     /// 2. X-Tenant-ID header (for service-to-service calls)
     pub fn extract_tenant_id(req: &ServiceRequest) -> Option<i64> {
-        // First try to get from authenticated user claims
-        if let Some(auth_claims) = req.extensions().get::<AuthClaims>() {
-            return Some(auth_claims.tenant_id);
+        // First check if tenant context was already set by upstream auth middleware
+        if let Some(ctx) = req.extensions().get::<TenantContext>() {
+            return Some(ctx.tenant_id);
         }
 
         // Fall back to header for internal service calls
