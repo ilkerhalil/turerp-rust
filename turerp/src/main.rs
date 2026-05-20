@@ -377,9 +377,12 @@ async fn main() -> std::io::Result<()> {
 
     // Macro to build the common Actix app (middleware + app_data).
     // Avoids duplicating ~100 lines for postgres vs in-memory feature flags.
+    // Macro to build the common Actix app (middleware + app_data).
+    // Avoids duplicating ~100 lines for postgres vs in-memory feature flags.
     macro_rules! build_app_core {
         ($app:expr) => {{
             $app
+                .configure(|cfg| app_state.register_services(cfg))
                 // Security middlewares (ORDER MATTERS!)
                 // First wrap = outermost (touches request first, response last).
                 // Last wrap = innermost (touches request last, response first).
@@ -410,72 +413,6 @@ async fn main() -> std::io::Result<()> {
                 ) // IP whitelist check (after tenant context)
                 .wrap(RequestIdMiddleware) // Request ID for tracing
                 .wrap(TracingMiddleware) // Innermost: structured request/response tracing
-                .app_data(web::Data::new(app_state.clone())) // Full AppState for health probes
-                .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
-                .app_data(app_state.auth.auth_service.clone())
-                .app_data(app_state.auth.user_service.clone())
-                .app_data(app_state.auth.jwt_service.clone())
-                .app_data(app_state.commerce.cari_service.clone())
-                .app_data(app_state.commerce.stock_service.clone())
-                .app_data(app_state.commerce.invoice_service.clone())
-                .app_data(app_state.commerce.sales_service.clone())
-                .app_data(app_state.commerce.barcode_service.clone())
-                .app_data(app_state.hr.hr_service.clone())
-                .app_data(app_state.hr.sgk_payroll_service.clone())
-                .app_data(app_state.finance.accounting_service.clone())
-                .app_data(app_state.project.project_service.clone())
-                .app_data(app_state.project.manufacturing_service.clone())
-                .app_data(app_state.project.qc_service.clone())
-                .app_data(app_state.project.crm_service.clone())
-                .app_data(app_state.chart_of_accounts_service.clone())
-                .app_data(app_state.custom_field_service.clone())
-                .app_data(app_state.admin.tenant_service.clone())
-                .app_data(app_state.admin.tenant_config_service.clone())
-                .app_data(app_state.assets_service.clone())
-                .app_data(app_state.feature_service.clone())
-                .app_data(app_state.commerce.product_service.clone())
-                .app_data(app_state.commerce.purchase_service.clone())
-                .app_data(app_state.analytics.audit_service.clone())
-                .app_data(app_state.admin.settings_service.clone())
-                .app_data(app_state.admin.api_key_service.clone())
-                .app_data(app_state.admin.ip_whitelist_service.clone())
-                .app_data(app_state.infra.job_scheduler.clone())
-                .app_data(app_state.infra.event_bus.clone())
-                .app_data(app_state.infra.notification_service.clone())
-                .app_data(app_state.infra.report_engine.clone())
-                .app_data(app_state.analytics.forecasting_service.clone())
-                .app_data(app_state.analytics.subscription_service.clone())
-                .app_data(app_state.observability_service.clone())
-                .app_data(app_state.hr.shift_service.clone())
-                .app_data(app_state.infra.tracing_service.clone())
-                .app_data(app_state.infra.db_router.clone())
-                .app_data(app_state.i18n.clone())
-                .app_data(app_state.finance.tax_service.clone())
-                .app_data(app_state.finance.bank_service.clone())
-                .app_data(app_state.finance.cost_center_service.clone())
-                .app_data(app_state.finance.currency_service.clone())
-                .app_data(app_state.integration.efatura_service.clone())
-                .app_data(app_state.integration.earchive_service.clone())
-                .app_data(app_state.integration.edefter_service.clone())
-                .app_data(app_state.integration.blockchain_ledger_service.clone())
-                .app_data(app_state.integration.customer_portal_service.clone())
-                .app_data(app_state.integration.vendor_portal_service.clone())
-                .app_data(app_state.document.document_service.clone())
-                .app_data(app_state.document.dashboard_service.clone())
-                .app_data(app_state.document.file_storage.clone())
-                .app_data(app_state.integration.webhook_service.clone())
-                .app_data(app_state.integration.workflow_service.clone())
-                .app_data(app_state.infra.cache_service.clone())
-                .app_data(app_state.infra.search_service.clone())
-                .app_data(app_state.infra.rate_limit_stats.clone())
-                .app_data(app_state.analytics.archive_service.clone())
-                .app_data(app_state.infra.import_service.clone())
-                .app_data(app_state.commerce.inter_company_service.clone())
-                .app_data(app_state.commerce.company_service.clone())
-                .app_data(app_state.infra.circuit_breaker_registry.clone())
-                .app_data(app_state.infra.retry_stats.clone())
-                .app_data(app_state.auth.mfa_service.clone())
-                .app_data(app_state.ldap_service.clone())
         }};
     }
 
