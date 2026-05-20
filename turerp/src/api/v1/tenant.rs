@@ -1,9 +1,9 @@
 //! Tenant API endpoints (v1)
 
 use actix_web::{web, HttpResponse};
-use serde::Serialize;
 
 use crate::common::pagination::PaginationParams;
+use crate::common::MessageResponse;
 use crate::domain::tenant::model::{
     CreateTenant, CreateTenantConfig, UpdateTenant, UpdateTenantConfig,
 };
@@ -12,12 +12,6 @@ use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
 use crate::json_resp;
 use crate::middleware::{AdminUser, AuthUser};
-
-/// Simple localized success message payload.
-#[derive(Serialize)]
-pub struct MessageResponse {
-    pub message: String,
-}
 
 /// Create tenant (requires admin role)
 #[utoipa::path(

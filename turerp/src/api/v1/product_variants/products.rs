@@ -2,7 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
-use crate::common::pagination::PaginationParams;
+use crate::common::pagination::{PaginatedSearchQuery, PaginationParams};
 use crate::common::MessageResponse;
 use crate::domain::product::ProductService;
 use crate::domain::product::{CreateProduct, ProductResponse};
@@ -261,7 +261,7 @@ pub async fn destroy_product(
     get,
     path = "/api/v1/products/search",
     tag = "Products",
-    params(("q" = String, Query, description = "Search query")),
+    params(PaginatedSearchQuery),
     responses(
         (status = 200, description = "Search results", body = Vec<ProductResponse>),
         (status = 401, description = "Not authenticated")
@@ -271,7 +271,7 @@ pub async fn destroy_product(
 pub async fn search_products(
     auth_user: AuthUser,
     service: web::Data<ProductService>,
-    query: web::Query<SearchQuery>,
+    query: web::Query<PaginatedSearchQuery>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
@@ -290,27 +290,5 @@ pub async fn search_products(
             Ok(HttpResponse::Ok().json(responses))
         }
         Err(e) => Ok(e.to_http_response(i18n, locale.as_str())),
-    }
-}
-
-#[derive(serde::Deserialize, utoipa::ToSchema)]
-pub struct SearchQuery {
-    pub q: String,
-    #[serde(default = "crate::common::pagination::default_page")]
-    pub page: u32,
-    #[serde(default = "crate::common::pagination::default_per_page")]
-    pub per_page: u32,
-}
-
-impl SearchQuery {
-    /// Validate search query
-    pub fn validate(&self) -> Result<(), String> {
-        if self.q.trim().is_empty() {
-            return Err("Search query cannot be empty".to_string());
-        }
-        if self.q.len() > 200 {
-            return Err("Search query must be at most 200 characters".to_string());
-        }
-        Ok(())
     }
 }

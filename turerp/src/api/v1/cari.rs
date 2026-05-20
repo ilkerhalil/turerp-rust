@@ -2,7 +2,7 @@
 
 use actix_web::{web, HttpResponse};
 
-use crate::common::pagination::PaginationParams;
+use crate::common::pagination::{PaginatedSearchQuery, PaginationParams};
 use crate::common::MessageResponse;
 use crate::domain::cari::model::{CariResponse, CariType, CreateCari, UpdateCari};
 use crate::domain::cari::service::CariService;
@@ -151,7 +151,7 @@ pub async fn get_cari_by_type(
     get,
     path = "/api/v1/caris/search",
     tag = "Cari",
-    params(("q" = String, Query, description = "Search query"), PaginationParams),
+    params(PaginatedSearchQuery),
     responses(
         (status = 200, description = "Paginated search results"),
         (status = 401, description = "Not authenticated")
@@ -161,7 +161,7 @@ pub async fn get_cari_by_type(
 pub async fn search_cari(
     auth_user: AuthUser,
     cari_service: web::Data<CariService>,
-    query: web::Query<SearchQuery>,
+    query: web::Query<PaginatedSearchQuery>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
@@ -323,28 +323,6 @@ pub async fn destroy_cari(
         .destroy_cari(*path, admin_user.0.tenant_id)
         .await?;
     Ok(HttpResponse::NoContent().finish())
-}
-
-#[derive(serde::Deserialize, utoipa::ToSchema)]
-pub struct SearchQuery {
-    pub q: String,
-    #[serde(default = "crate::common::pagination::default_page")]
-    pub page: u32,
-    #[serde(default = "crate::common::pagination::default_per_page")]
-    pub per_page: u32,
-}
-
-impl SearchQuery {
-    /// Validate pagination parameters
-    pub fn validate(&self) -> Result<(), String> {
-        if self.page == 0 {
-            return Err("page must be at least 1".to_string());
-        }
-        if self.per_page == 0 || self.per_page > 100 {
-            return Err("per_page must be between 1 and 100".to_string());
-        }
-        Ok(())
-    }
 }
 
 /// Configure cari routes for v1 API

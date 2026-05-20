@@ -1,20 +1,14 @@
 //! Users API endpoints (legacy — deprecated, use /api/v1/users)
 
 use actix_web::{web, HttpResponse};
-use serde::Serialize;
 
 use crate::common::pagination::PaginationParams;
+use crate::common::MessageResponse;
 use crate::domain::user::model::{CreateUser, UpdateUser};
 use crate::domain::user::service::UserService;
 use crate::error::{ApiError, ApiResult};
 use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::AuthUser;
-
-/// Simple localized success message payload.
-#[derive(Serialize)]
-pub struct MessageResponse {
-    pub message: String,
-}
 
 /// Create user endpoint (requires authentication)
 pub async fn create_user(
