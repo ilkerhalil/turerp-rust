@@ -370,13 +370,13 @@ pub async fn seed_settings(
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(create_setting)
         .service(list_settings)
+        .service(list_deleted_settings)
         .service(get_setting_by_key)
         .service(update_setting)
         .service(bulk_update_settings)
         .service(delete_setting)
         .service(soft_delete_setting)
         .service(restore_setting)
-        .service(list_deleted_settings)
         .service(destroy_setting)
         .service(seed_settings);
 }

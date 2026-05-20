@@ -23,8 +23,15 @@ pub trait ChartAccountRepository: Send + Sync {
         tenant_id: i64,
     ) -> Result<ChartAccount, ApiError>;
 
-    /// Find a chart account by code
+    /// Find a chart account by code (non-deleted only)
     async fn find_by_code(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<Option<ChartAccount>, ApiError>;
+
+    /// Find a chart account by code including deleted ones
+    async fn find_by_code_include_deleted(
         &self,
         code: &str,
         tenant_id: i64,
@@ -153,6 +160,19 @@ impl ChartAccountRepository for InMemoryChartAccountRepository {
             .accounts
             .values()
             .find(|a| a.code == code && a.tenant_id == tenant_id && !a.is_deleted())
+            .cloned())
+    }
+
+    async fn find_by_code_include_deleted(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<Option<ChartAccount>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .accounts
+            .values()
+            .find(|a| a.code == code && a.tenant_id == tenant_id)
             .cloned())
     }
 

@@ -275,6 +275,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_custom_field)),
     )
     .service(
+        web::resource("/v1/custom-fields/deleted").route(web::get().to(list_deleted_custom_fields)),
+    )
+    .service(
         web::resource("/v1/custom-fields/{id}")
             .route(web::get().to(get_custom_field))
             .route(web::put().to(update_custom_field))
@@ -282,9 +285,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     )
     .service(
         web::resource("/v1/custom-fields/{id}/restore").route(web::post().to(restore_custom_field)),
-    )
-    .service(
-        web::resource("/v1/custom-fields/deleted").route(web::get().to(list_deleted_custom_fields)),
     )
     .service(
         web::resource("/v1/custom-fields/{id}/destroy")

@@ -30,6 +30,13 @@ pub trait CurrencyRepository: Send + Sync {
     /// Find a currency by code
     async fn find_by_code(&self, code: &str, tenant_id: i64) -> Result<Option<Currency>, ApiError>;
 
+    /// Find a currency by code, including soft-deleted ones
+    async fn find_by_code_include_deleted(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<Option<Currency>, ApiError>;
+
     /// Find the base currency for a tenant
     async fn find_base(&self, tenant_id: i64) -> Result<Option<Currency>, ApiError>;
 
@@ -141,6 +148,20 @@ impl CurrencyRepository for InMemoryCurrencyRepository {
             .currencies
             .values()
             .find(|c| c.tenant_id == tenant_id && c.code == code_upper && !c.is_deleted())
+            .cloned())
+    }
+
+    async fn find_by_code_include_deleted(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<Option<Currency>, ApiError> {
+        let inner = self.inner.lock();
+        let code_upper = code.trim().to_uppercase();
+        Ok(inner
+            .currencies
+            .values()
+            .find(|c| c.tenant_id == tenant_id && c.code == code_upper)
             .cloned())
     }
 

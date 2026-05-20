@@ -164,6 +164,27 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
         Ok(result.map(|r| r.into()))
     }
 
+    async fn find_by_code_include_deleted(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<Option<ChartAccount>, ApiError> {
+        let result: Option<ChartAccountRow> = sqlx::query_as(&format!(
+            r#"
+            SELECT {CHART_ACCOUNT_COLUMNS}
+            FROM chart_accounts
+            WHERE tenant_id = $1 AND code = $2
+            "#,
+        ))
+        .bind(tenant_id)
+        .bind(code)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find chart account by code: {}", e)))?;
+
+        Ok(result.map(|r| r.into()))
+    }
+
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<ChartAccount>, ApiError> {
         let result: Option<ChartAccountRow> = sqlx::query_as(&format!(
             r#"

@@ -484,10 +484,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::delete().to(delete_job)),
     )
     .service(web::resource("/v1/archive/records").route(web::get().to(list_records)))
+    .service(web::resource("/v1/archive/records/restore").route(web::post().to(restore_records)))
     .service(
         web::resource("/v1/archive/records/{id}")
             .route(web::get().to(get_record))
             .route(web::delete().to(delete_record)),
-    )
-    .service(web::resource("/v1/archive/records/restore").route(web::post().to(restore_records)));
+    );
 }

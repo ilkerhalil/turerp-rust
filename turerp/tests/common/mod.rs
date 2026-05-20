@@ -16,7 +16,7 @@ use turerp::api::{
     v1_purchase_orders_configure, v1_purchase_requests_configure, v1_rate_limits_configure,
     v1_reports_configure, v1_resilience_configure, v1_sales_configure, v1_search_configure,
     v1_settings_configure, v1_stock_configure, v1_subscriptions_configure, v1_tax_configure,
-    v1_tenant_configure, v1_webhooks_configure, v1_workflows_configure,
+    v1_tenant_configure, v1_users_configure, v1_webhooks_configure, v1_workflows_configure,
 };
 use turerp::app::create_app_state_in_memory;
 use turerp::config::Config;
@@ -55,6 +55,7 @@ pub fn configure_v1_routes(cfg: &mut web::ServiceConfig) {
         .configure(v1_project_configure)
         .configure(v1_manufacturing_configure)
         .configure(v1_mfa_configure)
+        .configure(v1_users_configure)
         .configure(v1_tenant_configure)
         .configure(v1_assets_configure)
         .configure(v1_product_variants_configure)
@@ -154,6 +155,7 @@ pub fn build_test_app(
         .app_data(state.infra.import_service.clone())
         .app_data(state.commerce.inter_company_service.clone())
         .app_data(state.integration.efatura_service.clone())
+        .app_data(state.integration.earchive_service.clone())
         .app_data(state.integration.edefter_service.clone())
         .app_data(state.commerce.company_service.clone())
         .service(
