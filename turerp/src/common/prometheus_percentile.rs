@@ -15,19 +15,6 @@ pub struct HistogramBucket {
     pub cumulative_count: u64,
 }
 
-/// Percentile value for a specific metric + label set.
-#[derive(Debug, Clone, PartialEq)]
-pub struct PercentileValue {
-    /// Metric name (e.g. `http_request_duration_seconds`).
-    pub name: String,
-    /// Label set that identifies this histogram series.
-    pub labels: HashMap<String, String>,
-    /// Computed quantile (0.50, 0.95, 0.99).
-    pub quantile: f64,
-    /// Interpolated value in the same unit as the histogram (seconds, etc.).
-    pub value: f64,
-}
-
 /// Parsed histogram data for a single metric series.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedHistogram {

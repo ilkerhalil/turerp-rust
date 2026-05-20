@@ -563,13 +563,6 @@ impl InMemoryStockMovementRepository {
             }),
         }
     }
-
-    /// Register a warehouse's tenant_id for tenant isolation of movements.
-    /// This must be called before creating movements for a warehouse.
-    pub fn register_warehouse_tenant(&self, warehouse_id: i64, tenant_id: i64) {
-        let mut inner = self.inner.lock();
-        inner.warehouse_tenants.insert(warehouse_id, tenant_id);
-    }
 }
 
 impl Default for InMemoryStockMovementRepository {

@@ -18,11 +18,6 @@ use crate::domain::sales::repository::{
 };
 use crate::error::ApiError;
 
-#[allow(dead_code)]
-fn default_company_id() -> i64 {
-    1
-}
-
 // Convert sqlx errors to ApiError with proper detection of error types
 
 // ---------------------------------------------------------------------------
@@ -30,7 +25,6 @@ fn default_company_id() -> i64 {
 // ---------------------------------------------------------------------------
 
 /// Database row representation for SalesOrder
-#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct SalesOrderRow {
     id: i64,
@@ -94,7 +88,6 @@ impl From<SalesOrderRow> for SalesOrder {
 }
 
 /// Database row representation for SalesOrder with total count (for pagination)
-#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct SalesOrderRowWithTotal {
     id: i64,
@@ -196,7 +189,6 @@ impl From<SalesOrderLineRow> for SalesOrderLine {
 }
 
 /// Database row representation for Quotation
-#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct QuotationRow {
     id: i64,
@@ -254,7 +246,6 @@ impl From<QuotationRow> for Quotation {
 }
 
 /// Database row representation for Quotation with total count (for pagination)
-#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct QuotationRowWithTotal {
     id: i64,

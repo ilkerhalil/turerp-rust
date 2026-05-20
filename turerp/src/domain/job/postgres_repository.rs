@@ -15,8 +15,6 @@ use crate::error::ApiError;
 #[derive(Debug, FromRow)]
 struct JobRow {
     id: i64,
-    #[allow(dead_code)]
-    job_type: String,
     payload: sqlx::types::Json<serde_json::Value>,
     status: String,
     priority: String,
@@ -63,8 +61,6 @@ impl TryFrom<JobRow> for Job {
 #[derive(Debug, FromRow)]
 struct JobScheduleRow {
     id: i64,
-    #[allow(dead_code)]
-    job_type: String,
     payload: sqlx::types::Json<serde_json::Value>,
     cron_expression: String,
     priority: String,

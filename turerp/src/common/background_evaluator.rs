@@ -39,12 +39,6 @@ impl BackgroundEvaluator {
         }
     }
 
-    /// Override the default 60-second evaluation interval.
-    pub fn with_interval(mut self, secs: u64) -> Self {
-        self.interval_secs = secs;
-        self
-    }
-
     /// Start the background evaluation loop.
     ///
     /// The loop runs until the provided `shutdown_rx` fires.

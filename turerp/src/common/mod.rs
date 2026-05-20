@@ -76,7 +76,7 @@ pub use read_replicas::{
 };
 pub use reports::{
     BoxReportEngine, GeneratedReport, InMemoryReportEngine, ReportEngine, ReportError,
-    ReportFormat, ReportMeta, ReportRequest, ReportTemplate, ReportType,
+    ReportFormat, ReportMeta, ReportRequest, ReportType,
 };
 pub use retry::{
     resilient_call, BoxRetryStats, RetryConfig, RetryPolicy, RetryStats, RetryStatsSnapshot,

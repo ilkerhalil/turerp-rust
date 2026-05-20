@@ -128,16 +128,6 @@ impl ImportResult {
         self
     }
 
-    pub fn with_error_no_field(mut self, row: usize, message: impl Into<String>) -> Self {
-        self.errors.push(ImportError {
-            row,
-            field: None,
-            message: message.into(),
-        });
-        self.failed_rows += 1;
-        self
-    }
-
     pub fn add_success(&mut self) {
         self.success_rows += 1;
     }

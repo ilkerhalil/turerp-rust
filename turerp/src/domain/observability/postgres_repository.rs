@@ -316,9 +316,7 @@ fn alert_state_str(state: AlertState) -> &'static str {
 
 /// Row type for sparklines
 #[derive(Debug, FromRow)]
-#[allow(dead_code)]
 struct SparklineRow {
-    metric: String,
     value: f64,
     recorded_at: DateTime<Utc>,
 }

@@ -11,15 +11,9 @@ use crate::domain::cari::model::{Cari, CariStatus, CariType, CreateCari, UpdateC
 use crate::domain::cari::repository::{BoxCariRepository, CariRepository};
 use crate::error::ApiError;
 
-#[allow(dead_code)]
-fn default_company_id() -> i64 {
-    1
-}
-
 // Convert sqlx errors to ApiError with proper detection of error types
 
 /// Database row representation for Cari
-#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct CariRow {
     id: i64,
@@ -100,7 +94,6 @@ impl From<CariRow> for Cari {
 }
 
 /// Database row representation for paginated cari queries with total count
-#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct CariRowWithTotal {
     id: i64,

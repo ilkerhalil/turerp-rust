@@ -235,10 +235,3 @@ pub struct DashboardJson {
     pub panels: Vec<serde_json::Value>,
     pub tags: Vec<String>,
 }
-
-impl DashboardJson {
-    /// Serialize the dashboard to a JSON string.
-    pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
-        serde_json::to_string_pretty(self)
-    }
-}

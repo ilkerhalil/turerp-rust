@@ -17,12 +17,6 @@ static MT940_61_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("static regex should compile")
 });
 
-// MT940 :86: tag pattern (description)
-#[allow(dead_code)]
-static MT940_86_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r":86:(.+?)(?:\n|:[0-9A-Z]{2,3}:|$)").expect("static regex should compile")
-});
-
 // CAMT.053 basic XML patterns
 static CAMT_DATE_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?s)<Dt>(\d{4}-\d{2}-\d{2})</Dt>").expect("static regex should compile")

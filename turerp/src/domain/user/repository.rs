@@ -96,16 +96,6 @@ impl InMemoryUserRepository {
             }),
         }
     }
-
-    pub fn with_users(users: Vec<User>) -> Self {
-        let max_id = users.iter().map(|u| u.id).max().unwrap_or(0);
-        Self {
-            inner: Mutex::new(InMemoryUserInner {
-                users,
-                next_id: max_id + 1,
-            }),
-        }
-    }
 }
 
 impl Default for InMemoryUserRepository {

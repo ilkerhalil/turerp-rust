@@ -189,15 +189,15 @@
 20. [ ] Eksiz PostgreSQL repo'lar implemente et
 21. [ ] URL naming standardize et
 22. [ ] Search endpoint'ler `?q=` query param yap
-23. [ ] `encryption_key_bytes()` Result donsun
-24. [ ] `tenant_database_url()` parse et
+23. [x] ~~`encryption_key_bytes()` Result donsun~~ — **Cozuldu (#100)** — `Result<[u8; 32], ApiError>` donuyor, `.expect()` yok
+24. [x] ~~`tenant_database_url()` parse et~~ — **Cozuldu (#100)** — `url` crate ile proper parsing, query params korunuyor, Result donuyor
 25. [ ] Idempotency Redis/Postgres backend yap
 26. [ ] Audit logging auth'dan sonra tasila
 27. [ ] Structured logging (field syntax)
 28. [ ] P99 gauge histogram yap
 
 ### Faz 4: Low (2-3 gun)
-29. [ ] Dead code temizligi
+29. [x] ~~Dead code temizligi~~ — **Cozuldu (#100)** — 202+ satir dead code kaldirildi, 20+ dosya, clippy/format/test/API temiz
 30. [ ] Doc comment'lari tamamla
 31. [x] README badge AGPL — **Yanlis bulgu**, zaten AGPL-3.0 badge mevcut
 32. [ ] `tests/integration/` dizinini kaldir veya doldur

@@ -17,28 +17,6 @@ use opentelemetry_sdk::resource::Resource;
 use opentelemetry_sdk::trace::{BatchSpanProcessor, SdkTracerProvider};
 use opentelemetry_semantic_conventions::resource::SERVICE_NAME;
 
-/// Global OTLP state (kept alive for the process lifetime)
-pub struct OtlpPipeline {
-    _tracer_provider: Option<SdkTracerProvider>,
-    _meter_provider: Option<SdkMeterProvider>,
-    _logger_provider: Option<SdkLoggerProvider>,
-}
-
-impl OtlpPipeline {
-    /// Shut down providers gracefully.
-    pub fn shutdown(&self) {
-        if let Some(ref tp) = self._tracer_provider {
-            let _ = tp.shutdown();
-        }
-        if let Some(ref mp) = self._meter_provider {
-            let _ = mp.shutdown();
-        }
-        if let Some(ref lp) = self._logger_provider {
-            let _ = lp.shutdown();
-        }
-    }
-}
-
 fn build_resource() -> Resource {
     Resource::builder_empty()
         .with_attributes([KeyValue::new(SERVICE_NAME, "turerp")])
@@ -128,58 +106,4 @@ pub fn install_otlp_metrics(endpoint: &str) -> Result<SdkMeterProvider, String> 
     global::set_meter_provider(provider.clone());
 
     Ok(provider)
-}
-
-/// Convenience: install the full OTLP pipeline (traces + metrics + logs).
-///
-/// Returns an `OtlpPipeline` handle that should be stored in AppState so it lives
-/// for the process duration.
-pub fn install_otlp_pipeline(endpoint: &str) -> Result<OtlpPipeline, String> {
-    // Traces
-    let span_exporter = SpanExporter::builder()
-        .with_tonic()
-        .with_endpoint(endpoint.to_string())
-        .build()
-        .map_err(|e| format!("Failed to build OTLP span exporter: {}", e))?;
-
-    let span_processor = BatchSpanProcessor::builder(span_exporter).build();
-
-    let tracer_provider = SdkTracerProvider::builder()
-        .with_span_processor(span_processor)
-        .with_resource(build_resource())
-        .build();
-
-    global::set_tracer_provider(tracer_provider.clone());
-
-    // Metrics
-    let metric_exporter = MetricExporter::builder()
-        .with_tonic()
-        .with_endpoint(endpoint.to_string())
-        .build()
-        .map_err(|e| format!("Failed to build OTLP metric exporter: {}", e))?;
-
-    let meter_provider = SdkMeterProvider::builder()
-        .with_periodic_exporter(metric_exporter)
-        .with_resource(build_resource())
-        .build();
-
-    global::set_meter_provider(meter_provider.clone());
-
-    // Logs
-    let log_exporter = LogExporter::builder()
-        .with_tonic()
-        .with_endpoint(endpoint.to_string())
-        .build()
-        .map_err(|e| format!("Failed to build OTLP log exporter: {}", e))?;
-
-    let logger_provider = SdkLoggerProvider::builder()
-        .with_resource(build_resource())
-        .with_batch_exporter(log_exporter)
-        .build();
-
-    Ok(OtlpPipeline {
-        _tracer_provider: Some(tracer_provider),
-        _meter_provider: Some(meter_provider),
-        _logger_provider: Some(logger_provider),
-    })
 }

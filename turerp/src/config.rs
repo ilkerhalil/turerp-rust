@@ -5,6 +5,7 @@ use config::ConfigError;
 use secrecy::SecretString;
 use serde::Deserialize;
 use std::fmt;
+use url::Url;
 
 /// Application environment
 #[derive(Debug, Clone, PartialEq, Deserialize, Default)]
@@ -384,12 +385,6 @@ pub struct SecurityHeadersConfig {
     pub enabled: bool,
 }
 
-/// Encryption configuration
-#[derive(Debug, Clone, Deserialize)]
-pub struct EncryptionConfig {
-    pub key: String,
-}
-
 /// Secrets management configuration
 #[derive(Debug, Clone)]
 pub struct SecretsConfig {
@@ -646,12 +641,23 @@ impl Config {
     }
 
     /// Get database URL for a specific tenant
-    pub fn tenant_database_url(&self, db_name: &str) -> String {
-        if let Some(idx) = self.database.url.rfind('/') {
-            format!("{}/{}", &self.database.url[..idx], db_name)
-        } else {
-            self.database.url.clone()
+    ///
+    /// Properly parses the URL to replace only the path (database name) component,
+    /// preserving query parameters, auth credentials, and host information.
+    pub fn tenant_database_url(&self, db_name: &str) -> Result<String, String> {
+        if db_name.is_empty() {
+            return Err("db_name cannot be empty".to_string());
         }
+        if db_name.contains('/') || db_name.contains('?') || db_name.contains('#') {
+            return Err("db_name contains invalid characters".to_string());
+        }
+
+        let mut url =
+            Url::parse(&self.database.url).map_err(|e| format!("Invalid database URL: {}", e))?;
+
+        url.set_path(&format!("/{}", db_name));
+
+        Ok(url.to_string())
     }
 
     /// Check if running in production mode
@@ -739,9 +745,9 @@ mod tests {
             },
             ..Default::default()
         };
-        let tenant_url = config.tenant_database_url("tenant_abc");
+        let tenant_url = config.tenant_database_url("tenant_abc").unwrap();
         assert!(tenant_url.contains("tenant_abc"));
-        assert!(tenant_url.contains("turerp") || tenant_url.contains("postgres"));
+        assert!(tenant_url.contains("postgres://postgres:postgres@localhost:5432/tenant_abc"));
     }
 
     #[test]
@@ -930,8 +936,56 @@ mod tests {
             ..Default::default()
         };
 
-        let tenant_url = config.tenant_database_url("newdb");
+        let tenant_url = config.tenant_database_url("newdb").unwrap();
         assert_eq!(tenant_url, "postgres://user:pass@host/newdb");
+    }
+
+    #[test]
+    fn test_tenant_database_url_preserves_query_params() {
+        let config = Config {
+            database: DatabaseConfig {
+                url: "postgres://user:pass@host/db?sslmode=require".to_string(),
+                max_connections: 10,
+                min_connections: 5,
+            },
+            ..Default::default()
+        };
+        let tenant_url = config.tenant_database_url("tenant1").unwrap();
+        assert_eq!(
+            tenant_url,
+            "postgres://user:pass@host/tenant1?sslmode=require"
+        );
+    }
+
+    #[test]
+    fn test_tenant_database_url_rejects_empty_db_name() {
+        let config = Config::default();
+        let result = config.tenant_database_url("");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("empty"));
+    }
+
+    #[test]
+    fn test_tenant_database_url_rejects_invalid_chars() {
+        let config = Config::default();
+        assert!(config.tenant_database_url("a/b").is_err());
+        assert!(config.tenant_database_url("a?b").is_err());
+        assert!(config.tenant_database_url("a#b").is_err());
+    }
+
+    #[test]
+    fn test_tenant_database_url_rejects_invalid_url() {
+        let config = Config {
+            database: DatabaseConfig {
+                url: "not-a-valid-url".to_string(),
+                max_connections: 10,
+                min_connections: 5,
+            },
+            ..Default::default()
+        };
+        let result = config.tenant_database_url("tenant1");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid database URL"));
     }
 
     #[test]

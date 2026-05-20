@@ -124,14 +124,6 @@ impl InMemoryNotificationRepository {
             }),
         }
     }
-
-    #[allow(dead_code)]
-    fn allocate_id(&self) -> i64 {
-        let mut inner = self.inner.write();
-        let id = inner.next_id;
-        inner.next_id += 1;
-        id
-    }
 }
 
 impl Default for InMemoryNotificationRepository {

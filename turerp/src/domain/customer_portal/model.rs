@@ -202,15 +202,6 @@ pub struct CreatePortalUser {
     pub timezone: Option<String>,
 }
 
-/// Update portal user request
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct UpdatePortalUser {
-    pub full_name: Option<String>,
-    pub phone: Option<String>,
-    pub language: Option<String>,
-    pub timezone: Option<String>,
-}
-
 /// Portal login request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PortalLoginRequest {

@@ -79,20 +79,6 @@ impl StreamingCsvWriter {
         Self { writer }
     }
 
-    pub fn write_headers(&mut self, headers: &[&str]) -> Result<(), ReportError> {
-        self.writer
-            .write_record(headers)
-            .map_err(|e| ReportError::Io(e.to_string()))?;
-        Ok(())
-    }
-
-    pub fn write_row(&mut self, cells: &[&str]) -> Result<(), ReportError> {
-        self.writer
-            .write_record(cells)
-            .map_err(|e| ReportError::Io(e.to_string()))?;
-        Ok(())
-    }
-
     pub fn finish(self) -> Result<Vec<u8>, ReportError> {
         let mut data = vec![0xEF, 0xBB, 0xBF];
         data.extend(

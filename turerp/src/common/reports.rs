@@ -11,12 +11,10 @@ pub mod engine;
 pub mod error;
 pub mod excel;
 pub mod pdf;
-pub mod template;
 pub mod xml;
 
 pub use engine::InMemoryReportEngine;
 pub use error::ReportError;
-pub use template::ReportTemplate;
 
 /// Report format
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

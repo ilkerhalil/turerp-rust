@@ -15,11 +15,6 @@ use crate::domain::stock::repository::{
 };
 use crate::error::ApiError;
 
-#[allow(dead_code)]
-fn default_company_id() -> i64 {
-    1
-}
-
 // Convert sqlx errors to ApiError with proper detection of error types
 
 // ============================================================================
@@ -27,7 +22,6 @@ fn default_company_id() -> i64 {
 // ============================================================================
 
 /// Database row representation for Warehouse
-#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct WarehouseRow {
     id: i64,
