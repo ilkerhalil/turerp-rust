@@ -73,6 +73,18 @@ impl CurrencyService {
             .ok_or_else(|| ApiError::NotFound(format!("Currency {} not found", code)))
     }
 
+    /// Get a currency by code, including soft-deleted ones
+    pub async fn get_currency_by_code_include_deleted(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<Currency, ApiError> {
+        self.currency_repo
+            .find_by_code_include_deleted(code, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Currency {} not found", code)))
+    }
+
     /// Get the base currency for a tenant
     pub async fn get_base_currency(&self, tenant_id: i64) -> Result<Currency, ApiError> {
         self.currency_repo

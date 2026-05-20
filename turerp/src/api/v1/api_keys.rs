@@ -312,7 +312,7 @@ async fn check_scope(
 /// Configure API key routes
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope("/api/v1/api-keys")
+        web::scope("/v1/api-keys")
             // Admin CRUD
             .route("", web::post().to(create_api_key))
             .route("/tenant/{tenant_id}", web::get().to(list_api_keys))

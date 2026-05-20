@@ -115,7 +115,11 @@ impl InMemoryTenantRepository {
             deleted_at: None,
             deleted_by: None,
         };
-        repo.inner.lock().tenants.insert(1, default_tenant);
+        {
+            let mut inner = repo.inner.lock();
+            inner.tenants.insert(1, default_tenant);
+            inner.next_id = 2;
+        }
 
         repo
     }

@@ -4,6 +4,7 @@ use rust_decimal::Decimal;
 use std::collections::HashMap;
 
 use crate::common::pagination::{PaginatedResult, PaginationParams};
+use crate::common::soft_delete::SoftDeletable;
 use crate::domain::chart_of_accounts::model::{
     AccountGroup, AccountTreeNode, ChartAccount, ChartAccountResponse, CreateChartAccount,
     TrialBalanceEntry, UpdateChartAccount,
@@ -278,6 +279,27 @@ impl ChartOfAccountsService {
             .ok_or_else(|| ApiError::NotFound(format!("Chart account '{}' not found", code)))?;
 
         self.delete_account(account.id, tenant_id, deleted_by).await
+    }
+
+    /// Get a deleted chart account by code (for restore/destroy operations)
+    pub async fn get_deleted_account_by_code(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<ChartAccountResponse, ApiError> {
+        let account = self
+            .repo
+            .find_by_code_include_deleted(code, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Chart account '{}' not found", code)))?;
+
+        if !account.is_deleted() {
+            return Err(ApiError::BadRequest(
+                "Chart account is not deleted".to_string(),
+            ));
+        }
+
+        Ok(account.into())
     }
 
     /// Restore a soft-deleted chart account

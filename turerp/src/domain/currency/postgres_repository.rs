@@ -174,6 +174,28 @@ impl CurrencyRepository for PostgresCurrencyRepository {
         Ok(row.map(Into::into))
     }
 
+    async fn find_by_code_include_deleted(
+        &self,
+        code: &str,
+        tenant_id: i64,
+    ) -> Result<Option<Currency>, ApiError> {
+        let row = sqlx::query_as::<_, CurrencyRow>(
+            r#"
+            SELECT id, tenant_id, code, name, symbol, decimal_places, is_active, is_base,
+                   created_at, updated_at, deleted_at, deleted_by, NULL::bigint as total_count
+            FROM currencies
+            WHERE code = UPPER($1) AND tenant_id = $2
+            "#,
+        )
+        .bind(code)
+        .bind(tenant_id)
+        .fetch_optional(self.pool.as_ref())
+        .await
+        .map_err(|e| map_sqlx_error(e, "currency"))?;
+
+        Ok(row.map(Into::into))
+    }
+
     async fn find_base(&self, tenant_id: i64) -> Result<Option<Currency>, ApiError> {
         let row = sqlx::query_as::<_, CurrencyRow>(
             r#"

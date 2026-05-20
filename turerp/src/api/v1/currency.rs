@@ -252,7 +252,7 @@ pub async fn restore_currency(
     let i18n = resolve(&i18n);
     let code = path.into_inner();
     let currency = match currency_service
-        .get_currency_by_code(&code, admin_user.0.tenant_id)
+        .get_currency_by_code_include_deleted(&code, admin_user.0.tenant_id)
         .await
     {
         Ok(c) => c,
@@ -311,7 +311,7 @@ pub async fn destroy_currency(
     let i18n = resolve(&i18n);
     let code = path.into_inner();
     let currency = match currency_service
-        .get_currency_by_code(&code, admin_user.0.tenant_id)
+        .get_currency_by_code_include_deleted(&code, admin_user.0.tenant_id)
         .await
     {
         Ok(c) => c,
@@ -566,11 +566,11 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         web::scope("/currencies")
             .route("", web::get().to(list_currencies))
             .route("", web::post().to(create_currency))
+            .route("/deleted", web::get().to(list_deleted_currencies))
             .route("/{code}", web::get().to(get_currency))
             .route("/{code}", web::put().to(update_currency))
             .route("/{code}/soft", web::delete().to(soft_delete_currency))
             .route("/{code}/restore", web::post().to(restore_currency))
-            .route("/deleted", web::get().to(list_deleted_currencies))
             .route("/{code}/destroy", web::delete().to(destroy_currency)),
     )
     .service(
@@ -579,9 +579,9 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("", web::post().to(create_exchange_rate))
             .route("/convert", web::get().to(convert_amount))
             .route("/effective", web::get().to(get_effective_rate))
+            .route("/deleted", web::get().to(list_deleted_exchange_rates))
             .route("/{id}/soft", web::delete().to(soft_delete_exchange_rate))
             .route("/{id}/restore", web::post().to(restore_exchange_rate))
-            .route("/deleted", web::get().to(list_deleted_exchange_rates))
             .route("/{id}/destroy", web::delete().to(destroy_exchange_rate)),
     );
 }

@@ -185,7 +185,7 @@ pub async fn restore_chart_account(
     let i18n = resolve(&i18n);
     let code = path.into_inner();
     let account = chart_of_accounts_service
-        .get_account_by_code(&code, admin_user.0.tenant_id)
+        .get_deleted_account_by_code(&code, admin_user.0.tenant_id)
         .await?;
     match chart_of_accounts_service
         .restore_account(account.id, admin_user.0.tenant_id)
@@ -238,7 +238,7 @@ pub async fn destroy_chart_account(
     let i18n = resolve(&i18n);
     let code = path.into_inner();
     let account = chart_of_accounts_service
-        .get_account_by_code(&code, admin_user.0.tenant_id)
+        .get_deleted_account_by_code(&code, admin_user.0.tenant_id)
         .await?;
     match chart_of_accounts_service
         .destroy_account(account.id, admin_user.0.tenant_id)
@@ -356,6 +356,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(get_trial_balance)),
     )
     .service(
+        web::resource("/v1/chart-of-accounts/deleted")
+            .route(web::get().to(list_deleted_chart_accounts)),
+    )
+    .service(
         web::resource("/v1/chart-of-accounts/{code}")
             .route(web::get().to(get_chart_account_by_code))
             .route(web::put().to(update_chart_account))
@@ -364,10 +368,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/chart-of-accounts/{code}/restore")
             .route(web::post().to(restore_chart_account)),
-    )
-    .service(
-        web::resource("/v1/chart-of-accounts/deleted")
-            .route(web::get().to(list_deleted_chart_accounts)),
     )
     .service(
         web::resource("/v1/chart-of-accounts/{code}/destroy")

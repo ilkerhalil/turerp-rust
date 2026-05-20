@@ -74,7 +74,7 @@
 
 ### Gozlemlenebilirlik (3)
 26. Zero `#[tracing::instrument]` — DB query'ler, business logic gorunmez
-27. 37 domain'de integration test yok — invoice, cari, stock, hr test'siz
+27. ~~37 domain'de integration test yok~~ — **Cozuldu** — 36 yeni `*_crud_test.rs` dosyasi yazildi, toplam 1921+ test geciyor
 28. PostgreSQL path hic test edilmiyor — tum testler in-memory
 
 ---
@@ -182,7 +182,7 @@
 15. [x] ~~Postgres feature flag runtime'a cevir~~ — **#98** — `#[cfg(feature = "postgres")]` kaldırıldı, `create_app_state_unified()` runtime seçim yapıyor
 16. [x] domain/mod.rs re-export'lari daralt — **#93** — 113 re-export kaldırıldı
 17. [x] Portal servisler trait-based hale getir — **#93** — `CustomerPortal` + `VendorPortal` trait'leri eklendi
-18. [ ] 37 domain icin integration test basla
+18. [x] 37 domain icin integration test basla — 36 yeni test dosyasi, tum testler geciyor
 19. [x] `#[tracing::instrument]` ekle — **#93** — 16 annotation eklendi (invoice, bank, cari, auth)
 
 ### Faz 3: Medium (1-2 hafta)
