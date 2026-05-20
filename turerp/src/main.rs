@@ -6,6 +6,7 @@
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpServer};
 use secrecy::ExposeSecret;
+use std::sync::Arc;
 use turerp::config::Config;
 use turerp::middleware::{
     audit::spawn_audit_writer, AuditLoggingMiddleware, AuthUser, IdempotencyMiddleware,
@@ -355,6 +356,25 @@ async fn main() -> std::io::Result<()> {
     let is_production = config.is_production();
     let security_headers_config = config.security_headers.clone();
 
+    // Build idempotency middleware: Redis in production if enabled, otherwise in-memory
+    let idempotency_middleware = if config.redis.enabled {
+        match turerp::middleware::RedisIdempotencyStore::new(&config.redis.url).await {
+            Ok(store) => {
+                tracing::info!("Redis idempotency store initialized");
+                IdempotencyMiddleware::new(Arc::new(store))
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to initialize Redis idempotency store ({}), falling back to in-memory",
+                    e
+                );
+                IdempotencyMiddleware::in_memory()
+            }
+        }
+    } else {
+        IdempotencyMiddleware::in_memory()
+    };
+
     // Macro to build the common Actix app (middleware + app_data).
     // Avoids duplicating ~100 lines for postgres vs in-memory feature flags.
     macro_rules! build_app_core {
@@ -375,7 +395,7 @@ async fn main() -> std::io::Result<()> {
                 .wrap(JwtAuthMiddleware::new(
                     app_state.auth.jwt_service.get_ref().clone(),
                 )) // JWT validation
-                .wrap(IdempotencyMiddleware::in_memory()) // Idempotency key caching
+                .wrap(idempotency_middleware.clone()) // Idempotency key caching
                 .wrap(MetricsMiddleware::new()) // Metrics collection
                 .wrap(TenantMiddleware) // Tenant context extraction (after auth)
                 .wrap(
