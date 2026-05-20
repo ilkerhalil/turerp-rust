@@ -6,6 +6,7 @@
 //! signing, sending, and status tracking.
 
 pub mod model;
+pub mod postgres_repository;
 pub mod repository;
 pub mod service;
 
@@ -14,5 +15,6 @@ pub use model::{
     CreateEarchiveDocument, EarchiveDocument, EarchiveResponse, EarchiveStatus, EarchiveType,
     GenerateEarchiveRequest,
 };
+pub use postgres_repository::PostgresEarchiveRepository;
 pub use repository::{BoxEarchiveRepository, EarchiveRepository, InMemoryEarchiveRepository};
 pub use service::EarchiveService;
