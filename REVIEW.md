@@ -88,7 +88,7 @@
 - ~~CORS `*` + `allow_credentials: true`~~ — **Cozuldu (#94)** — wildcard origin ile credentials zorla `false`
 
 ### Performans
-- `update_preferences` N+1 bulk upsert
+- ~~`update_preferences` N+1 bulk upsert~~ — **Cozuldu (#111)** — `UNNEST($3::text[], $4::text[], $5::bool[])` ile tek sorgu, N round-trip 1'e indi
 - `SELECT *` document repo'larda (genis tablolar)
 - ~~`subdomain.clone()` gereksiz allocation~~ — **Cozuldu (#104)** — `tenant/postgres_repository.rs` ve `tenant/repository.rs`'te 3 clone kaldırıldı, String move yapıldı
 - ~~`Vec::new()` yerine `with_capacity`~~ — **Cozuldu (#104)** — 24 yerde `Vec::with_capacity()` eklendi, 18 dosya
