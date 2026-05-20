@@ -7,7 +7,7 @@ use actix_web::body::MessageBody;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, HttpMessage};
 use futures::future::LocalBoxFuture;
 
-use crate::middleware::AuthUser;
+use crate::utils::jwt::AuthClaims;
 
 /// Tenant context extracted from the request
 #[derive(Debug, Clone)]
@@ -35,9 +35,9 @@ impl TenantMiddleware {
     /// 1. AuthUser extension (from JWT claims)
     /// 2. X-Tenant-ID header (for service-to-service calls)
     pub fn extract_tenant_id(req: &ServiceRequest) -> Option<i64> {
-        // First try to get from authenticated user
-        if let Some(auth_user) = req.extensions().get::<AuthUser>() {
-            return Some(auth_user.0.tenant_id);
+        // First try to get from authenticated user claims
+        if let Some(auth_claims) = req.extensions().get::<AuthClaims>() {
+            return Some(auth_claims.tenant_id);
         }
 
         // Fall back to header for internal service calls
