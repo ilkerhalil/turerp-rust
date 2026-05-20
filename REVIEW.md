@@ -114,7 +114,7 @@
 - `InterCompanyService` `common/`da ama 4 domain'e bagli
 - `QualityControlService` yanlis state'te
 - `SGK Payroll` concrete `HrService`'e bagli
-- `AppState` 60+ `.app_data()` tekrari
+- ~~`AppState` 60+ `.app_data()` tekrari~~ — **Cozuldu (#110)** — `AppState::register_services(&self, cfg: &mut web::ServiceConfig)` eklendi, 66 registration `main.rs` `build_app_core!` macro'dan `lib.rs`'e tasindi
 
 ### Gozlemlenebilirlik
 - Duplicate logging (actix Logger + TracingMiddleware)
