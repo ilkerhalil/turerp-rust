@@ -23,7 +23,10 @@ use common::*;
 /// Benchmark: hit the liveness endpoint with sequential requests
 #[actix_web::test]
 async fn test_sequential_health_latency() {
-    let config = Config::default();
+    let config = Config {
+        encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
+        ..Config::default()
+    };
     let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let app = test::init_service(
@@ -70,7 +73,10 @@ async fn test_sequential_health_latency() {
 /// Benchmark: concurrent burst against the liveness endpoint
 #[actix_web::test]
 async fn test_concurrent_health_burst() {
-    let config = Config::default();
+    let config = Config {
+        encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
+        ..Config::default()
+    };
     let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let app = test::init_service(
@@ -127,7 +133,10 @@ async fn test_concurrent_health_burst() {
 /// Benchmark: POST-heavy simulated registration load
 #[actix_web::test]
 async fn test_post_load_json_parsing() {
-    let config = Config::default();
+    let config = Config {
+        encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
+        ..Config::default()
+    };
     let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let app = test::init_service(
@@ -180,7 +189,10 @@ async fn test_post_load_json_parsing() {
 /// Benchmark: rapid successive requests from same IP to exercise rate-limit stats
 #[actix_web::test]
 async fn test_rate_limit_stats_accumulation() {
-    let config = Config::default();
+    let config = Config {
+        encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
+        ..Config::default()
+    };
     let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let app = test::init_service(
@@ -237,7 +249,10 @@ fn create_perf_admin_token(jwt: &JwtService) -> String {
 /// Benchmark: sequential job scheduling throughput
 #[actix_web::test]
 async fn test_job_scheduling_throughput() {
-    let config = Config::default();
+    let config = Config {
+        encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
+        ..Config::default()
+    };
     let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let jwt = JwtService::new(
@@ -290,7 +305,10 @@ async fn test_job_scheduling_throughput() {
 /// Benchmark: concurrent job scheduling burst
 #[actix_web::test]
 async fn test_concurrent_job_scheduling_burst() {
-    let config = Config::default();
+    let config = Config {
+        encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
+        ..Config::default()
+    };
     let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
 
     let jwt = JwtService::new(

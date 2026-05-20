@@ -71,7 +71,9 @@ pub use v1::webhooks_configure as v1_webhooks_configure;
 pub use v1::workflows_configure as v1_workflows_configure;
 
 use crate::common::MessageResponse;
-use crate::domain::auth::{LoginRequest, LoginResponse, RefreshTokenRequest, RegisterRequest};
+use crate::domain::auth::{
+    LoginRequest, LoginResponse, LogoutRequest, RefreshTokenRequest, RegisterRequest,
+};
 use crate::domain::feature::{
     CreateFeatureFlag, FeatureFlagResponse, FeatureFlagStatus, UpdateFeatureFlag,
 };
@@ -97,6 +99,7 @@ use utoipa::OpenApi;
         crate::api::v1::auth::register,
         crate::api::v1::auth::login,
         crate::api::v1::auth::refresh_token,
+        crate::api::v1::auth::logout,
         crate::api::v1::auth::me,
         // MFA
         crate::api::v1::mfa::mfa_setup,
@@ -800,6 +803,7 @@ use utoipa::OpenApi;
             LoginRequest,
             LoginResponse,
             RefreshTokenRequest,
+            LogoutRequest,
             RegisterRequest,
             CreateUser,
             UpdateUser,

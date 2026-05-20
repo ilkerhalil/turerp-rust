@@ -149,6 +149,10 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "028_missing_repos",
             sql: include_str!("../../migrations/028_missing_repos.sql"),
         },
+        Migration {
+            version: "029_brute_force_protection",
+            sql: include_str!("../../migrations/029_brute_force_protection.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).

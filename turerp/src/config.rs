@@ -451,7 +451,7 @@ impl Default for Config {
             cdc: CdcConfig::default(),
             security_headers: SecurityHeadersConfig::default(),
             secrets: SecretsConfig::default(),
-            encryption_key: "dGVzdC1rZXktZm9yLXRlc3Rpbmctb25seS0xMjM0NTY=".to_string(),
+            encryption_key: String::new(),
         }
     }
 }
@@ -562,8 +562,7 @@ impl Config {
         let cdc = CdcConfig::from_env();
         let security_headers = SecurityHeadersConfig::from_env();
         let secrets = SecretsConfig::from_env();
-        let encryption_key = std::env::var("TURERP_ENCRYPTION_KEY")
-            .unwrap_or_else(|_| "dGVzdC1rZXktZm9yLXRlc3Rpbmctb25seS0xMjM0NTY=".to_string());
+        let encryption_key = std::env::var("TURERP_ENCRYPTION_KEY").unwrap_or_default();
 
         Ok(Self {
             environment,
@@ -604,11 +603,12 @@ impl Config {
                 }
             }
 
-            // Encryption key must not be the hardcoded default
-            if self.encryption_key == "dGVzdC1rZXktZm9yLXRlc3Rpbmctb25seS0xMjM0NTY=" {
+            // Encryption key must not be the hardcoded default or empty
+            if self.encryption_key.is_empty()
+                || self.encryption_key == "dGVzdC1rZXktZm9yLXRlc3Rpbmctb25seS0xMjM0NTY="
+            {
                 return Err(ConfigError::Message(
-                    "TURERP_ENCRYPTION_KEY is set to the default test key in production. \
-                     Generate a secure 32-byte base64-encoded key and set TURERP_ENCRYPTION_KEY."
+                    "Encryption key must be explicitly set via TURERP_ENCRYPTION_KEY environment variable. Do not use the default test key in production."
                         .to_string(),
                 ));
             }
