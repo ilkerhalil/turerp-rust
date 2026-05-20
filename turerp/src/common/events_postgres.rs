@@ -98,7 +98,7 @@ fn parse_event_status(s: &str) -> EventStatus {
     }
 }
 
-#[allow(dead_code)]
+#[cfg(test)]
 fn event_status_str(s: EventStatus) -> &'static str {
     match s {
         EventStatus::Pending => "pending",

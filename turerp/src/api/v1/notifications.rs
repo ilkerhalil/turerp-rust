@@ -1,10 +1,11 @@
 //! Notification API endpoints (v1)
 
+#![allow(unused_imports)]
+
 use crate::common::{
     MessageResponse, NotificationChannel, NotificationPriority, NotificationRequest,
     NotificationService,
 };
-#[allow(unused_imports)]
 use crate::domain::notification::model::{NotificationPreferenceResponse, NotificationResponse};
 use crate::error::ApiError;
 use crate::middleware::AdminUser;

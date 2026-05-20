@@ -19,17 +19,11 @@ use crate::domain::hr::repository::{
 };
 use crate::error::ApiError;
 
-#[allow(dead_code)]
-fn default_company_id() -> i64 {
-    1
-}
-
 // ---------------------------------------------------------------------------
 // Employee row and repository
 // ---------------------------------------------------------------------------
 
 /// Database row representation for Employee
-#[allow(dead_code)]
 #[derive(Debug, FromRow)]
 struct EmployeeRow {
     id: i64,
@@ -635,8 +629,8 @@ impl AttendanceRepository for PostgresAttendanceRepository {
 // ---------------------------------------------------------------------------
 
 /// Database row representation for LeaveType
-#[allow(dead_code)]
 #[derive(Debug, FromRow)]
+#[allow(dead_code)]
 struct LeaveTypeRow {
     id: i64,
     tenant_id: i64,
@@ -1123,8 +1117,8 @@ impl LeaveRequestRepository for PostgresLeaveRequestRepository {
 // ---------------------------------------------------------------------------
 
 /// Database row representation for Payroll
-#[allow(dead_code)]
 #[derive(Debug, FromRow)]
+#[allow(dead_code)]
 struct PayrollRow {
     id: i64,
     tenant_id: i64,

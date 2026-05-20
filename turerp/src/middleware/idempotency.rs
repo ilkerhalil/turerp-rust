@@ -38,7 +38,6 @@ pub struct CachedResponse {
 pub trait IdempotencyStore: Send + Sync {
     fn get(&self, key: &str) -> Option<CachedResponse>;
     fn set(&self, key: &str, response: CachedResponse);
-    #[allow(dead_code)]
     fn remove(&self, key: &str);
 }
 

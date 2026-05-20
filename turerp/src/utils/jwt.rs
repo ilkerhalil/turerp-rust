@@ -47,12 +47,6 @@ impl AuthClaims {
         }
     }
 
-    /// Set cari_id for portal user claims
-    pub fn with_cari_id(mut self, cari_id: i64) -> Self {
-        self.cari_id = Some(cari_id);
-        self
-    }
-
     /// Parse the `sub` claim as a user ID, returning an error on invalid tokens.
     pub fn user_id(&self) -> Result<i64, ApiError> {
         self.sub

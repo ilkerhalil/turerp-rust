@@ -114,21 +114,9 @@ struct Document {
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 struct BkToCstmrStmt {
-    #[serde(rename = "GrpHdr", default)]
-    grp_hdr: Option<GrpHdr>,
     #[serde(rename = "Stmt")]
     stmt: Stmt,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct GrpHdr {
-    #[serde(rename = "MsgId")]
-    msg_id: String,
-    #[serde(rename = "CreDtTm")]
-    cre_dt_tm: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -150,19 +138,9 @@ struct Acct {
 }
 
 #[derive(Debug, Deserialize)]
-#[allow(dead_code)]
 struct AcctId {
     #[serde(rename = "IBAN")]
     iban: Option<String>,
-    #[serde(rename = "Othr")]
-    othr: Option<OthrId>,
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct OthrId {
-    #[serde(rename = "Id")]
-    id: String,
 }
 
 #[derive(Debug, Deserialize)]

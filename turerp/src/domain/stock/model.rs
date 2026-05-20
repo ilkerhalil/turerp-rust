@@ -353,8 +353,3 @@ mod tests {
         assert!(!warehouse.is_deleted());
     }
 }
-
-#[allow(dead_code)]
-fn default_company_id() -> i64 {
-    1
-}

@@ -118,11 +118,6 @@ impl TenantService {
     pub async fn destroy_tenant(&self, id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id).await
     }
-
-    /// Get tenant database URL
-    pub fn get_database_url(&self, base_url: &str, tenant: &Tenant) -> String {
-        format!("{}/{}", base_url.trim_end_matches('/'), tenant.db_name)
-    }
 }
 
 /// Tenant config service with optional encryption support
