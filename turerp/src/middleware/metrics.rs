@@ -11,14 +11,17 @@
 use actix_web::body::MessageBody;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
 use metrics::{counter, gauge, histogram};
-use std::sync::OnceLock;
 use std::task::{Context, Poll};
 use std::time::Instant;
 
 use metrics_exporter_prometheus::PrometheusHandle;
 
-/// Global handle for rendering Prometheus metrics
-static PROMETHEUS_HANDLE: OnceLock<PrometheusHandle> = OnceLock::new();
+/// Global handle for rendering Prometheus metrics.
+///
+/// Uses `Mutex` instead of `OnceLock` so tests can reset the handle
+/// between runs, eliminating test-order dependency.
+static PROMETHEUS_HANDLE: parking_lot::Mutex<Option<PrometheusHandle>> =
+    parking_lot::Mutex::new(None);
 
 /// Metrics middleware
 pub struct MetricsMiddleware;
@@ -142,9 +145,11 @@ pub fn install_metrics_exporter() -> Result<(), String> {
         .install_recorder()
         .map_err(|e| format!("Failed to install Prometheus recorder: {}", e))?;
 
-    PROMETHEUS_HANDLE
-        .set(handle)
-        .map_err(|_| "Prometheus handle already initialized".to_string())?;
+    let mut guard = PROMETHEUS_HANDLE.lock();
+    if guard.is_some() {
+        return Err("Prometheus handle already initialized".to_string());
+    }
+    *guard = Some(handle);
 
     tracing::info!("Prometheus metrics exporter installed");
     Ok(())
@@ -156,7 +161,8 @@ pub fn install_metrics_exporter() -> Result<(), String> {
 /// metrics snapshot. Returns empty string if the recorder was never installed.
 pub fn render_metrics() -> String {
     PROMETHEUS_HANDLE
-        .get()
+        .lock()
+        .as_ref()
         .map(|h| h.render())
         .unwrap_or_default()
 }
@@ -172,10 +178,20 @@ mod tests {
 
     #[test]
     fn test_render_metrics_without_install() {
-        // Without installing, render_metrics should return empty string
-        // (The OnceLock is never set in this test, so get() returns None)
-        // Note: This test assumes no other test has called install_metrics_exporter()
-        // which is true in unit test context since install is global and can only
-        // be called once per process.
+        // Clear any previously installed handle so this test is independent.
+        *PROMETHEUS_HANDLE.lock() = None;
+        assert_eq!(render_metrics(), "");
+    }
+
+    #[test]
+    fn test_render_metrics_after_install() {
+        // Ensure a clean slate, then install, record a metric, and verify output.
+        *PROMETHEUS_HANDLE.lock() = None;
+        install_metrics_exporter().expect("install should succeed in test");
+        metrics::counter!("test_metric_total").increment(1);
+        let rendered = render_metrics();
+        assert!(rendered.contains("test_metric_total"));
+        // Clean up so other tests are not affected.
+        *PROMETHEUS_HANDLE.lock() = None;
     }
 }
