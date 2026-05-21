@@ -117,7 +117,7 @@
 - ~~`AppState` 60+ `.app_data()` tekrari~~ — **Cozuldu (#110)** — `AppState::register_services(&self, cfg: &mut web::ServiceConfig)` eklendi, 66 registration `main.rs` `build_app_core!` macro'dan `lib.rs`'e tasindi
 
 ### Gozlemlenebilirlik
-- Duplicate logging (actix Logger + TracingMiddleware)
+- ~~Duplicate logging (actix Logger + TracingMiddleware)~~ — **Yanlis bulgu**, `actix Logger` middleware yok, sadece `TracingMiddleware` mevcut
 - ~~Domain log'lari string interpolation~~ — **Cozuldu (#113)** — 23 instance `tracing::warn!("msg {}", val)` → `tracing::warn!(field = %val, "msg")`, 13 dosya
 - ~~DB error log'larinda tenant_id/user_id context yok~~ — **Cozuldu (#114)** — `CURRENT_TENANT_ID` tokio task-local eklendi, `TenantMiddleware` scope set ediyor, `ApiError::Database`/`Internal` log'ları `tenant_id` field ile yapılıyor
 - ~~P99 gauge gercek percentile degil~~ — **Cozuldu (#106)** — Yanlis `gauge!().set(elapsed)` kaldırıldı, `http_request_duration_seconds` histogram üzerinden `compute_percentiles()` ile gercek P99 hesaplanıyor
@@ -131,7 +131,7 @@
 - `tests/integration/` bos dizin
 - `println!` forecasting test'lerinde
 - `eprintln!` OTLP init hatalarinda
-- TracingMiddleware'de tenant_id/user_id yok
+- ~~TracingMiddleware'de tenant_id/user_id yok~~ — **Yanlis bulgu**, `tracing.rs:61-65`'te `AuthClaims`'ten `tenant_id` ve `user_id` çekiliyor, `tracing::info!`/`warn!`/`error!` field'larında loglanıyor
 - Missing `///` docs public handler'larda
 - `unwrap()` GraphQL test'lerinde
 - `std::time::Instant` async context'te
