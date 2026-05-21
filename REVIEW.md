@@ -88,7 +88,7 @@
 - ~~CORS `*` + `allow_credentials: true`~~ — **Cozuldu (#94)** — wildcard origin ile credentials zorla `false`
 
 ### Performans
-- `update_preferences` N+1 bulk upsert
+- ~~`update_preferences` N+1 bulk upsert~~ — **Cozuldu (#111)** — `UNNEST($3::text[], $4::text[], $5::bool[])` ile tek sorgu, N round-trip 1'e indi
 - `SELECT *` document repo'larda (genis tablolar)
 - ~~`subdomain.clone()` gereksiz allocation~~ — **Cozuldu (#104)** — `tenant/postgres_repository.rs` ve `tenant/repository.rs`'te 3 clone kaldırıldı, String move yapıldı
 - ~~`Vec::new()` yerine `with_capacity`~~ — **Cozuldu (#104)** — 24 yerde `Vec::with_capacity()` eklendi, 18 dosya
@@ -96,7 +96,7 @@
 ### Kod Kalitesi
 - Giant `create_in_memory_services!` macro (1000+ satir)
 - ~~`api/mod.rs` 70+ manual re-export~~ — **Cozuldu (#104)** — 58 individual re-export gruplandi, `v1/mod.rs` ara katman kaldırıldı, net -79 satır
-- `TenantMiddleware` `AuthUser`'a erisiyor (coupling)
+- ~~`TenantMiddleware` `AuthUser`'a erisiyor (coupling)~~ — **Cozuldu (#112)** — `JwtAuthMiddleware` artik `TenantContext` ekliyor, `TenantMiddleware` `AuthClaims` import'ini kaldirdi, auth mekanizmasindan bagimsiz hale geldi
 - ~~`RateLimitMiddleware` duplicate IP extraction~~ — **Cozuldu (#109)** — `is_loopback`, `is_in_trusted_proxies`, ve `extract_client_ip` `common/ip_utils.rs`'te ortaklasildi, rate_limit.rs + ip_whitelist.rs'ten ~60 satir kaldirildi
 - ~~`SearchQuery` her domain'de yeniden implemente~~ — **Cozuldu (#108)** — `PaginatedSearchQuery` `common/pagination.rs`'te ortaklasildi, cari/invoice/products'tan lokal tanimlar kaldirildi
 - ~~`jwt.rs` `Unauthorized` yerine `InvalidToken`~~ — **Cozuldu (#104)** — 3 yerde `ApiError::Unauthorized` → `ApiError::InvalidToken`
@@ -114,7 +114,7 @@
 - `InterCompanyService` `common/`da ama 4 domain'e bagli
 - `QualityControlService` yanlis state'te
 - `SGK Payroll` concrete `HrService`'e bagli
-- `AppState` 60+ `.app_data()` tekrari
+- ~~`AppState` 60+ `.app_data()` tekrari~~ — **Cozuldu (#110)** — `AppState::register_services(&self, cfg: &mut web::ServiceConfig)` eklendi, 66 registration `main.rs` `build_app_core!` macro'dan `lib.rs`'e tasindi
 
 ### Gozlemlenebilirlik
 - Duplicate logging (actix Logger + TracingMiddleware)

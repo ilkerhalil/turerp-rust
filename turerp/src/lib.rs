@@ -460,6 +460,95 @@ pub mod app {
         pub i18n: web::Data<I18n>,
     }
 
+    impl AppState {
+        /// Register all service data into the Actix application.
+        ///
+        /// Centralizes the 60+ `.app_data()` calls that were previously
+        /// duplicated inside `main.rs`'s `build_app_core!` macro.
+        pub fn register_services(&self, cfg: &mut web::ServiceConfig) {
+            cfg.app_data(web::Data::new(self.clone())); // Full AppState for health probes
+            cfg.app_data(web::JsonConfig::default().limit(1024 * 1024)); // 1MB JSON limit
+
+            cfg.app_data(self.auth.auth_service.clone());
+            cfg.app_data(self.auth.user_service.clone());
+            cfg.app_data(self.auth.jwt_service.clone());
+
+            cfg.app_data(self.commerce.cari_service.clone());
+            cfg.app_data(self.commerce.stock_service.clone());
+            cfg.app_data(self.commerce.invoice_service.clone());
+            cfg.app_data(self.commerce.sales_service.clone());
+            cfg.app_data(self.commerce.barcode_service.clone());
+            cfg.app_data(self.commerce.product_service.clone());
+            cfg.app_data(self.commerce.purchase_service.clone());
+            cfg.app_data(self.commerce.inter_company_service.clone());
+            cfg.app_data(self.commerce.company_service.clone());
+
+            cfg.app_data(self.hr.hr_service.clone());
+            cfg.app_data(self.hr.sgk_payroll_service.clone());
+            cfg.app_data(self.hr.shift_service.clone());
+
+            cfg.app_data(self.finance.accounting_service.clone());
+            cfg.app_data(self.finance.tax_service.clone());
+            cfg.app_data(self.finance.bank_service.clone());
+            cfg.app_data(self.finance.cost_center_service.clone());
+            cfg.app_data(self.finance.currency_service.clone());
+
+            cfg.app_data(self.project.project_service.clone());
+            cfg.app_data(self.project.manufacturing_service.clone());
+            cfg.app_data(self.project.qc_service.clone());
+            cfg.app_data(self.project.crm_service.clone());
+
+            cfg.app_data(self.chart_of_accounts_service.clone());
+            cfg.app_data(self.custom_field_service.clone());
+
+            cfg.app_data(self.admin.tenant_service.clone());
+            cfg.app_data(self.admin.tenant_config_service.clone());
+            cfg.app_data(self.admin.settings_service.clone());
+            cfg.app_data(self.admin.api_key_service.clone());
+            cfg.app_data(self.admin.ip_whitelist_service.clone());
+
+            cfg.app_data(self.assets_service.clone());
+            cfg.app_data(self.feature_service.clone());
+
+            cfg.app_data(self.analytics.audit_service.clone());
+            cfg.app_data(self.analytics.forecasting_service.clone());
+            cfg.app_data(self.analytics.subscription_service.clone());
+            cfg.app_data(self.analytics.archive_service.clone());
+
+            cfg.app_data(self.observability_service.clone());
+            cfg.app_data(self.i18n.clone());
+
+            cfg.app_data(self.infra.job_scheduler.clone());
+            cfg.app_data(self.infra.event_bus.clone());
+            cfg.app_data(self.infra.notification_service.clone());
+            cfg.app_data(self.infra.report_engine.clone());
+            cfg.app_data(self.infra.tracing_service.clone());
+            cfg.app_data(self.infra.db_router.clone());
+            cfg.app_data(self.infra.cache_service.clone());
+            cfg.app_data(self.infra.search_service.clone());
+            cfg.app_data(self.infra.rate_limit_stats.clone());
+            cfg.app_data(self.infra.import_service.clone());
+            cfg.app_data(self.infra.circuit_breaker_registry.clone());
+            cfg.app_data(self.infra.retry_stats.clone());
+
+            cfg.app_data(self.integration.efatura_service.clone());
+            cfg.app_data(self.integration.earchive_service.clone());
+            cfg.app_data(self.integration.edefter_service.clone());
+            cfg.app_data(self.integration.blockchain_ledger_service.clone());
+            cfg.app_data(self.integration.customer_portal_service.clone());
+            cfg.app_data(self.integration.vendor_portal_service.clone());
+            cfg.app_data(self.integration.webhook_service.clone());
+            cfg.app_data(self.integration.workflow_service.clone());
+
+            cfg.app_data(self.document.document_service.clone());
+            cfg.app_data(self.document.dashboard_service.clone());
+            cfg.app_data(self.document.file_storage.clone());
+
+            cfg.app_data(self.auth.mfa_service.clone());
+            cfg.app_data(self.ldap_service.clone());
+        }
+    }
+
     /// Create all in-memory services
     macro_rules! create_in_memory_services {
         ($config:expr) => {{

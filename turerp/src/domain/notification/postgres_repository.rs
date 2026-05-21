@@ -745,36 +745,44 @@ impl NotificationPreferenceRepository for PostgresNotificationPreferenceReposito
         user_id: i64,
         prefs: Vec<UpdatePreference>,
     ) -> Result<Vec<NotificationPreference>, ApiError> {
-        let mut results = Vec::with_capacity(prefs.len());
-
-        for pref in prefs {
-            let channel: crate::common::notifications::NotificationChannel =
-                pref.channel
-                    .parse()
-                    .map_err(|e: String| ApiError::Validation(format!("Invalid channel: {}", e)))?;
-
-            let row: NotificationPreferenceRow = sqlx::query_as(
-                r#"
-                INSERT INTO notification_preferences
-                    (tenant_id, user_id, channel, notification_type, enabled, updated_at)
-                VALUES ($1, $2, $3, $4, $5, NOW())
-                ON CONFLICT (tenant_id, user_id, channel, notification_type)
-                DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()
-                RETURNING id, tenant_id, user_id, channel, notification_type, enabled, created_at, updated_at, deleted_at, deleted_by
-                "#,
-            )
-            .bind(tenant_id)
-            .bind(user_id)
-            .bind(channel.to_string())
-            .bind(&pref.notification_type)
-            .bind(pref.enabled)
-            .fetch_one(&*self.pool)
-            .await
-            .map_err(|e| map_sqlx_error(e, "NotificationPreference"))?;
-
-            results.push(row.into());
+        if prefs.is_empty() {
+            return Ok(Vec::new());
         }
 
-        Ok(results)
+        // Validate all channels upfront
+        let mut channels = Vec::with_capacity(prefs.len());
+        let mut notification_types = Vec::with_capacity(prefs.len());
+        let mut enableds = Vec::with_capacity(prefs.len());
+
+        for pref in prefs {
+            let channel: NotificationChannel = pref
+                .channel
+                .parse()
+                .map_err(|e: String| ApiError::Validation(format!("Invalid channel: {}", e)))?;
+            channels.push(channel.to_string());
+            notification_types.push(pref.notification_type);
+            enableds.push(pref.enabled);
+        }
+
+        let rows: Vec<NotificationPreferenceRow> = sqlx::query_as(
+            r#"
+            INSERT INTO notification_preferences
+                (tenant_id, user_id, channel, notification_type, enabled, updated_at)
+            SELECT $1, $2, unnest($3::text[]), unnest($4::text[]), unnest($5::bool[]), NOW()
+            ON CONFLICT (tenant_id, user_id, channel, notification_type)
+            DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = NOW()
+            RETURNING id, tenant_id, user_id, channel, notification_type, enabled, created_at, updated_at, deleted_at, deleted_by
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(user_id)
+        .bind(&channels)
+        .bind(&notification_types)
+        .bind(&enableds)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "NotificationPreference"))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
     }
 }
