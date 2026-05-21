@@ -122,7 +122,7 @@
 - ~~DB error log'larinda tenant_id/user_id context yok~~ — **Cozuldu (#114)** — `CURRENT_TENANT_ID` tokio task-local eklendi, `TenantMiddleware` scope set ediyor, `ApiError::Database`/`Internal` log'ları `tenant_id` field ile yapılıyor
 - ~~P99 gauge gercek percentile degil~~ — **Cozuldu (#106)** — Yanlis `gauge!().set(elapsed)` kaldırıldı, `http_request_duration_seconds` histogram üzerinden `compute_percentiles()` ile gercek P99 hesaplanıyor
 - ~~Metrics test global OnceLock'e bagimli~~ — **Cozuldu (#115)** — `std::sync::OnceLock` yerine `parking_lot::Mutex<Option<PrometheusHandle>>` kullanılıyor, testler arası bağımsızlık sağlandı
-- README MIT badge ama Cargo.toml AGPL-3.0
+- ~~README MIT badge ama Cargo.toml AGPL-3.0~~ — **Çözüldü** — README badge AGPL-3.0 yapıldı
 
 ---
 

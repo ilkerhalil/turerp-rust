@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/turerp/turerp-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/turerp/turerp-rust/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-701%20passing-brightgreen)]()
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](#license)
 
 **Multi-tenant SaaS ERP system** - Built with Rust, Actix-web, and SQLx.
 
