@@ -70,13 +70,13 @@ impl LdapClient for Ldap3Client {
                 match ldap.simple_bind(&config.bind_dn, &password).await {
                     Ok(result) => Ok(result.success().is_ok()),
                     Err(e) => {
-                        tracing::warn!("LDAP bind failed: {}", e);
+                        tracing::warn!(error = %e, "LDAP bind failed");
                         Ok(false)
                     }
                 }
             }
             Err(e) => {
-                tracing::warn!("LDAP connection failed: {}", e);
+                tracing::warn!(error = %e, "LDAP connection failed");
                 Ok(false)
             }
         }

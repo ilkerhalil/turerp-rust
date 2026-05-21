@@ -122,7 +122,7 @@ impl PostgresWebhookRepository {
 
     fn encrypt_secret(&self, secret: &str) -> Result<String, ApiError> {
         crate::utils::encryption::encrypt(secret, &self.encryption_key).map_err(|e| {
-            tracing::error!("Failed to encrypt webhook secret: {}", e);
+            tracing::error!(error = %e, "Failed to encrypt webhook secret");
             ApiError::Internal("Failed to encrypt webhook secret".to_string())
         })
     }
@@ -145,7 +145,7 @@ impl PostgresWebhookRepository {
                 }
             }
             Err(e) => {
-                tracing::error!("Unexpected decryption error: {}", e);
+                tracing::error!(error = %e, "Unexpected decryption error");
                 Err(ApiError::Internal(
                     "Failed to decrypt webhook secret".to_string(),
                 ))

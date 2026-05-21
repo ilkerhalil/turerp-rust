@@ -40,11 +40,11 @@ impl From<SettingRow> for Setting {
             value: row.value,
             default_value: row.default_value,
             data_type: row.data_type.parse().unwrap_or_else(|_| {
-                tracing::warn!("Invalid data_type in DB: {}", row.data_type);
+                tracing::warn!(data_type = %row.data_type, "Invalid data_type in DB");
                 SettingDataType::String
             }),
             group: row.group_name.parse().unwrap_or_else(|_| {
-                tracing::warn!("Invalid group in DB: {}", row.group_name);
+                tracing::warn!(group = %row.group_name, "Invalid group in DB");
                 SettingGroup::General
             }),
             description: row.description,

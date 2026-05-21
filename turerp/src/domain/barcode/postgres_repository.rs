@@ -33,7 +33,7 @@ impl From<BarcodeConfigRow> for BarcodeConfig {
             entity_type: row.entity_type,
             entity_id: row.entity_id,
             barcode_type: row.barcode_type.parse().unwrap_or_else(|e| {
-                tracing::warn!("Invalid barcode type in database: {}", e);
+                tracing::warn!(error = %e, "Invalid barcode type in database");
                 BarcodeType::default()
             }),
             code: row.code,

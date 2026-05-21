@@ -40,7 +40,7 @@ impl From<EarchiveDocumentRow> for EarchiveDocument {
             id: row.id,
             tenant_id: row.tenant_id,
             document_type: row.document_type.parse().unwrap_or_else(|e| {
-                tracing::warn!("Invalid document_type in database: {}", e);
+                tracing::warn!(error = %e, "Invalid document_type in database");
                 EarchiveType::EArchiveInvoice
             }),
             related_invoice_id: row.related_invoice_id,
@@ -48,7 +48,7 @@ impl From<EarchiveDocumentRow> for EarchiveDocument {
             xml_content: row.xml_content,
             signature: row.signature,
             status: row.status.parse().unwrap_or_else(|e| {
-                tracing::warn!("Invalid status in database: {}", e);
+                tracing::warn!(error = %e, "Invalid status in database");
                 EarchiveStatus::Draft
             }),
             gib_response: row.gib_response,

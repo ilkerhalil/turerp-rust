@@ -157,7 +157,7 @@ impl WebhookService {
                 )
                 .await
                 {
-                    tracing::warn!("Webhook delivery failed for {}: {}", wh_url, e);
+                    tracing::warn!(url = %wh_url, error = %e, "Webhook delivery failed");
                 }
             });
         }

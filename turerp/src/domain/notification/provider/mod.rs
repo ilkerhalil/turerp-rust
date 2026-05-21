@@ -76,8 +76,8 @@ impl Default for NoopSmsProvider {
 
 #[async_trait]
 impl SmsProvider for NoopSmsProvider {
-    async fn send_sms(&self, to: &str, message: &str) -> Result<String, ApiError> {
-        tracing::info!("NOOP SMS to={} message={}", to, message);
+    async fn send_sms(&self, to: &str, _message: &str) -> Result<String, ApiError> {
+        tracing::info!(to, "NOOP SMS sent");
         Ok("noop-message-id".to_string())
     }
 }

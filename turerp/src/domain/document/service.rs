@@ -107,7 +107,7 @@ impl DocumentService {
             match self.repo.restore(id, tenant_id).await {
                 Ok(doc) => restored.push(DocumentResponse::from(doc)),
                 Err(e) => {
-                    tracing::warn!("Failed to restore document {}: {}", id, e);
+                    tracing::warn!(id, error = %e, "Failed to restore document");
                     failed.push(BulkRestoreFailed {
                         id,
                         reason: e.to_string(),

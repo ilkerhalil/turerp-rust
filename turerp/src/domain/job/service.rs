@@ -45,12 +45,12 @@ impl JobService {
                 tokio::select! {
                     _ = cron_interval.tick() => {
                         if let Err(e) = Self::evaluate_schedules(&*repo).await {
-                            tracing::warn!("Cron schedule evaluation failed: {}", e);
+                            tracing::warn!(error = %e, "Cron schedule evaluation failed");
                         }
                     }
                     _ = heartbeat_interval.tick() => {
                         if let Err(e) = repo.reset_stalled(Duration::from_secs(1800)).await {
-                            tracing::warn!("Stalled job recovery failed: {}", e);
+                            tracing::warn!(error = %e, "Stalled job recovery failed");
                         }
                     }
                     _ = rx.recv() => {
@@ -81,10 +81,10 @@ impl JobService {
                 Ok(s) => s,
                 Err(e) => {
                     tracing::warn!(
-                        "Invalid cron expression '{}': {}. Disabling schedule {}.",
-                        cron_expr,
-                        e,
-                        schedule.id
+                        cron_expression = %cron_expr,
+                        error = %e,
+                        schedule_id = schedule.id,
+                        "Invalid cron expression; disabling schedule"
                     );
                     repo.toggle_schedule(schedule.id, false).await.ok();
                     continue;
@@ -97,7 +97,7 @@ impl JobService {
                 .with_max_attempts(schedule.max_attempts);
 
             if let Err(e) = repo.create(job).await {
-                tracing::warn!("Failed to create scheduled job: {}", e);
+                tracing::warn!(error = %e, "Failed to create scheduled job");
                 continue;
             }
 
@@ -110,7 +110,7 @@ impl JobService {
                 .update_schedule_next_run(schedule.id, next_run, now)
                 .await
             {
-                tracing::warn!("Failed to update schedule next_run: {}", e);
+                tracing::warn!(error = %e, "Failed to update schedule next_run");
             }
         }
 
