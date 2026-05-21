@@ -484,7 +484,13 @@ impl SecretsConfig {
 
 impl Default for SecretsConfig {
     fn default() -> Self {
-        Self::from_env()
+        Self {
+            vault_enabled: false,
+            vault_addr: "http://127.0.0.1:8200".to_string(),
+            vault_token: SecretString::new(String::new().into()),
+            vault_mount: "secret".to_string(),
+            fallback_to_env: true,
+        }
     }
 }
 
