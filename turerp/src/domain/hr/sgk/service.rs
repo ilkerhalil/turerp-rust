@@ -1,9 +1,11 @@
 //! SGK payroll service
 
+use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, TimeZone, Utc};
 use rust_decimal::Decimal;
+use std::sync::Arc;
 
-use crate::domain::hr::model::{EmployeeStatus, Payroll, PayrollStatus};
+use crate::domain::hr::model::{Employee, EmployeeStatus, Payroll, PayrollStatus};
 use crate::domain::hr::service::HrService;
 use crate::domain::hr::sgk::calculator::{
     default_income_tax_brackets_2026, default_sgk_config_2026, PayrollCalculator,
@@ -18,9 +20,58 @@ use crate::domain::hr::sgk::repository::{
 };
 use crate::error::ApiError;
 
+/// Trait abstracting the HR data that SGK payroll service needs.
+/// Implemented by [`HrService`] and can be mocked in tests.
+#[async_trait]
+pub trait SgkEmployeeProvider: Send + Sync {
+    async fn find_employee_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<Employee>, ApiError>;
+    async fn find_employees_by_tenant(&self, tenant_id: i64) -> Result<Vec<Employee>, ApiError>;
+    async fn create_payroll(&self, payroll: Payroll) -> Result<Payroll, ApiError>;
+    async fn find_payrolls_by_period(
+        &self,
+        tenant_id: i64,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<Vec<Payroll>, ApiError>;
+}
+
+#[async_trait]
+impl SgkEmployeeProvider for HrService {
+    async fn find_employee_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<Employee>, ApiError> {
+        self.employee_repo().find_by_id(id, tenant_id).await
+    }
+
+    async fn find_employees_by_tenant(&self, tenant_id: i64) -> Result<Vec<Employee>, ApiError> {
+        self.employee_repo().find_by_tenant(tenant_id).await
+    }
+
+    async fn create_payroll(&self, payroll: Payroll) -> Result<Payroll, ApiError> {
+        self.payroll_repo().create(payroll).await
+    }
+
+    async fn find_payrolls_by_period(
+        &self,
+        tenant_id: i64,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<Vec<Payroll>, ApiError> {
+        self.payroll_repo()
+            .find_by_period(tenant_id, start, end)
+            .await
+    }
+}
+
 #[derive(Clone)]
 pub struct SgkPayrollService {
-    hr_service: HrService,
+    hr_provider: Arc<dyn SgkEmployeeProvider>,
     sgk_reg_repo: BoxSgkEmployeeRegistrationRepository,
     sgk_config_repo: BoxSgkConfigRepository,
     bonus_repo: BoxEmployeeBonusRepository,
@@ -28,13 +79,13 @@ pub struct SgkPayrollService {
 
 impl SgkPayrollService {
     pub fn new(
-        hr_service: HrService,
+        hr_provider: Arc<dyn SgkEmployeeProvider>,
         sgk_reg_repo: BoxSgkEmployeeRegistrationRepository,
         sgk_config_repo: BoxSgkConfigRepository,
         bonus_repo: BoxEmployeeBonusRepository,
     ) -> Self {
         Self {
-            hr_service,
+            hr_provider,
             sgk_reg_repo,
             sgk_config_repo,
             bonus_repo,
@@ -95,9 +146,8 @@ impl SgkPayrollService {
         period_end: DateTime<Utc>,
     ) -> Result<Payroll, ApiError> {
         let employee = self
-            .hr_service
-            .employee_repo()
-            .find_by_id(employee_id, tenant_id)
+            .hr_provider
+            .find_employee_by_id(employee_id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Employee not found".to_string()))?;
 
@@ -155,7 +205,7 @@ impl SgkPayrollService {
             deleted_by: None,
         };
 
-        self.hr_service.payroll_repo().create(payroll).await
+        self.hr_provider.create_payroll(payroll).await
     }
 
     pub async fn generate_ebildirge(
@@ -180,11 +230,7 @@ impl SgkPayrollService {
             .ok_or_else(|| ApiError::BadRequest("Invalid period".to_string()))?
             - Duration::seconds(1);
 
-        let employees = self
-            .hr_service
-            .employee_repo()
-            .find_by_tenant(tenant_id)
-            .await?;
+        let employees = self.hr_provider.find_employees_by_tenant(tenant_id).await?;
 
         let mut employee_data = Vec::new();
 
@@ -194,9 +240,8 @@ impl SgkPayrollService {
             }
 
             let payrolls = self
-                .hr_service
-                .payroll_repo()
-                .find_by_period(tenant_id, period_start, period_end)
+                .hr_provider
+                .find_payrolls_by_period(tenant_id, period_start, period_end)
                 .await?;
             let payroll = match payrolls.into_iter().find(|p| p.employee_id == employee.id) {
                 Some(p) => p,
@@ -280,9 +325,8 @@ impl SgkPayrollService {
             - Duration::seconds(1);
 
         let payrolls = self
-            .hr_service
-            .payroll_repo()
-            .find_by_period(tenant_id, period_start, period_end)
+            .hr_provider
+            .find_payrolls_by_period(tenant_id, period_start, period_end)
             .await?;
 
         let mut total_gross = Decimal::ZERO;
@@ -356,7 +400,7 @@ mod tests {
     use rust_decimal::Decimal;
     use std::sync::Arc;
 
-    fn create_service() -> SgkPayrollService {
+    fn create_service() -> (HrService, SgkPayrollService) {
         let employee_repo = Arc::new(InMemoryEmployeeRepository::new()) as _;
         let attendance_repo = Arc::new(InMemoryAttendanceRepository::new()) as _;
         let leave_request_repo = Arc::new(InMemoryLeaveRequestRepository::new()) as _;
@@ -375,7 +419,14 @@ mod tests {
         let sgk_config_repo = Arc::new(InMemorySgkConfigRepository::new()) as _;
         let bonus_repo = Arc::new(InMemoryEmployeeBonusRepository::new()) as _;
 
-        SgkPayrollService::new(hr_service, sgk_reg_repo, sgk_config_repo, bonus_repo)
+        let sgk_payroll_service = SgkPayrollService::new(
+            Arc::new(hr_service.clone()),
+            sgk_reg_repo,
+            sgk_config_repo,
+            bonus_repo,
+        );
+
+        (hr_service, sgk_payroll_service)
     }
 
     fn sample_create_employee() -> CreateEmployee {
@@ -399,7 +450,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_register_employee() {
-        let service = create_service();
+        let (_hr, service) = create_service();
         let create = CreateSgkEmployeeRegistration {
             employee_id: 1,
             tenant_id: 1,
@@ -417,12 +468,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_calculate_sgk_payroll() {
-        let service = create_service();
-        let emp = service
-            .hr_service
-            .create_employee(sample_create_employee())
-            .await
-            .unwrap();
+        let (hr, service) = create_service();
+        let emp = hr.create_employee(sample_create_employee()).await.unwrap();
 
         let period_start = Utc.with_ymd_and_hms(2024, 6, 1, 0, 0, 0).unwrap();
         let period_end = Utc.with_ymd_and_hms(2024, 6, 30, 23, 59, 59).unwrap();
@@ -441,12 +488,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_ebildirge() {
-        let service = create_service();
-        let emp = service
-            .hr_service
-            .create_employee(sample_create_employee())
-            .await
-            .unwrap();
+        let (hr, service) = create_service();
+        let emp = hr.create_employee(sample_create_employee()).await.unwrap();
 
         service
             .register_employee(CreateSgkEmployeeRegistration {

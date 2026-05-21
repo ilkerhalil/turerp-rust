@@ -12,7 +12,6 @@ pub mod events_postgres;
 pub mod file_storage;
 pub mod gov;
 pub mod import;
-pub mod inter_company;
 pub mod ip_utils;
 pub mod job_executor;
 pub mod jobs;
@@ -30,6 +29,10 @@ pub mod secrets;
 pub mod soft_delete;
 pub mod tracing_mod;
 
+pub use crate::domain::inter_company::{
+    InterCompanyInvoiceLine, InterCompanyInvoiceResult, InterCompanyService,
+    InterCompanyStockTransferResult,
+};
 pub use alert_duration_tracker::AlertDurationTracker;
 pub use background_evaluator::BackgroundEvaluator;
 pub use bank_parsers::{parse_bank_xml, parse_camt053, parse_mt940};
@@ -55,10 +58,6 @@ pub use gov::{
     ResilientGibGateway,
 };
 pub use import::{BoxImportService, CsvImportService, ImportService};
-pub use inter_company::{
-    InterCompanyInvoiceLine, InterCompanyInvoiceResult, InterCompanyService,
-    InterCompanyStockTransferResult,
-};
 pub use jobs::{
     BoxJobScheduler, CreateJob, InMemoryJobScheduler, Job, JobPriority, JobScheduler, JobStatus,
     JobType,

@@ -7,21 +7,16 @@ pub mod service;
 
 pub use model::{
     BillOfMaterials, BillOfMaterialsLine, CreateBillOfMaterials, CreateBillOfMaterialsLine,
-    CreateInspection, CreateNonConformanceReport, CreateRouting, CreateRoutingOperation,
-    CreateWorkOrder, CreateWorkOrderMaterial, CreateWorkOrderOperation, Inspection,
-    InspectionStatus, NcrStatus, NcrType, NonConformanceReport, Routing, RoutingOperation,
-    UpdateInspection, UpdateNonConformanceReport, WorkOrder, WorkOrderMaterial, WorkOrderOperation,
-    WorkOrderPriority, WorkOrderStatus,
+    CreateRouting, CreateRoutingOperation, CreateWorkOrder, CreateWorkOrderMaterial,
+    CreateWorkOrderOperation, Routing, RoutingOperation, WorkOrder, WorkOrderMaterial,
+    WorkOrderOperation, WorkOrderPriority, WorkOrderStatus,
 };
 pub use postgres_repository::{
-    PostgresBillOfMaterialsRepository, PostgresInspectionRepository, PostgresNcrRepository,
-    PostgresRoutingRepository, PostgresWorkOrderRepository,
+    PostgresBillOfMaterialsRepository, PostgresRoutingRepository, PostgresWorkOrderRepository,
 };
 pub use repository::{
-    BillOfMaterialsRepository, BoxBillOfMaterialsRepository, BoxInspectionRepository,
-    BoxNcrRepository, BoxRoutingRepository, BoxWorkOrderRepository,
-    InMemoryBillOfMaterialsRepository, InMemoryInspectionRepository, InMemoryNcrRepository,
-    InMemoryRoutingRepository, InMemoryWorkOrderRepository, InspectionRepository, NcrRepository,
-    RoutingRepository, WorkOrderRepository,
+    BillOfMaterialsRepository, BoxBillOfMaterialsRepository, BoxRoutingRepository,
+    BoxWorkOrderRepository, InMemoryBillOfMaterialsRepository, InMemoryRoutingRepository,
+    InMemoryWorkOrderRepository, RoutingRepository, WorkOrderRepository,
 };
-pub use service::{ManufacturingService, QualityControlService};
+pub use service::ManufacturingService;

@@ -3,10 +3,10 @@
 use actix_web::{web, HttpResponse};
 
 use crate::common::MessageResponse;
-use crate::domain::manufacturing::model::{
+use crate::domain::quality_control::model::{
     CreateInspection, CreateNonConformanceReport, UpdateInspection, UpdateNonConformanceReport,
 };
-use crate::domain::manufacturing::service::QualityControlService;
+use crate::domain::quality_control::QualityControlService;
 use crate::error::ApiResult;
 use crate::i18n::{resolve, I18n, Locale};
 use crate::json_resp;
