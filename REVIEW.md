@@ -118,7 +118,7 @@
 
 ### Gozlemlenebilirlik
 - Duplicate logging (actix Logger + TracingMiddleware)
-- Domain log'lari string interpolation (structured field yok)
+- ~~Domain log'lari string interpolation~~ — **Cozuldu (#113)** — 23 instance `tracing::warn!("msg {}", val)` → `tracing::warn!(field = %val, "msg")`, 13 dosya
 - DB error log'larinda tenant_id/user_id context yok
 - ~~P99 gauge gercek percentile degil~~ — **Cozuldu (#106)** — Yanlis `gauge!().set(elapsed)` kaldırıldı, `http_request_duration_seconds` histogram üzerinden `compute_percentiles()` ile gercek P99 hesaplanıyor
 - Metrics test global OnceLock'e bagimli
