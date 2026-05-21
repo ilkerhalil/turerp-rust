@@ -6,11 +6,11 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
-use crate::common::inter_company::{InterCompanyInvoiceLine, InterCompanyService};
 use crate::common::pagination::PaginationParams;
 use crate::common::MessageResponse;
 use crate::domain::company::model::{CompanyResponse, CreateCompany, UpdateCompany};
 use crate::domain::company::service::CompanyService;
+use crate::domain::inter_company::{InterCompanyInvoiceLine, InterCompanyService};
 use crate::domain::invoice::model::{InvoiceStatus, InvoiceType};
 use crate::domain::invoice::service::InvoiceService;
 use crate::error::{ApiError, ApiResult};

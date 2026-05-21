@@ -1,15 +1,19 @@
 //! Inter-company transaction service for cross-company invoices and stock transfers.
 
+use std::sync::Arc;
+
+use rust_decimal::Decimal;
+
 use crate::domain::company::service::CompanyService;
+use crate::domain::inter_company::model::{
+    InterCompanyInvoiceLine, InterCompanyInvoiceResult, InterCompanyStockTransferResult,
+};
 use crate::domain::invoice::model::{CreateInvoice, CreateInvoiceLine, InvoiceType};
 use crate::domain::invoice::service::InvoiceService;
 use crate::domain::product::service::ProductService;
 use crate::domain::stock::model::{CreateStockMovement, MovementType};
 use crate::domain::stock::service::StockService;
 use crate::error::ApiError;
-use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
 /// Service for inter-company transactions.
 #[derive(Clone)]
@@ -208,28 +212,4 @@ impl InterCompanyService {
             in_movement_id: in_movement.id,
         })
     }
-}
-
-/// Line item for an inter-company invoice.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InterCompanyInvoiceLine {
-    pub product_id: i64,
-    pub description: String,
-    pub quantity: Decimal,
-    pub unit_price: Decimal,
-    pub vat_rate: Decimal,
-}
-
-/// Result of a cross-company invoice.
-#[derive(Debug, Clone, Serialize)]
-pub struct InterCompanyInvoiceResult {
-    pub sales_invoice_id: i64,
-    pub purchase_invoice_id: i64,
-}
-
-/// Result of an inter-company stock transfer.
-#[derive(Debug, Clone, Serialize)]
-pub struct InterCompanyStockTransferResult {
-    pub out_movement_id: i64,
-    pub in_movement_id: i64,
 }

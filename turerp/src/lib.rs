@@ -348,7 +348,8 @@ pub mod app {
         pub purchase_service: web::Data<PurchaseService>,
         pub product_service: web::Data<ProductService>,
         pub barcode_service: web::Data<BarcodeService>,
-        pub inter_company_service: web::Data<crate::common::inter_company::InterCompanyService>,
+        pub inter_company_service:
+            web::Data<crate::domain::inter_company::service::InterCompanyService>,
     }
 
     /// HR domain services
@@ -404,7 +405,7 @@ pub mod app {
         pub project_service: web::Data<ProjectService>,
         pub manufacturing_service: web::Data<ManufacturingService>,
         pub crm_service: web::Data<CrmService>,
-        pub qc_service: web::Data<crate::domain::manufacturing::QualityControlService>,
+        pub qc_service: web::Data<crate::domain::quality_control::QualityControlService>,
     }
 
     /// Document & Content domain services
@@ -642,7 +643,7 @@ pub mod app {
         let bonus_repo = Arc::new(InMemoryEmployeeBonusRepository::new())
             as crate::domain::hr::sgk::repository::BoxEmployeeBonusRepository;
         let sgk_payroll_service = crate::domain::hr::sgk::service::SgkPayrollService::new(
-            hr_service.clone(),
+            Arc::new(hr_service.clone()),
             sgk_reg_repo,
             sgk_config_repo,
             bonus_repo,
@@ -759,12 +760,12 @@ pub mod app {
 
         // Quality Control
         let inspection_repo =
-            Arc::new(crate::domain::manufacturing::InMemoryInspectionRepository::new())
-                as crate::domain::manufacturing::BoxInspectionRepository;
-        let ncr_repo = Arc::new(crate::domain::manufacturing::InMemoryNcrRepository::new())
-            as crate::domain::manufacturing::BoxNcrRepository;
+            Arc::new(crate::domain::quality_control::InMemoryInspectionRepository::new())
+                as crate::domain::quality_control::BoxInspectionRepository;
+        let ncr_repo = Arc::new(crate::domain::quality_control::InMemoryNcrRepository::new())
+            as crate::domain::quality_control::BoxNcrRepository;
         let qc_service =
-            crate::domain::manufacturing::QualityControlService::new(inspection_repo, ncr_repo);
+            crate::domain::quality_control::QualityControlService::new(inspection_repo, ncr_repo);
 
         // Settings
         let settings_repo = Arc::new(crate::domain::settings::InMemorySettingsRepository::new())
@@ -977,7 +978,7 @@ pub mod app {
             ));
 
         // Inter-Company Service
-        let inter_company_service = crate::common::inter_company::InterCompanyService::new(
+        let inter_company_service = crate::domain::inter_company::service::InterCompanyService::new(
             Arc::new(company_service.clone()),
             Arc::new(invoice_service.clone()),
             Arc::new(stock_service.clone()),
@@ -1249,7 +1250,7 @@ pub mod app {
         let bonus_repo = Arc::new(InMemoryEmployeeBonusRepository::new())
             as crate::domain::hr::sgk::repository::BoxEmployeeBonusRepository;
         let sgk_payroll_service = crate::domain::hr::sgk::service::SgkPayrollService::new(
-            hr_service.clone(),
+            Arc::new(hr_service.clone()),
             sgk_reg_repo,
             sgk_config_repo,
             bonus_repo,
@@ -1342,12 +1343,12 @@ pub mod app {
             TenantConfigService::new(tenant_config_repo).with_cache(cache_service.clone());
         // Quality Control - using in-memory repos until PostgreSQL repos are implemented
         let inspection_repo =
-            Arc::new(crate::domain::manufacturing::InMemoryInspectionRepository::new())
-                as crate::domain::manufacturing::BoxInspectionRepository;
-        let ncr_repo = Arc::new(crate::domain::manufacturing::InMemoryNcrRepository::new())
-            as crate::domain::manufacturing::BoxNcrRepository;
+            Arc::new(crate::domain::quality_control::InMemoryInspectionRepository::new())
+                as crate::domain::quality_control::BoxInspectionRepository;
+        let ncr_repo = Arc::new(crate::domain::quality_control::InMemoryNcrRepository::new())
+            as crate::domain::quality_control::BoxNcrRepository;
         let qc_service =
-            crate::domain::manufacturing::QualityControlService::new(inspection_repo, ncr_repo);
+            crate::domain::quality_control::QualityControlService::new(inspection_repo, ncr_repo);
 
         // Assets - PostgreSQL
         let asset_repo = PostgresAssetsRepository::new(pool.clone());
@@ -1586,7 +1587,7 @@ pub mod app {
             ));
 
         // Inter-Company Service
-        let inter_company_service = crate::common::inter_company::InterCompanyService::new(
+        let inter_company_service = crate::domain::inter_company::service::InterCompanyService::new(
             Arc::new(company_service.clone()),
             Arc::new(invoice_service.clone()),
             Arc::new(stock_service.clone()),
