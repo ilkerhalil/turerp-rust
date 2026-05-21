@@ -106,13 +106,31 @@ impl ResponseError for ApiError {
                 HttpResponse::PayloadTooLarge().json(ErrorResponse { error: msg.clone() })
             }
             ApiError::Database(msg) => {
-                tracing::error!("Database error: {}", msg);
+                let tenant_id = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    crate::middleware::tenant::CURRENT_TENANT_ID.with(|cell| cell.get())
+                }))
+                .ok()
+                .flatten();
+                if let Some(tid) = tenant_id {
+                    tracing::error!(tenant_id = tid, error = %msg, "Database error");
+                } else {
+                    tracing::error!(error = %msg, "Database error");
+                }
                 HttpResponse::InternalServerError().json(ErrorResponse {
                     error: "An internal database error occurred".to_string(),
                 })
             }
             ApiError::Internal(msg) => {
-                tracing::error!("Internal error: {}", msg);
+                let tenant_id = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    crate::middleware::tenant::CURRENT_TENANT_ID.with(|cell| cell.get())
+                }))
+                .ok()
+                .flatten();
+                if let Some(tid) = tenant_id {
+                    tracing::error!(tenant_id = tid, error = %msg, "Internal error");
+                } else {
+                    tracing::error!(error = %msg, "Internal error");
+                }
                 HttpResponse::InternalServerError().json(ErrorResponse {
                     error: "An internal error occurred".to_string(),
                 })
