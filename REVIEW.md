@@ -119,7 +119,7 @@
 ### Gozlemlenebilirlik
 - Duplicate logging (actix Logger + TracingMiddleware)
 - ~~Domain log'lari string interpolation~~ — **Cozuldu (#113)** — 23 instance `tracing::warn!("msg {}", val)` → `tracing::warn!(field = %val, "msg")`, 13 dosya
-- DB error log'larinda tenant_id/user_id context yok
+- ~~DB error log'larinda tenant_id/user_id context yok~~ — **Cozuldu (#114)** — `CURRENT_TENANT_ID` tokio task-local eklendi, `TenantMiddleware` scope set ediyor, `ApiError::Database`/`Internal` log'ları `tenant_id` field ile yapılıyor
 - ~~P99 gauge gercek percentile degil~~ — **Cozuldu (#106)** — Yanlis `gauge!().set(elapsed)` kaldırıldı, `http_request_duration_seconds` histogram üzerinden `compute_percentiles()` ile gercek P99 hesaplanıyor
 - Metrics test global OnceLock'e bagimli
 - README MIT badge ama Cargo.toml AGPL-3.0
