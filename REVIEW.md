@@ -40,7 +40,7 @@
 ## High Bulgular (28) — Kisa Vadede Kapanmali
 
 ### Guvenlik (3)
-1. Login `tenant_id` default = 1 — sistem tenant'ina brute-force (`auth.rs:65`)
+1. ~~Login `tenant_id` default = 1~~ — **Cozuldu** — `LoginParams.tenant_id` default `None`, login handler'da `.ok_or_else(|| ApiError::BadRequest("tenant_id is required"))` ile zorunlu
 2. ~~`/metrics` ve `/swagger-ui` auth'siz~~ — **Yanlis bulgu**, zaten auth arkanda (`AuthUser` extractor + `JwtAuthMiddleware`)
 3. ~~Runtime regex derleme loop icinde — reconciliation super-linear yavaslar (`bank/service.rs:566`)~~ **Cozuldu (#91)** — `LazyLock<Regex>` ile compile-time derleme
 
@@ -61,8 +61,8 @@
 ### Mimari (4)
 16. ~~`domain/mod.rs` God Module~~ — **Kismen Cozuldu (#93)** — 113 re-export kaldırıldı, 47'ye indi, tam temizlik icin #20'deki eksik domain'ler eklendikten sonra
 17. ~~Portal servisler concrete coupling~~ — **Cozuldu (#93)** — `CustomerPortal` + `VendorPortal` trait'leri eklendi
-18. `postgres` feature flag compile-time — runtime storage switch gerekli
-19. Vault token plain `String` — `secrecy::SecretString` kullanilmali
+18. ~~`postgres` feature flag compile-time~~ — **Cozuldu (#98)** — `#[cfg(feature = "postgres")]` kaldırıldı, `create_app_state_unified()` runtime seçim yapıyor
+19. ~~Vault token plain `String`~~ — **Cozuldu (#93)** — `secrecy::SecretString` kullanılıyor
 
 ### Kod Kalitesi (6)
 20. ~~`main.rs` duplicate bootstrap~~ — **Cozuldu (#93)** — `macro_rules! build_app_core` ile birleştirildi
@@ -73,9 +73,9 @@
 25. ~~`#[allow(dead_code)]` suppressions~~ — **Cozuldu (#100)** — gereksiz suppressions kaldırıldı, sadece 3 yerde DB mapping icin korundu
 
 ### Gozlemlenebilirlik (3)
-26. Zero `#[tracing::instrument]` — DB query'ler, business logic gorunmez
+26. ~~Zero `#[tracing::instrument]`~~ — **Cozuldu (#93)** — 16 annotation eklendi (invoice, bank, cari, auth)
 27. ~~37 domain'de integration test yok~~ — **Cozuldu** — 36 yeni `*_crud_test.rs` dosyasi yazildi, toplam 1921+ test geciyor
-28. PostgreSQL path hic test edilmiyor — tum testler in-memory
+28. ~~PostgreSQL path hic test edilmiyor~~ — **Kısmen Cozuldu** — 7 eksik PostgreSQL repo implemente edildi (#102), 36 yeni integration test dosyasi yazildi; tam PostgreSQL integration testleri CI'da PostgreSQL container gerektirir
 
 ---
 
