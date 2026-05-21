@@ -173,7 +173,10 @@ impl DocumentRepository for PostgresDocumentRepository {
                 description, current_version, created_at, updated_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 1, NOW(), NOW())
-            RETURNING *
+            RETURNING
+                id, tenant_id, name, filename, size_bytes, mime_type,
+                hash, storage_path, uploaded_by, category_id, tags,
+                description, current_version, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(doc.tenant_id)
@@ -197,7 +200,11 @@ impl DocumentRepository for PostgresDocumentRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Document>, ApiError> {
         let row = sqlx::query_as::<_, DocumentRow>(
             r#"
-            SELECT * FROM documents
+            SELECT
+                id, tenant_id, name, filename, size_bytes, mime_type,
+                hash, storage_path, uploaded_by, category_id, tags,
+                description, current_version, created_at, updated_at, deleted_at, deleted_by
+            FROM documents
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
@@ -221,7 +228,11 @@ impl DocumentRepository for PostgresDocumentRepository {
         // that checks all common filters in the query and applies entity filtering in code.
 
         let base_query = r#"
-            SELECT * FROM documents
+            SELECT
+                id, tenant_id, name, filename, size_bytes, mime_type,
+                hash, storage_path, uploaded_by, category_id, tags,
+                description, current_version, created_at, updated_at, deleted_at, deleted_by
+            FROM documents
             WHERE tenant_id = $1 AND deleted_at IS NULL
               AND ($2::text IS NULL OR name ILIKE '%' || $2 || '%'
                    OR filename ILIKE '%' || $2 || '%'
@@ -280,7 +291,7 @@ impl DocumentRepository for PostgresDocumentRepository {
         // Filter by entity link in code
         if let (Some(ref entity_type), Some(entity_id)) = (&params.entity_type, params.entity_id) {
             let link_rows = sqlx::query_as::<_, DocumentLinkRow>(
-                "SELECT * FROM document_links WHERE tenant_id = $1 AND entity_type = $2 AND entity_id = $3"
+                "SELECT id, document_id, tenant_id, entity_type, entity_id, created_at FROM document_links WHERE tenant_id = $1 AND entity_type = $2 AND entity_id = $3"
             )
             .bind(tenant_id)
             .bind(entity_type)
@@ -317,7 +328,10 @@ impl DocumentRepository for PostgresDocumentRepository {
                 description = COALESCE($6, description),
                 updated_at = NOW()
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
-            RETURNING *
+            RETURNING
+                id, tenant_id, name, filename, size_bytes, mime_type,
+                hash, storage_path, uploaded_by, category_id, tags,
+                description, current_version, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(id)
@@ -363,7 +377,10 @@ impl DocumentRepository for PostgresDocumentRepository {
             UPDATE documents
             SET deleted_at = NULL, deleted_by = NULL
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
-            RETURNING *
+            RETURNING
+                id, tenant_id, name, filename, size_bytes, mime_type,
+                hash, storage_path, uploaded_by, category_id, tags,
+                description, current_version, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(id)
@@ -381,7 +398,11 @@ impl DocumentRepository for PostgresDocumentRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Document>, ApiError> {
         let rows = sqlx::query_as::<_, DocumentRow>(
             r#"
-            SELECT * FROM documents
+            SELECT
+                id, tenant_id, name, filename, size_bytes, mime_type,
+                hash, storage_path, uploaded_by, category_id, tags,
+                description, current_version, created_at, updated_at, deleted_at, deleted_by
+            FROM documents
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY updated_at DESC
             LIMIT 1000
@@ -476,7 +497,9 @@ impl DocumentRepository for PostgresDocumentRepository {
                 size_bytes, hash, storage_path, created_by, comment, created_at
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-            RETURNING *
+            RETURNING
+                id, document_id, tenant_id, version_number, filename,
+                size_bytes, hash, storage_path, created_by, comment, created_at
             "#,
         )
         .bind(version.document_id)
@@ -506,7 +529,10 @@ impl DocumentRepository for PostgresDocumentRepository {
     ) -> Result<Vec<DocumentVersion>, ApiError> {
         let rows = sqlx::query_as::<_, DocumentVersionRow>(
             r#"
-            SELECT * FROM document_versions
+            SELECT
+                id, document_id, tenant_id, version_number, filename,
+                size_bytes, hash, storage_path, created_by, comment, created_at
+            FROM document_versions
             WHERE document_id = $1 AND tenant_id = $2
             ORDER BY version_number DESC
             LIMIT 1000
@@ -536,7 +562,10 @@ impl DocumentRepository for PostgresDocumentRepository {
     ) -> Result<Option<DocumentVersion>, ApiError> {
         let row = sqlx::query_as::<_, DocumentVersionRow>(
             r#"
-            SELECT * FROM document_versions
+            SELECT
+                id, document_id, tenant_id, version_number, filename,
+                size_bytes, hash, storage_path, created_by, comment, created_at
+            FROM document_versions
             WHERE id = $1 AND tenant_id = $2
             "#,
         )
@@ -559,7 +588,8 @@ impl DocumentRepository for PostgresDocumentRepository {
             r#"
             INSERT INTO document_categories (tenant_id, name, description, color, parent_id, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-            RETURNING *
+            RETURNING
+                id, tenant_id, name, description, color, parent_id, created_at, updated_at
             "#,
         )
         .bind(category.tenant_id)
@@ -580,7 +610,7 @@ impl DocumentRepository for PostgresDocumentRepository {
         tenant_id: i64,
     ) -> Result<Option<DocumentCategory>, ApiError> {
         let row = sqlx::query_as::<_, DocumentCategoryRow>(
-            "SELECT * FROM document_categories WHERE id = $1 AND tenant_id = $2",
+            "SELECT id, tenant_id, name, description, color, parent_id, created_at, updated_at FROM document_categories WHERE id = $1 AND tenant_id = $2",
         )
         .bind(id)
         .bind(tenant_id)
@@ -593,7 +623,7 @@ impl DocumentRepository for PostgresDocumentRepository {
 
     async fn list_categories(&self, tenant_id: i64) -> Result<Vec<DocumentCategory>, ApiError> {
         let rows = sqlx::query_as::<_, DocumentCategoryRow>(
-            "SELECT * FROM document_categories WHERE tenant_id = $1 ORDER BY name",
+            "SELECT id, tenant_id, name, description, color, parent_id, created_at, updated_at FROM document_categories WHERE tenant_id = $1 ORDER BY name",
         )
         .bind(tenant_id)
         .fetch_all(&*self.pool)
@@ -619,7 +649,8 @@ impl DocumentRepository for PostgresDocumentRepository {
                 parent_id = COALESCE($6, parent_id),
                 updated_at = NOW()
             WHERE id = $1 AND tenant_id = $2
-            RETURNING *
+            RETURNING
+                id, tenant_id, name, description, color, parent_id, created_at, updated_at
             "#,
         )
         .bind(id)
@@ -679,7 +710,8 @@ impl DocumentRepository for PostgresDocumentRepository {
             r#"
             INSERT INTO document_links (document_id, tenant_id, entity_type, entity_id, created_at)
             VALUES ($1, $2, $3, $4, NOW())
-            RETURNING *
+            RETURNING
+                id, document_id, tenant_id, entity_type, entity_id, created_at
             "#,
         )
         .bind(link.document_id)
@@ -713,7 +745,7 @@ impl DocumentRepository for PostgresDocumentRepository {
         tenant_id: i64,
     ) -> Result<Vec<DocumentLink>, ApiError> {
         let rows = sqlx::query_as::<_, DocumentLinkRow>(
-            "SELECT * FROM document_links WHERE document_id = $1 AND tenant_id = $2 ORDER BY created_at DESC",
+            "SELECT id, document_id, tenant_id, entity_type, entity_id, created_at FROM document_links WHERE document_id = $1 AND tenant_id = $2 ORDER BY created_at DESC",
         )
         .bind(document_id)
         .bind(tenant_id)
@@ -731,7 +763,7 @@ impl DocumentRepository for PostgresDocumentRepository {
         entity_id: i64,
     ) -> Result<Vec<DocumentLink>, ApiError> {
         let rows = sqlx::query_as::<_, DocumentLinkRow>(
-            "SELECT * FROM document_links WHERE tenant_id = $1 AND entity_type = $2 AND entity_id = $3 ORDER BY created_at DESC",
+            "SELECT id, document_id, tenant_id, entity_type, entity_id, created_at FROM document_links WHERE tenant_id = $1 AND entity_type = $2 AND entity_id = $3 ORDER BY created_at DESC",
         )
         .bind(tenant_id)
         .bind(entity_type)
@@ -751,7 +783,11 @@ impl DocumentRepository for PostgresDocumentRepository {
     ) -> Result<Vec<Document>, ApiError> {
         let rows = sqlx::query_as::<_, DocumentRow>(
             r#"
-            SELECT d.* FROM documents d
+            SELECT
+                d.id, d.tenant_id, d.name, d.filename, d.size_bytes, d.mime_type,
+                d.hash, d.storage_path, d.uploaded_by, d.category_id, d.tags,
+                d.description, d.current_version, d.created_at, d.updated_at, d.deleted_at, d.deleted_by
+            FROM documents d
             JOIN document_links l ON d.id = l.document_id
             WHERE l.tenant_id = $1
               AND l.entity_type = $2

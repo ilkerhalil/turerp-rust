@@ -89,7 +89,7 @@
 
 ### Performans
 - ~~`update_preferences` N+1 bulk upsert~~ — **Cozuldu (#111)** — `UNNEST($3::text[], $4::text[], $5::bool[])` ile tek sorgu, N round-trip 1'e indi
-- `SELECT *` document repo'larda (genis tablolar)
+- ~~`SELECT *` document repo'larda~~ — **Cozuldu (#117)** — 18 `SELECT *` / `RETURNING *` / `d.*` sorgusu explicit kolon listesine cevrildi, 4 tablo (documents, document_versions, document_categories, document_links)
 - ~~`subdomain.clone()` gereksiz allocation~~ — **Cozuldu (#104)** — `tenant/postgres_repository.rs` ve `tenant/repository.rs`'te 3 clone kaldırıldı, String move yapıldı
 - ~~`Vec::new()` yerine `with_capacity`~~ — **Cozuldu (#104)** — 24 yerde `Vec::with_capacity()` eklendi, 18 dosya
 
@@ -104,12 +104,12 @@
 
 ### Mimari
 - ~~Eksiz PostgreSQL repo'lar (barcode, ip_whitelist, earchive, portal servisler)~~ — **Cozuldu (#102)** — `PostgresBarcodeRepository`, `PostgresIpWhitelistRepository`, `PostgresEarchiveRepository`, `PostgresPortalUserRepository`, `PostgresSupportTicketRepository`, `PostgresVendorUserRepository`, `PostgresDeliveryNoteRepository` implemente edildi, migration 028 eklendi, `lib.rs` wiring tamamlandi
-- URL naming tutarsiz (`/cari` singular, `/invoices` plural)
+- ~~URL naming tutarsiz~~ — **Cozuldu (#105)** — `/cari` → `/caris`, 10 utoipa annotation + 7 actix route + 6 test dosyasi guncellendi
 - Search endpoint'ler `?q=` query param olmali
-- `encryption_key_bytes()` `.expect()` panic
-- `tenant_database_url()` naive string replace
+- ~~`encryption_key_bytes()` `.expect()` panic~~ — **Cozuldu (#100)** — `Result<[u8; 32], ApiError>` donuyor, `.expect()` kaldirildi
+- ~~`tenant_database_url()` naive string replace~~ — **Cozuldu (#100)** — `url` crate ile proper parsing, query params korunuyor, `Result` donuyor
 - IP Whitelist JWT'den sonra
-- Audit logging auth'dan once
+- ~~Audit logging auth'dan once~~ — **Cozuldu (#105)** — `JwtAuthMiddleware` → `AuditLoggingMiddleware` sirasi degisti, audit log'lar artik auth claim'leri ile
 - ~~Idempotency in-memory (scale-out calismaz)~~ — **Cozuldu** — `RedisIdempotencyStore` eklendi, async trait, main.rs'te Redis enabled ise otomatik inject
 - `InterCompanyService` `common/`da ama 4 domain'e bagli
 - `QualityControlService` yanlis state'te
@@ -121,7 +121,7 @@
 - ~~Domain log'lari string interpolation~~ — **Cozuldu (#113)** — 23 instance `tracing::warn!("msg {}", val)` → `tracing::warn!(field = %val, "msg")`, 13 dosya
 - ~~DB error log'larinda tenant_id/user_id context yok~~ — **Cozuldu (#114)** — `CURRENT_TENANT_ID` tokio task-local eklendi, `TenantMiddleware` scope set ediyor, `ApiError::Database`/`Internal` log'ları `tenant_id` field ile yapılıyor
 - ~~P99 gauge gercek percentile degil~~ — **Cozuldu (#106)** — Yanlis `gauge!().set(elapsed)` kaldırıldı, `http_request_duration_seconds` histogram üzerinden `compute_percentiles()` ile gercek P99 hesaplanıyor
-- Metrics test global OnceLock'e bagimli
+- ~~Metrics test global OnceLock'e bagimli~~ — **Cozuldu (#115)** — `std::sync::OnceLock` yerine `parking_lot::Mutex<Option<PrometheusHandle>>` kullanılıyor, testler arası bağımsızlık sağlandı
 - README MIT badge ama Cargo.toml AGPL-3.0
 
 ---
