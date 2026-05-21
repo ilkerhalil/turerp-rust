@@ -27,29 +27,24 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      # Swatinem/rust-cache is purpose-built for Rust CI:
+      # - Automatically handles cargo registry, index, and target caching
+      # - Smart cache keying based on Cargo.lock + Cargo.toml + rust-toolchain
+      # - Selectively prunes target/ to avoid cache bloat (unlike raw actions/cache)
+      # - Works on GitHub Actions without Node.js deprecation issues
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache target directory
-        uses: actions/cache@v4
-        with:
-          path: turerp/target
-          key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
+          workspaces: turerp
+          shared-key: ci
 
       - name: Check formatting
         run: cargo fmt --check
 
+      # Compile everything (including tests and bins) in a single pass.
+      # This avoids redundant re-compilation in subsequent steps.
       - name: Build
-        run: cargo build --verbose
+        run: cargo test --no-run --verbose
 
       - name: Verify OpenAPI is up-to-date
         run: |
@@ -76,17 +71,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo-audit
-        uses: actions/cache@v4
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
         with:
-          path: ~/.cargo/bin/cargo-audit
-          key: ${{ runner.os }}-cargo-audit
+          workspaces: turerp
+          shared-key: security
 
       - name: Install cargo-audit
-        run: |
-          if ! command -v cargo-audit &> /dev/null; then
-            cargo install cargo-audit
-          fi
+        run: cargo install cargo-audit
 
       - name: Run security audit
         # RUSTSEC-2023-0071: rsa Marvin Attack - only affects sqlx-mysql which we don't use
@@ -106,6 +98,12 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: turerp
+          shared-key: release
 
       - name: Build release
         run: cargo build --release --verbose
