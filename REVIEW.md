@@ -94,7 +94,7 @@
 - ~~`Vec::new()` yerine `with_capacity`~~ — **Cozuldu (#104)** — 24 yerde `Vec::with_capacity()` eklendi, 18 dosya
 
 ### Kod Kalitesi
-- Giant `create_in_memory_services!` macro (1000+ satir)
+- ~~Giant `create_in_memory_services!` macro (1000+ satir)~~ — **Cozuldu (#115)** — Macro inlined into `create_app_state_in_memory()`, ~542 satir boilerplate kaldirildi, tuple destructuring ortadan kalkti
 - ~~`api/mod.rs` 70+ manual re-export~~ — **Cozuldu (#104)** — 58 individual re-export gruplandi, `v1/mod.rs` ara katman kaldırıldı, net -79 satır
 - ~~`TenantMiddleware` `AuthUser`'a erisiyor (coupling)~~ — **Cozuldu (#112)** — `JwtAuthMiddleware` artik `TenantContext` ekliyor, `TenantMiddleware` `AuthClaims` import'ini kaldirdi, auth mekanizmasindan bagimsiz hale geldi
 - ~~`RateLimitMiddleware` duplicate IP extraction~~ — **Cozuldu (#109)** — `is_loopback`, `is_in_trusted_proxies`, ve `extract_client_ip` `common/ip_utils.rs`'te ortaklasildi, rate_limit.rs + ip_whitelist.rs'ten ~60 satir kaldirildi
