@@ -128,16 +128,16 @@
 
 ## Low Bulgular (20) — Nice to Have
 
-- `tests/integration/` bos dizin
-- `println!` forecasting test'lerinde
-- `eprintln!` OTLP init hatalarinda
-- ~~TracingMiddleware'de tenant_id/user_id yok~~ — **Yanlis bulgu**, `tracing.rs:61-65`'te `AuthClaims`'ten `tenant_id` ve `user_id` çekiliyor, `tracing::info!`/`warn!`/`error!` field'larında loglanıyor
-- Missing `///` docs public handler'larda
-- `unwrap()` GraphQL test'lerinde
-- `std::time::Instant` async context'te
-- `__TestFileVisibility` artifact prod modulde
-- Restore/destroy HTTP method RPC-style
-- `SecretsConfig::default()` side effect'li
+- ~~`tests/integration/` bos dizin~~ — **Cozuldu (#22)** — Dizin kaldirildi
+- ~~`println!` forecasting test'lerinde~~ — **Yanlis bulgu**, forecasting modulunde `println!` yok
+- ~~`eprintln!` OTLP init hatalarinda~~ — **Yanlis bulgu**, `otlp.rs`'te `eprintln!` yok
+- ~~TracingMiddleware'de tenant_id/user_id yok~~ — **Cozuldu (#121)** — `tracing.rs:61-65`'te `AuthClaims`'ten `tenant_id` ve `user_id` çekiliyor, middleware sirasi duzeltilerek runtime'da da calisiyor
+- ~~Missing `///` docs public handler'larda~~ — **Cozuldu (#24-28)** — 3 grup halinde tum public handler'lara doc comment eklendi
+- ~~`unwrap()` GraphQL test'lerinde~~ — **Yanlis bulgu**, `graphql.rs`'te veya testlerde `unwrap()` yok
+- ~~`std::time::Instant` async context'te~~ — **Yanlis bulgu**, `Instant` zaman olcumu icin kullaniliyor, async'te sorunsuz
+- ~~`__TestFileVisibility` artifact prod modulde~~ — **Yanlis bulgu**, `domain/mod.rs`'te normal `pub type` re-export
+- ~~Restore/destroy HTTP method RPC-style~~ — **Tasarim karari**, soft-delete pattern'i `POST/PUT` ile restore/destroy kullaniyor
+- ~~`SecretsConfig::default()` side effect'li~~ — **Cozuldu** — `from_env()` yerine pure default degerler, side-effect kaldırildi
 - ~~Duplicate `MessageResponse`~~ — **Cozuldu (#108)** — `crate::common::MessageResponse` kullaniliyor
 - ~~`SearchQuery` local vs common~~ — **Cozuldu (#108)** — `PaginatedSearchQuery` `common/pagination.rs`'te ortaklasildi
 
