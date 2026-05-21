@@ -105,7 +105,7 @@
 ### Mimari
 - ~~Eksiz PostgreSQL repo'lar (barcode, ip_whitelist, earchive, portal servisler)~~ — **Cozuldu (#102)** — `PostgresBarcodeRepository`, `PostgresIpWhitelistRepository`, `PostgresEarchiveRepository`, `PostgresPortalUserRepository`, `PostgresSupportTicketRepository`, `PostgresVendorUserRepository`, `PostgresDeliveryNoteRepository` implemente edildi, migration 028 eklendi, `lib.rs` wiring tamamlandi
 - ~~URL naming tutarsiz~~ — **Cozuldu (#105)** — `/cari` → `/caris`, 10 utoipa annotation + 7 actix route + 6 test dosyasi guncellendi
-- Search endpoint'ler `?q=` query param olmali
+- ~~Search endpoint'ler `?q=` query param olmali~~ — **Yanlış bulgu**, tüm search endpoint'ler (cari, invoice, products, documents, search) zaten `web::Query` ile `?q=` query parametresi kullanıyor
 - ~~`encryption_key_bytes()` `.expect()` panic~~ — **Cozuldu (#100)** — `Result<[u8; 32], ApiError>` donuyor, `.expect()` kaldirildi
 - ~~`tenant_database_url()` naive string replace~~ — **Cozuldu (#100)** — `url` crate ile proper parsing, query params korunuyor, invalid karakterler reject ediliyor
 - ~~IP Whitelist JWT'den sonra~~ — **Yanlis bulgu**, mevcut siralama dogru; JwtAuth → IpWhitelist
@@ -188,13 +188,13 @@
 ### Faz 3: Medium (1-2 hafta)
 20. [x] Eksiz PostgreSQL repo'lar implemente et — **Cozuldu (#102)** — 7 repo + migration 028 + lib.rs wiring
 21. [x] URL naming standardize et — **Cozuldu (#105)** — `/cari` → `/caris`, 10 utoipa annotation + 7 actix route + 6 test dosyasi
-22. [ ] Search endpoint'ler `?q=` query param yap
+22. [x] ~~Search endpoint'ler `?q=` query param yap~~ — **Yanlış bulgu**, tüm search endpoint'ler zaten `web::Query` ile `?q=` kullanıyor
 23. [x] ~~`encryption_key_bytes()` Result donsun~~ — **Cozuldu (#100)** — `Result<[u8; 32], ApiError>` donuyor, `.expect()` yok
 24. [x] ~~`tenant_database_url()` parse et~~ — **Cozuldu (#100)** — `url` crate ile proper parsing, query params korunuyor, Result donuyor
 25. [x] ~~Idempotency Redis/Postgres backend yap~~ — **Cozuldu** — `RedisIdempotencyStore` implemente edildi, `IdempotencyStore` async trait'e cevrildi, main.rs'te `config.redis.enabled == true` ise Redis backend otomatik inject, yoksa in-memory fallback
 26. [x] Audit logging auth'dan sonra tasila — **Cozuldu (#105)** — `JwtAuthMiddleware` → `AuditLoggingMiddleware` sirasi degisti, audit log'lar artik auth claim'leri ile
 27. [x] Structured logging (field syntax) — **Cozuldu (#105)** — 13 log donusumu, 4 domain (invoice, bank, cari postgres repo + auth mod.rs)
-28. [ ] P99 gauge histogram yap
+28. [x] ~~P99 gauge histogram yap~~ — **Yanlış bulgu**, zaten çözüldü (#106), histogram üzerinden `compute_percentiles()` ile P99 hesaplanıyor
 
 ### Faz 4: Low (2-3 gun)
 29. [x] ~~Dead code temizligi~~ — **Cozuldu (#100)** — 202+ satir dead code kaldirildi, 20+ dosya, clippy/format/test/API temiz
