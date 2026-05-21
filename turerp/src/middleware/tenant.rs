@@ -6,6 +6,14 @@
 use actix_web::body::MessageBody;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, HttpMessage};
 use futures::future::LocalBoxFuture;
+use std::cell::Cell;
+
+// Task-local tenant ID for observability.
+// Stores the current tenant ID so downstream error handlers (e.g. map_sqlx_error)
+// can include it in structured logs without threading it through every call site.
+tokio::task_local! {
+    pub static CURRENT_TENANT_ID: Cell<Option<i64>>;
+}
 
 /// Tenant context extracted from the request
 #[derive(Debug, Clone)]
@@ -89,17 +97,25 @@ where
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         // Extract tenant_id from request
-        if let Some(tenant_id) = TenantMiddleware::extract_tenant_id(&req) {
-            // Store tenant context in extensions
-            req.extensions_mut().insert(TenantContext { tenant_id });
+        let tenant_id = TenantMiddleware::extract_tenant_id(&req);
+        if let Some(tid) = tenant_id {
+            req.extensions_mut()
+                .insert(TenantContext { tenant_id: tid });
         }
 
         let fut = self.service.call(req);
 
-        Box::pin(async move {
-            let res = fut.await?;
-            Ok(res)
-        })
+        if let Some(tid) = tenant_id {
+            Box::pin(CURRENT_TENANT_ID.scope(Cell::new(Some(tid)), async move {
+                let res = fut.await?;
+                Ok(res)
+            }))
+        } else {
+            Box::pin(async move {
+                let res = fut.await?;
+                Ok(res)
+            })
+        }
     }
 }
 
