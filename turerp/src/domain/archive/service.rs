@@ -250,7 +250,7 @@ impl ArchiveService {
             match self.record_repo.restore(id, tenant_id).await {
                 Ok(record) => restored.push(record),
                 Err(e) => {
-                    tracing::warn!("Failed to restore archive record {}: {}", id, e);
+                    tracing::warn!(id, error = %e, "Failed to restore archive record");
                     failed.push((id, e.to_string()));
                 }
             }

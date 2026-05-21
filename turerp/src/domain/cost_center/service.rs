@@ -118,7 +118,7 @@ impl CostCenterService {
             match self.repo.restore(id, tenant_id).await {
                 Ok(center) => restored.push(CostCenterResponse::from(center)),
                 Err(e) => {
-                    tracing::warn!("Failed to restore cost center {}: {}", id, e);
+                    tracing::warn!(id, error = %e, "Failed to restore cost center");
                     failed.push(BulkRestoreFailed {
                         id,
                         reason: e.to_string(),

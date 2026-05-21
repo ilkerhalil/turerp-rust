@@ -114,7 +114,7 @@ impl TaxService {
             match self.rate_repo.restore(id, tenant_id).await {
                 Ok(rate) => restored.push(rate),
                 Err(e) => {
-                    tracing::warn!("Failed to restore tax rate {}: {}", id, e);
+                    tracing::warn!(id, error = %e, "Failed to restore tax rate");
                     failed.push((id, e.to_string()));
                 }
             }
@@ -301,7 +301,7 @@ impl TaxService {
             match self.period_repo.restore(id, tenant_id).await {
                 Ok(period) => restored.push(period),
                 Err(e) => {
-                    tracing::warn!("Failed to restore tax period {}: {}", id, e);
+                    tracing::warn!(id, error = %e, "Failed to restore tax period");
                     failed.push((id, e.to_string()));
                 }
             }

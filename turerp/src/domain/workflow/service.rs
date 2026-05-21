@@ -1036,7 +1036,7 @@ impl WorkflowService {
             recipient: format!("user:{}", user_id),
         };
         if let Err(e) = self.notification_service.send(req).await {
-            tracing::warn!("Failed to send workflow notification: {}", e);
+            tracing::warn!(error = %e, "Failed to send workflow notification");
         }
     }
 
