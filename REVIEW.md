@@ -111,9 +111,9 @@
 - ~~IP Whitelist JWT'den sonra~~ — **Yanlis bulgu**, mevcut siralama dogru; JwtAuth → IpWhitelist
 - ~~Audit logging auth'dan once~~ — **Cozuldu (#105)** — `JwtAuthMiddleware` → `AuditLoggingMiddleware` sirasi degisti, audit log'lar artik auth claim'leri ile
 - ~~Idempotency in-memory (scale-out calismaz)~~ — **Cozuldu** — `RedisIdempotencyStore` eklendi, async trait, main.rs'te Redis enabled ise otomatik inject
-- `InterCompanyService` `common/`da ama 4 domain'e bagli
-- `QualityControlService` yanlis state'te
-- `SGK Payroll` concrete `HrService`'e bagli
+- ~~`InterCompanyService` `common/`da ama 4 domain'e bagli~~ — **Cozuldu (#123)** — `domain/inter_company/` modulune tasindi
+- ~~`QualityControlService` yanlis state'te~~ — **Cozuldu (#123)** — `domain/quality_control/` modulune tasindi
+- ~~`SGK Payroll` concrete `HrService`'e bagli~~ — **Cozuldu (#123)** — `SgkEmployeeProvider` trait eklendi, `HrService`'den ayrildi
 - ~~`AppState` 60+ `.app_data()` tekrari~~ — **Cozuldu (#110)** — `AppState::register_services(&self, cfg: &mut web::ServiceConfig)` eklendi, 66 registration `main.rs` `build_app_core!` macro'dan `lib.rs`'e tasindi
 
 ### Gozlemlenebilirlik
@@ -122,7 +122,7 @@
 - ~~DB error log'larinda tenant_id/user_id context yok~~ — **Cozuldu (#114)** — `CURRENT_TENANT_ID` tokio task-local eklendi, `TenantMiddleware` scope set ediyor, `ApiError::Database`/`Internal` log'ları `tenant_id` field ile yapılıyor
 - ~~P99 gauge gercek percentile degil~~ — **Cozuldu (#106)** — Yanlis `gauge!().set(elapsed)` kaldırıldı, `http_request_duration_seconds` histogram üzerinden `compute_percentiles()` ile gercek P99 hesaplanıyor
 - ~~Metrics test global OnceLock'e bagimli~~ — **Cozuldu (#115)** — `std::sync::OnceLock` yerine `parking_lot::Mutex<Option<PrometheusHandle>>` kullanılıyor, testler arası bağımsızlık sağlandı
-- README MIT badge ama Cargo.toml AGPL-3.0
+- ~~README MIT badge ama Cargo.toml AGPL-3.0~~ — **Çözüldü** — README badge AGPL-3.0 yapıldı
 
 ---
 
@@ -198,9 +198,9 @@
 
 ### Faz 4: Low (2-3 gun)
 29. [x] ~~Dead code temizligi~~ — **Cozuldu (#100)** — 202+ satir dead code kaldirildi, 20+ dosya, clippy/format/test/API temiz
-30. [ ] Doc comment'lari tamamla
+30. [x] ~~Doc comment'lari tamamla~~ — **Cozuldu (#24-28)** — Tum public handler'lara doc comment eklendi
 31. [x] README badge AGPL — **Yanlis bulgu**, zaten AGPL-3.0 badge mevcut
-32. [ ] `tests/integration/` dizinini kaldir veya doldur
+32. [x] ~~`tests/integration/` dizinini kaldir veya doldur~~ — **Cozuldu (#22)** — Bos dizin kaldirildi
 
 ---
 
