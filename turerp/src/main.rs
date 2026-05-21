@@ -411,8 +411,8 @@ async fn main() -> std::io::Result<()> {
                                 .collect(),
                         ),
                 ) // IP whitelist check (after tenant context)
-                .wrap(RequestIdMiddleware) // Request ID for tracing
-                .wrap(TracingMiddleware) // Innermost: structured request/response tracing
+                .wrap(TracingMiddleware) // Innermost: reads request_id/tenant_id/user_id from extensions set by upstream middlewares
+                .wrap(RequestIdMiddleware) // Request ID generation (must run before TracingMiddleware)
         }};
     }
 
