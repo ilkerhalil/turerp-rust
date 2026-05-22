@@ -348,14 +348,14 @@ let user = repo.find_by_id(id).await.unwrap();
 
 ## Build & Test
 
-- ALWAYS run `cargo clean` before building — the `target/` directory grows unbounded and can reach 100+ GB
+- CI uses `Swatinem/rust-cache@v2` for incremental builds; local builds do not require `cargo clean`
 - ALWAYS run tests after code changes
 - ALWAYS verify build succeeds before committing
 
 ```bash
-# Clean + build workflow (mandatory)
-cargo clean && cargo test
-cargo clean && cargo clippy -- -D warnings
+# Build + test workflow
+cargo test
+cargo clippy -- -D warnings
 cargo fmt --check
 
 # Regenerate OpenAPI spec after adding new endpoints

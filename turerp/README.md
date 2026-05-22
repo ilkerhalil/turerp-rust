@@ -255,6 +255,8 @@ turerp/
 │   │   ├── accounting/   # Accounting module
 │   │   ├── project/      # Project management
 │   │   ├── manufacturing/# Manufacturing module
+    │   │   ├── quality_control/# Quality control module (NCR, inspections)
+    │   │   ├── inter_company/# Inter-company transactions
 │   │   ├── crm/          # CRM module
 │   │   ├── dashboard/    # BI dashboard backend
 │   │   └── file/         # File metadata repository
