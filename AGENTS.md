@@ -5,7 +5,7 @@ Multi-tenant SaaS ERP system built with Rust, Actix-web, and SQLx.
 
 **Current Production Score: 9.2/10**
 
-*Note: Score reflects full OpenAPI coverage (647 handlers documented), comprehensive test suite (26 test files), 50+ domain modules, and production-ready observability via OpenTelemetry/Aspire Dashboard.*
+*Note: Score reflects full OpenAPI coverage (724 handlers documented), comprehensive test suite (70+ test files, 1921+ tests), 50+ domain modules, and production-ready observability via OpenTelemetry/Aspire Dashboard.*
 
 ### Architecture
 
@@ -47,7 +47,9 @@ Multi-tenant SaaS ERP system built with Rust, Actix-web, and SQLx.
 | `accounting` | Chart of accounts, journal entries, trial balance | Complete |
 | `assets` | Fixed assets, depreciation, maintenance | Complete |
 | `project` | Project management, WBS, costs, profitability | Complete |
-| `manufacturing` | BOM, work orders, routing, material requirements, quality control (NCR) | Complete |
+| `manufacturing` | BOM, work orders, routing, material requirements | Complete |
+| `quality_control` | Inspections, non-conformance reports (NCR), QC service | Complete |
+| `inter_company` | Inter-company transactions, transfer pricing | Complete |
 | `crm` | Leads, opportunities, campaigns, support tickets | Complete |
 | `hr` | Employee management, attendance, leave, payroll, SGK/e-Bildirge | Complete |
 | `shift` | Shift planning, assignments, attendance, overtime | Complete |
@@ -173,20 +175,14 @@ Issue A: branch -> PR -> CI pass -> merge to main -> Issue B: branch -> PR -> ..
 ## Quick Start
 
 ```bash
-# ALWAYS clean before building to prevent target/ disk bloat
-cargo clean
-
 # Development (in-memory storage)
 cargo run
 
-# Production (PostgreSQL)
-cargo clean && cargo run --features postgres
+# Production (PostgreSQL) — set TURERP_DATABASE_URL
+cargo run
 
 # Run tests
-cargo clean && cargo test
-
-# Run with PostgreSQL tests
-cargo clean && cargo test --features postgres
+cargo test
 
 # Code quality
 cargo clippy -- -D warnings
@@ -365,7 +361,6 @@ pub struct InMemoryUserRepository {
 }
 
 // PostgreSQL implementation for production
-#[cfg(feature = "postgres")]
 pub struct PostgresUserRepository {
     pool: Arc<PgPool>,
 }
@@ -468,7 +463,7 @@ turerp/
 │   ├── config.rs               # Configuration management (env + file)
 │   ├── error.rs                # Error types (thiserror)
 │   ├── api/                    # API layer
-│   │   ├── mod.rs              # API module + OpenAPI spec (647 documented paths)
+│   │   ├── mod.rs              # API module + OpenAPI spec (724 documented paths)
 │   │   ├── auth.rs             # Legacy auth routes (deprecated)
 │   │   ├── users.rs            # Legacy users routes (deprecated)
 │   │   └── v1/                 # API version 1 (all production routes)
@@ -576,6 +571,8 @@ turerp/
 │   │   ├── assets/             # Fixed assets domain
 │   │   ├── project/            # Project domain
 │   │   ├── manufacturing/      # Manufacturing domain
+│   │   ├── quality_control/    # Quality control domain (NCR, inspections)
+│   │   ├── inter_company/      # Inter-company transactions domain
 │   │   ├── crm/                # CRM domain
 │   │   ├── hr/                 # HR domain
 │   │   ├── shift/              # Shift planning domain
@@ -673,7 +670,8 @@ turerp/
 │   ├── 024_workflows.sql
 │   ├── 025_bank_integration.sql
 │   ├── 026_subscriptions.sql
-│   └── 027_observability.sql
+│   ├── 027_observability.sql
+    └── 028_missing_repos.sql
 ├── tests/
 │   ├── common/
 │   │   ├── mod.rs
@@ -710,71 +708,54 @@ turerp/
 
 ---
 
-## Feature Flags
+## Runtime Backend Selection
 
-```toml
-# Cargo.toml
-[features]
-default = []
-postgres = ["sqlx/runtime-tokio-native-tls"]
-```
-
-### Usage
+PostgreSQL and in-memory backends are selected at runtime via configuration, not compile-time feature flags.
 
 ```rust
-// Conditional compilation for PostgreSQL
-#[cfg(feature = "postgres")]
-pub mod postgres_repository;
-
-#[cfg(feature = "postgres")]
-use crate::db;
-
-// In lib.rs - AppState with optional db_pool
+// lib.rs — unified AppState (no #[cfg(feature = "postgres")])
 pub struct AppState {
     pub auth_service: web::Data<AuthService>,
     pub user_service: web::Data<UserService>,
     pub jwt_service: web::Data<JwtService>,
-    #[cfg(feature = "postgres")]
-    pub db_pool: web::Data<Arc<PgPool>>,
+    pub db_pool: Option<web::Data<Arc<PgPool>>>,
 }
+
+// create_app_state_unified() chooses backend at runtime:
+//   - If TURERP_DATABASE_URL is set → PostgreSQL path
+//   - Otherwise → in-memory path
 ```
+
+All repository traits have dual implementations (`InMemory*` and `Postgres*`). The `create_app_state_unified()` function in `lib.rs` wires the correct set at startup based on `config.database_url`.
 
 ---
 
 ## Middleware Stack
 
-**Order matters! Security middlewares first.**
+**Order matters! First `.wrap()` = innermost (touches request LAST).**
 
 ```rust
 HttpServer::new(move || {
     App::new()
-        // Outermost: touches request first, response last
-        .wrap(middleware::Compress::default())          // 1. Response compression
-        .wrap(configure_cors(&config.cors))           // 2. CORS handling
-        .wrap(middleware::Logger::default())          // 3. Access logging
-        .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // 4. Audit logging
-        .wrap(JwtAuthMiddleware::new(...))            // 5. JWT validation
-        .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // 6. Rate limiting
-        .wrap(MetricsMiddleware::new())               // 7. Metrics collection
-        .wrap(TenantMiddleware)                       // 8. Tenant context (after auth)
-        .wrap(SecurityHeadersMiddleware)              // 9. Security headers
-        // Innermost: touches request last, response first
-        .wrap(RequestIdMiddleware)                      // 10. Request ID for tracing
+        // Innermost first: touches request LAST, response FIRST
+        .wrap(TracingMiddleware)                      // 1. Tracing (needs AuthClaims + RequestId)
+        .wrap(RequestIdMiddleware)                    // 2. Request ID generation
+        // Outermost last: touches request FIRST, response LAST
+        .wrap(middleware::Compress::default())        // 3. Response compression
+        .wrap(configure_cors(&config.cors))           // 4. CORS handling
+        .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // 5. Audit logging (after auth)
+        .wrap(JwtAuthMiddleware::new(...))            // 6. JWT validation
+        .wrap(IpWhitelistMiddleware)                   // 7. IP whitelist (after JWT)
+        .wrap(RateLimitMiddleware::with_config(&config.rate_limit)) // 8. Rate limiting (outermost security)
+        .wrap(MetricsMiddleware::new())               // 9. Metrics collection
+        .wrap(TenantMiddleware)                       // 10. Tenant context (after auth)
+        .wrap(SecurityHeadersMiddleware)              // 11. Security headers
         .app_data(web::JsonConfig::default().limit(1024 * 1024)) // 1MB JSON limit
-        .app_data(app_state.auth_service.clone())
-        .app_data(app_state.user_service.clone())
-        .app_data(app_state.jwt_service.clone())
-        #[cfg(feature = "postgres")]
-        .app_data(app_state.db_pool.clone())
-        .route("/health", web::get().to(health_check))
-        .route("/health/live", web::get().to(health_live))
-        .route("/health/ready", web::get().to(health_ready))
-        .route("/metrics", web::get().to(metrics_endpoint))
-        .service(web::scope("/api").configure(v1_*_configure))
-        .service(SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", ...))
-        .service(web::resource("/graphql").route(web::post().to(graphql_handler)))
+        // Services registered via AppState::register_services()
 })
 ```
+
+**Key ordering rule:** TracingMiddleware must be innermost so `AuthClaims` and `RequestId` are already populated in extensions when it runs.
 
 ---
 
@@ -962,7 +943,7 @@ let user = repo.find_by_id(id).await.unwrap();
 
 **OpenAPI file:** `turerp/openapi.json` (generated via `cargo run --bin gen_openapi`)
 
-All 647 v1 business module endpoints are annotated with `#[utoipa::path]` and registered in the `ApiDoc` OpenAPI schema. The spec includes:
+All 724 v1 business module endpoints are annotated with `#[utoipa::path]` and registered in the `ApiDoc` OpenAPI schema. The spec includes:
 - Full path coverage for all REST endpoints
 - Request/response schemas for all DTOs
 - Security scheme (Bearer JWT)
