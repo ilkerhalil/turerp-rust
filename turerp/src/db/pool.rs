@@ -153,6 +153,18 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "029_brute_force_protection",
             sql: include_str!("../../migrations/029_brute_force_protection.sql"),
         },
+        Migration {
+            version: "030_ldap_configs",
+            sql: include_str!("../../migrations/030_ldap_configs.sql"),
+        },
+        Migration {
+            version: "031_sgk_tables",
+            sql: include_str!("../../migrations/031_sgk_tables.sql"),
+        },
+        Migration {
+            version: "032_blockchain_tables",
+            sql: include_str!("../../migrations/032_blockchain_tables.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).
