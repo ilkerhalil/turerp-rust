@@ -1010,15 +1010,8 @@ pub mod app {
         // Retry Stats
         let retry_stats: BoxRetryStats = Arc::new(crate::common::retry::RetryStats::new());
 
-        // For in-memory testing with postgres feature, create a mock pool
-        let pool = sqlx::postgres::PgPoolOptions::new()
-            .max_connections(1)
-            .connect_lazy("postgres://localhost/dummy")
-            .unwrap_or_else(|e| {
-                tracing::error!("Failed to create lazy pool: {}", e);
-                std::process::exit(1);
-            });
-        let db_pool = Some(web::Data::new(Arc::new(pool)));
+        // For in-memory testing, no PostgreSQL pool is needed
+        let db_pool = None;
 
         // Register webhook subscriber on event bus
         let webhook_service_arc = Arc::new(webhook_service.clone());
@@ -1153,10 +1146,7 @@ pub mod app {
     /// Create application state with PostgreSQL storage (for production)
     pub async fn create_app_state(config: &Config) -> Result<AppState, ApiError> {
         // Create connection pool
-        let pool = Arc::new(db::create_pool(&config.database).await.unwrap_or_else(|e| {
-            tracing::error!("Failed to create database pool: {}", e);
-            std::process::exit(1);
-        }));
+        let pool = Arc::new(db::create_pool(&config.database).await?);
 
         let cache_service: Arc<dyn crate::cache::CacheService> = if config.redis.enabled {
             match crate::cache::RedisCacheService::new(&config.redis.url, config.redis.ttl_seconds)

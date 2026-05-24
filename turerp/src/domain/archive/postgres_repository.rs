@@ -74,10 +74,12 @@ impl PostgresArchivePolicyRepository {
 }
 
 /// Common column list for archive_policies SELECT queries
-const ARCHIVE_POLICY_COLUMNS: &str = r#"
-    id, tenant_id, name, table_name, age_days, conditions,
-    is_active, created_at, updated_at
-"#;
+macro_rules! archive_policy_columns {
+    () => {
+        r#"id, tenant_id, name, table_name, age_days, conditions,
+    is_active, created_at, updated_at"#
+    };
+}
 
 #[async_trait]
 impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
@@ -86,12 +88,14 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
         create: CreateArchivePolicy,
         tenant_id: i64,
     ) -> Result<ArchivePolicy, ApiError> {
-        let row: ArchivePolicyRow = sqlx::query_as(&format!(
+        let row: ArchivePolicyRow = sqlx::query_as(concat!(
             r#"
             INSERT INTO archive_policies (tenant_id, name, table_name, age_days, conditions, is_active)
             VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING {ARCHIVE_POLICY_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            archive_policy_columns!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(tenant_id)
         .bind(&create.name)
@@ -107,12 +111,14 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<ArchivePolicy>, ApiError> {
-        let result: Option<ArchivePolicyRow> = sqlx::query_as(&format!(
+        let result: Option<ArchivePolicyRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {ARCHIVE_POLICY_COLUMNS}, 0 as total_count
+            SELECT "#,
+            archive_policy_columns!(),
+            r#", 0 as total_count
             FROM archive_policies
             WHERE id = $1 AND tenant_id = $2
-            "#,
+            "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -131,15 +137,17 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
         let offset = params.offset() as i64;
         let per_page = params.per_page as i64;
 
-        let rows: Vec<ArchivePolicyRow> = sqlx::query_as(&format!(
+        let rows: Vec<ArchivePolicyRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {ARCHIVE_POLICY_COLUMNS},
+            SELECT "#,
+            archive_policy_columns!(),
+            r#",
                    COUNT(*) OVER() as total_count
             FROM archive_policies
             WHERE tenant_id = $1
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
-            "#,
+            "#
         ))
         .bind(tenant_id)
         .bind(per_page)
@@ -159,13 +167,15 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
     }
 
     async fn find_active(&self, tenant_id: i64) -> Result<Vec<ArchivePolicy>, ApiError> {
-        let rows: Vec<ArchivePolicyRow> = sqlx::query_as(&format!(
+        let rows: Vec<ArchivePolicyRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {ARCHIVE_POLICY_COLUMNS}, 0 as total_count
+            SELECT "#,
+            archive_policy_columns!(),
+            r#", 0 as total_count
             FROM archive_policies
             WHERE tenant_id = $1 AND is_active = true
             ORDER BY created_at DESC
-            "#,
+            "#
         ))
         .bind(tenant_id)
         .fetch_all(&*self.pool)
@@ -183,7 +193,7 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
         tenant_id: i64,
         update: UpdateArchivePolicy,
     ) -> Result<ArchivePolicy, ApiError> {
-        let row: ArchivePolicyRow = sqlx::query_as(&format!(
+        let row: ArchivePolicyRow = sqlx::query_as(concat!(
             r#"
             UPDATE archive_policies
             SET
@@ -194,8 +204,10 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
                 is_active = COALESCE($5, is_active),
                 updated_at = NOW()
             WHERE id = $6 AND tenant_id = $7
-            RETURNING {ARCHIVE_POLICY_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            archive_policy_columns!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(&update.name)
         .bind(&update.table_name)
@@ -300,10 +312,12 @@ impl PostgresArchiveJobRepository {
 }
 
 /// Common column list for archive_jobs SELECT queries
-const ARCHIVE_JOB_COLUMNS: &str = r#"
-    id, tenant_id, policy_id, status, started_at, completed_at,
-    records_archived, records_failed, error_message, created_at
-"#;
+macro_rules! archive_job_columns {
+    () => {
+        r#"id, tenant_id, policy_id, status, started_at, completed_at,
+    records_archived, records_failed, error_message, created_at"#
+    };
+}
 
 #[async_trait]
 impl ArchiveJobRepository for PostgresArchiveJobRepository {
@@ -312,12 +326,14 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
         create: CreateArchiveJob,
         tenant_id: i64,
     ) -> Result<ArchiveJob, ApiError> {
-        let row: ArchiveJobRow = sqlx::query_as(&format!(
+        let row: ArchiveJobRow = sqlx::query_as(concat!(
             r#"
             INSERT INTO archive_jobs (tenant_id, policy_id, status, records_archived, records_failed)
             VALUES ($1, $2, 'Pending', 0, 0)
-            RETURNING {ARCHIVE_JOB_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            archive_job_columns!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(tenant_id)
         .bind(create.policy_id)
@@ -329,12 +345,14 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<ArchiveJob>, ApiError> {
-        let result: Option<ArchiveJobRow> = sqlx::query_as(&format!(
+        let result: Option<ArchiveJobRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {ARCHIVE_JOB_COLUMNS}, 0 as total_count
+            SELECT "#,
+            archive_job_columns!(),
+            r#", 0 as total_count
             FROM archive_jobs
             WHERE id = $1 AND tenant_id = $2
-            "#,
+            "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -353,15 +371,17 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
         let offset = params.offset() as i64;
         let per_page = params.per_page as i64;
 
-        let rows: Vec<ArchiveJobRow> = sqlx::query_as(&format!(
+        let rows: Vec<ArchiveJobRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {ARCHIVE_JOB_COLUMNS},
+            SELECT "#,
+            archive_job_columns!(),
+            r#",
                    COUNT(*) OVER() as total_count
             FROM archive_jobs
             WHERE tenant_id = $1
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
-            "#,
+            "#
         ))
         .bind(tenant_id)
         .bind(per_page)
@@ -389,15 +409,17 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
         let offset = params.offset() as i64;
         let per_page = params.per_page as i64;
 
-        let rows: Vec<ArchiveJobRow> = sqlx::query_as(&format!(
+        let rows: Vec<ArchiveJobRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {ARCHIVE_JOB_COLUMNS},
+            SELECT "#,
+            archive_job_columns!(),
+            r#",
                    COUNT(*) OVER() as total_count
             FROM archive_jobs
             WHERE tenant_id = $1 AND policy_id = $2
             ORDER BY created_at DESC
             LIMIT $3 OFFSET $4
-            "#,
+            "#
         ))
         .bind(tenant_id)
         .bind(policy_id)
@@ -428,7 +450,7 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
     ) -> Result<ArchiveJob, ApiError> {
         let status_str = status.to_string();
 
-        let row: ArchiveJobRow = sqlx::query_as(&format!(
+        let row: ArchiveJobRow = sqlx::query_as(concat!(
             r#"
             UPDATE archive_jobs
             SET status = $1,
@@ -437,8 +459,10 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
                 error_message = $4,
                 completed_at = CASE WHEN $1 IN ('Completed', 'Failed') THEN NOW() ELSE completed_at END
             WHERE id = $5 AND tenant_id = $6
-            RETURNING {ARCHIVE_JOB_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            archive_job_columns!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(&status_str)
         .bind(records_archived)
@@ -454,13 +478,15 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
     }
 
     async fn start_job(&self, id: i64, tenant_id: i64) -> Result<ArchiveJob, ApiError> {
-        let row: ArchiveJobRow = sqlx::query_as(&format!(
+        let row: ArchiveJobRow = sqlx::query_as(concat!(
             r#"
             UPDATE archive_jobs
             SET status = 'Running', started_at = NOW()
             WHERE id = $1 AND tenant_id = $2 AND status = 'Pending'
-            RETURNING {ARCHIVE_JOB_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            archive_job_columns!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -547,10 +573,12 @@ impl PostgresArchiveRecordRepository {
 }
 
 /// Common column list for archive_records SELECT queries
-const ARCHIVE_RECORD_COLUMNS: &str = r#"
-    id, tenant_id, source_table, source_id, archived_data,
-    archived_at, archive_job_id, restored_at
-"#;
+macro_rules! archive_record_columns {
+    () => {
+        r#"id, tenant_id, source_table, source_id, archived_data,
+    archived_at, archive_job_id, restored_at"#
+    };
+}
 
 #[async_trait]
 impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
@@ -562,12 +590,14 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
         archived_data: serde_json::Value,
         archive_job_id: i64,
     ) -> Result<ArchiveRecord, ApiError> {
-        let row: ArchiveRecordRow = sqlx::query_as(&format!(
+        let row: ArchiveRecordRow = sqlx::query_as(concat!(
             r#"
             INSERT INTO archive_records (tenant_id, source_table, source_id, archived_data, archive_job_id)
             VALUES ($1, $2, $3, $4, $5)
-            RETURNING {ARCHIVE_RECORD_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            archive_record_columns!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(tenant_id)
         .bind(&source_table)
@@ -582,12 +612,14 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<ArchiveRecord>, ApiError> {
-        let result: Option<ArchiveRecordRow> = sqlx::query_as(&format!(
+        let result: Option<ArchiveRecordRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {ARCHIVE_RECORD_COLUMNS}, 0 as total_count
+            SELECT "#,
+            archive_record_columns!(),
+            r#", 0 as total_count
             FROM archive_records
             WHERE id = $1 AND tenant_id = $2
-            "#,
+            "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -610,15 +642,17 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
 
         match (&source_table, source_id) {
             (Some(st), Some(sid)) => {
-                let rows: Vec<ArchiveRecordRow> = sqlx::query_as(&format!(
+                let rows: Vec<ArchiveRecordRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {ARCHIVE_RECORD_COLUMNS},
+                    SELECT "#,
+                    archive_record_columns!(),
+                    r#",
                            COUNT(*) OVER() as total_count
                     FROM archive_records
                     WHERE tenant_id = $1 AND source_table = $2 AND source_id = $3
                     ORDER BY archived_at DESC
                     LIMIT $4 OFFSET $5
-                    "#,
+                    "#
                 ))
                 .bind(tenant_id)
                 .bind(st)
@@ -639,15 +673,17 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
                 ))
             }
             (Some(st), None) => {
-                let rows: Vec<ArchiveRecordRow> = sqlx::query_as(&format!(
+                let rows: Vec<ArchiveRecordRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {ARCHIVE_RECORD_COLUMNS},
+                    SELECT "#,
+                    archive_record_columns!(),
+                    r#",
                            COUNT(*) OVER() as total_count
                     FROM archive_records
                     WHERE tenant_id = $1 AND source_table = $2
                     ORDER BY archived_at DESC
                     LIMIT $3 OFFSET $4
-                    "#,
+                    "#
                 ))
                 .bind(tenant_id)
                 .bind(st)
@@ -667,15 +703,17 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
                 ))
             }
             (None, Some(sid)) => {
-                let rows: Vec<ArchiveRecordRow> = sqlx::query_as(&format!(
+                let rows: Vec<ArchiveRecordRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {ARCHIVE_RECORD_COLUMNS},
+                    SELECT "#,
+                    archive_record_columns!(),
+                    r#",
                            COUNT(*) OVER() as total_count
                     FROM archive_records
                     WHERE tenant_id = $1 AND source_id = $2
                     ORDER BY archived_at DESC
                     LIMIT $3 OFFSET $4
-                    "#,
+                    "#
                 ))
                 .bind(tenant_id)
                 .bind(sid)
@@ -695,15 +733,17 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
                 ))
             }
             (None, None) => {
-                let rows: Vec<ArchiveRecordRow> = sqlx::query_as(&format!(
+                let rows: Vec<ArchiveRecordRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {ARCHIVE_RECORD_COLUMNS},
+                    SELECT "#,
+                    archive_record_columns!(),
+                    r#",
                            COUNT(*) OVER() as total_count
                     FROM archive_records
                     WHERE tenant_id = $1
                     ORDER BY archived_at DESC
                     LIMIT $2 OFFSET $3
-                    "#,
+                    "#
                 ))
                 .bind(tenant_id)
                 .bind(per_page)
@@ -725,13 +765,15 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
     }
 
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<ArchiveRecord, ApiError> {
-        let row: ArchiveRecordRow = sqlx::query_as(&format!(
+        let row: ArchiveRecordRow = sqlx::query_as(concat!(
             r#"
             UPDATE archive_records
             SET restored_at = NOW()
             WHERE id = $1 AND tenant_id = $2 AND restored_at IS NULL
-            RETURNING {ARCHIVE_RECORD_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            archive_record_columns!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(id)
         .bind(tenant_id)

@@ -176,8 +176,9 @@ impl PostgresEFaturaRepository {
 }
 
 /// Common column list for efatura SELECT queries
-const EFATURA_COLUMNS: &str = r#"
-    id, tenant_id, invoice_id, uuid, document_number, issue_date, profile_id,
+macro_rules! EFATURA_COLUMNS {
+    () => {
+        r#"id, tenant_id, invoice_id, uuid, document_number, issue_date, profile_id,
     sender_vkn_tckn, sender_name, sender_tax_office, sender_street,
     sender_district, sender_city, sender_country, sender_postal_code,
     sender_email, sender_phone, sender_register_number, sender_mersis_number,
@@ -186,8 +187,9 @@ const EFATURA_COLUMNS: &str = r#"
     receiver_email, receiver_phone, receiver_register_number, receiver_mersis_number,
     status, response_code, response_desc, xml_content,
     lines, tax_totals, legal_monetary_total,
-    created_at, updated_at
-"#;
+    created_at, updated_at"#
+    };
+}
 
 #[async_trait]
 impl EFaturaRepository for PostgresEFaturaRepository {
@@ -201,25 +203,29 @@ impl EFaturaRepository for PostgresEFaturaRepository {
         let monetary_total_json = serde_json::to_value(&fatura.legal_monetary_total)
             .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
 
-        let row: EfaturaRow = sqlx::query_as(&format!(
-            r#"
-            INSERT INTO efatura (
-                tenant_id, invoice_id, uuid, document_number, issue_date, profile_id,
-                sender_vkn_tckn, sender_name, sender_tax_office, sender_street,
-                sender_district, sender_city, sender_country, sender_postal_code,
-                sender_email, sender_phone, sender_register_number, sender_mersis_number,
-                receiver_vkn_tckn, receiver_name, receiver_tax_office, receiver_street,
-                receiver_district, receiver_city, receiver_country, receiver_postal_code,
-                receiver_email, receiver_phone, receiver_register_number, receiver_mersis_number,
-                status, response_code, response_desc, xml_content,
-                lines, tax_totals, legal_monetary_total
+        let row: EfaturaRow = sqlx::query_as(
+            concat!(
+                r#"
+                INSERT INTO efatura (
+                    tenant_id, invoice_id, uuid, document_number, issue_date, profile_id,
+                    sender_vkn_tckn, sender_name, sender_tax_office, sender_street,
+                    sender_district, sender_city, sender_country, sender_postal_code,
+                    sender_email, sender_phone, sender_register_number, sender_mersis_number,
+                    receiver_vkn_tckn, receiver_name, receiver_tax_office, receiver_street,
+                    receiver_district, receiver_city, receiver_country, receiver_postal_code,
+                    receiver_email, receiver_phone, receiver_register_number, receiver_mersis_number,
+                    status, response_code, response_desc, xml_content,
+                    lines, tax_totals, legal_monetary_total
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
+                        $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+                        $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
+                RETURNING "#,
+                EFATURA_COLUMNS!(),
+                r#", 0 as total_count
+                "#
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,
-                    $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
-                    $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
-            RETURNING {EFATURA_COLUMNS}, 0 as total_count
-            "#,
-        ))
+        )
         .bind(fatura.tenant_id)
         .bind(fatura.invoice_id)
         .bind(&fatura.uuid)
@@ -269,12 +275,14 @@ impl EFaturaRepository for PostgresEFaturaRepository {
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<EFatura>, ApiError> {
-        let result: Option<EfaturaRow> = sqlx::query_as(&format!(
+        let result: Option<EfaturaRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {EFATURA_COLUMNS}, 0 as total_count
-            FROM efatura
-            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
-            "#,
+                SELECT "#,
+            EFATURA_COLUMNS!(),
+            r#", 0 as total_count
+                FROM efatura
+                WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+                "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -286,12 +294,14 @@ impl EFaturaRepository for PostgresEFaturaRepository {
     }
 
     async fn find_by_uuid(&self, uuid: &str, tenant_id: i64) -> Result<Option<EFatura>, ApiError> {
-        let result: Option<EfaturaRow> = sqlx::query_as(&format!(
+        let result: Option<EfaturaRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {EFATURA_COLUMNS}, 0 as total_count
-            FROM efatura
-            WHERE uuid = $1 AND tenant_id = $2 AND deleted_at IS NULL
-            "#,
+                SELECT "#,
+            EFATURA_COLUMNS!(),
+            r#", 0 as total_count
+                FROM efatura
+                WHERE uuid = $1 AND tenant_id = $2 AND deleted_at IS NULL
+                "#
         ))
         .bind(uuid)
         .bind(tenant_id)
@@ -307,12 +317,14 @@ impl EFaturaRepository for PostgresEFaturaRepository {
         invoice_id: i64,
         tenant_id: i64,
     ) -> Result<Option<EFatura>, ApiError> {
-        let result: Option<EfaturaRow> = sqlx::query_as(&format!(
+        let result: Option<EfaturaRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {EFATURA_COLUMNS}, 0 as total_count
-            FROM efatura
-            WHERE invoice_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
-            "#,
+                SELECT "#,
+            EFATURA_COLUMNS!(),
+            r#", 0 as total_count
+                FROM efatura
+                WHERE invoice_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+                "#
         ))
         .bind(invoice_id)
         .bind(tenant_id)
@@ -335,15 +347,17 @@ impl EFaturaRepository for PostgresEFaturaRepository {
         match status {
             Some(s) => {
                 let status_str = s.to_string();
-                let rows: Vec<EfaturaRow> = sqlx::query_as(&format!(
+                let rows: Vec<EfaturaRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {EFATURA_COLUMNS},
-                           COUNT(*) OVER() as total_count
-                    FROM efatura
-                    WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
-                    ORDER BY issue_date DESC, id DESC
-                    LIMIT $3 OFFSET $4
-                    "#,
+                        SELECT "#,
+                    EFATURA_COLUMNS!(),
+                    r#",
+                               COUNT(*) OVER() as total_count
+                        FROM efatura
+                        WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
+                        ORDER BY issue_date DESC, id DESC
+                        LIMIT $3 OFFSET $4
+                        "#
                 ))
                 .bind(tenant_id)
                 .bind(&status_str)
@@ -363,15 +377,17 @@ impl EFaturaRepository for PostgresEFaturaRepository {
                 ))
             }
             None => {
-                let rows: Vec<EfaturaRow> = sqlx::query_as(&format!(
+                let rows: Vec<EfaturaRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {EFATURA_COLUMNS},
-                           COUNT(*) OVER() as total_count
-                    FROM efatura
-                    WHERE tenant_id = $1 AND deleted_at IS NULL
-                    ORDER BY issue_date DESC, id DESC
-                    LIMIT $2 OFFSET $3
-                    "#,
+                        SELECT "#,
+                    EFATURA_COLUMNS!(),
+                    r#",
+                               COUNT(*) OVER() as total_count
+                        FROM efatura
+                        WHERE tenant_id = $1 AND deleted_at IS NULL
+                        ORDER BY issue_date DESC, id DESC
+                        LIMIT $2 OFFSET $3
+                        "#
                 ))
                 .bind(tenant_id)
                 .bind(per_page)
@@ -402,16 +418,18 @@ impl EFaturaRepository for PostgresEFaturaRepository {
     ) -> Result<EFatura, ApiError> {
         let status_str = status.to_string();
 
-        let row: EfaturaRow = sqlx::query_as(&format!(
+        let row: EfaturaRow = sqlx::query_as(concat!(
             r#"
-            UPDATE efatura
-            SET status = $1,
-                response_code = $2,
-                response_desc = $3,
-                updated_at = NOW()
-            WHERE id = $4 AND tenant_id = $5 AND deleted_at IS NULL
-            RETURNING {EFATURA_COLUMNS}, 0 as total_count
-            "#,
+                UPDATE efatura
+                SET status = $1,
+                    response_code = $2,
+                    response_desc = $3,
+                    updated_at = NOW()
+                WHERE id = $4 AND tenant_id = $5 AND deleted_at IS NULL
+                RETURNING "#,
+            EFATURA_COLUMNS!(),
+            r#", 0 as total_count
+                "#
         ))
         .bind(&status_str)
         .bind(&response_code)
@@ -431,14 +449,16 @@ impl EFaturaRepository for PostgresEFaturaRepository {
         tenant_id: i64,
         xml_content: String,
     ) -> Result<EFatura, ApiError> {
-        let row: EfaturaRow = sqlx::query_as(&format!(
+        let row: EfaturaRow = sqlx::query_as(concat!(
             r#"
-            UPDATE efatura
-            SET xml_content = $1,
-                updated_at = NOW()
-            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
-            RETURNING {EFATURA_COLUMNS}, 0 as total_count
-            "#,
+                UPDATE efatura
+                SET xml_content = $1,
+                    updated_at = NOW()
+                WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
+                RETURNING "#,
+            EFATURA_COLUMNS!(),
+            r#", 0 as total_count
+                "#
         ))
         .bind(&xml_content)
         .bind(id)
