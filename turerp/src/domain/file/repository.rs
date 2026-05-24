@@ -5,7 +5,7 @@ use chrono::Utc;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-use crate::domain::file::model::{CreateFileRecord, FileRecord};
+use crate::domain::file::model::{CreateFileRecord, FileRecord, UpdateFileRecord};
 use crate::error::ApiError;
 
 /// Repository trait for file metadata operations
@@ -19,6 +19,14 @@ pub trait FileRepository: Send + Sync {
 
     /// Find all files for a tenant
     async fn find_all(&self, tenant_id: i64) -> Result<Vec<FileRecord>, ApiError>;
+
+    /// Update file metadata
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateFileRecord,
+    ) -> Result<FileRecord, ApiError>;
 
     /// Find files by entity type and entity ID
     async fn find_by_entity(
@@ -116,6 +124,37 @@ impl FileRepository for InMemoryFileRepository {
             .filter(|f| f.tenant_id == tenant_id && f.deleted_at.is_none())
             .cloned()
             .collect())
+    }
+
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateFileRecord,
+    ) -> Result<FileRecord, ApiError> {
+        let mut files = self.files.lock();
+        let file = files
+            .iter_mut()
+            .find(|f| f.id == id && f.tenant_id == tenant_id && f.deleted_at.is_none())
+            .ok_or_else(|| ApiError::NotFound(format!("File {} not found", id)))?;
+
+        if let Some(filename) = update.filename {
+            file.filename = filename;
+        }
+        if let Some(original_filename) = update.original_filename {
+            file.original_filename = original_filename;
+        }
+        if let Some(content_type) = update.content_type {
+            file.content_type = content_type;
+        }
+        if update.entity_type.is_some() {
+            file.entity_type = update.entity_type;
+        }
+        if update.entity_id.is_some() {
+            file.entity_id = update.entity_id;
+        }
+
+        Ok(file.clone())
     }
 
     async fn find_by_entity(

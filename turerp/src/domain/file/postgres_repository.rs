@@ -5,7 +5,7 @@ use sqlx::{FromRow, PgPool};
 use std::sync::Arc;
 
 use crate::db::error::map_sqlx_error;
-use crate::domain::file::model::{CreateFileRecord, FileRecord};
+use crate::domain::file::model::{CreateFileRecord, FileRecord, UpdateFileRecord};
 use crate::domain::file::repository::{BoxFileRepository, FileRepository};
 use crate::error::ApiError;
 
@@ -129,6 +129,41 @@ impl FileRepository for PostgresFileRepository {
         .map_err(|e| map_sqlx_error(e, "File"))?;
 
         Ok(rows.into_iter().map(Into::into).collect())
+    }
+
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateFileRecord,
+    ) -> Result<FileRecord, ApiError> {
+        let row = sqlx::query_as::<_, FileRow>(
+            r#"
+            UPDATE files
+            SET filename = COALESCE($3, filename),
+                original_filename = COALESCE($4, original_filename),
+                content_type = COALESCE($5, content_type),
+                entity_type = COALESCE($6, entity_type),
+                entity_id = COALESCE($7, entity_id)
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+            RETURNING *
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .bind(update.filename)
+        .bind(update.original_filename)
+        .bind(update.content_type)
+        .bind(&update.entity_type)
+        .bind(update.entity_id)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "File"))?;
+
+        match row {
+            Some(r) => Ok(r.into()),
+            None => Err(ApiError::NotFound(format!("File {} not found", id))),
+        }
     }
 
     async fn find_by_entity(

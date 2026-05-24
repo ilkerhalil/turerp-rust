@@ -165,6 +165,10 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "032_blockchain_tables",
             sql: include_str!("../../migrations/032_blockchain_tables.sql"),
         },
+        Migration {
+            version: "033_stock_movements_tenant_id",
+            sql: include_str!("../../migrations/033_stock_movements_tenant_id.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).

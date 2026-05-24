@@ -606,6 +606,7 @@ impl StockLevelRepository for PostgresStockLevelRepository {
 #[derive(Debug, FromRow)]
 struct StockMovementRow {
     id: i64,
+    tenant_id: i64,
     warehouse_id: i64,
     product_id: i64,
     movement_type: String,
@@ -632,6 +633,7 @@ impl From<StockMovementRow> for StockMovement {
 
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             company_id: 0,
             warehouse_id: row.warehouse_id,
             product_id: row.product_id,
@@ -672,13 +674,14 @@ impl StockMovementRepository for PostgresStockMovementRepository {
 
         let row: StockMovementRow = sqlx::query_as(
             r#"
-            INSERT INTO stock_movements (warehouse_id, product_id, movement_type, quantity,
+            INSERT INTO stock_movements (tenant_id, warehouse_id, product_id, movement_type, quantity,
                                           reference_type, reference_id, notes, created_at, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
-            RETURNING id, warehouse_id, product_id, movement_type, quantity,
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), $9)
+            RETURNING id, tenant_id, warehouse_id, product_id, movement_type, quantity,
                       reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
             "#,
         )
+        .bind(movement.tenant_id)
         .bind(movement.warehouse_id)
         .bind(movement.product_id)
         .bind(&movement_type_str)
@@ -695,14 +698,12 @@ impl StockMovementRepository for PostgresStockMovementRepository {
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<StockMovement>, ApiError> {
-        // StockMovement does not have tenant_id; join warehouses to enforce tenant isolation
         let result: Option<StockMovementRow> = sqlx::query_as(
             r#"
-            SELECT sm.id, sm.warehouse_id, sm.product_id, sm.movement_type, sm.quantity,
-                   sm.reference_type, sm.reference_id, sm.notes, sm.created_at, sm.created_by, sm.deleted_at, sm.deleted_by
-            FROM stock_movements sm
-            JOIN warehouses w ON w.id = sm.warehouse_id
-            WHERE sm.id = $1 AND w.tenant_id = $2 AND sm.deleted_at IS NULL
+            SELECT id, tenant_id, warehouse_id, product_id, movement_type, quantity,
+                   reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
+            FROM stock_movements
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -714,17 +715,22 @@ impl StockMovementRepository for PostgresStockMovementRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockMovement>, ApiError> {
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockMovement>, ApiError> {
         let rows: Vec<StockMovementRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, movement_type, quantity,
+            SELECT id, tenant_id, warehouse_id, product_id, movement_type, quantity,
                    reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
             FROM stock_movements
-            WHERE product_id = $1 AND deleted_at IS NULL
+            WHERE product_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(product_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -734,17 +740,22 @@ impl StockMovementRepository for PostgresStockMovementRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn find_by_warehouse(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError> {
+    async fn find_by_warehouse(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockMovement>, ApiError> {
         let rows: Vec<StockMovementRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, movement_type, quantity,
+            SELECT id, tenant_id, warehouse_id, product_id, movement_type, quantity,
                    reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
             FROM stock_movements
-            WHERE warehouse_id = $1 AND deleted_at IS NULL
+            WHERE warehouse_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(warehouse_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -760,12 +771,11 @@ impl StockMovementRepository for PostgresStockMovementRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<StockMovement>, ApiError> {
         let rows: Vec<StockMovementRow> = sqlx::query_as(
             r#"
-            SELECT sm.id, sm.warehouse_id, sm.product_id, sm.movement_type, sm.quantity,
-                   sm.reference_type, sm.reference_id, sm.notes, sm.created_at, sm.created_by, sm.deleted_at, sm.deleted_by
-            FROM stock_movements sm
-            JOIN warehouses w ON w.id = sm.warehouse_id
-            WHERE w.tenant_id = $1 AND sm.deleted_at IS NULL
-            ORDER BY sm.created_at DESC
+            SELECT id, tenant_id, warehouse_id, product_id, movement_type, quantity,
+                   reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
+            FROM stock_movements
+            WHERE tenant_id = $1 AND deleted_at IS NULL
+            ORDER BY created_at DESC
             "#,
         )
         .bind(tenant_id)
@@ -785,18 +795,20 @@ impl StockMovementRepository for PostgresStockMovementRepository {
         &self,
         reference_type: &str,
         reference_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<StockMovement>, ApiError> {
         let rows: Vec<StockMovementRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, movement_type, quantity,
+            SELECT id, tenant_id, warehouse_id, product_id, movement_type, quantity,
                    reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
             FROM stock_movements
-            WHERE reference_type = $1 AND reference_id = $2 AND deleted_at IS NULL
+            WHERE reference_type = $1 AND reference_id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(reference_type)
         .bind(reference_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -814,8 +826,7 @@ impl StockMovementRepository for PostgresStockMovementRepository {
             r#"
             UPDATE stock_movements
             SET deleted_at = NOW(), deleted_by = $3
-            WHERE id = $1 AND deleted_at IS NULL
-            AND warehouse_id IN (SELECT id FROM warehouses WHERE tenant_id = $2)
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -837,8 +848,7 @@ impl StockMovementRepository for PostgresStockMovementRepository {
             r#"
             UPDATE stock_movements
             SET deleted_at = NULL, deleted_by = NULL
-            WHERE id = $1 AND deleted_at IS NOT NULL
-            AND warehouse_id IN (SELECT id FROM warehouses WHERE tenant_id = $2)
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             "#,
         )
         .bind(id)
@@ -858,17 +868,22 @@ impl StockMovementRepository for PostgresStockMovementRepository {
             .ok_or_else(|| ApiError::NotFound("Stock movement not found".to_string()))
     }
 
-    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError> {
+    async fn find_deleted(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockMovement>, ApiError> {
         let rows: Vec<StockMovementRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, movement_type, quantity,
+            SELECT id, tenant_id, warehouse_id, product_id, movement_type, quantity,
                    reference_type, reference_id, notes, created_at, created_by, deleted_at, deleted_by
             FROM stock_movements
-            WHERE warehouse_id = $1 AND deleted_at IS NOT NULL
+            WHERE warehouse_id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
             "#,
         )
         .bind(warehouse_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find deleted stock movements: {}", e)))?;
@@ -880,8 +895,7 @@ impl StockMovementRepository for PostgresStockMovementRepository {
         let result = sqlx::query(
             r#"
             DELETE FROM stock_movements
-            WHERE id = $1
-            AND warehouse_id IN (SELECT id FROM warehouses WHERE tenant_id = $2)
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)

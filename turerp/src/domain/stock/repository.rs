@@ -98,21 +98,26 @@ pub trait StockLevelRepository: Send + Sync {
 }
 
 /// Repository trait for StockMovement operations.
-/// Note: StockMovement does not have a tenant_id field directly; tenant isolation
-/// is enforced via the warehouse relationship. The tenant_id parameter is used to
-/// join against warehouses and ensure tenant scoping.
 #[async_trait]
 pub trait StockMovementRepository: Send + Sync {
     async fn create(&self, movement: CreateStockMovement) -> Result<StockMovement, ApiError>;
-    /// Find by ID with tenant isolation (joins warehouses to verify tenant ownership)
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<StockMovement>, ApiError>;
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockMovement>, ApiError>;
-    async fn find_by_warehouse(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError>;
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockMovement>, ApiError>;
+    async fn find_by_warehouse(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockMovement>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<StockMovement>, ApiError>;
     async fn find_by_reference(
         &self,
         reference_type: &str,
         reference_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<StockMovement>, ApiError>;
 
     /// Soft delete a stock movement with tenant isolation
@@ -121,8 +126,12 @@ pub trait StockMovementRepository: Send + Sync {
     /// Restore a soft-deleted stock movement with tenant isolation
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<StockMovement, ApiError>;
 
-    /// Find soft-deleted stock movements
-    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError>;
+    /// Find soft-deleted stock movements for a warehouse
+    async fn find_deleted(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockMovement>, ApiError>;
 
     /// Hard delete a stock movement with tenant isolation (permanent destruction — admin only)
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
@@ -543,8 +552,6 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
 /// Inner state for InMemoryStockMovementRepository
 struct InMemoryStockMovementInner {
     movements: std::collections::HashMap<i64, StockMovement>,
-    /// Maps warehouse_id -> tenant_id for tenant isolation of movements
-    warehouse_tenants: std::collections::HashMap<i64, i64>,
     next_id: i64,
 }
 
@@ -558,7 +565,6 @@ impl InMemoryStockMovementRepository {
         Self {
             inner: Mutex::new(InMemoryStockMovementInner {
                 movements: std::collections::HashMap::new(),
-                warehouse_tenants: std::collections::HashMap::new(),
                 next_id: 1,
             }),
         }
@@ -584,7 +590,8 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
 
         let movement = StockMovement {
             id,
-            company_id: 0,
+            tenant_id: create.tenant_id,
+            company_id: create.company_id,
             warehouse_id: create.warehouse_id,
             product_id: create.product_id,
             movement_type: create.movement_type,
@@ -604,38 +611,39 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<StockMovement>, ApiError> {
         let inner = self.inner.lock();
-        // StockMovement does not have tenant_id directly; look up via warehouse
-        let movement = inner
+        Ok(inner
             .movements
             .get(&id)
-            .filter(|m| !m.is_deleted())
-            .cloned();
-        if let Some(ref m) = movement {
-            // Verify the warehouse belongs to the tenant
-            match inner.warehouse_tenants.get(&m.warehouse_id) {
-                Some(&w_tenant_id) if w_tenant_id == tenant_id => {}
-                _ => return Ok(None),
-            }
-        }
-        Ok(movement)
+            .filter(|m| !m.is_deleted() && m.tenant_id == tenant_id)
+            .cloned())
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockMovement>, ApiError> {
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockMovement>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .movements
             .values()
-            .filter(|m| m.product_id == product_id && !m.is_deleted())
+            .filter(|m| m.product_id == product_id && m.tenant_id == tenant_id && !m.is_deleted())
             .cloned()
             .collect())
     }
 
-    async fn find_by_warehouse(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError> {
+    async fn find_by_warehouse(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockMovement>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .movements
             .values()
-            .filter(|m| m.warehouse_id == warehouse_id && !m.is_deleted())
+            .filter(|m| {
+                m.warehouse_id == warehouse_id && m.tenant_id == tenant_id && !m.is_deleted()
+            })
             .cloned()
             .collect())
     }
@@ -645,13 +653,7 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
         Ok(inner
             .movements
             .values()
-            .filter(|m| {
-                !m.is_deleted()
-                    && inner
-                        .warehouse_tenants
-                        .get(&m.warehouse_id)
-                        .is_some_and(|&t| t == tenant_id)
-            })
+            .filter(|m| !m.is_deleted() && m.tenant_id == tenant_id)
             .cloned()
             .collect())
     }
@@ -660,6 +662,7 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
         &self,
         reference_type: &str,
         reference_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<StockMovement>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
@@ -667,6 +670,7 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
             .values()
             .filter(|m| {
                 !m.is_deleted()
+                    && m.tenant_id == tenant_id
                     && m.reference_type.as_deref() == Some(reference_type)
                     && m.reference_id == Some(reference_id)
             })
@@ -676,22 +680,16 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
 
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
-        // First, look up the warehouse_id immutably
-        let warehouse_id = inner
+        let movement = inner
             .movements
             .get(&id)
-            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?
-            .warehouse_id;
+            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?;
 
-        // Verify tenant ownership via warehouse
-        match inner.warehouse_tenants.get(&warehouse_id) {
-            Some(&w_tenant_id) if w_tenant_id == tenant_id => {}
-            _ => {
-                return Err(ApiError::NotFound(format!(
-                    "Stock movement {} not found",
-                    id
-                )))
-            }
+        if movement.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Stock movement {} not found",
+                id
+            )));
         }
 
         inner
@@ -704,22 +702,16 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
 
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<StockMovement, ApiError> {
         let mut inner = self.inner.lock();
-        // First, look up the warehouse_id immutably
-        let warehouse_id = inner
+        let movement = inner
             .movements
             .get(&id)
-            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?
-            .warehouse_id;
+            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?;
 
-        // Verify tenant ownership via warehouse
-        match inner.warehouse_tenants.get(&warehouse_id) {
-            Some(&w_tenant_id) if w_tenant_id == tenant_id => {}
-            _ => {
-                return Err(ApiError::NotFound(format!(
-                    "Stock movement {} not found",
-                    id
-                )))
-            }
+        if movement.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Stock movement {} not found",
+                id
+            )));
         }
 
         let movement = inner
@@ -730,33 +722,34 @@ impl StockMovementRepository for InMemoryStockMovementRepository {
         Ok(movement.clone())
     }
 
-    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockMovement>, ApiError> {
+    async fn find_deleted(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockMovement>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .movements
             .values()
-            .filter(|m| m.warehouse_id == warehouse_id && m.is_deleted())
+            .filter(|m| {
+                m.warehouse_id == warehouse_id && m.tenant_id == tenant_id && m.is_deleted()
+            })
             .cloned()
             .collect())
     }
 
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
-        // First, look up the warehouse_id and verify tenant
-        let warehouse_id = inner
+        let movement = inner
             .movements
             .get(&id)
-            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?
-            .warehouse_id;
+            .ok_or_else(|| ApiError::NotFound(format!("Stock movement {} not found", id)))?;
 
-        match inner.warehouse_tenants.get(&warehouse_id) {
-            Some(&w_tenant_id) if w_tenant_id == tenant_id => {}
-            _ => {
-                return Err(ApiError::NotFound(format!(
-                    "Stock movement {} not found",
-                    id
-                )))
-            }
+        if movement.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Stock movement {} not found",
+                id
+            )));
         }
 
         inner
