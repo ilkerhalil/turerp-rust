@@ -272,6 +272,7 @@ pub mod app {
     use crate::domain::dashboard::postgres_repository::PostgresDashboardRepository;
     use crate::domain::document::postgres_repository::PostgresDocumentRepository;
     use crate::domain::earchive::postgres_repository::PostgresEarchiveRepository;
+    use crate::domain::edefter::blockchain::postgres_repository::PostgresBlockchainLedgerRepository;
     use crate::domain::edefter::postgres_repository::PostgresEDefterRepository;
     use crate::domain::efatura::postgres_repository::PostgresEFaturaRepository;
     use crate::domain::feature::postgres_repository::PostgresFeatureFlagRepository;
@@ -280,10 +281,15 @@ pub mod app {
         PostgresAttendanceRepository, PostgresEmployeeRepository, PostgresLeaveRequestRepository,
         PostgresLeaveTypeRepository, PostgresPayrollRepository,
     };
+    use crate::domain::hr::sgk::postgres_repository::{
+        PostgresEmployeeBonusRepository, PostgresSgkConfigRepository,
+        PostgresSgkEmployeeRegistrationRepository,
+    };
     use crate::domain::invoice::postgres_repository::{
         PostgresInvoiceLineRepository, PostgresInvoiceRepository, PostgresPaymentRepository,
     };
     use crate::domain::ip_whitelist::postgres_repository::PostgresIpWhitelistRepository;
+    use crate::domain::ldap::postgres_repository::PostgresLdapConfigRepository;
     use crate::domain::manufacturing::postgres_repository::{
         PostgresBillOfMaterialsRepository, PostgresRoutingRepository, PostgresWorkOrderRepository,
     };
@@ -301,6 +307,9 @@ pub mod app {
         PostgresPurchaseOrderLineRepository, PostgresPurchaseOrderRepository,
         PostgresPurchaseRequestLineRepository, PostgresPurchaseRequestRepository,
     };
+    use crate::domain::quality_control::postgres_repository::{
+        PostgresInspectionRepository, PostgresNcrRepository,
+    };
     use crate::domain::sales::postgres_repository::{
         PostgresQuotationLineRepository, PostgresQuotationRepository,
         PostgresSalesOrderLineRepository, PostgresSalesOrderRepository,
@@ -317,7 +326,9 @@ pub mod app {
     use crate::domain::tax::postgres_repository::{
         PostgresTaxPeriodRepository, PostgresTaxRateRepository,
     };
-    use crate::domain::tenant::postgres_repository::PostgresTenantRepository;
+    use crate::domain::tenant::postgres_repository::{
+        PostgresTenantConfigRepository, PostgresTenantRepository,
+    };
     use crate::domain::user::postgres_repository::PostgresUserRepository;
     use crate::domain::vendor_portal::postgres_repository::{
         PostgresDeliveryNoteRepository, PostgresVendorUserRepository,
@@ -1242,13 +1253,11 @@ pub mod app {
             payroll_repo,
         );
 
-        // SGK Payroll (using in-memory repos until PostgreSQL repos are implemented)
-        let sgk_reg_repo = Arc::new(InMemorySgkEmployeeRegistrationRepository::new())
-            as crate::domain::hr::sgk::repository::BoxSgkEmployeeRegistrationRepository;
-        let sgk_config_repo = Arc::new(InMemorySgkConfigRepository::new())
-            as crate::domain::hr::sgk::repository::BoxSgkConfigRepository;
-        let bonus_repo = Arc::new(InMemoryEmployeeBonusRepository::new())
-            as crate::domain::hr::sgk::repository::BoxEmployeeBonusRepository;
+        // SGK Payroll - PostgreSQL
+        let sgk_reg_repo =
+            PostgresSgkEmployeeRegistrationRepository::new(pool.clone()).into_boxed();
+        let sgk_config_repo = PostgresSgkConfigRepository::new(pool.clone()).into_boxed();
+        let bonus_repo = PostgresEmployeeBonusRepository::new(pool.clone()).into_boxed();
         let sgk_payroll_service = crate::domain::hr::sgk::service::SgkPayrollService::new(
             Arc::new(hr_service.clone()),
             sgk_reg_repo,
@@ -1337,16 +1346,12 @@ pub mod app {
         // Tenant - PostgreSQL
         let tenant_repo = PostgresTenantRepository::new(pool.clone()).into_boxed();
         let tenant_service = TenantService::new(tenant_repo);
-        let tenant_config_repo =
-            Arc::new(InMemoryTenantConfigRepository::new()) as BoxTenantConfigRepository;
+        let tenant_config_repo = PostgresTenantConfigRepository::new(pool.clone()).into_boxed();
         let tenant_config_service =
             TenantConfigService::new(tenant_config_repo).with_cache(cache_service.clone());
-        // Quality Control - using in-memory repos until PostgreSQL repos are implemented
-        let inspection_repo =
-            Arc::new(crate::domain::quality_control::InMemoryInspectionRepository::new())
-                as crate::domain::quality_control::BoxInspectionRepository;
-        let ncr_repo = Arc::new(crate::domain::quality_control::InMemoryNcrRepository::new())
-            as crate::domain::quality_control::BoxNcrRepository;
+        // Quality Control - PostgreSQL
+        let inspection_repo = PostgresInspectionRepository::new(pool.clone()).into_boxed();
+        let ncr_repo = PostgresNcrRepository::new(pool.clone()).into_boxed();
         let qc_service =
             crate::domain::quality_control::QualityControlService::new(inspection_repo, ncr_repo);
 
@@ -1498,11 +1503,11 @@ pub mod app {
         // e-Defter - PostgreSQL
         let edefter_repo = PostgresEDefterRepository::new(pool.clone()).into_boxed();
         let edefter_service = crate::domain::edefter::EDefterService::new(edefter_repo);
+        // Blockchain Ledger - PostgreSQL
         let blockchain_ledger_repo =
-            Arc::new(crate::domain::edefter::blockchain::InMemoryBlockchainLedgerRepository::new())
-                as crate::domain::edefter::blockchain::BoxBlockchainLedgerRepository;
+            PostgresBlockchainLedgerRepository::new(pool.clone()).into_boxed();
         let blockchain_ledger_service =
-            crate::domain::edefter::blockchain::service::BlockchainLedgerService::new(
+            crate::domain::edefter::blockchain::BlockchainLedgerService::new(
                 blockchain_ledger_repo,
             );
 
@@ -1594,8 +1599,8 @@ pub mod app {
             Arc::new(product_service.clone()),
         );
 
-        // LDAP (using in-memory repo until PostgreSQL repo is implemented)
-        let ldap_repo = Arc::new(InMemoryLdapConfigRepository::new()) as BoxLdapConfigRepository;
+        // LDAP - PostgreSQL
+        let ldap_repo = PostgresLdapConfigRepository::new(pool.clone()).into_boxed();
         let ldap_service = LdapSyncService::new(
             ldap_repo,
             Arc::new(user_service.clone()),

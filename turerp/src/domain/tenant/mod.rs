@@ -10,7 +10,7 @@ pub use model::{
     generate_db_name, CreateTenant, CreateTenantConfig, Tenant, TenantConfig, TenantConfigResponse,
     UpdateTenant, UpdateTenantConfig,
 };
-pub use postgres_repository::PostgresTenantRepository;
+pub use postgres_repository::{PostgresTenantConfigRepository, PostgresTenantRepository};
 pub use repository::{
     BoxTenantConfigRepository, BoxTenantRepository, InMemoryTenantConfigRepository,
     InMemoryTenantRepository, TenantConfigRepository, TenantRepository,

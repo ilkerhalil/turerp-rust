@@ -5,8 +5,12 @@ use std::sync::Arc;
 
 use crate::common::pagination::PaginatedResult;
 use crate::db::error::map_sqlx_error;
-use crate::domain::tenant::model::{CreateTenant, Tenant, UpdateTenant};
-use crate::domain::tenant::repository::{BoxTenantRepository, TenantRepository};
+use crate::domain::tenant::model::{
+    CreateTenant, CreateTenantConfig, Tenant, TenantConfig, UpdateTenant, UpdateTenantConfig,
+};
+use crate::domain::tenant::repository::{
+    BoxTenantConfigRepository, BoxTenantRepository, TenantConfigRepository, TenantRepository,
+};
 use crate::error::ApiError;
 
 // Convert sqlx errors to ApiError with proper detection of error types
@@ -326,5 +330,164 @@ impl TenantRepository for PostgresTenantRepository {
         .map_err(|e| ApiError::Database(format!("Failed to check subdomain: {}", e)))?;
 
         Ok(result.0)
+    }
+}
+
+/// Database row representation for TenantConfig
+#[derive(Debug, FromRow)]
+struct TenantConfigRow {
+    id: i64,
+    tenant_id: i64,
+    key: String,
+    value: serde_json::Value,
+    is_encrypted: bool,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl From<TenantConfigRow> for TenantConfig {
+    fn from(row: TenantConfigRow) -> Self {
+        Self {
+            id: row.id,
+            tenant_id: row.tenant_id,
+            key: row.key,
+            value: row.value,
+            is_encrypted: row.is_encrypted,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
+}
+
+/// PostgreSQL tenant config repository
+pub struct PostgresTenantConfigRepository {
+    pool: Arc<PgPool>,
+}
+
+impl PostgresTenantConfigRepository {
+    /// Create a new PostgreSQL tenant config repository
+    pub fn new(pool: Arc<PgPool>) -> Self {
+        Self { pool }
+    }
+
+    /// Convert to boxed trait object
+    pub fn into_boxed(self) -> BoxTenantConfigRepository {
+        Arc::new(self) as BoxTenantConfigRepository
+    }
+}
+
+#[async_trait]
+impl TenantConfigRepository for PostgresTenantConfigRepository {
+    async fn set(&self, create: CreateTenantConfig) -> Result<TenantConfig, ApiError> {
+        let row: TenantConfigRow = sqlx::query_as(
+            r#"
+            INSERT INTO tenant_configs (tenant_id, key, value, is_encrypted, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, NOW(), NOW())
+            ON CONFLICT (tenant_id, key) DO UPDATE SET
+                value = EXCLUDED.value,
+                is_encrypted = EXCLUDED.is_encrypted,
+                updated_at = NOW()
+            RETURNING id, tenant_id, key, value, is_encrypted, created_at, updated_at
+            "#,
+        )
+        .bind(create.tenant_id)
+        .bind(&create.key)
+        .bind(&create.value)
+        .bind(create.is_encrypted.unwrap_or(false))
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "TenantConfig"))?;
+
+        Ok(row.into())
+    }
+
+    async fn get(&self, tenant_id: i64, key: &str) -> Result<Option<TenantConfig>, ApiError> {
+        let result: Option<TenantConfigRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, key, value, is_encrypted, created_at, updated_at
+            FROM tenant_configs
+            WHERE tenant_id = $1 AND key = $2
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(key)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to get tenant config: {}", e)))?;
+
+        Ok(result.map(|r| r.into()))
+    }
+
+    async fn get_all(&self, tenant_id: i64) -> Result<Vec<TenantConfig>, ApiError> {
+        let rows: Vec<TenantConfigRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, key, value, is_encrypted, created_at, updated_at
+            FROM tenant_configs
+            WHERE tenant_id = $1
+            ORDER BY key ASC
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to get tenant configs: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
+    async fn update(&self, id: i64, update: UpdateTenantConfig) -> Result<TenantConfig, ApiError> {
+        let row: TenantConfigRow = sqlx::query_as(
+            r#"
+            UPDATE tenant_configs
+            SET
+                value = COALESCE($1, value),
+                is_encrypted = COALESCE($2, is_encrypted),
+                updated_at = NOW()
+            WHERE id = $3
+            RETURNING id, tenant_id, key, value, is_encrypted, created_at, updated_at
+            "#,
+        )
+        .bind(&update.value)
+        .bind(update.is_encrypted)
+        .bind(id)
+        .fetch_one(&*self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "TenantConfig"))?;
+
+        Ok(row.into())
+    }
+
+    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+        let result = sqlx::query(
+            r#"
+            DELETE FROM tenant_configs
+            WHERE id = $1
+            "#,
+        )
+        .bind(id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to delete tenant config: {}", e)))?;
+
+        if result.rows_affected() == 0 {
+            return Err(ApiError::NotFound("TenantConfig not found".to_string()));
+        }
+
+        Ok(())
+    }
+
+    async fn delete_by_tenant(&self, tenant_id: i64) -> Result<(), ApiError> {
+        sqlx::query(
+            r#"
+            DELETE FROM tenant_configs
+            WHERE tenant_id = $1
+            "#,
+        )
+        .bind(tenant_id)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to delete tenant configs: {}", e)))?;
+
+        Ok(())
     }
 }

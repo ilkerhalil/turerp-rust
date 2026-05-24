@@ -1,6 +1,7 @@
 //! LDAP / Active Directory synchronization domain module
 
 pub mod model;
+pub mod postgres_repository;
 pub mod repository;
 pub mod service;
 
@@ -9,5 +10,6 @@ pub use model::{
     CreateLdapConfig, LdapConfig, LdapConfigResponse, LdapSyncResult, LdapUser,
     TestLdapConnectionRequest, UpdateLdapConfig,
 };
+pub use postgres_repository::PostgresLdapConfigRepository;
 pub use repository::{BoxLdapConfigRepository, InMemoryLdapConfigRepository, LdapConfigRepository};
 pub use service::{Ldap3Client, LdapClient, LdapSyncService};
