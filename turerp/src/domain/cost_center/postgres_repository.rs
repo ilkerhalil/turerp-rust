@@ -120,10 +120,12 @@ impl PostgresCostCenterRepository {
 }
 
 /// Common column list for cost_centers SELECT queries
-const COST_CENTER_COLUMNS: &str = r#"
-    id, tenant_id, code, name, description, center_type, parent_id,
-    is_active, created_at, updated_at, deleted_at, deleted_by
-"#;
+macro_rules! COST_CENTER_COLUMNS {
+    () => {
+        r#"id, tenant_id, code, name, description, center_type, parent_id,
+    is_active, created_at, updated_at, deleted_at, deleted_by"#
+    };
+}
 
 #[async_trait]
 impl CostCenterRepository for PostgresCostCenterRepository {
@@ -134,13 +136,17 @@ impl CostCenterRepository for PostgresCostCenterRepository {
     ) -> Result<CostCenter, ApiError> {
         let center_type_str = create.center_type.to_string();
 
-        let row: CostCenterRow = sqlx::query_as(&format!(
-            r#"
-            INSERT INTO cost_centers (tenant_id, code, name, description, center_type, parent_id, is_active)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING {COST_CENTER_COLUMNS}, 0 as total_count
-            "#,
-        ))
+        let row: CostCenterRow = sqlx::query_as(
+            concat!(
+                r#"
+                INSERT INTO cost_centers (tenant_id, code, name, description, center_type, parent_id, is_active)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING "#,
+                COST_CENTER_COLUMNS!(),
+                r#", 0 as total_count
+                "#
+            ),
+        )
         .bind(tenant_id)
         .bind(&create.code)
         .bind(&create.name)
@@ -156,12 +162,14 @@ impl CostCenterRepository for PostgresCostCenterRepository {
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<CostCenter>, ApiError> {
-        let result: Option<CostCenterRow> = sqlx::query_as(&format!(
+        let result: Option<CostCenterRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {COST_CENTER_COLUMNS}, 0 as total_count
-            FROM cost_centers
-            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
-            "#,
+                SELECT "#,
+            COST_CENTER_COLUMNS!(),
+            r#", 0 as total_count
+                FROM cost_centers
+                WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+                "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -184,15 +192,17 @@ impl CostCenterRepository for PostgresCostCenterRepository {
         match center_type {
             Some(ct) => {
                 let type_str = ct.to_string();
-                let rows: Vec<CostCenterRow> = sqlx::query_as(&format!(
+                let rows: Vec<CostCenterRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {COST_CENTER_COLUMNS},
-                           COUNT(*) OVER() as total_count
-                    FROM cost_centers
-                    WHERE tenant_id = $1 AND center_type = $2 AND deleted_at IS NULL
-                    ORDER BY code ASC
-                    LIMIT $3 OFFSET $4
-                    "#,
+                        SELECT "#,
+                    COST_CENTER_COLUMNS!(),
+                    r#",
+                               COUNT(*) OVER() as total_count
+                        FROM cost_centers
+                        WHERE tenant_id = $1 AND center_type = $2 AND deleted_at IS NULL
+                        ORDER BY code ASC
+                        LIMIT $3 OFFSET $4
+                        "#
                 ))
                 .bind(tenant_id)
                 .bind(&type_str)
@@ -212,15 +222,17 @@ impl CostCenterRepository for PostgresCostCenterRepository {
                 ))
             }
             None => {
-                let rows: Vec<CostCenterRow> = sqlx::query_as(&format!(
+                let rows: Vec<CostCenterRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {COST_CENTER_COLUMNS},
-                           COUNT(*) OVER() as total_count
-                    FROM cost_centers
-                    WHERE tenant_id = $1 AND deleted_at IS NULL
-                    ORDER BY code ASC
-                    LIMIT $2 OFFSET $3
-                    "#,
+                        SELECT "#,
+                    COST_CENTER_COLUMNS!(),
+                    r#",
+                               COUNT(*) OVER() as total_count
+                        FROM cost_centers
+                        WHERE tenant_id = $1 AND deleted_at IS NULL
+                        ORDER BY code ASC
+                        LIMIT $2 OFFSET $3
+                        "#
                 ))
                 .bind(tenant_id)
                 .bind(per_page)
@@ -247,13 +259,15 @@ impl CostCenterRepository for PostgresCostCenterRepository {
         center_type: CostCenterType,
     ) -> Result<Vec<CostCenter>, ApiError> {
         let type_str = center_type.to_string();
-        let rows: Vec<CostCenterRow> = sqlx::query_as(&format!(
+        let rows: Vec<CostCenterRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {COST_CENTER_COLUMNS}, 0 as total_count
-            FROM cost_centers
-            WHERE tenant_id = $1 AND center_type = $2 AND deleted_at IS NULL
-            ORDER BY code ASC
-            "#,
+                SELECT "#,
+            COST_CENTER_COLUMNS!(),
+            r#", 0 as total_count
+                FROM cost_centers
+                WHERE tenant_id = $1 AND center_type = $2 AND deleted_at IS NULL
+                ORDER BY code ASC
+                "#
         ))
         .bind(tenant_id)
         .bind(&type_str)
@@ -270,20 +284,22 @@ impl CostCenterRepository for PostgresCostCenterRepository {
         tenant_id: i64,
         update: UpdateCostCenter,
     ) -> Result<CostCenter, ApiError> {
-        let row: CostCenterRow = sqlx::query_as(&format!(
+        let row: CostCenterRow = sqlx::query_as(concat!(
             r#"
-            UPDATE cost_centers
-            SET
-                code = COALESCE($1, code),
-                name = COALESCE($2, name),
-                description = COALESCE($3, description),
-                center_type = COALESCE($4, center_type),
-                parent_id = COALESCE($5, parent_id),
-                is_active = COALESCE($6, is_active),
-                updated_at = NOW()
-            WHERE id = $7 AND tenant_id = $8 AND deleted_at IS NULL
-            RETURNING {COST_CENTER_COLUMNS}, 0 as total_count
-            "#,
+                UPDATE cost_centers
+                SET
+                    code = COALESCE($1, code),
+                    name = COALESCE($2, name),
+                    description = COALESCE($3, description),
+                    center_type = COALESCE($4, center_type),
+                    parent_id = COALESCE($5, parent_id),
+                    is_active = COALESCE($6, is_active),
+                    updated_at = NOW()
+                WHERE id = $7 AND tenant_id = $8 AND deleted_at IS NULL
+                RETURNING "#,
+            COST_CENTER_COLUMNS!(),
+            r#", 0 as total_count
+                "#
         ))
         .bind(&update.code)
         .bind(&update.name)
@@ -323,13 +339,15 @@ impl CostCenterRepository for PostgresCostCenterRepository {
     }
 
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<CostCenter, ApiError> {
-        let row: CostCenterRow = sqlx::query_as(&format!(
+        let row: CostCenterRow = sqlx::query_as(concat!(
             r#"
-            UPDATE cost_centers
-            SET deleted_at = NULL, deleted_by = NULL
-            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
-            RETURNING {COST_CENTER_COLUMNS}, 0 as total_count
-            "#,
+                UPDATE cost_centers
+                SET deleted_at = NULL, deleted_by = NULL
+                WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
+                RETURNING "#,
+            COST_CENTER_COLUMNS!(),
+            r#", 0 as total_count
+                "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -341,13 +359,15 @@ impl CostCenterRepository for PostgresCostCenterRepository {
     }
 
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<CostCenter>, ApiError> {
-        let rows: Vec<CostCenterRow> = sqlx::query_as(&format!(
+        let rows: Vec<CostCenterRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {COST_CENTER_COLUMNS}, 0 as total_count
-            FROM cost_centers
-            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
-            ORDER BY deleted_at DESC
-            "#,
+                SELECT "#,
+            COST_CENTER_COLUMNS!(),
+            r#", 0 as total_count
+                FROM cost_centers
+                WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+                ORDER BY deleted_at DESC
+                "#
         ))
         .bind(tenant_id)
         .fetch_all(&*self.pool)
@@ -438,12 +458,14 @@ impl CostCenterRepository for PostgresCostCenterRepository {
         period_start: Option<DateTime<Utc>>,
         period_end: Option<DateTime<Utc>>,
     ) -> Result<ProfitabilityReport, ApiError> {
-        let center: Option<CostCenterRow> = sqlx::query_as(&format!(
+        let center: Option<CostCenterRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {COST_CENTER_COLUMNS}, 0 as total_count
-            FROM cost_centers
-            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
-            "#,
+                SELECT "#,
+            COST_CENTER_COLUMNS!(),
+            r#", 0 as total_count
+                FROM cost_centers
+                WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+                "#
         ))
         .bind(cost_center_id)
         .bind(tenant_id)

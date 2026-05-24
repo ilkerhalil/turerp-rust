@@ -104,11 +104,13 @@ impl PostgresChartAccountRepository {
 }
 
 /// Common column list for SELECT queries
-const CHART_ACCOUNT_COLUMNS: &str = r#"
-    id, tenant_id, code, name, group_name, parent_code, level,
+macro_rules! CHART_ACCOUNT_COLUMNS {
+    () => {
+        r#"id, tenant_id, code, name, group_name, parent_code, level,
     account_type, is_active, balance, allow_posting,
-    created_at, updated_at, deleted_at, deleted_by
-"#;
+    created_at, updated_at, deleted_at, deleted_by"#
+    };
+}
 
 #[async_trait]
 impl ChartAccountRepository for PostgresChartAccountRepository {
@@ -120,14 +122,16 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
         let group_name = create.group.to_string();
         let account_type = create.account_type.to_string();
 
-        let row: ChartAccountRow = sqlx::query_as(&format!(
+        let row: ChartAccountRow = sqlx::query_as(concat!(
             r#"
-            INSERT INTO chart_accounts (tenant_id, code, name, group_name, parent_code, level,
-                                         account_type, is_active, balance, allow_posting,
-                                         created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, 1, $6, true, 0, $7, NOW(), NOW())
-            RETURNING {CHART_ACCOUNT_COLUMNS}
-            "#,
+                INSERT INTO chart_accounts (tenant_id, code, name, group_name, parent_code, level,
+                                             account_type, is_active, balance, allow_posting,
+                                             created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, 1, $6, true, 0, $7, NOW(), NOW())
+                RETURNING "#,
+            CHART_ACCOUNT_COLUMNS!(),
+            r#"
+                "#
         ))
         .bind(tenant_id)
         .bind(&create.code)
@@ -148,12 +152,14 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
         code: &str,
         tenant_id: i64,
     ) -> Result<Option<ChartAccount>, ApiError> {
-        let result: Option<ChartAccountRow> = sqlx::query_as(&format!(
+        let result: Option<ChartAccountRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {CHART_ACCOUNT_COLUMNS}
-            FROM chart_accounts
-            WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
-            "#,
+                SELECT "#,
+            CHART_ACCOUNT_COLUMNS!(),
+            r#"
+                FROM chart_accounts
+                WHERE tenant_id = $1 AND code = $2 AND deleted_at IS NULL
+                "#
         ))
         .bind(tenant_id)
         .bind(code)
@@ -169,12 +175,14 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
         code: &str,
         tenant_id: i64,
     ) -> Result<Option<ChartAccount>, ApiError> {
-        let result: Option<ChartAccountRow> = sqlx::query_as(&format!(
+        let result: Option<ChartAccountRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {CHART_ACCOUNT_COLUMNS}
-            FROM chart_accounts
-            WHERE tenant_id = $1 AND code = $2
-            "#,
+                SELECT "#,
+            CHART_ACCOUNT_COLUMNS!(),
+            r#"
+                FROM chart_accounts
+                WHERE tenant_id = $1 AND code = $2
+                "#
         ))
         .bind(tenant_id)
         .bind(code)
@@ -186,12 +194,14 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<ChartAccount>, ApiError> {
-        let result: Option<ChartAccountRow> = sqlx::query_as(&format!(
+        let result: Option<ChartAccountRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {CHART_ACCOUNT_COLUMNS}
-            FROM chart_accounts
-            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
-            "#,
+                SELECT "#,
+            CHART_ACCOUNT_COLUMNS!(),
+            r#"
+                FROM chart_accounts
+                WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
+                "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -214,15 +224,17 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
         match group {
             Some(g) => {
                 let group_name = g.to_string();
-                let rows: Vec<ChartAccountRow> = sqlx::query_as(&format!(
+                let rows: Vec<ChartAccountRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {CHART_ACCOUNT_COLUMNS},
-                           COUNT(*) OVER() as total_count
-                    FROM chart_accounts
-                    WHERE tenant_id = $1 AND group_name = $2 AND deleted_at IS NULL
-                    ORDER BY code ASC
-                    LIMIT $3 OFFSET $4
-                    "#,
+                        SELECT "#,
+                    CHART_ACCOUNT_COLUMNS!(),
+                    r#",
+                               COUNT(*) OVER() as total_count
+                        FROM chart_accounts
+                        WHERE tenant_id = $1 AND group_name = $2 AND deleted_at IS NULL
+                        ORDER BY code ASC
+                        LIMIT $3 OFFSET $4
+                        "#
                 ))
                 .bind(tenant_id)
                 .bind(&group_name)
@@ -242,15 +254,17 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
                 ))
             }
             None => {
-                let rows: Vec<ChartAccountRow> = sqlx::query_as(&format!(
+                let rows: Vec<ChartAccountRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {CHART_ACCOUNT_COLUMNS},
-                           COUNT(*) OVER() as total_count
-                    FROM chart_accounts
-                    WHERE tenant_id = $1 AND deleted_at IS NULL
-                    ORDER BY code ASC
-                    LIMIT $2 OFFSET $3
-                    "#,
+                        SELECT "#,
+                    CHART_ACCOUNT_COLUMNS!(),
+                    r#",
+                               COUNT(*) OVER() as total_count
+                        FROM chart_accounts
+                        WHERE tenant_id = $1 AND deleted_at IS NULL
+                        ORDER BY code ASC
+                        LIMIT $2 OFFSET $3
+                        "#
                 ))
                 .bind(tenant_id)
                 .bind(per_page)
@@ -276,13 +290,15 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
         parent_code: &str,
         tenant_id: i64,
     ) -> Result<Vec<ChartAccount>, ApiError> {
-        let rows: Vec<ChartAccountRow> = sqlx::query_as(&format!(
+        let rows: Vec<ChartAccountRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {CHART_ACCOUNT_COLUMNS}
-            FROM chart_accounts
-            WHERE tenant_id = $1 AND parent_code = $2 AND deleted_at IS NULL
-            ORDER BY code ASC
-            "#,
+                SELECT "#,
+            CHART_ACCOUNT_COLUMNS!(),
+            r#"
+                FROM chart_accounts
+                WHERE tenant_id = $1 AND parent_code = $2 AND deleted_at IS NULL
+                ORDER BY code ASC
+                "#
         ))
         .bind(tenant_id)
         .bind(parent_code)
@@ -301,18 +317,20 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
     ) -> Result<ChartAccount, ApiError> {
         let group_name = update.group.map(|g| g.to_string());
 
-        let row: ChartAccountRow = sqlx::query_as(&format!(
+        let row: ChartAccountRow = sqlx::query_as(concat!(
             r#"
-            UPDATE chart_accounts
-            SET
-                name = COALESCE($1, name),
-                group_name = COALESCE($2, group_name),
-                is_active = COALESCE($3, is_active),
-                allow_posting = COALESCE($4, allow_posting),
-                updated_at = NOW()
-            WHERE id = $5 AND tenant_id = $6 AND deleted_at IS NULL
-            RETURNING {CHART_ACCOUNT_COLUMNS}
-            "#,
+                UPDATE chart_accounts
+                SET
+                    name = COALESCE($1, name),
+                    group_name = COALESCE($2, group_name),
+                    is_active = COALESCE($3, is_active),
+                    allow_posting = COALESCE($4, allow_posting),
+                    updated_at = NOW()
+                WHERE id = $5 AND tenant_id = $6 AND deleted_at IS NULL
+                RETURNING "#,
+            CHART_ACCOUNT_COLUMNS!(),
+            r#"
+                "#
         ))
         .bind(&update.name)
         .bind(&group_name)
@@ -373,13 +391,15 @@ impl ChartAccountRepository for PostgresChartAccountRepository {
     }
 
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<ChartAccount>, ApiError> {
-        let rows: Vec<ChartAccountRow> = sqlx::query_as(&format!(
+        let rows: Vec<ChartAccountRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {CHART_ACCOUNT_COLUMNS}
-            FROM chart_accounts
-            WHERE tenant_id = $1 AND deleted_at IS NOT NULL
-            ORDER BY deleted_at DESC
-            "#,
+                SELECT "#,
+            CHART_ACCOUNT_COLUMNS!(),
+            r#"
+                FROM chart_accounts
+                WHERE tenant_id = $1 AND deleted_at IS NOT NULL
+                ORDER BY deleted_at DESC
+                "#
         ))
         .bind(tenant_id)
         .fetch_all(&*self.pool)

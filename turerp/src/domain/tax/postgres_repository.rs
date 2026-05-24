@@ -185,23 +185,27 @@ impl PostgresTaxRateRepository {
 }
 
 /// Common column list for tax_rates SELECT queries
-const TAX_RATE_COLUMNS: &str = r#"
-    id, tenant_id, tax_type, rate, effective_from, effective_to,
-    category, description, is_default, created_at, deleted_at, deleted_by
-"#;
+macro_rules! TAX_RATE_COLUMNS {
+    () => {
+        r#"id, tenant_id, tax_type, rate, effective_from, effective_to,
+    category, description, is_default, created_at, deleted_at, deleted_by"#
+    };
+}
 
 #[async_trait]
 impl TaxRateRepository for PostgresTaxRateRepository {
     async fn create(&self, create: CreateTaxRate, tenant_id: i64) -> Result<TaxRate, ApiError> {
         let tax_type = create.tax_type.to_string();
 
-        let row: TaxRateRow = sqlx::query_as(&format!(
+        let row: TaxRateRow = sqlx::query_as(concat!(
             r#"
             INSERT INTO tax_rates (tenant_id, tax_type, rate, effective_from, effective_to,
                                    category, description, is_default)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING {TAX_RATE_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            TAX_RATE_COLUMNS!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(tenant_id)
         .bind(&tax_type)
@@ -219,12 +223,14 @@ impl TaxRateRepository for PostgresTaxRateRepository {
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<TaxRate>, ApiError> {
-        let result: Option<TaxRateRow> = sqlx::query_as(&format!(
+        let result: Option<TaxRateRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {TAX_RATE_COLUMNS}, 0 as total_count
+            SELECT "#,
+            TAX_RATE_COLUMNS!(),
+            r#", 0 as total_count
             FROM tax_rates
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
-            "#,
+            "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -247,15 +253,17 @@ impl TaxRateRepository for PostgresTaxRateRepository {
         match tax_type {
             Some(tt) => {
                 let tax_type_str = tt.to_string();
-                let rows: Vec<TaxRateRow> = sqlx::query_as(&format!(
+                let rows: Vec<TaxRateRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {TAX_RATE_COLUMNS},
+                    SELECT "#,
+                    TAX_RATE_COLUMNS!(),
+                    r#",
                            COUNT(*) OVER() as total_count
                     FROM tax_rates
                     WHERE tenant_id = $1 AND tax_type = $2 AND deleted_at IS NULL
                     ORDER BY effective_from DESC
                     LIMIT $3 OFFSET $4
-                    "#,
+                    "#
                 ))
                 .bind(tenant_id)
                 .bind(&tax_type_str)
@@ -275,15 +283,17 @@ impl TaxRateRepository for PostgresTaxRateRepository {
                 ))
             }
             None => {
-                let rows: Vec<TaxRateRow> = sqlx::query_as(&format!(
+                let rows: Vec<TaxRateRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {TAX_RATE_COLUMNS},
+                    SELECT "#,
+                    TAX_RATE_COLUMNS!(),
+                    r#",
                            COUNT(*) OVER() as total_count
                     FROM tax_rates
                     WHERE tenant_id = $1 AND deleted_at IS NULL
                     ORDER BY effective_from DESC
                     LIMIT $2 OFFSET $3
-                    "#,
+                    "#
                 ))
                 .bind(tenant_id)
                 .bind(per_page)
@@ -312,9 +322,11 @@ impl TaxRateRepository for PostgresTaxRateRepository {
     ) -> Result<Option<TaxRate>, ApiError> {
         let tax_type_str = tax_type.to_string();
 
-        let result: Option<TaxRateRow> = sqlx::query_as(&format!(
+        let result: Option<TaxRateRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {TAX_RATE_COLUMNS}, 0 as total_count
+            SELECT "#,
+            TAX_RATE_COLUMNS!(),
+            r#", 0 as total_count
             FROM tax_rates
             WHERE tenant_id = $1
               AND tax_type = $2
@@ -323,7 +335,7 @@ impl TaxRateRepository for PostgresTaxRateRepository {
               AND deleted_at IS NULL
             ORDER BY effective_from DESC
             LIMIT 1
-            "#,
+            "#
         ))
         .bind(tenant_id)
         .bind(&tax_type_str)
@@ -341,7 +353,7 @@ impl TaxRateRepository for PostgresTaxRateRepository {
         tenant_id: i64,
         update: UpdateTaxRate,
     ) -> Result<TaxRate, ApiError> {
-        let row: TaxRateRow = sqlx::query_as(&format!(
+        let row: TaxRateRow = sqlx::query_as(concat!(
             r#"
             UPDATE tax_rates
             SET
@@ -351,8 +363,10 @@ impl TaxRateRepository for PostgresTaxRateRepository {
                 description = COALESCE($4, description),
                 is_default = COALESCE($5, is_default)
             WHERE id = $6 AND tenant_id = $7 AND deleted_at IS NULL
-            RETURNING {TAX_RATE_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            TAX_RATE_COLUMNS!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(update.rate)
         .bind(update.effective_to)
@@ -412,13 +426,15 @@ impl TaxRateRepository for PostgresTaxRateRepository {
     }
 
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<TaxRate, ApiError> {
-        let row: TaxRateRow = sqlx::query_as(&format!(
+        let row: TaxRateRow = sqlx::query_as(concat!(
             r#"
             UPDATE tax_rates
             SET deleted_at = NULL, deleted_by = NULL
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
-            RETURNING {TAX_RATE_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            TAX_RATE_COLUMNS!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -430,13 +446,15 @@ impl TaxRateRepository for PostgresTaxRateRepository {
     }
 
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<TaxRate>, ApiError> {
-        let rows: Vec<TaxRateRow> = sqlx::query_as(&format!(
+        let rows: Vec<TaxRateRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {TAX_RATE_COLUMNS}, 0 as total_count
+            SELECT "#,
+            TAX_RATE_COLUMNS!(),
+            r#", 0 as total_count
             FROM tax_rates
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
-            "#,
+            "#
         ))
         .bind(tenant_id)
         .fetch_all(&*self.pool)
@@ -489,11 +507,13 @@ impl PostgresTaxPeriodRepository {
 }
 
 /// Common column list for tax_periods SELECT queries
-const TAX_PERIOD_COLUMNS: &str = r#"
-    id, tenant_id, tax_type, period_year, period_month,
+macro_rules! TAX_PERIOD_COLUMNS {
+    () => {
+        r#"id, tenant_id, tax_type, period_year, period_month,
     total_base, total_tax, total_deduction, net_tax,
-    status, filed_at, created_at, deleted_at, deleted_by
-"#;
+    status, filed_at, created_at, deleted_at, deleted_by"#
+    };
+}
 
 #[async_trait]
 impl TaxPeriodRepository for PostgresTaxPeriodRepository {
@@ -506,12 +526,14 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
     ) -> Result<TaxPeriod, ApiError> {
         let tax_type_str = tax_type.to_string();
 
-        let row: TaxPeriodRow = sqlx::query_as(&format!(
+        let row: TaxPeriodRow = sqlx::query_as(concat!(
             r#"
             INSERT INTO tax_periods (tenant_id, tax_type, period_year, period_month)
             VALUES ($1, $2, $3, $4)
-            RETURNING {TAX_PERIOD_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            TAX_PERIOD_COLUMNS!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(tenant_id)
         .bind(&tax_type_str)
@@ -525,12 +547,14 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
     }
 
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<TaxPeriod>, ApiError> {
-        let result: Option<TaxPeriodRow> = sqlx::query_as(&format!(
+        let result: Option<TaxPeriodRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {TAX_PERIOD_COLUMNS}, 0 as total_count
+            SELECT "#,
+            TAX_PERIOD_COLUMNS!(),
+            r#", 0 as total_count
             FROM tax_periods
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
-            "#,
+            "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -553,15 +577,17 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
         match tax_type {
             Some(tt) => {
                 let tax_type_str = tt.to_string();
-                let rows: Vec<TaxPeriodRow> = sqlx::query_as(&format!(
+                let rows: Vec<TaxPeriodRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {TAX_PERIOD_COLUMNS},
+                    SELECT "#,
+                    TAX_PERIOD_COLUMNS!(),
+                    r#",
                            COUNT(*) OVER() as total_count
                     FROM tax_periods
                     WHERE tenant_id = $1 AND tax_type = $2 AND deleted_at IS NULL
                     ORDER BY period_year DESC, period_month DESC
                     LIMIT $3 OFFSET $4
-                    "#,
+                    "#
                 ))
                 .bind(tenant_id)
                 .bind(&tax_type_str)
@@ -581,15 +607,17 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
                 ))
             }
             None => {
-                let rows: Vec<TaxPeriodRow> = sqlx::query_as(&format!(
+                let rows: Vec<TaxPeriodRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {TAX_PERIOD_COLUMNS},
+                    SELECT "#,
+                    TAX_PERIOD_COLUMNS!(),
+                    r#",
                            COUNT(*) OVER() as total_count
                     FROM tax_periods
                     WHERE tenant_id = $1 AND deleted_at IS NULL
                     ORDER BY period_year DESC, period_month DESC
                     LIMIT $2 OFFSET $3
-                    "#,
+                    "#
                 ))
                 .bind(tenant_id)
                 .bind(per_page)
@@ -619,7 +647,7 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
         let tax_type_str = period.tax_type.to_string();
         let status_str = period.status.to_string();
 
-        let row: TaxPeriodRow = sqlx::query_as(&format!(
+        let row: TaxPeriodRow = sqlx::query_as(concat!(
             r#"
             UPDATE tax_periods
             SET tax_type = $1,
@@ -632,8 +660,10 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
                 status = $8,
                 filed_at = $9
             WHERE id = $10 AND tenant_id = $11 AND deleted_at IS NULL
-            RETURNING {TAX_PERIOD_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            TAX_PERIOD_COLUMNS!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(&tax_type_str)
         .bind(period.period_year)
@@ -719,13 +749,15 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
     }
 
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<TaxPeriod, ApiError> {
-        let row: TaxPeriodRow = sqlx::query_as(&format!(
+        let row: TaxPeriodRow = sqlx::query_as(concat!(
             r#"
             UPDATE tax_periods
             SET deleted_at = NULL, deleted_by = NULL
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
-            RETURNING {TAX_PERIOD_COLUMNS}, 0 as total_count
-            "#,
+            RETURNING "#,
+            TAX_PERIOD_COLUMNS!(),
+            r#", 0 as total_count
+            "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -737,13 +769,15 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
     }
 
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<TaxPeriod>, ApiError> {
-        let rows: Vec<TaxPeriodRow> = sqlx::query_as(&format!(
+        let rows: Vec<TaxPeriodRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {TAX_PERIOD_COLUMNS}, 0 as total_count
+            SELECT "#,
+            TAX_PERIOD_COLUMNS!(),
+            r#", 0 as total_count
             FROM tax_periods
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
-            "#,
+            "#
         ))
         .bind(tenant_id)
         .fetch_all(&*self.pool)

@@ -151,16 +151,20 @@ impl PostgresEDefterRepository {
 }
 
 /// Common column list for ledger_periods SELECT queries
-const LEDGER_PERIOD_COLUMNS: &str = r#"
-    id, tenant_id, year, month, period_type, status,
-    berat_signed_at, sent_at, created_at
-"#;
+macro_rules! LEDGER_PERIOD_COLUMNS {
+    () => {
+        r#"id, tenant_id, year, month, period_type, status,
+    berat_signed_at, sent_at, created_at"#
+    };
+}
 
 /// Common column list for yevmiye_entries SELECT queries
-const YEVMIYE_ENTRY_COLUMNS: &str = r#"
-    id, period_id, entry_number, entry_date, explanation,
-    debit_total, credit_total, lines
-"#;
+macro_rules! YEVMIYE_ENTRY_COLUMNS {
+    () => {
+        r#"id, period_id, entry_number, entry_date, explanation,
+    debit_total, credit_total, lines"#
+    };
+}
 
 #[async_trait]
 impl EDefterRepository for PostgresEDefterRepository {
@@ -168,13 +172,15 @@ impl EDefterRepository for PostgresEDefterRepository {
         let period_type = period.period_type.to_string();
         let status = period.status.to_string();
 
-        let row: LedgerPeriodRow = sqlx::query_as(&format!(
+        let row: LedgerPeriodRow = sqlx::query_as(concat!(
             r#"
-            INSERT INTO ledger_periods (tenant_id, year, month, period_type, status,
-                                        berat_signed_at, sent_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING {LEDGER_PERIOD_COLUMNS}, 0 as total_count
-            "#,
+                INSERT INTO ledger_periods (tenant_id, year, month, period_type, status,
+                                            berat_signed_at, sent_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING "#,
+            LEDGER_PERIOD_COLUMNS!(),
+            r#", 0 as total_count
+                "#
         ))
         .bind(period.tenant_id)
         .bind(period.year)
@@ -195,12 +201,14 @@ impl EDefterRepository for PostgresEDefterRepository {
         id: i64,
         tenant_id: i64,
     ) -> Result<Option<LedgerPeriod>, ApiError> {
-        let result: Option<LedgerPeriodRow> = sqlx::query_as(&format!(
+        let result: Option<LedgerPeriodRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {LEDGER_PERIOD_COLUMNS}, 0 as total_count
-            FROM ledger_periods
-            WHERE id = $1 AND tenant_id = $2
-            "#,
+                SELECT "#,
+            LEDGER_PERIOD_COLUMNS!(),
+            r#", 0 as total_count
+                FROM ledger_periods
+                WHERE id = $1 AND tenant_id = $2
+                "#
         ))
         .bind(id)
         .bind(tenant_id)
@@ -224,15 +232,17 @@ impl EDefterRepository for PostgresEDefterRepository {
         match (year, period_type) {
             (Some(y), Some(pt)) => {
                 let period_type_str = pt.to_string();
-                let rows: Vec<LedgerPeriodRow> = sqlx::query_as(&format!(
+                let rows: Vec<LedgerPeriodRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {LEDGER_PERIOD_COLUMNS},
-                           COUNT(*) OVER() as total_count
-                    FROM ledger_periods
-                    WHERE tenant_id = $1 AND year = $2 AND period_type = $3
-                    ORDER BY year DESC, month DESC
-                    LIMIT $4 OFFSET $5
-                    "#,
+                        SELECT "#,
+                    LEDGER_PERIOD_COLUMNS!(),
+                    r#",
+                               COUNT(*) OVER() as total_count
+                        FROM ledger_periods
+                        WHERE tenant_id = $1 AND year = $2 AND period_type = $3
+                        ORDER BY year DESC, month DESC
+                        LIMIT $4 OFFSET $5
+                        "#
                 ))
                 .bind(tenant_id)
                 .bind(y)
@@ -253,15 +263,17 @@ impl EDefterRepository for PostgresEDefterRepository {
                 ))
             }
             (Some(y), None) => {
-                let rows: Vec<LedgerPeriodRow> = sqlx::query_as(&format!(
+                let rows: Vec<LedgerPeriodRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {LEDGER_PERIOD_COLUMNS},
-                           COUNT(*) OVER() as total_count
-                    FROM ledger_periods
-                    WHERE tenant_id = $1 AND year = $2
-                    ORDER BY year DESC, month DESC
-                    LIMIT $3 OFFSET $4
-                    "#,
+                        SELECT "#,
+                    LEDGER_PERIOD_COLUMNS!(),
+                    r#",
+                               COUNT(*) OVER() as total_count
+                        FROM ledger_periods
+                        WHERE tenant_id = $1 AND year = $2
+                        ORDER BY year DESC, month DESC
+                        LIMIT $3 OFFSET $4
+                        "#
                 ))
                 .bind(tenant_id)
                 .bind(y)
@@ -282,15 +294,17 @@ impl EDefterRepository for PostgresEDefterRepository {
             }
             (None, Some(pt)) => {
                 let period_type_str = pt.to_string();
-                let rows: Vec<LedgerPeriodRow> = sqlx::query_as(&format!(
+                let rows: Vec<LedgerPeriodRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {LEDGER_PERIOD_COLUMNS},
-                           COUNT(*) OVER() as total_count
-                    FROM ledger_periods
-                    WHERE tenant_id = $1 AND period_type = $2
-                    ORDER BY year DESC, month DESC
-                    LIMIT $3 OFFSET $4
-                    "#,
+                        SELECT "#,
+                    LEDGER_PERIOD_COLUMNS!(),
+                    r#",
+                               COUNT(*) OVER() as total_count
+                        FROM ledger_periods
+                        WHERE tenant_id = $1 AND period_type = $2
+                        ORDER BY year DESC, month DESC
+                        LIMIT $3 OFFSET $4
+                        "#
                 ))
                 .bind(tenant_id)
                 .bind(&period_type_str)
@@ -310,15 +324,17 @@ impl EDefterRepository for PostgresEDefterRepository {
                 ))
             }
             (None, None) => {
-                let rows: Vec<LedgerPeriodRow> = sqlx::query_as(&format!(
+                let rows: Vec<LedgerPeriodRow> = sqlx::query_as(concat!(
                     r#"
-                    SELECT {LEDGER_PERIOD_COLUMNS},
-                           COUNT(*) OVER() as total_count
-                    FROM ledger_periods
-                    WHERE tenant_id = $1
-                    ORDER BY year DESC, month DESC
-                    LIMIT $2 OFFSET $3
-                    "#,
+                        SELECT "#,
+                    LEDGER_PERIOD_COLUMNS!(),
+                    r#",
+                               COUNT(*) OVER() as total_count
+                        FROM ledger_periods
+                        WHERE tenant_id = $1
+                        ORDER BY year DESC, month DESC
+                        LIMIT $2 OFFSET $3
+                        "#
                 ))
                 .bind(tenant_id)
                 .bind(per_page)
@@ -348,15 +364,17 @@ impl EDefterRepository for PostgresEDefterRepository {
         let status_str = status.to_string();
 
         // Update berat_signed_at when status becomes Signed
-        let row: LedgerPeriodRow = sqlx::query_as(&format!(
+        let row: LedgerPeriodRow = sqlx::query_as(concat!(
             r#"
-            UPDATE ledger_periods
-            SET status = $1,
-                berat_signed_at = CASE WHEN $1 = 'Signed' THEN NOW() ELSE berat_signed_at END,
-                sent_at = CASE WHEN $1 = 'Sent' THEN NOW() ELSE sent_at END
-            WHERE id = $2 AND tenant_id = $3
-            RETURNING {LEDGER_PERIOD_COLUMNS}, 0 as total_count
-            "#,
+                UPDATE ledger_periods
+                SET status = $1,
+                    berat_signed_at = CASE WHEN $1 = 'Signed' THEN NOW() ELSE berat_signed_at END,
+                    sent_at = CASE WHEN $1 = 'Sent' THEN NOW() ELSE sent_at END
+                WHERE id = $2 AND tenant_id = $3
+                RETURNING "#,
+            LEDGER_PERIOD_COLUMNS!(),
+            r#", 0 as total_count
+                "#
         ))
         .bind(&status_str)
         .bind(id)
@@ -372,13 +390,15 @@ impl EDefterRepository for PostgresEDefterRepository {
         let lines_json =
             serde_json::to_value(&entry.lines).unwrap_or(serde_json::Value::Array(vec![]));
 
-        let row: YevmiyeEntryRow = sqlx::query_as(&format!(
+        let row: YevmiyeEntryRow = sqlx::query_as(concat!(
             r#"
-            INSERT INTO yevmiye_entries (period_id, entry_number, entry_date, explanation,
-                                         debit_total, credit_total, lines)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING {YEVMIYE_ENTRY_COLUMNS}
-            "#,
+                INSERT INTO yevmiye_entries (period_id, entry_number, entry_date, explanation,
+                                             debit_total, credit_total, lines)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING "#,
+            YEVMIYE_ENTRY_COLUMNS!(),
+            r#"
+                "#
         ))
         .bind(entry.period_id)
         .bind(entry.entry_number)
@@ -395,13 +415,15 @@ impl EDefterRepository for PostgresEDefterRepository {
     }
 
     async fn find_entries(&self, period_id: i64) -> Result<Vec<YevmiyeEntry>, ApiError> {
-        let rows: Vec<YevmiyeEntryRow> = sqlx::query_as(&format!(
+        let rows: Vec<YevmiyeEntryRow> = sqlx::query_as(concat!(
             r#"
-            SELECT {YEVMIYE_ENTRY_COLUMNS}
-            FROM yevmiye_entries
-            WHERE period_id = $1
-            ORDER BY entry_number ASC
-            "#,
+                SELECT "#,
+            YEVMIYE_ENTRY_COLUMNS!(),
+            r#"
+                FROM yevmiye_entries
+                WHERE period_id = $1
+                ORDER BY entry_number ASC
+                "#
         ))
         .bind(period_id)
         .fetch_all(&*self.pool)
