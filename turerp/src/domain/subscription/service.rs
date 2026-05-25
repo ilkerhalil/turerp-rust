@@ -187,8 +187,10 @@ impl SubscriptionService {
         let billing_period_start = sub
             .last_billed_at
             .map(|dt| dt.date_naive())
-            .unwrap_or_else(|| Utc::now().date_naive());
-        let billing_period_end = sub.next_billing_date.unwrap_or(billing_period_start);
+            .unwrap_or(sub.start_date);
+        let billing_period_end = sub.next_billing_date.ok_or_else(|| {
+            ApiError::BadRequest(format!("Subscription {} has no next billing date", id))
+        })?;
 
         self.repo
             .create_subscription_invoice(
@@ -263,7 +265,12 @@ impl SubscriptionService {
             .last_billed_at
             .map(|dt| dt.date_naive())
             .unwrap_or(sub.start_date);
-        let billing_period_end = sub.next_billing_date.unwrap_or(billing_period_start);
+        let billing_period_end = sub.next_billing_date.ok_or_else(|| {
+            ApiError::BadRequest(format!(
+                "Subscription {} has no next billing date",
+                subscription_id
+            ))
+        })?;
 
         if billing_period_end <= billing_period_start {
             return Err(ApiError::BadRequest(

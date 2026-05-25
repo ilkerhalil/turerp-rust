@@ -989,11 +989,16 @@ pub mod app {
             ));
 
         // Inter-Company Service
+        let inter_company_repo = Arc::new(
+            crate::domain::inter_company::repository::InMemoryInterCompanyRepository::new(),
+        )
+            as crate::domain::inter_company::repository::BoxInterCompanyRepository;
         let inter_company_service = crate::domain::inter_company::service::InterCompanyService::new(
             Arc::new(company_service.clone()),
             Arc::new(invoice_service.clone()),
             Arc::new(stock_service.clone()),
             Arc::new(product_service.clone()),
+            inter_company_repo,
         );
 
         // LDAP
@@ -1582,11 +1587,16 @@ pub mod app {
             ));
 
         // Inter-Company Service
+        let inter_company_repo = Arc::new(
+            crate::domain::inter_company::repository::InMemoryInterCompanyRepository::new(),
+        )
+            as crate::domain::inter_company::repository::BoxInterCompanyRepository;
         let inter_company_service = crate::domain::inter_company::service::InterCompanyService::new(
             Arc::new(company_service.clone()),
             Arc::new(invoice_service.clone()),
             Arc::new(stock_service.clone()),
             Arc::new(product_service.clone()),
+            inter_company_repo,
         );
 
         // LDAP - PostgreSQL

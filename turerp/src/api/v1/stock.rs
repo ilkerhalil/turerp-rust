@@ -264,6 +264,7 @@ pub async fn create_stock_movement(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.created_by = admin_user.0.user_id()?;
+    create.tenant_id = admin_user.0.tenant_id;
     json_resp!(
         stock_service.create_stock_movement(create, admin_user.0.tenant_id),
         HttpResponse::Created,
@@ -311,7 +312,7 @@ pub async fn list_stock_movements(
     security(("bearer_auth" = []))
 )]
 pub async fn get_stock_movements_by_product(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -319,7 +320,7 @@ pub async fn get_stock_movements_by_product(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        stock_service.get_stock_movements_by_product(*path),
+        stock_service.get_stock_movements_by_product(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -339,7 +340,7 @@ pub async fn get_stock_movements_by_product(
     security(("bearer_auth" = []))
 )]
 pub async fn get_stock_movements_by_warehouse(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -347,7 +348,7 @@ pub async fn get_stock_movements_by_warehouse(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        stock_service.get_stock_movements_by_warehouse(*path),
+        stock_service.get_stock_movements_by_warehouse(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -422,12 +423,12 @@ pub async fn restore_stock_movement(
     security(("bearer_auth" = []))
 )]
 pub async fn list_deleted_stock_movements(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
     let movements: Vec<_> = stock_service
-        .list_deleted_stock_movements(*path)
+        .list_deleted_stock_movements(*path, admin_user.0.tenant_id)
         .await?
         .into_iter()
         .map(StockMovementResponse::from)

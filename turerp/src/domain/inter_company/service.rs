@@ -6,8 +6,10 @@ use rust_decimal::Decimal;
 
 use crate::domain::company::service::CompanyService;
 use crate::domain::inter_company::model::{
-    InterCompanyInvoiceLine, InterCompanyInvoiceResult, InterCompanyStockTransferResult,
+    CreateInterCompanyInvoice, CreateInterCompanyStockTransfer, InterCompanyInvoiceLine,
+    InterCompanyInvoiceResult, InterCompanyStockTransferResult,
 };
+use crate::domain::inter_company::repository::BoxInterCompanyRepository;
 use crate::domain::invoice::model::{CreateInvoice, CreateInvoiceLine, InvoiceType};
 use crate::domain::invoice::service::InvoiceService;
 use crate::domain::product::service::ProductService;
@@ -22,6 +24,7 @@ pub struct InterCompanyService {
     invoice_service: Arc<InvoiceService>,
     stock_service: Arc<StockService>,
     product_service: Arc<ProductService>,
+    repository: BoxInterCompanyRepository,
 }
 
 impl InterCompanyService {
@@ -30,12 +33,14 @@ impl InterCompanyService {
         invoice_service: Arc<InvoiceService>,
         stock_service: Arc<StockService>,
         product_service: Arc<ProductService>,
+        repository: BoxInterCompanyRepository,
     ) -> Self {
         Self {
             company_service,
             invoice_service,
             stock_service,
             product_service,
+            repository,
         }
     }
 
@@ -141,10 +146,23 @@ impl InterCompanyService {
             })
             .await?;
 
-        Ok(InterCompanyInvoiceResult {
+        let result = InterCompanyInvoiceResult {
             sales_invoice_id: sales_invoice.id,
             purchase_invoice_id: purchase_invoice.id,
-        })
+        };
+
+        self.repository
+            .create_invoice(CreateInterCompanyInvoice {
+                tenant_id,
+                seller_company_id,
+                buyer_company_id,
+                lines,
+                sales_invoice_id: result.sales_invoice_id,
+                purchase_invoice_id: result.purchase_invoice_id,
+            })
+            .await?;
+
+        Ok(result)
     }
 
     /// Transfer stock between companies within the same tenant.
@@ -174,6 +192,7 @@ impl InterCompanyService {
             .stock_service
             .create_stock_movement(
                 CreateStockMovement {
+                    tenant_id,
                     warehouse_id,
                     company_id: from_company_id,
                     product_id,
@@ -193,6 +212,7 @@ impl InterCompanyService {
             .stock_service
             .create_stock_movement(
                 CreateStockMovement {
+                    tenant_id,
                     warehouse_id,
                     company_id: to_company_id,
                     product_id,
@@ -207,9 +227,25 @@ impl InterCompanyService {
             )
             .await?;
 
-        Ok(InterCompanyStockTransferResult {
+        let result = InterCompanyStockTransferResult {
             out_movement_id: out_movement.id,
             in_movement_id: in_movement.id,
-        })
+        };
+
+        self.repository
+            .create_stock_transfer(CreateInterCompanyStockTransfer {
+                tenant_id,
+                from_company_id,
+                to_company_id,
+                product_id,
+                warehouse_id,
+                quantity,
+                out_movement_id: result.out_movement_id,
+                in_movement_id: result.in_movement_id,
+                created_by,
+            })
+            .await?;
+
+        Ok(result)
     }
 }

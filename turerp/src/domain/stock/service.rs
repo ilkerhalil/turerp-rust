@@ -294,7 +294,9 @@ impl StockService {
             .update_quantity(create.warehouse_id, create.product_id, new_quantity)
             .await?;
 
-        // Create movement record
+        // Set tenant_id and create movement record
+        let mut create = create;
+        create.tenant_id = tenant_id;
         let movement = self.stock_movement_repo.create(create).await?;
         Ok(movement.into())
     }
@@ -302,18 +304,23 @@ impl StockService {
     pub async fn get_stock_movements_by_product(
         &self,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<StockMovementResponse>, ApiError> {
-        let movements = self.stock_movement_repo.find_by_product(product_id).await?;
+        let movements = self
+            .stock_movement_repo
+            .find_by_product(product_id, tenant_id)
+            .await?;
         Ok(movements.into_iter().map(|m| m.into()).collect())
     }
 
     pub async fn get_stock_movements_by_warehouse(
         &self,
         warehouse_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<StockMovementResponse>, ApiError> {
         let movements = self
             .stock_movement_repo
-            .find_by_warehouse(warehouse_id)
+            .find_by_warehouse(warehouse_id, tenant_id)
             .await?;
         Ok(movements.into_iter().map(|m| m.into()).collect())
     }
@@ -351,8 +358,11 @@ impl StockService {
     pub async fn list_deleted_stock_movements(
         &self,
         warehouse_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<StockMovement>, ApiError> {
-        self.stock_movement_repo.find_deleted(warehouse_id).await
+        self.stock_movement_repo
+            .find_deleted(warehouse_id, tenant_id)
+            .await
     }
 
     /// Permanently delete a stock movement with tenant isolation
@@ -444,6 +454,7 @@ mod tests {
         let movement = service
             .create_stock_movement(
                 CreateStockMovement {
+                    tenant_id: 1,
                     company_id: 1,
                     warehouse_id: warehouse.id,
                     product_id: 1,
@@ -485,6 +496,7 @@ mod tests {
         service
             .create_stock_movement(
                 CreateStockMovement {
+                    tenant_id: 1,
                     company_id: 1,
                     warehouse_id: warehouse.id,
                     product_id: 1,
@@ -504,6 +516,7 @@ mod tests {
         let result = service
             .create_stock_movement(
                 CreateStockMovement {
+                    tenant_id: 1,
                     company_id: 1,
                     warehouse_id: warehouse.id,
                     product_id: 1,
@@ -542,6 +555,7 @@ mod tests {
         let result = service
             .create_stock_movement(
                 CreateStockMovement {
+                    tenant_id: 1,
                     company_id: 1,
                     warehouse_id: warehouse.id,
                     product_id: 1,

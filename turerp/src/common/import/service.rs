@@ -364,6 +364,7 @@ impl ImportService for CsvImportService {
                         }
                     };
                     let create = CreateStockMovement {
+                        tenant_id,
                         warehouse_id,
                         company_id,
                         product_id: product.id,

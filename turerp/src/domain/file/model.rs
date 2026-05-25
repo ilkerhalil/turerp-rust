@@ -74,6 +74,16 @@ pub struct CreateFileRecord {
     pub entity_id: Option<i64>,
 }
 
+/// Update file metadata request
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
+pub struct UpdateFileRecord {
+    pub filename: Option<String>,
+    pub original_filename: Option<String>,
+    pub content_type: Option<String>,
+    pub entity_type: Option<String>,
+    pub entity_id: Option<i64>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

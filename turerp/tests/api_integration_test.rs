@@ -949,6 +949,7 @@ async fn test_stock_movement_create() {
         .uri("/api/v1/stock/movements")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
+            "tenant_id": 1,
             "warehouse_id": wh_id,
             "product_id": 1,
             "movement_type": "Purchase",

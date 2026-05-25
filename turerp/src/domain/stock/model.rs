@@ -141,6 +141,7 @@ impl std::str::FromStr for MovementType {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StockMovement {
     pub id: i64,
+    pub tenant_id: i64,
     pub company_id: i64,
     pub warehouse_id: i64,
     pub product_id: i64,
@@ -161,6 +162,7 @@ impl_soft_deletable!(StockMovement);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StockMovementResponse {
     pub id: i64,
+    pub tenant_id: i64,
     pub warehouse_id: i64,
     pub product_id: i64,
     pub movement_type: MovementType,
@@ -177,6 +179,7 @@ impl From<StockMovement> for StockMovementResponse {
     fn from(m: StockMovement) -> Self {
         Self {
             id: m.id,
+            tenant_id: m.tenant_id,
             company_id: m.company_id,
             warehouse_id: m.warehouse_id,
             product_id: m.product_id,
@@ -231,6 +234,7 @@ impl CreateWarehouse {
 /// Create stock movement request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateStockMovement {
+    pub tenant_id: i64,
     pub warehouse_id: i64,
     pub company_id: i64,
     pub product_id: i64,
@@ -305,6 +309,7 @@ mod tests {
     #[test]
     fn test_create_stock_movement_validation() {
         let valid = CreateStockMovement {
+            tenant_id: 1,
             warehouse_id: 1,
             company_id: 1,
             product_id: 1,
@@ -318,6 +323,7 @@ mod tests {
         assert!(valid.validate().is_ok());
 
         let invalid = CreateStockMovement {
+            tenant_id: 1,
             warehouse_id: 1,
             company_id: 1,
             product_id: 1,
