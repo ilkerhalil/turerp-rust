@@ -132,7 +132,7 @@ impl IdempotencyStore for InMemoryIdempotencyStore {
 
 /// Redis-backed idempotency store for production deployments
 pub struct RedisIdempotencyStore {
-    conn: redis::aio::MultiplexedConnection,
+    conn: Arc<redis::aio::MultiplexedConnection>,
     key_prefix: String,
 }
 
@@ -146,7 +146,7 @@ impl RedisIdempotencyStore {
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to connect to Redis: {}", e)))?;
         Ok(Self {
-            conn,
+            conn: Arc::new(conn),
             key_prefix: "idempotency:".to_string(),
         })
     }
@@ -162,7 +162,7 @@ impl RedisIdempotencyStore {
 impl IdempotencyStore for RedisIdempotencyStore {
     async fn get(&self, key: &str) -> Option<CachedResponse> {
         let full_key = format!("{}{}", self.key_prefix, key);
-        let mut conn = self.conn.clone();
+        let mut conn = (*self.conn).clone();
         let result: Result<Option<String>, _> = redis::cmd("GET")
             .arg(&full_key)
             .query_async(&mut conn)
@@ -193,7 +193,7 @@ impl IdempotencyStore for RedisIdempotencyStore {
             }
         };
         let full_key = format!("{}{}", self.key_prefix, key);
-        let mut conn = self.conn.clone();
+        let mut conn = (*self.conn).clone();
         if let Err(e) = redis::cmd("SETEX")
             .arg(&full_key)
             .arg(ttl)
@@ -207,7 +207,7 @@ impl IdempotencyStore for RedisIdempotencyStore {
 
     async fn remove(&self, key: &str) {
         let full_key = format!("{}{}", self.key_prefix, key);
-        let mut conn = self.conn.clone();
+        let mut conn = (*self.conn).clone();
         if let Err(e) = redis::cmd("DEL")
             .arg(&full_key)
             .query_async::<()>(&mut conn)

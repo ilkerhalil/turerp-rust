@@ -17,6 +17,7 @@ use crate::error::ApiError;
 pub trait ProductRepository: Send + Sync {
     async fn create(&self, product: CreateProduct) -> Result<Product, ApiError>;
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Product>, ApiError>;
+    async fn find_by_ids(&self, ids: &[i64], tenant_id: i64) -> Result<Vec<Product>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError>;
     async fn find_by_tenant_paginated(
         &self,
@@ -201,6 +202,16 @@ impl ProductRepository for InMemoryProductRepository {
             .get(&id)
             .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
             .cloned())
+    }
+
+    async fn find_by_ids(&self, ids: &[i64], tenant_id: i64) -> Result<Vec<Product>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(ids
+            .iter()
+            .filter_map(|id| inner.products.get(id))
+            .filter(|p| p.tenant_id == tenant_id && !p.is_deleted())
+            .cloned()
+            .collect())
     }
 
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {

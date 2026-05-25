@@ -27,7 +27,9 @@ async fn test_sequential_health_latency() {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
+    let app_state = create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed");
 
     let app = test::init_service(
         App::new()
@@ -77,7 +79,9 @@ async fn test_concurrent_health_burst() {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
+    let app_state = create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed");
 
     let app = test::init_service(
         App::new()
@@ -137,7 +141,9 @@ async fn test_post_load_json_parsing() {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
+    let app_state = create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed");
 
     let app = test::init_service(
         App::new()
@@ -193,7 +199,9 @@ async fn test_rate_limit_stats_accumulation() {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
+    let app_state = create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed");
 
     let app = test::init_service(
         App::new()
@@ -253,7 +261,9 @@ async fn test_job_scheduling_throughput() {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
+    let app_state = create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed");
 
     let jwt = JwtService::new(
         config.jwt.secret.clone(),
@@ -309,7 +319,9 @@ async fn test_concurrent_job_scheduling_burst() {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    let app_state = create_app_state_in_memory(&config).expect("app state creation failed");
+    let app_state = create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed");
 
     let jwt = JwtService::new(
         config.jwt.secret.clone(),
@@ -459,7 +471,7 @@ async fn test_concurrent_next_pending_contention() {
 /// Benchmark: concurrent dashboard KPI requests under load
 #[actix_web::test]
 async fn test_dashboard_load_under_concurrent_requests() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 

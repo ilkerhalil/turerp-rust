@@ -432,6 +432,68 @@ impl WebhookDeliveryRepository for PostgresWebhookDeliveryRepository {
         Ok(row.into())
     }
 
+    async fn create_many(
+        &self,
+        deliveries: &[WebhookDelivery],
+    ) -> Result<Vec<WebhookDelivery>, ApiError> {
+        if deliveries.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut query = String::from(
+            r#"
+            INSERT INTO webhook_deliveries
+                (webhook_id, tenant_id, event_type, payload, status, attempt_count, scheduled_at, created_at)
+            VALUES
+            "#,
+        );
+
+        for (i, _) in deliveries.iter().enumerate() {
+            let offset = i * 8;
+            if i > 0 {
+                query.push_str(", ");
+            }
+            query.push_str(&format!(
+                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
+                offset + 1,
+                offset + 2,
+                offset + 3,
+                offset + 4,
+                offset + 5,
+                offset + 6,
+                offset + 7,
+                offset + 8,
+            ));
+        }
+
+        query.push_str(
+            r#"
+            RETURNING id, webhook_id, tenant_id, event_type, payload, status, http_status,
+                response_body, error_message, attempt_count, scheduled_at, created_at, delivered_at
+            "#,
+        );
+
+        let mut q = sqlx::query_as::<_, WebhookDeliveryRow>(&query);
+        for d in deliveries {
+            q = q
+                .bind(d.webhook_id)
+                .bind(d.tenant_id)
+                .bind(&d.event_type)
+                .bind(&d.payload)
+                .bind(d.status.to_string())
+                .bind(d.attempt_count)
+                .bind(d.scheduled_at)
+                .bind(d.created_at);
+        }
+
+        let rows = q
+            .fetch_all(&*self.pool)
+            .await
+            .map_err(|e| map_sqlx_error(e, "WebhookDelivery"))?;
+
+        Ok(rows.into_iter().map(Into::into).collect())
+    }
+
     async fn find_by_id(
         &self,
         id: i64,

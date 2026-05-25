@@ -63,11 +63,18 @@ impl InterCompanyService {
             .await?;
 
         // Transfer pricing validation: unit price must be within 20% of standard sale price
+        let product_ids: Vec<i64> = lines.iter().map(|l| l.product_id).collect();
+        let products = self
+            .product_service
+            .get_products_batch(&product_ids, tenant_id)
+            .await?;
+        let product_map: std::collections::HashMap<i64, _> =
+            products.into_iter().map(|p| (p.id, p)).collect();
+
         for line in &lines {
-            let product = self
-                .product_service
-                .get_product(line.product_id, tenant_id)
-                .await?;
+            let product = product_map.get(&line.product_id).ok_or_else(|| {
+                ApiError::NotFound(format!("Product {} not found", line.product_id))
+            })?;
             if product.sale_price > Decimal::ZERO {
                 let lower = product.sale_price * Decimal::from(8) / Decimal::from(10);
                 let upper = product.sale_price * Decimal::from(12) / Decimal::from(10);

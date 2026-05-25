@@ -49,6 +49,11 @@ pub trait WebhookRepository: Send + Sync {
 pub trait WebhookDeliveryRepository: Send + Sync {
     async fn create(&self, delivery: WebhookDelivery) -> Result<WebhookDelivery, ApiError>;
 
+    async fn create_many(
+        &self,
+        deliveries: &[WebhookDelivery],
+    ) -> Result<Vec<WebhookDelivery>, ApiError>;
+
     async fn find_by_id(
         &self,
         id: i64,
@@ -369,6 +374,21 @@ impl WebhookDeliveryRepository for InMemoryWebhookDeliveryRepository {
         inner.next_id += 1;
         inner.deliveries.push(d.clone());
         Ok(d)
+    }
+
+    async fn create_many(
+        &self,
+        deliveries: &[WebhookDelivery],
+    ) -> Result<Vec<WebhookDelivery>, ApiError> {
+        let mut inner = self.inner.write();
+        let mut created = Vec::with_capacity(deliveries.len());
+        for mut d in deliveries.iter().cloned() {
+            d.id = inner.next_id;
+            inner.next_id += 1;
+            inner.deliveries.push(d.clone());
+            created.push(d);
+        }
+        Ok(created)
     }
 
     async fn find_by_id(

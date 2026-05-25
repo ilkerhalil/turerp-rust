@@ -37,19 +37,21 @@ mod tests {
         create_schema(true)
     }
 
-    fn test_context(tenant_id: i64) -> GraphQlContext {
+    async fn test_context(tenant_id: i64) -> GraphQlContext {
         let config = Config {
             encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
             ..Config::default()
         };
-        let state = create_app_state_in_memory(&config).expect("app state creation failed");
+        let state = create_app_state_in_memory(&config)
+            .await
+            .expect("app state creation failed");
         GraphQlContext::new(Arc::new(state), tenant_id)
     }
 
     #[tokio::test]
     async fn test_users_query_empty() {
         let schema = test_schema();
-        let gctx = test_context(1);
+        let gctx = test_context(1).await;
         let res = schema
             .execute(
                 async_graphql::Request::new("{ users(page: 1, perPage: 10) { items { id username email } pageInfo { total } } }")
@@ -65,7 +67,7 @@ mod tests {
     #[tokio::test]
     async fn test_employees_query_empty() {
         let schema = test_schema();
-        let gctx = test_context(1);
+        let gctx = test_context(1).await;
         let res = schema
             .execute(
                 async_graphql::Request::new("{ employees(page: 1, perPage: 10) { items { id employeeNumber firstName lastName } pageInfo { total } } }")
@@ -81,7 +83,7 @@ mod tests {
     #[tokio::test]
     async fn test_invoices_query_empty() {
         let schema = test_schema();
-        let gctx = test_context(1);
+        let gctx = test_context(1).await;
         let res = schema
             .execute(
                 async_graphql::Request::new("{ invoices(page: 1, perPage: 10) { items { id invoiceNumber status totalAmount } pageInfo { total } } }")
@@ -97,7 +99,7 @@ mod tests {
     #[tokio::test]
     async fn test_products_query_empty() {
         let schema = test_schema();
-        let gctx = test_context(1);
+        let gctx = test_context(1).await;
         let res = schema
             .execute(
                 async_graphql::Request::new("{ products(page: 1, perPage: 10) { items { id code name salePrice } pageInfo { total } } }")
@@ -113,7 +115,7 @@ mod tests {
     #[tokio::test]
     async fn test_caris_query_empty() {
         let schema = test_schema();
-        let gctx = test_context(1);
+        let gctx = test_context(1).await;
         let res = schema
             .execute(
                 async_graphql::Request::new("{ caris(page: 1, perPage: 10) { items { id code name cariType status } pageInfo { total } } }")

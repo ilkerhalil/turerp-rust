@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 /// Redis-backed cache service
 pub struct RedisCacheService {
-    client: redis::aio::MultiplexedConnection,
+    client: Arc<redis::aio::MultiplexedConnection>,
     default_ttl: u64,
 }
 
@@ -21,7 +21,7 @@ impl RedisCacheService {
             .await
             .map_err(|e| ApiError::Internal(format!("Failed to connect to Redis: {}", e)))?;
         Ok(Self {
-            client: conn,
+            client: Arc::new(conn),
             default_ttl,
         })
     }
@@ -35,7 +35,7 @@ impl RedisCacheService {
 #[async_trait]
 impl CacheService for RedisCacheService {
     async fn get_raw(&self, key: &str) -> Result<Option<String>, ApiError> {
-        let mut conn = self.client.clone();
+        let mut conn = (*self.client).clone();
         redis::cmd("GET")
             .arg(key)
             .query_async(&mut conn)
@@ -50,7 +50,7 @@ impl CacheService for RedisCacheService {
         ttl_seconds: Option<u64>,
     ) -> Result<(), ApiError> {
         let ttl = ttl_seconds.unwrap_or(self.default_ttl);
-        let mut conn = self.client.clone();
+        let mut conn = (*self.client).clone();
 
         redis::cmd("SETEX")
             .arg(key)
@@ -64,7 +64,7 @@ impl CacheService for RedisCacheService {
     }
 
     async fn delete(&self, key: &str) -> Result<(), ApiError> {
-        let mut conn = self.client.clone();
+        let mut conn = (*self.client).clone();
         redis::cmd("DEL")
             .arg(key)
             .query_async::<()>(&mut conn)
@@ -74,7 +74,7 @@ impl CacheService for RedisCacheService {
     }
 
     async fn delete_pattern(&self, pattern: &str) -> Result<u64, ApiError> {
-        let mut conn = self.client.clone();
+        let mut conn = (*self.client).clone();
         let keys: Vec<String> = redis::cmd("KEYS")
             .arg(pattern)
             .query_async(&mut conn)
@@ -99,7 +99,7 @@ impl CacheService for RedisCacheService {
     }
 
     async fn health_check(&self) -> Result<(), ApiError> {
-        let mut conn = self.client.clone();
+        let mut conn = (*self.client).clone();
         redis::cmd("PING")
             .query_async::<()>(&mut conn)
             .await
