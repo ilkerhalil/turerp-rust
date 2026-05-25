@@ -470,6 +470,7 @@ pub mod app {
         pub observability_service: web::Data<ObservabilityService>,
         pub ldap_service: web::Data<LdapSyncService>,
         pub i18n: web::Data<I18n>,
+        pub schema: crate::graphql::AppSchema,
     }
 
     impl AppState {
@@ -1145,6 +1146,7 @@ pub mod app {
             observability_service: web::Data::new(observability_service),
             ldap_service: web::Data::new(ldap_service),
             i18n: web::Data::new(i18n),
+            schema: crate::graphql::create_schema(config.graphql_introspection),
         })
     }
 
@@ -1694,6 +1696,7 @@ pub mod app {
             observability_service: web::Data::new(observability_service),
             ldap_service: web::Data::new(ldap_service),
             i18n: web::Data::new(i18n),
+            schema: crate::graphql::create_schema(config.graphql_introspection),
         })
     }
     /// Create application state based on runtime configuration

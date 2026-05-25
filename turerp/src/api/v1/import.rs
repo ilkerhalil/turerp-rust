@@ -15,6 +15,9 @@ use crate::common::import::ImportService;
 use crate::error::{ApiError, ApiResult};
 use crate::middleware::AdminUser;
 
+/// Maximum allowed import file size (100 MB)
+const MAX_IMPORT_FILE_SIZE: usize = 100 * 1024 * 1024;
+
 /// Upload and import a file
 #[utoipa::path(
     post,
@@ -25,7 +28,8 @@ use crate::middleware::AdminUser;
         (status = 201, description = "Import completed", body = ImportResult),
         (status = 400, description = "Invalid file or entity type"),
         (status = 401, description = "Not authenticated"),
-        (status = 403, description = "Admin role required")
+        (status = 403, description = "Admin role required"),
+        (status = 413, description = "File exceeds maximum size of 100MB")
     ),
     security(("bearer_auth" = []))
 )]
@@ -52,6 +56,12 @@ pub async fn import_file(
         if name == "file" {
             while let Some(chunk) = field.next().await {
                 let data = chunk.map_err(|e| ApiError::BadRequest(format!("Read error: {}", e)))?;
+                if file_data.len() + data.len() > MAX_IMPORT_FILE_SIZE {
+                    return Err(ApiError::PayloadTooLarge(format!(
+                        "File exceeds maximum size of {}MB",
+                        MAX_IMPORT_FILE_SIZE / 1024 / 1024
+                    )));
+                }
                 file_data.extend_from_slice(&data);
             }
         } else if name == "format" {
@@ -107,7 +117,8 @@ pub async fn import_file(
         (status = 202, description = "Import job scheduled", body = serde_json::Value),
         (status = 400, description = "Invalid file or entity type"),
         (status = 401, description = "Not authenticated"),
-        (status = 403, description = "Admin role required")
+        (status = 403, description = "Admin role required"),
+        (status = 413, description = "File exceeds maximum size of 100MB")
     ),
     security(("bearer_auth" = []))
 )]
@@ -139,6 +150,12 @@ pub async fn import_file_async(
             }
             while let Some(chunk) = field.next().await {
                 let data = chunk.map_err(|e| ApiError::BadRequest(format!("Read error: {}", e)))?;
+                if file_data.len() + data.len() > MAX_IMPORT_FILE_SIZE {
+                    return Err(ApiError::PayloadTooLarge(format!(
+                        "File exceeds maximum size of {}MB",
+                        MAX_IMPORT_FILE_SIZE / 1024 / 1024
+                    )));
+                }
                 file_data.extend_from_slice(&data);
             }
         } else if name == "format" {

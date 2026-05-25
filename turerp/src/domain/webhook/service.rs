@@ -214,9 +214,9 @@ impl WebhookService {
     fn validate_create(&self, dto: &CreateWebhook) -> Result<(), ApiError> {
         self.validate_url(&dto.url)?;
         if let Some(ref secret) = dto.secret {
-            if secret.len() < 8 {
+            if secret.len() < 32 {
                 return Err(ApiError::Validation(
-                    "Webhook secret must be at least 8 characters".to_string(),
+                    "Webhook secret must be at least 32 characters".to_string(),
                 ));
             }
         }
@@ -224,11 +224,61 @@ impl WebhookService {
     }
 
     fn validate_url(&self, url: &str) -> Result<(), ApiError> {
-        if !url.starts_with("https://") {
+        let parsed = url
+            .parse::<reqwest::Url>()
+            .map_err(|_| ApiError::Validation("Invalid URL format".to_string()))?;
+
+        if parsed.scheme() != "https" {
+            return Err(ApiError::Validation("HTTPS required".to_string()));
+        }
+
+        let host = parsed
+            .host_str()
+            .ok_or_else(|| ApiError::Validation("Missing host".to_string()))?;
+
+        if host.is_empty() {
+            return Err(ApiError::Validation("Missing host".to_string()));
+        }
+
+        // Block localhost variants
+        if host.eq_ignore_ascii_case("localhost")
+            || host.ends_with(".local")
+            || host == "127.0.0.1"
+            || host == "::1"
+            || host == "[::1]"
+        {
             return Err(ApiError::Validation(
-                "Webhook URL must use HTTPS".to_string(),
+                "Internal addresses not allowed".to_string(),
             ));
         }
+
+        // Block cloud metadata endpoint
+        if host == "169.254.169.254" {
+            return Err(ApiError::Validation(
+                "Metadata endpoints not allowed".to_string(),
+            ));
+        }
+
+        // Block private IP ranges
+        if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+            match ip {
+                std::net::IpAddr::V4(v4) => {
+                    if v4.is_private() || v4.is_loopback() || v4.is_link_local() {
+                        return Err(ApiError::Validation(
+                            "Private IP addresses not allowed".to_string(),
+                        ));
+                    }
+                }
+                std::net::IpAddr::V6(v6) => {
+                    if v6.is_loopback() || v6.is_unicast_link_local() {
+                        return Err(ApiError::Validation(
+                            "Private IP addresses not allowed".to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 }
@@ -432,5 +482,120 @@ mod tests {
     fn test_compute_signature() {
         let sig = compute_signature("secret", r#"{"test":true}"#);
         assert_eq!(sig.len(), 64); // hex-encoded SHA256 = 64 chars
+    }
+
+    // --- SSRF protection tests ---
+
+    #[test]
+    fn test_validate_url_valid_https() {
+        let svc = make_service();
+        assert!(svc.validate_url("https://example.com/webhook").is_ok());
+        assert!(svc
+            .validate_url("https://hooks.slack.com/services/xxx")
+            .is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_http_rejected() {
+        let svc = make_service();
+        let err = svc.validate_url("http://example.com").unwrap_err();
+        assert!(matches!(err, ApiError::Validation(ref msg) if msg == "HTTPS required"));
+    }
+
+    #[test]
+    fn test_validate_url_localhost_rejected() {
+        let svc = make_service();
+        for host in ["localhost", "LOCALHOST", "LocalHost"] {
+            let url = format!("https://{}/webhook", host);
+            let err = svc.validate_url(&url).unwrap_err();
+            assert!(
+                matches!(err, ApiError::Validation(ref msg) if msg == "Internal addresses not allowed"),
+                "expected localhost rejection for {}",
+                url
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_url_local_suffix_rejected() {
+        let svc = make_service();
+        let err = svc
+            .validate_url("https://my-service.local/webhook")
+            .unwrap_err();
+        assert!(
+            matches!(err, ApiError::Validation(ref msg) if msg == "Internal addresses not allowed")
+        );
+    }
+
+    #[test]
+    fn test_validate_url_loopback_ipv4_rejected() {
+        let svc = make_service();
+        let err = svc.validate_url("https://127.0.0.1/webhook").unwrap_err();
+        assert!(
+            matches!(err, ApiError::Validation(ref msg) if msg == "Internal addresses not allowed")
+        );
+    }
+
+    #[test]
+    fn test_validate_url_loopback_ipv6_rejected() {
+        let svc = make_service();
+        let err = svc.validate_url("https://[::1]/webhook").unwrap_err();
+        assert!(
+            matches!(err, ApiError::Validation(ref msg) if msg == "Internal addresses not allowed")
+        );
+    }
+
+    #[test]
+    fn test_validate_url_private_class_a_rejected() {
+        let svc = make_service();
+        let err = svc.validate_url("https://10.0.0.1/webhook").unwrap_err();
+        assert!(
+            matches!(err, ApiError::Validation(ref msg) if msg == "Private IP addresses not allowed")
+        );
+    }
+
+    #[test]
+    fn test_validate_url_private_class_b_rejected() {
+        let svc = make_service();
+        let err = svc.validate_url("https://172.16.0.1/webhook").unwrap_err();
+        assert!(
+            matches!(err, ApiError::Validation(ref msg) if msg == "Private IP addresses not allowed")
+        );
+    }
+
+    #[test]
+    fn test_validate_url_private_class_c_rejected() {
+        let svc = make_service();
+        let err = svc.validate_url("https://192.168.1.1/webhook").unwrap_err();
+        assert!(
+            matches!(err, ApiError::Validation(ref msg) if msg == "Private IP addresses not allowed")
+        );
+    }
+
+    #[test]
+    fn test_validate_url_cloud_metadata_rejected() {
+        let svc = make_service();
+        let err = svc
+            .validate_url("https://169.254.169.254/latest/meta-data/")
+            .unwrap_err();
+        assert!(
+            matches!(err, ApiError::Validation(ref msg) if msg == "Metadata endpoints not allowed")
+        );
+    }
+
+    #[test]
+    fn test_validate_url_invalid_format_rejected() {
+        let svc = make_service();
+        let err = svc.validate_url("not-a-url").unwrap_err();
+        assert!(matches!(err, ApiError::Validation(ref msg) if msg == "Invalid URL format"));
+    }
+
+    #[test]
+    fn test_validate_url_empty_host_rejected() {
+        let svc = make_service();
+        let err = svc.validate_url("https://").unwrap_err();
+        assert!(
+            matches!(err, ApiError::Validation(ref msg) if msg == "Invalid URL format" || msg == "Missing host")
+        );
     }
 }
