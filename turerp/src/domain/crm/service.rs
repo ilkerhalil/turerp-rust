@@ -36,10 +36,12 @@ impl CrmService {
     }
 
     // Lead methods
+    #[tracing::instrument(skip(self))]
     pub async fn create_lead(&self, create: CreateLead) -> Result<Lead, ApiError> {
         self.lead_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_lead(&self, id: i64, tenant_id: i64) -> Result<Lead, ApiError> {
         self.lead_repo
             .find_by_id(id, tenant_id)
@@ -47,10 +49,12 @@ impl CrmService {
             .ok_or_else(|| ApiError::NotFound("Lead not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_leads_by_tenant(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError> {
         self.lead_repo.find_by_tenant(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_leads_paginated(
         &self,
         tenant_id: i64,
@@ -64,6 +68,7 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_leads_by_status(
         &self,
         tenant_id: i64,
@@ -72,6 +77,7 @@ impl CrmService {
         self.lead_repo.find_by_status(tenant_id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_leads_by_status_paginated(
         &self,
         tenant_id: i64,
@@ -86,10 +92,12 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_lead_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError> {
         self.lead_repo.update_status(id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn convert_lead_to_customer(
         &self,
         id: i64,
@@ -98,6 +106,7 @@ impl CrmService {
         self.lead_repo.convert_to_customer(id, customer_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_lead(
         &self,
         id: i64,
@@ -107,19 +116,23 @@ impl CrmService {
         self.lead_repo.soft_delete(id, tenant_id, deleted_by).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_lead(&self, id: i64, tenant_id: i64) -> Result<Lead, ApiError> {
         self.lead_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_leads(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError> {
         self.lead_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_lead(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.lead_repo.destroy(id, tenant_id).await
     }
 
     // Opportunity methods
+    #[tracing::instrument(skip(self))]
     pub async fn create_opportunity(
         &self,
         create: CreateOpportunity,
@@ -127,6 +140,7 @@ impl CrmService {
         self.opportunity_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_opportunity(&self, id: i64, tenant_id: i64) -> Result<Opportunity, ApiError> {
         self.opportunity_repo
             .find_by_id(id, tenant_id)
@@ -134,6 +148,7 @@ impl CrmService {
             .ok_or_else(|| ApiError::NotFound("Opportunity not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_opportunities_by_tenant(
         &self,
         tenant_id: i64,
@@ -141,6 +156,7 @@ impl CrmService {
         self.opportunity_repo.find_by_tenant(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_opportunities_paginated(
         &self,
         tenant_id: i64,
@@ -154,6 +170,7 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_opportunities_by_status_paginated(
         &self,
         tenant_id: i64,
@@ -168,6 +185,7 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_opportunities_by_status(
         &self,
         tenant_id: i64,
@@ -178,6 +196,7 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_opportunities_by_customer(
         &self,
         customer_id: i64,
@@ -185,6 +204,7 @@ impl CrmService {
         self.opportunity_repo.find_by_customer(customer_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_opportunity_status(
         &self,
         id: i64,
@@ -193,6 +213,7 @@ impl CrmService {
         self.opportunity_repo.update_status(id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_opportunity(
         &self,
         id: i64,
@@ -204,6 +225,7 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_opportunity(
         &self,
         id: i64,
@@ -212,6 +234,7 @@ impl CrmService {
         self.opportunity_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_opportunities(
         &self,
         tenant_id: i64,
@@ -219,15 +242,18 @@ impl CrmService {
         self.opportunity_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_opportunity(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.opportunity_repo.destroy(id, tenant_id).await
     }
 
     // Campaign methods
+    #[tracing::instrument(skip(self))]
     pub async fn create_campaign(&self, create: CreateCampaign) -> Result<Campaign, ApiError> {
         self.campaign_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_campaign(&self, id: i64, tenant_id: i64) -> Result<Campaign, ApiError> {
         self.campaign_repo
             .find_by_id(id, tenant_id)
@@ -235,10 +261,12 @@ impl CrmService {
             .ok_or_else(|| ApiError::NotFound("Campaign not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_campaigns_by_tenant(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError> {
         self.campaign_repo.find_by_tenant(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_campaigns_paginated(
         &self,
         tenant_id: i64,
@@ -252,6 +280,7 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_campaigns_by_status_paginated(
         &self,
         tenant_id: i64,
@@ -266,6 +295,7 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_campaigns_by_status(
         &self,
         tenant_id: i64,
@@ -274,6 +304,7 @@ impl CrmService {
         self.campaign_repo.find_by_status(tenant_id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_campaign_status(
         &self,
         id: i64,
@@ -282,6 +313,7 @@ impl CrmService {
         self.campaign_repo.update_status(id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_campaign(
         &self,
         id: i64,
@@ -293,23 +325,28 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_campaign(&self, id: i64, tenant_id: i64) -> Result<Campaign, ApiError> {
         self.campaign_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_campaigns(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError> {
         self.campaign_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_campaign(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.campaign_repo.destroy(id, tenant_id).await
     }
 
     // Ticket methods
+    #[tracing::instrument(skip(self))]
     pub async fn create_ticket(&self, create: CreateTicket) -> Result<Ticket, ApiError> {
         self.ticket_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_ticket(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError> {
         self.ticket_repo
             .find_by_id(id, tenant_id)
@@ -317,6 +354,7 @@ impl CrmService {
             .ok_or_else(|| ApiError::NotFound("Ticket not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_ticket_by_number(
         &self,
         tenant_id: i64,
@@ -327,10 +365,12 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_tickets_by_tenant(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError> {
         self.ticket_repo.find_by_tenant(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_tickets_paginated(
         &self,
         tenant_id: i64,
@@ -344,6 +384,7 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_tickets_by_status_paginated(
         &self,
         tenant_id: i64,
@@ -358,6 +399,7 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_tickets_by_status(
         &self,
         tenant_id: i64,
@@ -366,10 +408,12 @@ impl CrmService {
         self.ticket_repo.find_by_status(tenant_id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_tickets_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError> {
         self.ticket_repo.find_by_assignee(assignee_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_ticket_status(
         &self,
         id: i64,
@@ -378,10 +422,12 @@ impl CrmService {
         self.ticket_repo.update_status(id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn resolve_ticket(&self, id: i64) -> Result<Ticket, ApiError> {
         self.ticket_repo.resolve(id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_ticket(
         &self,
         id: i64,
@@ -393,19 +439,23 @@ impl CrmService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_ticket(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError> {
         self.ticket_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_tickets(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError> {
         self.ticket_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_ticket(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.ticket_repo.destroy(id, tenant_id).await
     }
 
     // Dashboard metrics
+    #[tracing::instrument(skip(self))]
     pub async fn get_sales_pipeline_value(&self, tenant_id: i64) -> Result<Decimal, ApiError> {
         let opportunities = self.opportunity_repo.find_by_tenant(tenant_id).await?;
         let open_opps: Vec<_> = opportunities
@@ -419,6 +469,7 @@ impl CrmService {
         Ok(weighted_value)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_open_tickets_count(&self, tenant_id: i64) -> Result<usize, ApiError> {
         let tickets = self.ticket_repo.find_by_tenant(tenant_id).await?;
         let open_count = tickets

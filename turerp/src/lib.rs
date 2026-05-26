@@ -1034,30 +1034,33 @@ pub mod app {
 
             // Register business metrics subscribers on event bus
             let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
-            let _ = event_bus
+            event_bus
                 .subscribe(Arc::new(
                     crate::common::business_metrics::InstrumentedEventSubscriber::new(
                         Arc::new(crate::common::AccountingEntrySubscriber),
                         metrics_recorder.clone(),
                     ),
                 ))
-                .await;
-            let _ = event_bus
+                .await
+                .ok();
+            event_bus
                 .subscribe(Arc::new(
                     crate::common::business_metrics::InstrumentedEventSubscriber::new(
                         Arc::new(crate::common::StockDecrementSubscriber),
                         metrics_recorder.clone(),
                     ),
                 ))
-                .await;
-            let _ = event_bus
+                .await
+                .ok();
+            event_bus
                 .subscribe(Arc::new(
                     crate::common::business_metrics::InstrumentedEventSubscriber::new(
                         Arc::new(crate::common::TaxPeriodSubscriber),
                         metrics_recorder.clone(),
                     ),
                 ))
-                .await;
+                .await
+                .ok();
         });
 
         let i18n = I18n::init().await;
@@ -1530,30 +1533,33 @@ pub mod app {
 
         // Register business metrics subscribers on event bus
         let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
-        let _ = event_bus
+        event_bus
             .subscribe(Arc::new(
                 crate::common::business_metrics::InstrumentedEventSubscriber::new(
                     Arc::new(crate::common::AccountingEntrySubscriber),
                     metrics_recorder.clone(),
                 ),
             ))
-            .await;
-        let _ = event_bus
+            .await
+            .ok();
+        event_bus
             .subscribe(Arc::new(
                 crate::common::business_metrics::InstrumentedEventSubscriber::new(
                     Arc::new(crate::common::StockDecrementSubscriber),
                     metrics_recorder.clone(),
                 ),
             ))
-            .await;
-        let _ = event_bus
+            .await
+            .ok();
+        event_bus
             .subscribe(Arc::new(
                 crate::common::business_metrics::InstrumentedEventSubscriber::new(
                     Arc::new(crate::common::TaxPeriodSubscriber),
                     metrics_recorder.clone(),
                 ),
             ))
-            .await;
+            .await
+            .ok();
 
         // Search
         let search_service: Arc<dyn SearchService> = if config.database.url.is_empty() {

@@ -21,6 +21,7 @@ impl FeatureFlagService {
     }
 
     /// Create a new feature flag
+    #[tracing::instrument(skip(self))]
     pub async fn create(&self, flag: CreateFeatureFlag) -> Result<FeatureFlagResponse, ApiError> {
         // Check if flag already exists
         if self
@@ -40,12 +41,14 @@ impl FeatureFlagService {
     }
 
     /// Get a feature flag by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_by_id(&self, id: i64) -> Result<Option<FeatureFlagResponse>, ApiError> {
         let flag = self.repository.get_by_id(id).await?;
         Ok(flag.map(|f| f.into()))
     }
 
     /// Get a feature flag by name
+    #[tracing::instrument(skip(self))]
     pub async fn get_by_name(
         &self,
         name: &str,
@@ -56,6 +59,7 @@ impl FeatureFlagService {
     }
 
     /// Get all feature flags
+    #[tracing::instrument(skip(self))]
     pub async fn get_all(
         &self,
         tenant_id: Option<i64>,
@@ -65,6 +69,7 @@ impl FeatureFlagService {
     }
 
     /// Get all feature flags with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn get_all_paginated(
         &self,
         tenant_id: Option<i64>,
@@ -81,6 +86,7 @@ impl FeatureFlagService {
     }
 
     /// Update a feature flag
+    #[tracing::instrument(skip(self))]
     pub async fn update(
         &self,
         id: i64,
@@ -91,6 +97,7 @@ impl FeatureFlagService {
     }
 
     /// Delete a feature flag
+    #[tracing::instrument(skip(self))]
     pub async fn delete(&self, id: i64) -> Result<bool, ApiError> {
         let deleted = self.repository.delete(id).await?;
         if !deleted {
@@ -103,6 +110,7 @@ impl FeatureFlagService {
     }
 
     /// Soft delete a feature flag
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<bool, ApiError> {
         let deleted = self.repository.soft_delete(id, deleted_by).await?;
         if !deleted {
@@ -115,6 +123,7 @@ impl FeatureFlagService {
     }
 
     /// Restore a soft-deleted feature flag
+    #[tracing::instrument(skip(self))]
     pub async fn restore(&self, id: i64) -> Result<bool, ApiError> {
         let restored = self.repository.restore(id).await?;
         if !restored {
@@ -127,12 +136,14 @@ impl FeatureFlagService {
     }
 
     /// List deleted feature flags
+    #[tracing::instrument(skip(self))]
     pub async fn find_deleted(&self) -> Result<Vec<FeatureFlagResponse>, ApiError> {
         let flags = self.repository.find_deleted().await?;
         Ok(flags.into_iter().map(|f| f.into()).collect())
     }
 
     /// Permanently destroy a soft-deleted feature flag
+    #[tracing::instrument(skip(self))]
     pub async fn destroy(&self, id: i64) -> Result<bool, ApiError> {
         let destroyed = self.repository.destroy(id).await?;
         if !destroyed {
@@ -145,11 +156,13 @@ impl FeatureFlagService {
     }
 
     /// Check if a feature is enabled
+    #[tracing::instrument(skip(self))]
     pub async fn is_enabled(&self, name: &str, tenant_id: Option<i64>) -> Result<bool, ApiError> {
         self.repository.is_enabled(name, tenant_id).await
     }
 
     /// Enable a feature flag
+    #[tracing::instrument(skip(self))]
     pub async fn enable(&self, id: i64) -> Result<Option<FeatureFlagResponse>, ApiError> {
         self.update(
             id,
@@ -162,6 +175,7 @@ impl FeatureFlagService {
     }
 
     /// Disable a feature flag
+    #[tracing::instrument(skip(self))]
     pub async fn disable(&self, id: i64) -> Result<Option<FeatureFlagResponse>, ApiError> {
         self.update(
             id,

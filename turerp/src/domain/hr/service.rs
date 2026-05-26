@@ -52,6 +52,7 @@ impl HrService {
     }
 
     // Employee operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_employee(
         &self,
         create: CreateEmployee,
@@ -63,6 +64,7 @@ impl HrService {
         Ok(EmployeeResponse::from(employee))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_employee(
         &self,
         id: i64,
@@ -76,6 +78,7 @@ impl HrService {
         Ok(EmployeeResponse::from(employee))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_employees_by_tenant(
         &self,
         tenant_id: i64,
@@ -84,6 +87,7 @@ impl HrService {
         Ok(employees.into_iter().map(EmployeeResponse::from).collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_employees_paginated(
         &self,
         tenant_id: i64,
@@ -108,6 +112,7 @@ impl HrService {
         ))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_employee_status(
         &self,
         id: i64,
@@ -116,6 +121,7 @@ impl HrService {
         self.employee_repo.update_status(id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn terminate_employee(&self, id: i64) -> Result<Employee, ApiError> {
         self.employee_repo
             .update_status(id, EmployeeStatus::Terminated)
@@ -123,6 +129,7 @@ impl HrService {
     }
 
     // Employee soft-delete operations
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_employee(
         &self,
         id: i64,
@@ -134,19 +141,23 @@ impl HrService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_employee(&self, id: i64, tenant_id: i64) -> Result<Employee, ApiError> {
         self.employee_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_employees(&self, tenant_id: i64) -> Result<Vec<Employee>, ApiError> {
         self.employee_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_employee(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.employee_repo.destroy(id, tenant_id).await
     }
 
     // Attendance operations
+    #[tracing::instrument(skip(self))]
     pub async fn record_attendance(
         &self,
         create: CreateAttendance,
@@ -154,6 +165,7 @@ impl HrService {
         self.attendance_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_attendance_by_employee(
         &self,
         employee_id: i64,
@@ -161,6 +173,7 @@ impl HrService {
         self.attendance_repo.find_by_employee(employee_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_attendance_by_date(
         &self,
         date: chrono::DateTime<Utc>,
@@ -169,23 +182,28 @@ impl HrService {
     }
 
     // Attendance soft-delete operations
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_attendance(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
         self.attendance_repo.soft_delete(id, deleted_by).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_attendance(&self, id: i64) -> Result<Attendance, ApiError> {
         self.attendance_repo.restore(id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_attendance(&self) -> Result<Vec<Attendance>, ApiError> {
         self.attendance_repo.find_deleted().await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_attendance(&self, id: i64) -> Result<(), ApiError> {
         self.attendance_repo.destroy(id).await
     }
 
     // Leave operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_leave_request(
         &self,
         create: CreateLeaveRequest,
@@ -193,6 +211,7 @@ impl HrService {
         self.leave_request_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_leave_requests_by_employee(
         &self,
         employee_id: i64,
@@ -200,6 +219,7 @@ impl HrService {
         self.leave_request_repo.find_by_employee(employee_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn approve_leave_request(
         &self,
         id: i64,
@@ -210,6 +230,7 @@ impl HrService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn reject_leave_request(
         &self,
         id: i64,
@@ -221,6 +242,7 @@ impl HrService {
     }
 
     // Leave request soft-delete operations
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_leave_request(
         &self,
         id: i64,
@@ -229,24 +251,29 @@ impl HrService {
         self.leave_request_repo.soft_delete(id, deleted_by).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_leave_request(&self, id: i64) -> Result<LeaveRequest, ApiError> {
         self.leave_request_repo.restore(id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_leave_requests(&self) -> Result<Vec<LeaveRequest>, ApiError> {
         self.leave_request_repo.find_deleted().await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_leave_request(&self, id: i64) -> Result<(), ApiError> {
         self.leave_request_repo.destroy(id).await
     }
 
     // Leave type operations
+    #[tracing::instrument(skip(self))]
     pub async fn get_leave_types(&self, tenant_id: i64) -> Result<Vec<LeaveType>, ApiError> {
         self.leave_type_repo.find_by_tenant(tenant_id).await
     }
 
     // Leave type soft-delete operations
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_leave_type(
         &self,
         id: i64,
@@ -258,10 +285,12 @@ impl HrService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_leave_type(&self, id: i64, tenant_id: i64) -> Result<LeaveType, ApiError> {
         self.leave_type_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_leave_types(
         &self,
         tenant_id: i64,
@@ -269,11 +298,13 @@ impl HrService {
         self.leave_type_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_leave_type(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.leave_type_repo.destroy(id, tenant_id).await
     }
 
     // Payroll operations
+    #[tracing::instrument(skip(self))]
     pub async fn calculate_payroll(
         &self,
         tenant_id: i64,
@@ -301,7 +332,8 @@ impl HrService {
 
         let overtime_pay = overtime_hours * (employee.salary / Decimal::new(200, 0)); // Hourly rate
         let gross = employee.salary + overtime_pay;
-        let bonuses = Decimal::ZERO; // TODO: sum period bonuses when bonus repo is wired
+        // FIXME: sum period bonuses from EmployeeBonusRepository; requires wiring BoxEmployeeBonusRepository into HrService::new and all call sites
+        let bonuses = Decimal::ZERO;
 
         let config = default_sgk_config_2026();
         let brackets = default_income_tax_brackets_2026();
@@ -351,6 +383,7 @@ impl HrService {
         self.payroll_repo.create(payroll).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_payroll_by_employee(
         &self,
         employee_id: i64,
@@ -358,11 +391,13 @@ impl HrService {
         self.payroll_repo.find_by_employee(employee_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn mark_payroll_paid(&self, id: i64) -> Result<Payroll, ApiError> {
         self.payroll_repo.mark_paid(id).await
     }
 
     // Payroll soft-delete operations
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_payroll(
         &self,
         id: i64,
@@ -374,14 +409,17 @@ impl HrService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_payroll(&self, id: i64, tenant_id: i64) -> Result<Payroll, ApiError> {
         self.payroll_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_payroll(&self, tenant_id: i64) -> Result<Vec<Payroll>, ApiError> {
         self.payroll_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_payroll(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.payroll_repo.destroy(id, tenant_id).await
     }

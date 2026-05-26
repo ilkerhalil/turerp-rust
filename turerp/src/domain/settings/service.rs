@@ -19,6 +19,7 @@ impl SettingsService {
     }
 
     /// Create a new setting
+    #[tracing::instrument(skip(self))]
     pub async fn create(&self, create: CreateSetting) -> Result<Setting, ApiError> {
         create
             .validate()
@@ -32,6 +33,7 @@ impl SettingsService {
     }
 
     /// List settings with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_paginated(
         &self,
         tenant_id: i64,
@@ -45,16 +47,19 @@ impl SettingsService {
     }
 
     /// Get a setting by key
+    #[tracing::instrument(skip(self))]
     pub async fn get_by_key(&self, tenant_id: i64, key: &str) -> Result<Option<Setting>, ApiError> {
         self.repo.find_by_key(tenant_id, key).await
     }
 
     /// Get a setting by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_by_id(&self, tenant_id: i64, id: i64) -> Result<Option<Setting>, ApiError> {
         self.repo.find_by_id(id, tenant_id).await
     }
 
     /// List all settings for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list(
         &self,
         tenant_id: i64,
@@ -64,6 +69,7 @@ impl SettingsService {
     }
 
     /// Update a setting
+    #[tracing::instrument(skip(self))]
     pub async fn update(
         &self,
         tenant_id: i64,
@@ -86,11 +92,13 @@ impl SettingsService {
     }
 
     /// Delete a setting
+    #[tracing::instrument(skip(self))]
     pub async fn delete(&self, tenant_id: i64, id: i64) -> Result<(), ApiError> {
         self.repo.delete(id, tenant_id).await
     }
 
     /// Soft delete a setting
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_setting(
         &self,
         tenant_id: i64,
@@ -101,21 +109,25 @@ impl SettingsService {
     }
 
     /// Restore a soft-deleted setting
+    #[tracing::instrument(skip(self))]
     pub async fn restore_setting(&self, tenant_id: i64, id: i64) -> Result<(), ApiError> {
         self.repo.restore(id, tenant_id).await
     }
 
     /// List deleted settings for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_settings(&self, tenant_id: i64) -> Result<Vec<Setting>, ApiError> {
         self.repo.find_deleted(tenant_id).await
     }
 
     /// Permanently destroy a soft-deleted setting
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_setting(&self, tenant_id: i64, id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id, tenant_id).await
     }
 
     /// Bulk update settings by key
+    #[tracing::instrument(skip(self))]
     pub async fn bulk_update(
         &self,
         tenant_id: i64,
@@ -127,6 +139,7 @@ impl SettingsService {
     // Typed getters ----------------------------------------------------------------
 
     /// Get a string value by key
+    #[tracing::instrument(skip(self))]
     pub async fn get_string(
         &self,
         tenant_id: i64,
@@ -158,6 +171,7 @@ impl SettingsService {
     }
 
     /// Get an integer value by key
+    #[tracing::instrument(skip(self))]
     pub async fn get_int(
         &self,
         tenant_id: i64,
@@ -191,6 +205,7 @@ impl SettingsService {
     }
 
     /// Get a boolean value by key
+    #[tracing::instrument(skip(self))]
     pub async fn get_bool(
         &self,
         tenant_id: i64,
@@ -222,6 +237,7 @@ impl SettingsService {
     }
 
     /// Get a float value by key
+    #[tracing::instrument(skip(self))]
     pub async fn get_float(
         &self,
         tenant_id: i64,
@@ -255,6 +271,7 @@ impl SettingsService {
     }
 
     /// Get a JSON value by key
+    #[tracing::instrument(skip(self))]
     pub async fn get_json(
         &self,
         tenant_id: i64,
@@ -274,6 +291,7 @@ impl SettingsService {
     }
 
     /// Seed default settings for a new tenant
+    #[tracing::instrument(skip(self))]
     pub async fn seed_defaults(&self, tenant_id: i64) -> Result<Vec<Setting>, ApiError> {
         let defaults = vec![
             CreateSetting {

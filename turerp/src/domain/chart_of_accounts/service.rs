@@ -24,6 +24,7 @@ impl ChartOfAccountsService {
     }
 
     /// Create a new chart account
+    #[tracing::instrument(skip(self))]
     pub async fn create_account(
         &self,
         create: CreateChartAccount,
@@ -62,6 +63,7 @@ impl ChartOfAccountsService {
     }
 
     /// Get a chart account by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_account(
         &self,
         id: i64,
@@ -77,6 +79,7 @@ impl ChartOfAccountsService {
     }
 
     /// List chart accounts with optional group filter and pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_accounts(
         &self,
         tenant_id: i64,
@@ -88,6 +91,7 @@ impl ChartOfAccountsService {
     }
 
     /// Update a chart account
+    #[tracing::instrument(skip(self))]
     pub async fn update_account(
         &self,
         id: i64,
@@ -106,6 +110,7 @@ impl ChartOfAccountsService {
     }
 
     /// Delete a chart account (soft delete)
+    #[tracing::instrument(skip(self))]
     pub async fn delete_account(
         &self,
         id: i64,
@@ -123,6 +128,7 @@ impl ChartOfAccountsService {
     }
 
     /// Get the hierarchical tree of accounts
+    #[tracing::instrument(skip(self))]
     pub async fn get_tree(&self, tenant_id: i64) -> Result<Vec<AccountTreeNode>, ApiError> {
         let all_accounts = self
             .repo
@@ -195,6 +201,7 @@ impl ChartOfAccountsService {
     }
 
     /// Get children of an account by parent code
+    #[tracing::instrument(skip(self))]
     pub async fn get_children(
         &self,
         parent_code: &str,
@@ -205,6 +212,7 @@ impl ChartOfAccountsService {
     }
 
     /// Recalculate the balance of a parent account by summing all child balances
+    #[tracing::instrument(skip(self))]
     pub async fn recalculate_balance(
         &self,
         id: i64,
@@ -235,6 +243,7 @@ impl ChartOfAccountsService {
     }
 
     /// Get a chart account by code
+    #[tracing::instrument(skip(self))]
     pub async fn get_account_by_code(
         &self,
         code: &str,
@@ -250,6 +259,7 @@ impl ChartOfAccountsService {
     }
 
     /// Update a chart account by code
+    #[tracing::instrument(skip(self))]
     pub async fn update_account_by_code(
         &self,
         code: &str,
@@ -266,6 +276,7 @@ impl ChartOfAccountsService {
     }
 
     /// Delete a chart account by code (soft delete)
+    #[tracing::instrument(skip(self))]
     pub async fn delete_account_by_code(
         &self,
         code: &str,
@@ -282,6 +293,7 @@ impl ChartOfAccountsService {
     }
 
     /// Get a deleted chart account by code (for restore/destroy operations)
+    #[tracing::instrument(skip(self))]
     pub async fn get_deleted_account_by_code(
         &self,
         code: &str,
@@ -303,11 +315,13 @@ impl ChartOfAccountsService {
     }
 
     /// Restore a soft-deleted chart account
+    #[tracing::instrument(skip(self))]
     pub async fn restore_account(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.restore(id, tenant_id).await
     }
 
     /// List deleted chart accounts for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_accounts(
         &self,
         tenant_id: i64,
@@ -317,11 +331,13 @@ impl ChartOfAccountsService {
     }
 
     /// Permanently destroy a soft-deleted chart account
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_account(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id, tenant_id).await
     }
 
     /// Recalculate the balance of a chart account by code
+    #[tracing::instrument(skip(self))]
     pub async fn recalculate_balance_by_code(
         &self,
         code: &str,
@@ -337,6 +353,7 @@ impl ChartOfAccountsService {
     }
 
     /// Get trial balance: all accounts with debit/credit balances
+    #[tracing::instrument(skip(self))]
     pub async fn get_trial_balance(
         &self,
         tenant_id: i64,

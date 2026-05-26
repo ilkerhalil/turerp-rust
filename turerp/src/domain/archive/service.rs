@@ -34,6 +34,7 @@ impl ArchiveService {
     // ---- Archive Policy Operations ----
 
     /// Create a new archive policy
+    #[tracing::instrument(skip(self))]
     pub async fn create_policy(
         &self,
         create: CreateArchivePolicy,
@@ -56,6 +57,7 @@ impl ArchiveService {
     }
 
     /// Get an archive policy by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_policy(&self, id: i64, tenant_id: i64) -> Result<ArchivePolicy, ApiError> {
         self.policy_repo
             .find_by_id(id, tenant_id)
@@ -64,6 +66,7 @@ impl ArchiveService {
     }
 
     /// List archive policies with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_policies(
         &self,
         tenant_id: i64,
@@ -73,6 +76,7 @@ impl ArchiveService {
     }
 
     /// List active archive policies
+    #[tracing::instrument(skip(self))]
     pub async fn list_active_policies(
         &self,
         tenant_id: i64,
@@ -81,6 +85,7 @@ impl ArchiveService {
     }
 
     /// Update an archive policy
+    #[tracing::instrument(skip(self))]
     pub async fn update_policy(
         &self,
         id: i64,
@@ -98,6 +103,7 @@ impl ArchiveService {
     }
 
     /// Delete an archive policy
+    #[tracing::instrument(skip(self))]
     pub async fn delete_policy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.policy_repo.delete(id, tenant_id).await
     }
@@ -105,6 +111,7 @@ impl ArchiveService {
     // ---- Archive Job Operations ----
 
     /// Create and start a new archive job
+    #[tracing::instrument(skip(self))]
     pub async fn create_job(
         &self,
         create: CreateArchiveJob,
@@ -123,6 +130,7 @@ impl ArchiveService {
     }
 
     /// Get an archive job by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_job(&self, id: i64, tenant_id: i64) -> Result<ArchiveJob, ApiError> {
         self.job_repo
             .find_by_id(id, tenant_id)
@@ -131,6 +139,7 @@ impl ArchiveService {
     }
 
     /// List archive jobs with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_jobs(
         &self,
         tenant_id: i64,
@@ -140,6 +149,7 @@ impl ArchiveService {
     }
 
     /// List archive jobs for a specific policy
+    #[tracing::instrument(skip(self))]
     pub async fn list_jobs_by_policy(
         &self,
         policy_id: i64,
@@ -152,6 +162,7 @@ impl ArchiveService {
     }
 
     /// Complete an archive job with results
+    #[tracing::instrument(skip(self))]
     pub async fn complete_job(
         &self,
         id: i64,
@@ -172,6 +183,7 @@ impl ArchiveService {
     }
 
     /// Fail an archive job with an error message
+    #[tracing::instrument(skip(self))]
     pub async fn fail_job(
         &self,
         id: i64,
@@ -191,6 +203,7 @@ impl ArchiveService {
     }
 
     /// Delete an archive job
+    #[tracing::instrument(skip(self))]
     pub async fn delete_job(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.job_repo.delete(id, tenant_id).await
     }
@@ -198,6 +211,7 @@ impl ArchiveService {
     // ---- Archive Record Operations ----
 
     /// Create an archive record
+    #[tracing::instrument(skip(self))]
     pub async fn create_record(
         &self,
         tenant_id: i64,
@@ -218,6 +232,7 @@ impl ArchiveService {
     }
 
     /// Get an archive record by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_record(&self, id: i64, tenant_id: i64) -> Result<ArchiveRecord, ApiError> {
         self.record_repo
             .find_by_id(id, tenant_id)
@@ -226,6 +241,7 @@ impl ArchiveService {
     }
 
     /// List archive records with optional filters
+    #[tracing::instrument(skip(self))]
     pub async fn list_records(
         &self,
         tenant_id: i64,
@@ -239,6 +255,8 @@ impl ArchiveService {
     }
 
     /// Restore archived records
+    #[allow(clippy::type_complexity)]
+    #[tracing::instrument(skip(self))]
     pub async fn restore_records(
         &self,
         request: RestoreRequest,
@@ -259,6 +277,7 @@ impl ArchiveService {
     }
 
     /// Permanently delete an archive record
+    #[tracing::instrument(skip(self))]
     pub async fn delete_record(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.record_repo.delete(id, tenant_id).await
     }

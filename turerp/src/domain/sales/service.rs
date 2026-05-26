@@ -36,6 +36,7 @@ impl SalesService {
     }
 
     // Sales Order operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_sales_order(
         &self,
         create: CreateSalesOrder,
@@ -58,6 +59,7 @@ impl SalesService {
         Ok(SalesOrderResponse::from((order, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_sales_order(
         &self,
         id: i64,
@@ -74,10 +76,12 @@ impl SalesService {
         Ok(SalesOrderResponse::from((order, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_orders_by_tenant(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
         self.order_repo.find_by_tenant(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_orders_by_tenant_paginated(
         &self,
         tenant_id: i64,
@@ -92,6 +96,7 @@ impl SalesService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_orders_by_cari(
         &self,
         cari_id: i64,
@@ -99,6 +104,7 @@ impl SalesService {
         self.order_repo.find_by_cari(cari_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_orders_by_status(
         &self,
         tenant_id: i64,
@@ -107,6 +113,7 @@ impl SalesService {
         self.order_repo.find_by_status(tenant_id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_orders_by_status_paginated(
         &self,
         tenant_id: i64,
@@ -122,6 +129,7 @@ impl SalesService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_order_status(
         &self,
         id: i64,
@@ -130,12 +138,14 @@ impl SalesService {
         self.order_repo.update_status(id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.order_line_repo.delete_by_order(id).await?;
         self.order_repo.delete(id, tenant_id).await
     }
 
     /// Soft delete a sales order (sets deleted_at) and its lines
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_order(
         &self,
         id: i64,
@@ -153,17 +163,19 @@ impl SalesService {
     }
 
     /// Restore a soft-deleted sales order and its lines
+    #[tracing::instrument(skip(self))]
     pub async fn restore_order(&self, id: i64, tenant_id: i64) -> Result<SalesOrder, ApiError> {
         let order = self.order_repo.restore(id, tenant_id).await?;
         // Restore all soft-deleted lines
         let deleted_lines = self.order_line_repo.find_deleted(order.id).await?;
         for line in deleted_lines {
-            let _ = self.order_line_repo.restore(line.id, order.id).await;
+            let _ = self.order_line_repo.restore(line.id, order.id).await.ok();
         }
         Ok(order)
     }
 
     /// Restore a soft-deleted sales order and return as response
+    #[tracing::instrument(skip(self))]
     pub async fn restore_order_response(
         &self,
         id: i64,
@@ -175,17 +187,20 @@ impl SalesService {
     }
 
     /// List soft-deleted sales orders
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_orders(&self, tenant_id: i64) -> Result<Vec<SalesOrder>, ApiError> {
         self.order_repo.find_deleted(tenant_id).await
     }
 
     /// Permanently delete a sales order (admin only, after soft delete)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.order_line_repo.delete_by_order(id).await?;
         self.order_repo.destroy(id, tenant_id).await
     }
 
     // Quotation operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_quotation(
         &self,
         create: CreateQuotation,
@@ -208,6 +223,7 @@ impl SalesService {
         Ok(QuotationResponse::from((quotation, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_quotation(
         &self,
         id: i64,
@@ -224,6 +240,7 @@ impl SalesService {
         Ok(QuotationResponse::from((quotation, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_quotations_by_tenant(
         &self,
         tenant_id: i64,
@@ -231,6 +248,7 @@ impl SalesService {
         self.quotation_repo.find_by_tenant(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_quotations_by_tenant_paginated(
         &self,
         tenant_id: i64,
@@ -245,6 +263,7 @@ impl SalesService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_quotations_by_cari(
         &self,
         cari_id: i64,
@@ -252,6 +271,7 @@ impl SalesService {
         self.quotation_repo.find_by_cari(cari_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_quotations_by_status(
         &self,
         tenant_id: i64,
@@ -260,6 +280,7 @@ impl SalesService {
         self.quotation_repo.find_by_status(tenant_id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_quotations_by_status_paginated(
         &self,
         tenant_id: i64,
@@ -275,6 +296,7 @@ impl SalesService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_quotation_status(
         &self,
         id: i64,
@@ -284,6 +306,7 @@ impl SalesService {
     }
 
     /// Convert quotation to sales order
+    #[tracing::instrument(skip(self))]
     pub async fn convert_quotation_to_order(
         &self,
         quotation_id: i64,
@@ -350,7 +373,11 @@ impl SalesService {
         {
             Ok(lines) => lines,
             Err(e) => {
-                let _ = self.order_repo.delete(order.id, quotation.tenant_id).await;
+                if let Err(rollback_err) =
+                    self.order_repo.delete(order.id, quotation.tenant_id).await
+                {
+                    tracing::warn!(error = %rollback_err, "Failed to roll back orphan order {} after line creation failed", order.id);
+                }
                 return Err(e);
             }
         };
@@ -361,20 +388,26 @@ impl SalesService {
             .link_to_order(quotation_id, order.id)
             .await
         {
-            let _ = self.order_line_repo.delete_by_order(order.id).await;
-            let _ = self.order_repo.delete(order.id, quotation.tenant_id).await;
+            if let Err(rollback_err) = self.order_line_repo.delete_by_order(order.id).await {
+                tracing::warn!(error = %rollback_err, "Failed to roll back order lines for order {} after quotation linking failed", order.id);
+            }
+            if let Err(rollback_err) = self.order_repo.delete(order.id, quotation.tenant_id).await {
+                tracing::warn!(error = %rollback_err, "Failed to roll back orphan order {} after quotation linking failed", order.id);
+            }
             return Err(e);
         }
 
         Ok(SalesOrderResponse::from((order, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_quotation(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.quotation_line_repo.delete_by_quotation(id).await?;
         self.quotation_repo.delete(id, tenant_id).await
     }
 
     /// Soft delete a quotation (sets deleted_at) and its lines
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_quotation(
         &self,
         id: i64,
@@ -393,6 +426,7 @@ impl SalesService {
     }
 
     /// Restore a soft-deleted quotation and its lines
+    #[tracing::instrument(skip(self))]
     pub async fn restore_quotation(&self, id: i64, tenant_id: i64) -> Result<Quotation, ApiError> {
         let quotation = self.quotation_repo.restore(id, tenant_id).await?;
         let deleted_lines = self.quotation_line_repo.find_deleted(quotation.id).await?;
@@ -400,12 +434,14 @@ impl SalesService {
             let _ = self
                 .quotation_line_repo
                 .restore(line.id, quotation.id)
-                .await;
+                .await
+                .ok();
         }
         Ok(quotation)
     }
 
     /// Restore a soft-deleted quotation and return as response
+    #[tracing::instrument(skip(self))]
     pub async fn restore_quotation_response(
         &self,
         id: i64,
@@ -420,6 +456,7 @@ impl SalesService {
     }
 
     /// List soft-deleted quotations
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_quotations(
         &self,
         tenant_id: i64,
@@ -428,6 +465,7 @@ impl SalesService {
     }
 
     /// Permanently delete a quotation (admin only, after soft delete)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_quotation(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.quotation_line_repo.delete_by_quotation(id).await?;
         self.quotation_repo.destroy(id, tenant_id).await
@@ -436,6 +474,7 @@ impl SalesService {
     // Sales Order Line operations
 
     /// Soft delete a sales order line
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_order_line(
         &self,
         line_id: i64,
@@ -448,6 +487,7 @@ impl SalesService {
     }
 
     /// Restore a soft-deleted sales order line
+    #[tracing::instrument(skip(self))]
     pub async fn restore_order_line(
         &self,
         line_id: i64,
@@ -457,6 +497,7 @@ impl SalesService {
     }
 
     /// List soft-deleted sales order lines
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_order_lines(
         &self,
         order_id: i64,
@@ -465,6 +506,7 @@ impl SalesService {
     }
 
     /// Permanently delete a sales order line
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_order_line(&self, line_id: i64, order_id: i64) -> Result<(), ApiError> {
         self.order_line_repo.destroy(line_id, order_id).await
     }
@@ -472,6 +514,7 @@ impl SalesService {
     // Quotation Line operations
 
     /// Soft delete a quotation line
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_quotation_line(
         &self,
         line_id: i64,
@@ -484,6 +527,7 @@ impl SalesService {
     }
 
     /// Restore a soft-deleted quotation line
+    #[tracing::instrument(skip(self))]
     pub async fn restore_quotation_line(
         &self,
         line_id: i64,
@@ -495,6 +539,7 @@ impl SalesService {
     }
 
     /// List soft-deleted quotation lines
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_quotation_lines(
         &self,
         quotation_id: i64,
@@ -503,6 +548,7 @@ impl SalesService {
     }
 
     /// Permanently delete a quotation line
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_quotation_line(
         &self,
         line_id: i64,

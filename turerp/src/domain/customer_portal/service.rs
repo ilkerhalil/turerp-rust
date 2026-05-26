@@ -188,7 +188,8 @@ impl CustomerPortal for CustomerPortalService {
         let _ = self
             .portal_user_repo
             .update_last_login(user.id, tenant_id)
-            .await;
+            .await
+            .ok();
 
         let claims = PortalAuthClaims::new(
             user.id,
@@ -277,7 +278,7 @@ impl CustomerPortal for CustomerPortalService {
                 delivery_date: order.delivery_date.map(|d| d.date_naive()),
                 total_amount: order.total_amount,
                 currency: order.currency,
-                item_count: 0, // TODO: populate from order lines once SalesService exposes them
+                item_count: 0, // FIXME: populate from SalesOrderLineRepository::find_by_order(order.id) once SalesService exposes a line-count method
             })
             .collect();
 

@@ -29,6 +29,7 @@ impl TaxService {
     // ---- Tax Rate Operations ----
 
     /// Create a new tax rate
+    #[tracing::instrument(skip(self))]
     pub async fn create_tax_rate(
         &self,
         create: CreateTaxRate,
@@ -48,6 +49,7 @@ impl TaxService {
     }
 
     /// Get a tax rate by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_tax_rate(&self, id: i64, tenant_id: i64) -> Result<TaxRate, ApiError> {
         self.rate_repo
             .find_by_id(id, tenant_id)
@@ -56,6 +58,7 @@ impl TaxService {
     }
 
     /// List tax rates with optional type filter and pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_tax_rates(
         &self,
         tenant_id: i64,
@@ -66,6 +69,7 @@ impl TaxService {
     }
 
     /// Update a tax rate
+    #[tracing::instrument(skip(self))]
     pub async fn update_tax_rate(
         &self,
         id: i64,
@@ -88,6 +92,7 @@ impl TaxService {
     }
 
     /// Soft delete a tax rate
+    #[tracing::instrument(skip(self))]
     pub async fn delete_tax_rate(
         &self,
         id: i64,
@@ -98,11 +103,14 @@ impl TaxService {
     }
 
     /// Restore a soft-deleted tax rate
+    #[tracing::instrument(skip(self))]
     pub async fn restore_tax_rate(&self, id: i64, tenant_id: i64) -> Result<TaxRate, ApiError> {
         self.rate_repo.restore(id, tenant_id).await
     }
 
     /// Bulk restore soft-deleted tax rates
+    #[allow(clippy::type_complexity)]
+    #[tracing::instrument(skip(self))]
     pub async fn bulk_restore_tax_rates(
         &self,
         ids: Vec<i64>,
@@ -123,16 +131,19 @@ impl TaxService {
     }
 
     /// List soft-deleted tax rates
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_tax_rates(&self, tenant_id: i64) -> Result<Vec<TaxRate>, ApiError> {
         self.rate_repo.find_deleted(tenant_id).await
     }
 
     /// Permanently destroy a soft-deleted tax rate
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_tax_rate(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.rate_repo.destroy(id, tenant_id).await
     }
 
     /// Find the effective tax rate for a given type and date
+    #[tracing::instrument(skip(self))]
     pub async fn get_effective_rate(
         &self,
         tax_type: TaxType,
@@ -149,6 +160,7 @@ impl TaxService {
     }
 
     /// Calculate tax on a base amount using the effective rate for a given date
+    #[tracing::instrument(skip(self))]
     pub async fn calculate_tax(
         &self,
         tax_type: TaxType,
@@ -181,6 +193,7 @@ impl TaxService {
     // ---- Tax Period Operations ----
 
     /// Create a new tax period
+    #[tracing::instrument(skip(self))]
     pub async fn create_tax_period(
         &self,
         create: CreateTaxPeriod,
@@ -202,6 +215,7 @@ impl TaxService {
     }
 
     /// List tax periods with optional type filter and pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_tax_periods(
         &self,
         tenant_id: i64,
@@ -212,6 +226,7 @@ impl TaxService {
     }
 
     /// Get a tax period by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_tax_period(&self, id: i64, tenant_id: i64) -> Result<TaxPeriod, ApiError> {
         self.period_repo
             .find_by_id(id, tenant_id)
@@ -220,6 +235,7 @@ impl TaxService {
     }
 
     /// Get all detail lines for a tax period
+    #[tracing::instrument(skip(self))]
     pub async fn get_period_details(
         &self,
         period_id: i64,
@@ -228,6 +244,7 @@ impl TaxService {
     }
 
     /// Calculate (recalculate) a tax period by summing all details
+    #[tracing::instrument(skip(self))]
     pub async fn calculate_period(&self, id: i64, tenant_id: i64) -> Result<TaxPeriod, ApiError> {
         let mut period = self.get_tax_period(id, tenant_id).await?;
 
@@ -256,6 +273,7 @@ impl TaxService {
     }
 
     /// File a tax period (change status to Filed)
+    #[tracing::instrument(skip(self))]
     pub async fn file_period(&self, id: i64, tenant_id: i64) -> Result<TaxPeriod, ApiError> {
         let mut period = self.get_tax_period(id, tenant_id).await?;
 
@@ -273,6 +291,7 @@ impl TaxService {
     }
 
     /// Soft delete a tax period
+    #[tracing::instrument(skip(self))]
     pub async fn delete_tax_period(
         &self,
         id: i64,
@@ -285,11 +304,14 @@ impl TaxService {
     }
 
     /// Restore a soft-deleted tax period
+    #[tracing::instrument(skip(self))]
     pub async fn restore_tax_period(&self, id: i64, tenant_id: i64) -> Result<TaxPeriod, ApiError> {
         self.period_repo.restore(id, tenant_id).await
     }
 
     /// Bulk restore soft-deleted tax periods
+    #[allow(clippy::type_complexity)]
+    #[tracing::instrument(skip(self))]
     pub async fn bulk_restore_tax_periods(
         &self,
         ids: Vec<i64>,
@@ -310,6 +332,7 @@ impl TaxService {
     }
 
     /// List soft-deleted tax periods
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_tax_periods(
         &self,
         tenant_id: i64,
@@ -318,6 +341,7 @@ impl TaxService {
     }
 
     /// Permanently destroy a soft-deleted tax period
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_tax_period(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.period_repo.destroy(id, tenant_id).await
     }

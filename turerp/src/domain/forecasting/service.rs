@@ -32,6 +32,7 @@ impl ForecastingService {
     }
 
     /// Generate a demand forecast using simple moving average
+    #[tracing::instrument(skip(self))]
     pub async fn forecast_demand(
         &self,
         tenant_id: i64,
@@ -78,6 +79,7 @@ impl ForecastingService {
     }
 
     /// Generate reorder suggestions for all products in a warehouse
+    #[tracing::instrument(skip(self))]
     pub async fn get_reorder_suggestions(
         &self,
         tenant_id: i64,
@@ -161,6 +163,7 @@ impl ForecastingService {
     }
 
     /// Generate stock level alerts
+    #[tracing::instrument(skip(self))]
     pub async fn get_stock_alerts(
         &self,
         tenant_id: i64,
@@ -263,6 +266,7 @@ impl ForecastingService {
     }
 
     /// Generate a comprehensive forecast report for all products
+    #[tracing::instrument(skip(self))]
     pub async fn get_forecast_report(
         &self,
         tenant_id: i64,

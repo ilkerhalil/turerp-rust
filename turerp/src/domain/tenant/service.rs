@@ -24,6 +24,7 @@ impl TenantService {
     }
 
     /// Create a new tenant
+    #[tracing::instrument(skip(self))]
     pub async fn create_tenant(&self, create: CreateTenant) -> Result<Tenant, ApiError> {
         create
             .validate()
@@ -42,6 +43,7 @@ impl TenantService {
     }
 
     /// Get tenant by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_tenant(&self, id: i64) -> Result<Tenant, ApiError> {
         self.repo
             .find_by_id(id)
@@ -50,6 +52,7 @@ impl TenantService {
     }
 
     /// Get tenant by subdomain
+    #[tracing::instrument(skip(self))]
     pub async fn get_tenant_by_subdomain(&self, subdomain: &str) -> Result<Tenant, ApiError> {
         self.repo
             .find_by_subdomain(subdomain)
@@ -60,11 +63,13 @@ impl TenantService {
     }
 
     /// Get all tenants
+    #[tracing::instrument(skip(self))]
     pub async fn get_all_tenants(&self) -> Result<Vec<Tenant>, ApiError> {
         self.repo.find_all().await
     }
 
     /// Get all tenants paginated
+    #[tracing::instrument(skip(self))]
     pub async fn get_all_tenants_paginated(
         &self,
         page: u32,
@@ -77,6 +82,7 @@ impl TenantService {
     }
 
     /// Update a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn update_tenant(&self, id: i64, update: UpdateTenant) -> Result<Tenant, ApiError> {
         // Check if subdomain changed and exists
         if let Some(ref subdomain) = update.subdomain {
@@ -95,26 +101,31 @@ impl TenantService {
     }
 
     /// Delete a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn delete_tenant(&self, id: i64) -> Result<(), ApiError> {
         self.repo.delete(id).await
     }
 
     /// Soft delete a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_tenant(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
         self.repo.soft_delete(id, deleted_by).await
     }
 
     /// Restore a soft-deleted tenant
+    #[tracing::instrument(skip(self))]
     pub async fn restore_tenant(&self, id: i64) -> Result<Tenant, ApiError> {
         self.repo.restore(id).await
     }
 
     /// List all deleted tenants
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_tenants(&self) -> Result<Vec<Tenant>, ApiError> {
         self.repo.find_deleted().await
     }
 
     /// Permanently destroy a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_tenant(&self, id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id).await
     }
@@ -201,6 +212,7 @@ impl TenantConfigService {
     }
 
     /// Set a config value
+    #[tracing::instrument(skip(self))]
     pub async fn set_config(
         &self,
         mut create: CreateTenantConfig,
@@ -223,6 +235,7 @@ impl TenantConfigService {
     }
 
     /// Get a config value
+    #[tracing::instrument(skip(self))]
     pub async fn get_config(
         &self,
         tenant_id: i64,
@@ -268,6 +281,7 @@ impl TenantConfigService {
     }
 
     /// Get all configs for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn get_all_configs(
         &self,
         tenant_id: i64,
@@ -319,6 +333,7 @@ impl TenantConfigService {
     }
 
     /// Update a config
+    #[tracing::instrument(skip(self))]
     pub async fn update_config(
         &self,
         id: i64,
@@ -355,6 +370,7 @@ impl TenantConfigService {
     }
 
     /// Delete a config
+    #[tracing::instrument(skip(self))]
     pub async fn delete_config(&self, id: i64) -> Result<(), ApiError> {
         self.repo.delete(id).await?;
 
@@ -367,6 +383,7 @@ impl TenantConfigService {
     }
 
     /// Delete all configs for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn delete_all_configs(&self, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.delete_by_tenant(tenant_id).await?;
         self.invalidate_tenant_cache(tenant_id).await.ok();

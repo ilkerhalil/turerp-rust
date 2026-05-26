@@ -264,7 +264,6 @@ pub async fn get_cdc_status(
     _admin_user: AdminUser,
     app_state: web::Data<crate::app::AppState>,
 ) -> Result<HttpResponse, ApiError> {
-    let _ = &app_state;
     {
         if let Some(ref listener) = app_state.infra.cdc_listener {
             let active = listener.is_active();

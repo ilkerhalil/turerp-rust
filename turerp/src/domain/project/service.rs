@@ -31,18 +31,22 @@ impl ProjectService {
             cost_repo,
         }
     }
+    #[tracing::instrument(skip(self))]
     pub async fn create_project(&self, create: CreateProject) -> Result<Project, ApiError> {
         self.project_repo.create(create).await
     }
+    #[tracing::instrument(skip(self))]
     pub async fn get_project(&self, id: i64, tenant_id: i64) -> Result<Project, ApiError> {
         self.project_repo
             .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))
     }
+    #[tracing::instrument(skip(self))]
     pub async fn get_projects_by_tenant(&self, tenant_id: i64) -> Result<Vec<Project>, ApiError> {
         self.project_repo.find_by_tenant(tenant_id).await
     }
+    #[tracing::instrument(skip(self))]
     pub async fn get_projects_paginated(
         &self,
         tenant_id: i64,
@@ -55,6 +59,7 @@ impl ProjectService {
             .find_by_tenant_paginated(tenant_id, page, per_page)
             .await
     }
+    #[tracing::instrument(skip(self))]
     pub async fn update_project_status(
         &self,
         id: i64,
@@ -63,12 +68,15 @@ impl ProjectService {
     ) -> Result<Project, ApiError> {
         self.project_repo.update_status(id, tenant_id, status).await
     }
+    #[tracing::instrument(skip(self))]
     pub async fn create_wbs_item(&self, create: CreateWbsItem) -> Result<WbsItem, ApiError> {
         self.wbs_repo.create(create).await
     }
+    #[tracing::instrument(skip(self))]
     pub async fn get_wbs_by_project(&self, project_id: i64) -> Result<Vec<WbsItem>, ApiError> {
         self.wbs_repo.find_by_project(project_id).await
     }
+    #[tracing::instrument(skip(self))]
     pub async fn update_wbs_progress(
         &self,
         id: i64,
@@ -77,15 +85,18 @@ impl ProjectService {
     ) -> Result<WbsItem, ApiError> {
         self.wbs_repo.update_progress(id, progress, hours).await
     }
+    #[tracing::instrument(skip(self))]
     pub async fn create_project_cost(
         &self,
         create: CreateProjectCost,
     ) -> Result<ProjectCost, ApiError> {
         self.cost_repo.create(create).await
     }
+    #[tracing::instrument(skip(self))]
     pub async fn get_project_costs(&self, project_id: i64) -> Result<Vec<ProjectCost>, ApiError> {
         self.cost_repo.find_by_project(project_id).await
     }
+    #[tracing::instrument(skip(self))]
     pub async fn get_profitability(
         &self,
         project_id: i64,
@@ -112,6 +123,7 @@ impl ProjectService {
     }
 
     // Soft delete operations
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_project(
         &self,
         id: i64,
@@ -123,14 +135,17 @@ impl ProjectService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_project(&self, id: i64, tenant_id: i64) -> Result<Project, ApiError> {
         self.project_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_projects(&self, tenant_id: i64) -> Result<Vec<Project>, ApiError> {
         self.project_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_project(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.project_repo.destroy(id, tenant_id).await
     }

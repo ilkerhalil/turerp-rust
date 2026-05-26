@@ -81,6 +81,7 @@ impl NotificationService {
     }
 
     /// Send a notification (queues job for async delivery)
+    #[tracing::instrument(skip(self))]
     pub async fn send(
         &self,
         request: NotificationRequest,
@@ -225,6 +226,7 @@ impl NotificationService {
     }
 
     /// Get a notification by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_notification(
         &self,
         id: i64,
@@ -235,6 +237,7 @@ impl NotificationService {
     }
 
     /// Get notification history for a user
+    #[tracing::instrument(skip(self))]
     pub async fn get_history(
         &self,
         tenant_id: i64,
@@ -256,6 +259,7 @@ impl NotificationService {
     }
 
     /// Get in-app notifications for a user
+    #[tracing::instrument(skip(self))]
     pub async fn get_in_app_notifications(
         &self,
         tenant_id: i64,
@@ -270,6 +274,7 @@ impl NotificationService {
     }
 
     /// Mark an in-app notification as read
+    #[tracing::instrument(skip(self))]
     pub async fn mark_as_read(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.in_app_repo.mark_as_read(id, tenant_id).await?;
         self.notification_repo
@@ -279,16 +284,19 @@ impl NotificationService {
     }
 
     /// Mark all notifications as read for a user
+    #[tracing::instrument(skip(self))]
     pub async fn mark_all_as_read(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError> {
         self.in_app_repo.mark_all_as_read(tenant_id, user_id).await
     }
 
     /// Get unread notification count for a user
+    #[tracing::instrument(skip(self))]
     pub async fn unread_count(&self, tenant_id: i64, user_id: i64) -> Result<u64, ApiError> {
         self.in_app_repo.unread_count(tenant_id, user_id).await
     }
 
     /// Get user preferences
+    #[tracing::instrument(skip(self))]
     pub async fn get_preferences(
         &self,
         tenant_id: i64,
@@ -302,6 +310,7 @@ impl NotificationService {
     }
 
     /// Update user preferences
+    #[tracing::instrument(skip(self))]
     pub async fn update_preferences(
         &self,
         tenant_id: i64,
@@ -316,6 +325,7 @@ impl NotificationService {
     }
 
     /// Retry a failed notification
+    #[tracing::instrument(skip(self))]
     pub async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let notification = self
             .notification_repo
@@ -350,6 +360,7 @@ impl NotificationService {
     }
 
     /// Execute notification delivery (called by job worker)
+    #[tracing::instrument(skip(self))]
     pub async fn execute_delivery(
         &self,
         notification_id: i64,
@@ -431,6 +442,7 @@ impl NotificationService {
     }
 
     /// Soft delete a notification
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete(
         &self,
         id: i64,
@@ -443,11 +455,13 @@ impl NotificationService {
     }
 
     /// Restore a soft-deleted notification
+    #[tracing::instrument(skip(self))]
     pub async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.notification_repo.restore(id, tenant_id).await
     }
 
     /// List deleted notifications for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn find_deleted(
         &self,
         tenant_id: i64,
@@ -457,6 +471,7 @@ impl NotificationService {
     }
 
     /// Permanently destroy a soft-deleted notification
+    #[tracing::instrument(skip(self))]
     pub async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.notification_repo.destroy(id, tenant_id).await
     }
@@ -466,6 +481,7 @@ impl NotificationService {
     // -----------------------------------------------------------------------
 
     /// Register a push token for a user
+    #[tracing::instrument(skip(self))]
     pub async fn register_push_token(
         &self,
         tenant_id: i64,
@@ -475,6 +491,7 @@ impl NotificationService {
     }
 
     /// Unregister a push token for a user by device type
+    #[tracing::instrument(skip(self))]
     pub async fn unregister_push_token(
         &self,
         tenant_id: i64,
@@ -487,6 +504,7 @@ impl NotificationService {
     }
 
     /// Send a push notification to a user
+    #[tracing::instrument(skip(self))]
     pub async fn send_push_notification(
         &self,
         tenant_id: i64,
@@ -499,6 +517,7 @@ impl NotificationService {
     }
 
     /// Broadcast a push notification to all active users in a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn broadcast_push_notification(
         &self,
         tenant_id: i64,
@@ -508,6 +527,7 @@ impl NotificationService {
     }
 
     /// Get all active push tokens for a user
+    #[tracing::instrument(skip(self))]
     pub async fn get_user_push_tokens(
         &self,
         tenant_id: i64,

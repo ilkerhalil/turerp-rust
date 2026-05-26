@@ -29,6 +29,7 @@ impl CurrencyService {
     // ---- Currency Operations ----
 
     /// Create a new currency
+    #[tracing::instrument(skip(self))]
     pub async fn create_currency(
         &self,
         create: CreateCurrency,
@@ -54,6 +55,7 @@ impl CurrencyService {
     }
 
     /// Get a currency by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_currency(&self, id: i64, tenant_id: i64) -> Result<Currency, ApiError> {
         self.currency_repo
             .find_by_id(id, tenant_id)
@@ -62,6 +64,7 @@ impl CurrencyService {
     }
 
     /// Get a currency by code
+    #[tracing::instrument(skip(self))]
     pub async fn get_currency_by_code(
         &self,
         code: &str,
@@ -74,6 +77,7 @@ impl CurrencyService {
     }
 
     /// Get a currency by code, including soft-deleted ones
+    #[tracing::instrument(skip(self))]
     pub async fn get_currency_by_code_include_deleted(
         &self,
         code: &str,
@@ -86,6 +90,7 @@ impl CurrencyService {
     }
 
     /// Get the base currency for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn get_base_currency(&self, tenant_id: i64) -> Result<Currency, ApiError> {
         self.currency_repo
             .find_base(tenant_id)
@@ -94,6 +99,7 @@ impl CurrencyService {
     }
 
     /// List currencies with optional active filter and pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_currencies(
         &self,
         tenant_id: i64,
@@ -106,6 +112,7 @@ impl CurrencyService {
     }
 
     /// Update a currency
+    #[tracing::instrument(skip(self))]
     pub async fn update_currency(
         &self,
         id: i64,
@@ -136,6 +143,7 @@ impl CurrencyService {
     }
 
     /// Delete a currency
+    #[tracing::instrument(skip(self))]
     pub async fn delete_currency(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.currency_repo
             .find_by_id(id, tenant_id)
@@ -145,6 +153,7 @@ impl CurrencyService {
     }
 
     /// Soft delete a currency
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_currency(
         &self,
         id: i64,
@@ -157,16 +166,19 @@ impl CurrencyService {
     }
 
     /// Restore a soft-deleted currency
+    #[tracing::instrument(skip(self))]
     pub async fn restore_currency(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.currency_repo.restore(id, tenant_id).await
     }
 
     /// List deleted currencies for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_currencies(&self, tenant_id: i64) -> Result<Vec<Currency>, ApiError> {
         self.currency_repo.find_deleted(tenant_id).await
     }
 
     /// Permanently destroy a soft-deleted currency
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_currency(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.currency_repo.destroy(id, tenant_id).await
     }
@@ -174,6 +186,7 @@ impl CurrencyService {
     // ---- Exchange Rate Operations ----
 
     /// Create a new exchange rate
+    #[tracing::instrument(skip(self))]
     pub async fn create_exchange_rate(
         &self,
         create: CreateExchangeRate,
@@ -193,6 +206,7 @@ impl CurrencyService {
     }
 
     /// Get an exchange rate by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_exchange_rate(
         &self,
         id: i64,
@@ -205,6 +219,7 @@ impl CurrencyService {
     }
 
     /// Get the effective exchange rate for a pair on a given date
+    #[tracing::instrument(skip(self))]
     pub async fn get_effective_rate(
         &self,
         from: &str,
@@ -301,6 +316,7 @@ impl CurrencyService {
     }
 
     /// List exchange rates with optional currency and date filters
+    #[tracing::instrument(skip(self))]
     pub async fn list_exchange_rates(
         &self,
         tenant_id: i64,
@@ -314,6 +330,7 @@ impl CurrencyService {
     }
 
     /// List all rates effective on a specific date
+    #[tracing::instrument(skip(self))]
     pub async fn list_effective_on(
         &self,
         tenant_id: i64,
@@ -326,6 +343,7 @@ impl CurrencyService {
     }
 
     /// Update an exchange rate
+    #[tracing::instrument(skip(self))]
     pub async fn update_exchange_rate(
         &self,
         id: i64,
@@ -343,6 +361,7 @@ impl CurrencyService {
     }
 
     /// Delete an exchange rate
+    #[tracing::instrument(skip(self))]
     pub async fn delete_exchange_rate(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.rate_repo
             .find_by_id(id, tenant_id)
@@ -352,6 +371,7 @@ impl CurrencyService {
     }
 
     /// Soft delete an exchange rate
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_exchange_rate(
         &self,
         id: i64,
@@ -362,11 +382,13 @@ impl CurrencyService {
     }
 
     /// Restore a soft-deleted exchange rate
+    #[tracing::instrument(skip(self))]
     pub async fn restore_exchange_rate(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.rate_repo.restore(id, tenant_id).await
     }
 
     /// List deleted exchange rates for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_exchange_rates(
         &self,
         tenant_id: i64,
@@ -375,6 +397,7 @@ impl CurrencyService {
     }
 
     /// Permanently destroy a soft-deleted exchange rate
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_exchange_rate(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.rate_repo.destroy(id, tenant_id).await
     }
@@ -382,6 +405,7 @@ impl CurrencyService {
     // ---- Conversion Operations ----
 
     /// Convert an amount from one currency to another using the effective rate
+    #[tracing::instrument(skip(self))]
     pub async fn convert(
         &self,
         amount: Decimal,

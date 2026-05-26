@@ -30,6 +30,7 @@ impl EFaturaService {
     ///
     /// Since cross-domain invoice lookup is not yet available, this creates
     /// a placeholder e-Fatura with a generated UUID and document number.
+    #[tracing::instrument(skip(self))]
     pub async fn create_from_invoice(
         &self,
         invoice_id: i64,
@@ -101,6 +102,7 @@ impl EFaturaService {
     }
 
     /// Get an e-Fatura by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_efatura(&self, id: i64, tenant_id: i64) -> Result<EFatura, ApiError> {
         self.repo
             .find_by_id(id, tenant_id)
@@ -109,6 +111,7 @@ impl EFaturaService {
     }
 
     /// Get an e-Fatura by UUID
+    #[tracing::instrument(skip(self))]
     pub async fn get_by_uuid(&self, uuid: &str, tenant_id: i64) -> Result<EFatura, ApiError> {
         self.repo
             .find_by_uuid(uuid, tenant_id)
@@ -117,6 +120,7 @@ impl EFaturaService {
     }
 
     /// List e-Fatura documents with optional status filter and pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_efaturas(
         &self,
         tenant_id: i64,
@@ -127,6 +131,7 @@ impl EFaturaService {
     }
 
     /// Send an e-Fatura to GIB
+    #[tracing::instrument(skip(self))]
     pub async fn send_to_gib(&self, id: i64, tenant_id: i64) -> Result<EFatura, ApiError> {
         let fatura = self.get_efatura(id, tenant_id).await?;
 
@@ -189,6 +194,7 @@ impl EFaturaService {
     }
 
     /// Check the status of an e-Fatura at GIB by UUID
+    #[tracing::instrument(skip(self))]
     pub async fn check_status(&self, uuid: &str, tenant_id: i64) -> Result<EFatura, ApiError> {
         let fatura = self.get_by_uuid(uuid, tenant_id).await?;
         let gib_uuid = Self::extract_gib_uuid(&fatura);
@@ -215,6 +221,7 @@ impl EFaturaService {
     }
 
     /// Cancel (retract) an e-Fatura
+    #[tracing::instrument(skip(self))]
     pub async fn cancel_efatura(
         &self,
         id: i64,
@@ -250,6 +257,7 @@ impl EFaturaService {
     /// Get the XML content of an e-Fatura.
     ///
     /// If no stored XML exists, a placeholder is generated.
+    #[tracing::instrument(skip(self))]
     pub async fn get_xml(&self, id: i64, tenant_id: i64) -> Result<String, ApiError> {
         let fatura = self.get_efatura(id, tenant_id).await?;
 

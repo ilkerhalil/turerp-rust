@@ -33,6 +33,7 @@ impl StockService {
     }
 
     // Warehouse operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_warehouse(
         &self,
         create: CreateWarehouse,
@@ -44,6 +45,7 @@ impl StockService {
         Ok(warehouse.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_warehouse(
         &self,
         id: i64,
@@ -57,6 +59,7 @@ impl StockService {
         Ok(warehouse.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_warehouses_by_tenant(
         &self,
         tenant_id: i64,
@@ -65,6 +68,7 @@ impl StockService {
         Ok(warehouses.into_iter().map(|w| w.into()).collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_warehouses_paginated(
         &self,
         tenant_id: i64,
@@ -85,6 +89,7 @@ impl StockService {
         ))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_warehouse(
         &self,
         id: i64,
@@ -101,6 +106,7 @@ impl StockService {
         Ok(warehouse.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_warehouse(
         &self,
         id: i64,
@@ -113,11 +119,13 @@ impl StockService {
     }
 
     /// Restore a soft-deleted warehouse (admin only)
+    #[tracing::instrument(skip(self))]
     pub async fn restore_warehouse(&self, id: i64, tenant_id: i64) -> Result<Warehouse, ApiError> {
         self.warehouse_repo.restore(id, tenant_id).await
     }
 
     /// List soft-deleted warehouses (admin only)
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_warehouses(
         &self,
         tenant_id: i64,
@@ -126,11 +134,13 @@ impl StockService {
     }
 
     /// Permanently delete a warehouse (admin only, after soft delete)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_warehouse(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.warehouse_repo.destroy(id, tenant_id).await
     }
 
     // Stock level operations
+    #[tracing::instrument(skip(self))]
     pub async fn get_stock_level(
         &self,
         warehouse_id: i64,
@@ -144,6 +154,7 @@ impl StockService {
         Ok(level.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_stock_by_product(
         &self,
         product_id: i64,
@@ -152,6 +163,7 @@ impl StockService {
         Ok(levels.into_iter().map(|l| l.into()).collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_stock_by_warehouse(
         &self,
         warehouse_id: i64,
@@ -163,6 +175,7 @@ impl StockService {
         Ok(levels.into_iter().map(|l| l.into()).collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_stock_summary(
         &self,
         product_id: i64,
@@ -199,6 +212,7 @@ impl StockService {
     }
 
     /// Soft delete a stock level
+    #[tracing::instrument(skip(self))]
     pub async fn delete_stock_level(
         &self,
         warehouse_id: i64,
@@ -211,6 +225,7 @@ impl StockService {
     }
 
     /// Restore a soft-deleted stock level
+    #[tracing::instrument(skip(self))]
     pub async fn restore_stock_level(
         &self,
         warehouse_id: i64,
@@ -222,6 +237,7 @@ impl StockService {
     }
 
     /// List soft-deleted stock levels for a warehouse
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_stock_levels(
         &self,
         warehouse_id: i64,
@@ -230,6 +246,7 @@ impl StockService {
     }
 
     /// Permanently delete a stock level
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_stock_level(
         &self,
         warehouse_id: i64,
@@ -241,6 +258,7 @@ impl StockService {
     }
 
     // Stock movement operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_stock_movement(
         &self,
         create: CreateStockMovement,
@@ -301,6 +319,7 @@ impl StockService {
         Ok(movement.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_stock_movements_by_product(
         &self,
         product_id: i64,
@@ -313,6 +332,7 @@ impl StockService {
         Ok(movements.into_iter().map(|m| m.into()).collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_stock_movements_by_warehouse(
         &self,
         warehouse_id: i64,
@@ -325,6 +345,7 @@ impl StockService {
         Ok(movements.into_iter().map(|m| m.into()).collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_stock_movements_by_tenant(
         &self,
         tenant_id: i64,
@@ -334,6 +355,7 @@ impl StockService {
     }
 
     /// Soft delete a stock movement with tenant isolation
+    #[tracing::instrument(skip(self))]
     pub async fn delete_stock_movement(
         &self,
         id: i64,
@@ -346,6 +368,7 @@ impl StockService {
     }
 
     /// Restore a soft-deleted stock movement with tenant isolation
+    #[tracing::instrument(skip(self))]
     pub async fn restore_stock_movement(
         &self,
         id: i64,
@@ -355,6 +378,7 @@ impl StockService {
     }
 
     /// List soft-deleted stock movements for a warehouse
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_stock_movements(
         &self,
         warehouse_id: i64,
@@ -366,11 +390,13 @@ impl StockService {
     }
 
     /// Permanently delete a stock movement with tenant isolation
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_stock_movement(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.stock_movement_repo.destroy(id, tenant_id).await
     }
 
     // Reservation operations
+    #[tracing::instrument(skip(self))]
     pub async fn reserve_stock(
         &self,
         warehouse_id: i64,
@@ -384,6 +410,7 @@ impl StockService {
         Ok(level.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn release_stock(
         &self,
         warehouse_id: i64,

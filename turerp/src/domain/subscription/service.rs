@@ -27,6 +27,7 @@ impl SubscriptionService {
     // --- Plans ---
 
     /// Create a subscription plan
+    #[tracing::instrument(skip(self))]
     pub async fn create_plan(
         &self,
         create: CreatePlan,
@@ -42,6 +43,7 @@ impl SubscriptionService {
     }
 
     /// Get a plan by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_plan(
         &self,
         id: i64,
@@ -59,6 +61,7 @@ impl SubscriptionService {
     }
 
     /// List all plans for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_plans(
         &self,
         tenant_id: i64,
@@ -68,6 +71,7 @@ impl SubscriptionService {
     }
 
     /// Update a plan
+    #[tracing::instrument(skip(self))]
     pub async fn update_plan(
         &self,
         id: i64,
@@ -83,6 +87,7 @@ impl SubscriptionService {
     }
 
     /// Delete a plan
+    #[tracing::instrument(skip(self))]
     pub async fn delete_plan(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.delete_plan(id, tenant_id).await?;
         tracing::info!(tenant_id, plan_id = id, "Deleted subscription plan");
@@ -92,6 +97,7 @@ impl SubscriptionService {
     // --- Subscriptions ---
 
     /// Create a subscription
+    #[tracing::instrument(skip(self))]
     pub async fn create_subscription(
         &self,
         create: CreateSubscription,
@@ -107,6 +113,7 @@ impl SubscriptionService {
     }
 
     /// Get a subscription by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_subscription(
         &self,
         id: i64,
@@ -124,6 +131,7 @@ impl SubscriptionService {
     }
 
     /// List all subscriptions for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_subscriptions(
         &self,
         tenant_id: i64,
@@ -133,6 +141,7 @@ impl SubscriptionService {
     }
 
     /// List active subscriptions for a customer
+    #[tracing::instrument(skip(self))]
     pub async fn list_active_by_customer(
         &self,
         customer_id: i64,
@@ -146,6 +155,7 @@ impl SubscriptionService {
     }
 
     /// Update a subscription
+    #[tracing::instrument(skip(self))]
     pub async fn update_subscription(
         &self,
         id: i64,
@@ -161,6 +171,7 @@ impl SubscriptionService {
     }
 
     /// Delete a subscription
+    #[tracing::instrument(skip(self))]
     pub async fn delete_subscription(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.delete_subscription(id, tenant_id).await?;
         tracing::info!(tenant_id, subscription_id = id, "Deleted subscription");
@@ -170,6 +181,7 @@ impl SubscriptionService {
     // --- Billing ---
 
     /// Renew a subscription (extend by billing cycle)
+    #[tracing::instrument(skip(self))]
     pub async fn renew_subscription(
         &self,
         id: i64,
@@ -209,6 +221,7 @@ impl SubscriptionService {
     }
 
     /// Find subscriptions due for billing on or before a date
+    #[tracing::instrument(skip(self))]
     pub async fn due_for_billing(
         &self,
         tenant_id: i64,
@@ -219,6 +232,7 @@ impl SubscriptionService {
     }
 
     /// Get invoices for a subscription
+    #[tracing::instrument(skip(self))]
     pub async fn get_invoices(
         &self,
         subscription_id: i64,
@@ -234,6 +248,7 @@ impl SubscriptionService {
     // --- Proration ---
 
     /// Calculate proration for a subscription plan change
+    #[tracing::instrument(skip(self))]
     pub async fn calculate_proration(
         &self,
         subscription_id: i64,
@@ -322,6 +337,7 @@ impl SubscriptionService {
     // --- Dunning ---
 
     /// Get dunning entries for a subscription
+    #[tracing::instrument(skip(self))]
     pub async fn get_dunning_status(
         &self,
         subscription_id: i64,
@@ -336,6 +352,7 @@ impl SubscriptionService {
 
     /// Handle dunning retry for a subscription with failed payment
     /// Returns the updated dunning entry after retry attempt
+    #[tracing::instrument(skip(self))]
     pub async fn handle_dunning(
         &self,
         subscription_id: i64,
@@ -428,6 +445,7 @@ impl SubscriptionService {
     // --- Trial ---
 
     /// Convert a trial subscription to paid
+    #[tracing::instrument(skip(self))]
     pub async fn process_trial_conversion(
         &self,
         subscription_id: i64,
@@ -488,6 +506,7 @@ impl SubscriptionService {
     }
 
     /// List trial subscriptions for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_trial_subscriptions(
         &self,
         tenant_id: i64,
@@ -499,6 +518,7 @@ impl SubscriptionService {
     // --- Usage ---
 
     /// Record usage for metered billing
+    #[tracing::instrument(skip(self))]
     pub async fn record_usage(
         &self,
         subscription_id: i64,
@@ -567,6 +587,7 @@ impl SubscriptionService {
     }
 
     /// Get usage records for a subscription
+    #[tracing::instrument(skip(self))]
     pub async fn get_usage_records(
         &self,
         subscription_id: i64,
@@ -582,6 +603,7 @@ impl SubscriptionService {
     // --- Cancellation ---
 
     /// Cancel a subscription with optional refund calculation
+    #[tracing::instrument(skip(self))]
     pub async fn cancel_subscription(
         &self,
         subscription_id: i64,

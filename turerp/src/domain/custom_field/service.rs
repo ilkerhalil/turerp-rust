@@ -21,6 +21,7 @@ impl CustomFieldService {
     }
 
     /// Create a new custom field definition
+    #[tracing::instrument(skip(self))]
     pub async fn create(
         &self,
         create: CreateCustomFieldDefinition,
@@ -78,6 +79,7 @@ impl CustomFieldService {
     }
 
     /// Get a custom field definition by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_by_id(
         &self,
         id: i64,
@@ -92,6 +94,7 @@ impl CustomFieldService {
     }
 
     /// List custom field definitions by module
+    #[tracing::instrument(skip(self))]
     pub async fn list_by_module(
         &self,
         tenant_id: i64,
@@ -102,6 +105,7 @@ impl CustomFieldService {
     }
 
     /// List all custom field definitions for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_all(
         &self,
         tenant_id: i64,
@@ -111,6 +115,7 @@ impl CustomFieldService {
     }
 
     /// Update a custom field definition
+    #[tracing::instrument(skip(self))]
     pub async fn update(
         &self,
         id: i64,
@@ -148,6 +153,7 @@ impl CustomFieldService {
     }
 
     /// Soft delete a custom field definition
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete(
         &self,
         id: i64,
@@ -158,11 +164,13 @@ impl CustomFieldService {
     }
 
     /// Restore a soft-deleted custom field definition
+    #[tracing::instrument(skip(self))]
     pub async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.restore(id, tenant_id).await
     }
 
     /// List deleted custom field definitions for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted(
         &self,
         tenant_id: i64,
@@ -172,11 +180,13 @@ impl CustomFieldService {
     }
 
     /// Permanently destroy a soft-deleted custom field definition
+    #[tracing::instrument(skip(self))]
     pub async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id, tenant_id).await
     }
 
     /// Validate custom field values against their definitions
+    #[tracing::instrument(skip(self))]
     pub async fn validate_entity_custom_fields(
         &self,
         tenant_id: i64,

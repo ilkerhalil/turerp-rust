@@ -50,7 +50,11 @@ impl InvoiceService {
         let lines = match self.line_repo.create_many(invoice.id, create.lines).await {
             Ok(lines) => lines,
             Err(e) => {
-                let _ = self.invoice_repo.delete(invoice.id, create.tenant_id).await;
+                if let Err(rollback_err) =
+                    self.invoice_repo.delete(invoice.id, create.tenant_id).await
+                {
+                    tracing::warn!(error = %rollback_err, "Failed to roll back orphan invoice {} after line creation failed", invoice.id);
+                }
                 return Err(e);
             }
         };
@@ -218,10 +222,13 @@ impl InvoiceService {
             .update_paid_amount(invoice.id, invoice.tenant_id, new_paid)
             .await
         {
-            let _ = self
+            if let Err(rollback_err) = self
                 .payment_repo
                 .delete(payment.id, payment.tenant_id)
-                .await;
+                .await
+            {
+                tracing::warn!(error = %rollback_err, "Failed to roll back payment {} after paid amount update failed", payment.id);
+            }
             return Err(e);
         }
 

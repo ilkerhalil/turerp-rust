@@ -232,7 +232,7 @@ impl BackgroundEvaluator {
     }
 
     /// Extract label key/value pairs from a Prometheus metric line fragment.
-    #[allow(dead_code)]
+    #[cfg(test)]
     fn extract_labels(fragment: &str) -> HashMap<String, String> {
         let mut labels = HashMap::new();
         if let Some(start) = fragment.find('{') {

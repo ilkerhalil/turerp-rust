@@ -92,6 +92,7 @@ impl SgkPayrollService {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn register_employee(
         &self,
         create: CreateSgkEmployeeRegistration,
@@ -116,6 +117,7 @@ impl SgkPayrollService {
         self.sgk_reg_repo.create(reg).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_or_create_config(
         &self,
         tenant_id: i64,
@@ -138,6 +140,7 @@ impl SgkPayrollService {
         }
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn calculate_sgk_payroll(
         &self,
         tenant_id: i64,
@@ -208,6 +211,7 @@ impl SgkPayrollService {
         self.hr_provider.create_payroll(payroll).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn generate_ebildirge(
         &self,
         tenant_id: i64,
@@ -285,6 +289,7 @@ impl SgkPayrollService {
         Ok(xml)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn add_bonus(&self, create: CreateEmployeeBonus) -> Result<EmployeeBonus, ApiError> {
         create
             .validate()
@@ -303,6 +308,7 @@ impl SgkPayrollService {
         self.bonus_repo.create(bonus).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_payroll_summary(
         &self,
         tenant_id: i64,

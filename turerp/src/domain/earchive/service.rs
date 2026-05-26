@@ -24,6 +24,7 @@ impl EarchiveService {
     }
 
     /// Generate an E-Archive document from an invoice.
+    #[tracing::instrument(skip(self))]
     pub async fn generate_earchive(
         &self,
         tenant_id: i64,
@@ -141,6 +142,7 @@ impl EarchiveService {
     }
 
     /// Sign an E-Archive document (mock signing)
+    #[tracing::instrument(skip(self))]
     pub async fn sign_document(
         &self,
         tenant_id: i64,
@@ -178,6 +180,7 @@ impl EarchiveService {
     }
 
     /// Send an E-Archive document to GİB (mock)
+    #[tracing::instrument(skip(self))]
     pub async fn send_to_gib(
         &self,
         tenant_id: i64,
@@ -209,6 +212,7 @@ impl EarchiveService {
     }
 
     /// Get an E-Archive document by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_document(
         &self,
         tenant_id: i64,
@@ -223,6 +227,7 @@ impl EarchiveService {
     }
 
     /// List E-Archive documents with optional status filter and pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_documents(
         &self,
         tenant_id: i64,
@@ -235,6 +240,7 @@ impl EarchiveService {
     }
 
     /// Cancel an E-Archive document
+    #[tracing::instrument(skip(self))]
     pub async fn cancel_document(
         &self,
         tenant_id: i64,
@@ -262,6 +268,7 @@ impl EarchiveService {
     }
 
     /// Create a document directly from a request (for testing/advanced use)
+    #[tracing::instrument(skip(self))]
     pub async fn create_document(
         &self,
         tenant_id: i64,

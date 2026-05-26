@@ -26,6 +26,7 @@ impl CostCenterService {
     // ---- Cost Center Operations ----
 
     /// Create a new cost center
+    #[tracing::instrument(skip(self))]
     pub async fn create_cost_center(
         &self,
         create: CreateCostCenter,
@@ -45,6 +46,7 @@ impl CostCenterService {
     }
 
     /// Get a cost center by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_cost_center(&self, id: i64, tenant_id: i64) -> Result<CostCenter, ApiError> {
         self.repo.find_by_id(id, tenant_id).await?.ok_or_else(|| {
             tracing::warn!(tenant_id, cost_center_id = id, "Cost center not found");
@@ -53,6 +55,7 @@ impl CostCenterService {
     }
 
     /// List cost centers with optional type filter and pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_cost_centers(
         &self,
         tenant_id: i64,
@@ -63,6 +66,7 @@ impl CostCenterService {
     }
 
     /// Find cost centers by type
+    #[tracing::instrument(skip(self))]
     pub async fn list_by_type(
         &self,
         tenant_id: i64,
@@ -72,6 +76,7 @@ impl CostCenterService {
     }
 
     /// Update a cost center
+    #[tracing::instrument(skip(self))]
     pub async fn update_cost_center(
         &self,
         id: i64,
@@ -84,6 +89,7 @@ impl CostCenterService {
     }
 
     /// Soft delete a cost center
+    #[tracing::instrument(skip(self))]
     pub async fn delete_cost_center(
         &self,
         id: i64,
@@ -96,6 +102,7 @@ impl CostCenterService {
     }
 
     /// Restore a soft-deleted cost center
+    #[tracing::instrument(skip(self))]
     pub async fn restore_cost_center(
         &self,
         id: i64,
@@ -107,6 +114,7 @@ impl CostCenterService {
     }
 
     /// Bulk restore soft-deleted cost centers
+    #[tracing::instrument(skip(self))]
     pub async fn bulk_restore_cost_centers(
         &self,
         ids: Vec<i64>,
@@ -140,6 +148,7 @@ impl CostCenterService {
     }
 
     /// List soft-deleted cost centers
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_cost_centers(
         &self,
         tenant_id: i64,
@@ -148,6 +157,7 @@ impl CostCenterService {
     }
 
     /// Permanently destroy a soft-deleted cost center
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_cost_center(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id, tenant_id).await?;
         tracing::info!(tenant_id, cost_center_id = id, "Destroyed cost center");
@@ -157,6 +167,7 @@ impl CostCenterService {
     // ---- Allocation Operations ----
 
     /// Create a new allocation
+    #[tracing::instrument(skip(self))]
     pub async fn create_allocation(
         &self,
         allocation: CreateAllocation,
@@ -188,6 +199,7 @@ impl CostCenterService {
     }
 
     /// Get allocations for a cost center
+    #[tracing::instrument(skip(self))]
     pub async fn get_allocations(
         &self,
         cost_center_id: i64,
@@ -200,6 +212,7 @@ impl CostCenterService {
     // ---- Profitability Report ----
 
     /// Get profitability report for a cost center
+    #[tracing::instrument(skip(self))]
     pub async fn get_profitability_report(
         &self,
         cost_center_id: i64,
@@ -216,6 +229,7 @@ impl CostCenterService {
     // ---- Budget Operations ----
 
     /// Create a new budget
+    #[tracing::instrument(skip(self))]
     pub async fn create_budget(
         &self,
         budget: CreateBudget,
@@ -237,6 +251,7 @@ impl CostCenterService {
     }
 
     /// Get a budget by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_budget(&self, id: i64, tenant_id: i64) -> Result<Budget, ApiError> {
         self.repo
             .find_budget_by_id(id, tenant_id)
@@ -245,6 +260,7 @@ impl CostCenterService {
     }
 
     /// List budgets for a cost center
+    #[tracing::instrument(skip(self))]
     pub async fn list_budgets(
         &self,
         cost_center_id: i64,
@@ -257,6 +273,7 @@ impl CostCenterService {
     }
 
     /// Update a budget
+    #[tracing::instrument(skip(self))]
     pub async fn update_budget(
         &self,
         id: i64,
@@ -284,12 +301,14 @@ impl CostCenterService {
     }
 
     /// Delete a budget
+    #[tracing::instrument(skip(self))]
     pub async fn delete_budget(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.get_budget(id, tenant_id).await?;
         self.repo.delete_budget(id, tenant_id).await
     }
 
     /// Generate variance report for a cost center
+    #[tracing::instrument(skip(self))]
     pub async fn generate_variance_report(
         &self,
         cost_center_id: i64,
@@ -306,6 +325,7 @@ impl CostCenterService {
     // ---- Allocation Rule Operations ----
 
     /// Create an allocation rule
+    #[tracing::instrument(skip(self))]
     pub async fn create_allocation_rule(
         &self,
         rule: CreateAllocationRule,
@@ -343,6 +363,7 @@ impl CostCenterService {
     }
 
     /// Get an allocation rule by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_allocation_rule(
         &self,
         id: i64,
@@ -355,6 +376,7 @@ impl CostCenterService {
     }
 
     /// List allocation rules for a cost center
+    #[tracing::instrument(skip(self))]
     pub async fn list_allocation_rules(
         &self,
         cost_center_id: i64,
@@ -367,6 +389,7 @@ impl CostCenterService {
     }
 
     /// List active allocation rules for a source type
+    #[tracing::instrument(skip(self))]
     pub async fn get_rules_for_source(
         &self,
         source_type: &str,
@@ -378,6 +401,7 @@ impl CostCenterService {
     }
 
     /// Update an allocation rule
+    #[tracing::instrument(skip(self))]
     pub async fn update_allocation_rule(
         &self,
         id: i64,
@@ -416,12 +440,14 @@ impl CostCenterService {
     }
 
     /// Delete an allocation rule
+    #[tracing::instrument(skip(self))]
     pub async fn delete_allocation_rule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.get_allocation_rule(id, tenant_id).await?;
         self.repo.delete_allocation_rule(id, tenant_id).await
     }
 
     /// Apply matching allocation rules to a source and amount, generating allocations
+    #[tracing::instrument(skip(self))]
     pub async fn apply_allocation_rules(
         &self,
         source_type: &str,

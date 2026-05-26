@@ -68,7 +68,7 @@ impl JobExecutor {
     pub async fn shutdown(&self) {
         let tx = self.shutdown.lock().take();
         if let Some(tx) = tx {
-            let _ = tx.send(()).await;
+            let _ = tx.send(()).await.ok();
         }
     }
 
