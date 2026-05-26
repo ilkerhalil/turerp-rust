@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_subscription_endpoints_require_auth() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let endpoints = vec![
@@ -56,7 +56,7 @@ async fn test_subscription_endpoints_require_auth() {
 
 #[actix_web::test]
 async fn test_update_subscription() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 

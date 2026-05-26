@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_chart_account_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -46,7 +46,7 @@ async fn test_create_chart_account_success() {
 
 #[actix_web::test]
 async fn test_list_chart_accounts_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -89,7 +89,7 @@ async fn test_list_chart_accounts_paginated() {
 
 #[actix_web::test]
 async fn test_list_chart_accounts_by_group() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -144,7 +144,7 @@ async fn test_list_chart_accounts_by_group() {
 
 #[actix_web::test]
 async fn test_get_chart_account_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -181,7 +181,7 @@ async fn test_get_chart_account_success() {
 
 #[actix_web::test]
 async fn test_get_chart_account_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -197,7 +197,7 @@ async fn test_get_chart_account_not_found() {
 
 #[actix_web::test]
 async fn test_update_chart_account_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -244,7 +244,7 @@ async fn test_update_chart_account_success() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_chart_account() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -306,7 +306,7 @@ async fn test_delete_and_restore_chart_account() {
 
 #[actix_web::test]
 async fn test_list_deleted_chart_accounts() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -353,7 +353,7 @@ async fn test_list_deleted_chart_accounts() {
 
 #[actix_web::test]
 async fn test_destroy_chart_account_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -408,7 +408,7 @@ async fn test_destroy_chart_account_permanently() {
 
 #[actix_web::test]
 async fn test_get_account_tree() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -428,7 +428,7 @@ async fn test_get_account_tree() {
 
 #[actix_web::test]
 async fn test_get_trial_balance() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -452,7 +452,7 @@ async fn test_get_trial_balance() {
 
 #[actix_web::test]
 async fn test_chart_account_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()

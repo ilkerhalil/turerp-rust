@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_purchase_order_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -48,7 +48,7 @@ async fn test_create_purchase_order_success() {
 
 #[actix_web::test]
 async fn test_list_purchase_orders_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -94,7 +94,7 @@ async fn test_list_purchase_orders_paginated() {
 
 #[actix_web::test]
 async fn test_get_purchase_order_by_status() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -136,7 +136,7 @@ async fn test_get_purchase_order_by_status() {
 
 #[actix_web::test]
 async fn test_get_purchase_order_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -181,7 +181,7 @@ async fn test_get_purchase_order_success() {
 
 #[actix_web::test]
 async fn test_get_purchase_order_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -197,7 +197,7 @@ async fn test_get_purchase_order_not_found() {
 
 #[actix_web::test]
 async fn test_update_purchase_order_status() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -246,7 +246,7 @@ async fn test_update_purchase_order_status() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_purchase_order() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -321,7 +321,7 @@ async fn test_delete_and_restore_purchase_order() {
 
 #[actix_web::test]
 async fn test_list_deleted_purchase_orders() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -377,7 +377,7 @@ async fn test_list_deleted_purchase_orders() {
 
 #[actix_web::test]
 async fn test_destroy_purchase_order_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -441,7 +441,7 @@ async fn test_destroy_purchase_order_permanently() {
 
 #[actix_web::test]
 async fn test_create_purchase_request_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -478,7 +478,7 @@ async fn test_create_purchase_request_success() {
 
 #[actix_web::test]
 async fn test_list_purchase_requests_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -522,7 +522,7 @@ async fn test_list_purchase_requests_paginated() {
 
 #[actix_web::test]
 async fn test_get_purchase_request_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -565,7 +565,7 @@ async fn test_get_purchase_request_success() {
 
 #[actix_web::test]
 async fn test_get_purchase_request_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -581,7 +581,7 @@ async fn test_get_purchase_request_not_found() {
 
 #[actix_web::test]
 async fn test_update_purchase_request() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -628,7 +628,7 @@ async fn test_update_purchase_request() {
 
 #[actix_web::test]
 async fn test_approve_purchase_request() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -684,7 +684,7 @@ async fn test_approve_purchase_request() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_purchase_request() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -756,7 +756,7 @@ async fn test_delete_and_restore_purchase_request() {
 
 #[actix_web::test]
 async fn test_list_deleted_purchase_requests() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -809,7 +809,7 @@ async fn test_list_deleted_purchase_requests() {
 
 #[actix_web::test]
 async fn test_destroy_purchase_request_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -870,7 +870,7 @@ async fn test_destroy_purchase_request_permanently() {
 
 #[actix_web::test]
 async fn test_purchase_order_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -882,7 +882,7 @@ async fn test_purchase_order_unauthorized() {
 
 #[actix_web::test]
 async fn test_purchase_request_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -894,7 +894,7 @@ async fn test_purchase_request_unauthorized() {
 
 #[actix_web::test]
 async fn test_create_purchase_order_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let now = chrono::Utc::now();

@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_ledger_period_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -42,7 +42,7 @@ async fn test_create_ledger_period_success() {
 
 #[actix_web::test]
 async fn test_get_ledger_period_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -81,7 +81,7 @@ async fn test_get_ledger_period_success() {
 
 #[actix_web::test]
 async fn test_get_ledger_period_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -97,7 +97,7 @@ async fn test_get_ledger_period_not_found() {
 
 #[actix_web::test]
 async fn test_check_period_status() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -133,7 +133,7 @@ async fn test_check_period_status() {
 
 #[actix_web::test]
 async fn test_populate_period() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -198,7 +198,7 @@ async fn test_populate_period() {
 
 #[actix_web::test]
 async fn test_validate_period_balance() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -242,7 +242,7 @@ async fn test_validate_period_balance() {
 
 #[actix_web::test]
 async fn test_edefter_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -259,7 +259,7 @@ async fn test_edefter_unauthorized() {
 
 #[actix_web::test]
 async fn test_edefter_normal_user_forbidden() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_user!(&app, 1);
 

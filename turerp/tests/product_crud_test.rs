@@ -23,7 +23,7 @@ fn create_product_payload() -> serde_json::Value {
 
 #[actix_web::test]
 async fn test_create_product_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -45,7 +45,7 @@ async fn test_create_product_success() {
 
 #[actix_web::test]
 async fn test_list_products_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -83,7 +83,7 @@ async fn test_list_products_paginated() {
 
 #[actix_web::test]
 async fn test_get_product_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -112,7 +112,7 @@ async fn test_get_product_success() {
 
 #[actix_web::test]
 async fn test_get_product_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -128,7 +128,7 @@ async fn test_get_product_not_found() {
 
 #[actix_web::test]
 async fn test_update_product_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -162,7 +162,7 @@ async fn test_update_product_success() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_product() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -221,7 +221,7 @@ async fn test_delete_and_restore_product() {
 
 #[actix_web::test]
 async fn test_list_deleted_products() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -261,7 +261,7 @@ async fn test_list_deleted_products() {
 
 #[actix_web::test]
 async fn test_destroy_product_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -309,7 +309,7 @@ async fn test_destroy_product_permanently() {
 
 #[actix_web::test]
 async fn test_search_products() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -346,7 +346,7 @@ async fn test_search_products() {
 
 #[actix_web::test]
 async fn test_product_unauthorized_without_token() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()

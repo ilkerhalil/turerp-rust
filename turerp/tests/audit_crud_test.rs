@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_get_audit_logs_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -48,7 +48,7 @@ async fn test_get_audit_logs_success() {
 
 #[actix_web::test]
 async fn test_get_audit_logs_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -89,7 +89,7 @@ async fn test_get_audit_logs_paginated() {
 
 #[actix_web::test]
 async fn test_get_audit_logs_filtered_by_path() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -143,7 +143,7 @@ async fn test_get_audit_logs_filtered_by_path() {
 
 #[actix_web::test]
 async fn test_get_audit_logs_filtered_by_user_id() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -197,7 +197,7 @@ async fn test_get_audit_logs_filtered_by_user_id() {
 
 #[actix_web::test]
 async fn test_get_audit_logs_tenant_isolation() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -250,7 +250,7 @@ async fn test_get_audit_logs_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_get_audit_logs_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()

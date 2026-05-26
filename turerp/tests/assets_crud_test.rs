@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_asset_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -50,7 +50,7 @@ async fn test_create_asset_success() {
 
 #[actix_web::test]
 async fn test_list_assets_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -88,7 +88,7 @@ async fn test_list_assets_paginated() {
 
 #[actix_web::test]
 async fn test_get_asset_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -124,7 +124,7 @@ async fn test_get_asset_success() {
 
 #[actix_web::test]
 async fn test_get_asset_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -136,7 +136,7 @@ async fn test_get_asset_not_found() {
 
 #[actix_web::test]
 async fn test_update_asset_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -177,7 +177,7 @@ async fn test_update_asset_success() {
 
 #[actix_web::test]
 async fn test_get_assets_by_status() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -211,7 +211,7 @@ async fn test_get_assets_by_status() {
 
 #[actix_web::test]
 async fn test_unauthorized_assets_access() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get().uri("/api/v1/assets").to_request();
@@ -225,7 +225,7 @@ async fn test_unauthorized_assets_access() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_asset() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -292,7 +292,7 @@ async fn test_delete_and_restore_asset() {
 
 #[actix_web::test]
 async fn test_list_deleted_assets() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -339,7 +339,7 @@ async fn test_list_deleted_assets() {
 
 #[actix_web::test]
 async fn test_destroy_asset_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_webhook_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -39,7 +39,7 @@ async fn test_create_webhook_success() {
 
 #[actix_web::test]
 async fn test_list_webhooks() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -69,7 +69,7 @@ async fn test_list_webhooks() {
 
 #[actix_web::test]
 async fn test_get_webhook_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -103,7 +103,7 @@ async fn test_get_webhook_success() {
 
 #[actix_web::test]
 async fn test_get_webhook_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -119,7 +119,7 @@ async fn test_get_webhook_not_found() {
 
 #[actix_web::test]
 async fn test_update_webhook_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -163,7 +163,7 @@ async fn test_update_webhook_success() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_webhook() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -223,7 +223,7 @@ async fn test_delete_and_restore_webhook() {
 
 #[actix_web::test]
 async fn test_list_deleted_webhooks() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -268,7 +268,7 @@ async fn test_list_deleted_webhooks() {
 
 #[actix_web::test]
 async fn test_destroy_webhook_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -321,7 +321,7 @@ async fn test_destroy_webhook_permanently() {
 
 #[actix_web::test]
 async fn test_webhook_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -339,7 +339,7 @@ async fn test_webhook_unauthorized() {
 
 #[actix_web::test]
 async fn test_webhook_normal_user_forbidden() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_user!(&app, 1);
 

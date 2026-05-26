@@ -11,7 +11,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_start_workflow() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin(&app_state, 1).await;
@@ -46,7 +46,7 @@ async fn test_start_workflow() {
 
 #[actix_web::test]
 async fn test_start_workflow_invalid_entity_type() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -70,7 +70,7 @@ async fn test_start_workflow_invalid_entity_type() {
 
 #[actix_web::test]
 async fn test_start_workflow_mismatched_entity_type() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -99,7 +99,7 @@ async fn test_start_workflow_mismatched_entity_type() {
 
 #[actix_web::test]
 async fn test_approve_step() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -143,7 +143,7 @@ async fn test_approve_step() {
 
 #[actix_web::test]
 async fn test_approve_all_steps_to_completion() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -202,7 +202,7 @@ async fn test_approve_all_steps_to_completion() {
 
 #[actix_web::test]
 async fn test_reject_step() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -245,7 +245,7 @@ async fn test_reject_step() {
 
 #[actix_web::test]
 async fn test_resubmit_workflow() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -299,7 +299,7 @@ async fn test_resubmit_workflow() {
 
 #[actix_web::test]
 async fn test_approve_nonexistent_instance() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -322,7 +322,7 @@ async fn test_approve_nonexistent_instance() {
 
 #[actix_web::test]
 async fn test_get_instance() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin(&app_state, 1).await;
@@ -368,7 +368,7 @@ async fn test_get_instance() {
 
 #[actix_web::test]
 async fn test_get_instance_not_found() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -386,7 +386,7 @@ async fn test_get_instance_not_found() {
 
 #[actix_web::test]
 async fn test_get_instance_audit() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -431,7 +431,7 @@ async fn test_get_instance_audit() {
 
 #[actix_web::test]
 async fn test_get_pending_approvals() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _user_id) = register_admin(&app_state, 1).await;

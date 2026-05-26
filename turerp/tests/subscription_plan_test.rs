@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_plan_crud_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -113,7 +113,7 @@ async fn test_plan_crud_admin() {
 
 #[actix_web::test]
 async fn test_subscription_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -234,7 +234,7 @@ async fn test_subscription_crud() {
 
 #[actix_web::test]
 async fn test_plan_create_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (user_token, _) = register_user!(&app, 1);
 
@@ -258,7 +258,7 @@ async fn test_plan_create_requires_admin() {
 
 #[actix_web::test]
 async fn test_plan_update_delete_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (admin_token, _) = register_admin(&app_state, 1).await;
     let (user_token, _) = register_user!(&app, 1);

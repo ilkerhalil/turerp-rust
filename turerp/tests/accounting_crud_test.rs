@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_account_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -47,7 +47,7 @@ async fn test_create_account_success() {
 
 #[actix_web::test]
 async fn test_list_accounts_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -90,7 +90,7 @@ async fn test_list_accounts_paginated() {
 
 #[actix_web::test]
 async fn test_get_accounts_by_type() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -130,7 +130,7 @@ async fn test_get_accounts_by_type() {
 
 #[actix_web::test]
 async fn test_get_account_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -172,7 +172,7 @@ async fn test_get_account_success() {
 
 #[actix_web::test]
 async fn test_get_account_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -192,7 +192,7 @@ async fn test_get_account_not_found() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_account() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -265,7 +265,7 @@ async fn test_delete_and_restore_account() {
 
 #[actix_web::test]
 async fn test_list_deleted_accounts() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -318,7 +318,7 @@ async fn test_list_deleted_accounts() {
 
 #[actix_web::test]
 async fn test_destroy_account_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -379,7 +379,7 @@ async fn test_destroy_account_permanently() {
 
 #[actix_web::test]
 async fn test_create_journal_entry_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -468,7 +468,7 @@ async fn test_create_journal_entry_success() {
 
 #[actix_web::test]
 async fn test_list_journal_entries_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -543,7 +543,7 @@ async fn test_list_journal_entries_paginated() {
 
 #[actix_web::test]
 async fn test_get_journal_entry_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -617,7 +617,7 @@ async fn test_get_journal_entry_success() {
 
 #[actix_web::test]
 async fn test_get_journal_entry_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -633,7 +633,7 @@ async fn test_get_journal_entry_not_found() {
 
 #[actix_web::test]
 async fn test_post_and_void_journal_entry() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -721,7 +721,7 @@ async fn test_post_and_void_journal_entry() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_journal_entry() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -825,7 +825,7 @@ async fn test_delete_and_restore_journal_entry() {
 
 #[actix_web::test]
 async fn test_list_deleted_journal_entries() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -910,7 +910,7 @@ async fn test_list_deleted_journal_entries() {
 
 #[actix_web::test]
 async fn test_destroy_journal_entry_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -1003,7 +1003,7 @@ async fn test_destroy_journal_entry_permanently() {
 
 #[actix_web::test]
 async fn test_account_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -1015,7 +1015,7 @@ async fn test_account_unauthorized() {
 
 #[actix_web::test]
 async fn test_journal_entry_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -1027,7 +1027,7 @@ async fn test_journal_entry_unauthorized() {
 
 #[actix_web::test]
 async fn test_create_account_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()

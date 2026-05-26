@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_document_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -45,7 +45,7 @@ async fn test_create_document_success() {
 
 #[actix_web::test]
 async fn test_list_documents_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -84,7 +84,7 @@ async fn test_list_documents_paginated() {
 
 #[actix_web::test]
 async fn test_get_document_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -121,7 +121,7 @@ async fn test_get_document_success() {
 
 #[actix_web::test]
 async fn test_get_document_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -137,7 +137,7 @@ async fn test_get_document_not_found() {
 
 #[actix_web::test]
 async fn test_update_document_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -179,7 +179,7 @@ async fn test_update_document_success() {
 
 #[actix_web::test]
 async fn test_search_documents_by_query() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -227,7 +227,7 @@ async fn test_search_documents_by_query() {
 
 #[actix_web::test]
 async fn test_unauthorized_document_access() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -243,7 +243,7 @@ async fn test_unauthorized_document_access() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_document() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -311,7 +311,7 @@ async fn test_delete_and_restore_document() {
 
 #[actix_web::test]
 async fn test_list_deleted_documents() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -359,7 +359,7 @@ async fn test_list_deleted_documents() {
 
 #[actix_web::test]
 async fn test_destroy_document_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

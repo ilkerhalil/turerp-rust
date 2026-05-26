@@ -11,7 +11,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_allocation_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -59,7 +59,7 @@ async fn test_create_allocation_success() {
 
 #[actix_web::test]
 async fn test_get_allocations() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -116,7 +116,7 @@ async fn test_get_allocations() {
 
 #[actix_web::test]
 async fn test_get_profitability_report() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -195,7 +195,7 @@ async fn test_get_profitability_report() {
 
 #[actix_web::test]
 async fn test_create_cost_center_requires_admin() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (user_token, _user_id) = register_user!(&app, 1);
 
@@ -217,7 +217,7 @@ async fn test_create_cost_center_requires_admin() {
 
 #[actix_web::test]
 async fn test_update_cost_center_requires_admin() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (admin_token, _admin_id) = register_admin(&state, 1).await;
     let (user_token, _user_id) = register_user!(&app, 1);
@@ -252,7 +252,7 @@ async fn test_update_cost_center_requires_admin() {
 
 #[actix_web::test]
 async fn test_delete_cost_center_requires_admin() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (admin_token, _admin_id) = register_admin(&state, 1).await;
     let (user_token, _user_id) = register_user!(&app, 1);
@@ -290,7 +290,7 @@ async fn test_delete_cost_center_requires_admin() {
 
 #[actix_web::test]
 async fn test_tenant_isolation() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token_t1, _user_id_t1) = register_admin(&state, 1).await;
     let (token_t2, _user_id_t2) = register_admin(&state, 2).await;
@@ -343,7 +343,7 @@ async fn test_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_create_cost_center_validation_empty_code() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -369,7 +369,7 @@ async fn test_create_cost_center_validation_empty_code() {
 
 #[actix_web::test]
 async fn test_create_cost_center_validation_empty_name() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -395,7 +395,7 @@ async fn test_create_cost_center_validation_empty_name() {
 
 #[actix_web::test]
 async fn test_create_allocation_validation_negative_amount() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -439,7 +439,7 @@ async fn test_create_allocation_validation_negative_amount() {
 
 #[actix_web::test]
 async fn test_create_allocation_validation_bad_percentage() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -483,7 +483,7 @@ async fn test_create_allocation_validation_bad_percentage() {
 
 #[actix_web::test]
 async fn test_bulk_restore_validation_empty_ids() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

@@ -83,8 +83,8 @@ fn build_test_app_with_forecasting(
         )
 }
 
-fn create_seeded_app_state() -> turerp::app::AppState {
-    let mut state = create_test_app_state();
+async fn create_seeded_app_state() -> turerp::app::AppState {
+    let mut state = create_test_app_state().await;
 
     let repo = InMemoryForecastingRepository::new();
     let today = chrono::Utc::now();
@@ -114,7 +114,7 @@ fn create_seeded_app_state() -> turerp::app::AppState {
 
 #[actix_web::test]
 async fn test_forecast_demand_success() {
-    let state = create_seeded_app_state();
+    let state = create_seeded_app_state().await;
     let app = test::init_service(build_test_app_with_forecasting(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -145,7 +145,7 @@ async fn test_forecast_demand_success() {
 
 #[actix_web::test]
 async fn test_forecast_demand_not_found() {
-    let state = create_seeded_app_state();
+    let state = create_seeded_app_state().await;
     let app = test::init_service(build_test_app_with_forecasting(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -169,7 +169,7 @@ async fn test_forecast_demand_not_found() {
 
 #[actix_web::test]
 async fn test_forecast_demand_validation_error() {
-    let state = create_seeded_app_state();
+    let state = create_seeded_app_state().await;
     let app = test::init_service(build_test_app_with_forecasting(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -193,7 +193,7 @@ async fn test_forecast_demand_validation_error() {
 
 #[actix_web::test]
 async fn test_reorder_suggestions_success() {
-    let state = create_seeded_app_state();
+    let state = create_seeded_app_state().await;
     let app = test::init_service(build_test_app_with_forecasting(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -222,7 +222,7 @@ async fn test_reorder_suggestions_success() {
 
 #[actix_web::test]
 async fn test_stock_alerts_success() {
-    let state = create_seeded_app_state();
+    let state = create_seeded_app_state().await;
     let app = test::init_service(build_test_app_with_forecasting(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -251,7 +251,7 @@ async fn test_stock_alerts_success() {
 
 #[actix_web::test]
 async fn test_forecast_report_success() {
-    let state = create_seeded_app_state();
+    let state = create_seeded_app_state().await;
     let app = test::init_service(build_test_app_with_forecasting(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -276,7 +276,7 @@ async fn test_forecast_report_success() {
 
 #[actix_web::test]
 async fn test_forecast_unauthorized() {
-    let state = create_seeded_app_state();
+    let state = create_seeded_app_state().await;
     let app = test::init_service(build_test_app_with_forecasting(&state)).await;
 
     let req = test::TestRequest::post()

@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_template_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -48,7 +48,7 @@ async fn test_create_template_admin() {
 
 #[actix_web::test]
 async fn test_create_template_user_forbidden() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_user!(&app, 1);
@@ -72,7 +72,7 @@ async fn test_create_template_user_forbidden() {
 
 #[actix_web::test]
 async fn test_list_templates() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;
@@ -101,7 +101,7 @@ async fn test_list_templates() {
 
 #[actix_web::test]
 async fn test_list_templates_unauthorized() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let req = test::TestRequest::get()

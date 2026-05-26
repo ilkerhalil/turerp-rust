@@ -8,7 +8,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_subscription_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     // Admin in tenant 1
@@ -98,7 +98,7 @@ async fn test_subscription_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_renew_subscription() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -173,7 +173,7 @@ async fn test_renew_subscription() {
 
 #[actix_web::test]
 async fn test_due_for_billing() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -249,7 +249,7 @@ async fn test_due_for_billing() {
 
 #[actix_web::test]
 async fn test_subscription_validation_errors() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -290,7 +290,7 @@ async fn test_subscription_validation_errors() {
 
 #[actix_web::test]
 async fn test_plan_soft_delete() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -356,7 +356,7 @@ async fn test_plan_soft_delete() {
 
 #[actix_web::test]
 async fn test_subscription_soft_delete() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -446,7 +446,7 @@ async fn test_subscription_soft_delete() {
 
 #[actix_web::test]
 async fn test_delete_plan_with_active_subscriptions_fails() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 

@@ -70,7 +70,7 @@ async fn health_check_handler(
 
 #[actix_web::test]
 async fn test_health_live_returns_ok() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_health_app(&state)).await;
 
     let req = test::TestRequest::get().uri("/health/live").to_request();
@@ -86,7 +86,7 @@ async fn test_health_live_returns_ok() {
 
 #[actix_web::test]
 async fn test_health_ready_in_memory_returns_ok() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_health_app(&state)).await;
 
     let req = test::TestRequest::get().uri("/health/ready").to_request();
@@ -102,7 +102,7 @@ async fn test_health_ready_in_memory_returns_ok() {
 
 #[actix_web::test]
 async fn test_health_root_returns_ok() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_health_app(&state)).await;
 
     let req = test::TestRequest::get().uri("/health").to_request();
@@ -116,7 +116,7 @@ async fn test_health_root_returns_ok() {
 
 #[actix_web::test]
 async fn test_health_does_not_require_auth() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_health_app(&state)).await;
 
     // No Authorization header - should still succeed

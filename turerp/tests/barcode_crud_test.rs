@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_generate_barcode_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -45,7 +45,7 @@ async fn test_generate_barcode_success() {
 
 #[actix_web::test]
 async fn test_list_barcodes_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -87,7 +87,7 @@ async fn test_list_barcodes_paginated() {
 
 #[actix_web::test]
 async fn test_get_barcode_for_entity_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -127,7 +127,7 @@ async fn test_get_barcode_for_entity_success() {
 
 #[actix_web::test]
 async fn test_get_barcode_for_entity_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -143,7 +143,7 @@ async fn test_get_barcode_for_entity_not_found() {
 
 #[actix_web::test]
 async fn test_delete_barcode_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -191,7 +191,7 @@ async fn test_delete_barcode_success() {
 
 #[actix_web::test]
 async fn test_generate_barcode_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -212,7 +212,7 @@ async fn test_generate_barcode_unauthorized() {
 
 #[actix_web::test]
 async fn test_delete_barcode_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

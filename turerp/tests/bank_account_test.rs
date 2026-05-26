@@ -8,7 +8,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_bank_account_success() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -38,7 +38,7 @@ async fn test_create_bank_account_success() {
 
 #[actix_web::test]
 async fn test_get_bank_accounts() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -75,7 +75,7 @@ async fn test_get_bank_accounts() {
 
 #[actix_web::test]
 async fn test_get_bank_account_by_id() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -112,7 +112,7 @@ async fn test_get_bank_account_by_id() {
 
 #[actix_web::test]
 async fn test_update_bank_account() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -154,7 +154,7 @@ async fn test_update_bank_account() {
 
 #[actix_web::test]
 async fn test_delete_bank_account() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -187,7 +187,7 @@ async fn test_delete_bank_account() {
 
 #[actix_web::test]
 async fn test_bank_account_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token1, _) = register_admin(&app_state, 1).await;
     let (token2, _) = register_admin(&app_state, 2).await;
@@ -224,7 +224,7 @@ async fn test_bank_account_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_create_bank_account_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_user!(&app, 1);
 
@@ -249,7 +249,7 @@ async fn test_create_bank_account_requires_admin() {
 
 #[actix_web::test]
 async fn test_bank_account_validation_error() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -268,7 +268,7 @@ async fn test_bank_account_validation_error() {
 
 #[actix_web::test]
 async fn test_get_bank_account_not_found() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -282,7 +282,7 @@ async fn test_get_bank_account_not_found() {
 
 #[actix_web::test]
 async fn test_restore_bank_account() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -342,7 +342,7 @@ async fn test_restore_bank_account() {
 
 #[actix_web::test]
 async fn test_destroy_bank_account_permanent() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 

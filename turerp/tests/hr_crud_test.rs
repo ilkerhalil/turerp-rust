@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_employee_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -53,7 +53,7 @@ async fn test_create_employee_success() {
 
 #[actix_web::test]
 async fn test_list_employees_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -98,7 +98,7 @@ async fn test_list_employees_paginated() {
 
 #[actix_web::test]
 async fn test_get_employee_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -143,7 +143,7 @@ async fn test_get_employee_success() {
 
 #[actix_web::test]
 async fn test_get_employee_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -159,7 +159,7 @@ async fn test_get_employee_not_found() {
 
 #[actix_web::test]
 async fn test_update_employee_status() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -207,7 +207,7 @@ async fn test_update_employee_status() {
 
 #[actix_web::test]
 async fn test_soft_delete_and_restore_employee() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -282,7 +282,7 @@ async fn test_soft_delete_and_restore_employee() {
 
 #[actix_web::test]
 async fn test_list_deleted_employees() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -337,7 +337,7 @@ async fn test_list_deleted_employees() {
 
 #[actix_web::test]
 async fn test_destroy_employee_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -400,7 +400,7 @@ async fn test_destroy_employee_permanently() {
 
 #[actix_web::test]
 async fn test_employee_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -412,7 +412,7 @@ async fn test_employee_unauthorized() {
 
 #[actix_web::test]
 async fn test_create_employee_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let hire_date = chrono::Utc::now();

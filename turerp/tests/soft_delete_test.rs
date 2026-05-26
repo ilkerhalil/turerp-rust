@@ -60,12 +60,14 @@ fn configure_v1_routes(cfg: &mut web::ServiceConfig) {
 }
 
 /// Create app state with default config for testing
-fn create_test_app_state() -> turerp::app::AppState {
+async fn create_test_app_state() -> turerp::app::AppState {
     let config = Config {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    create_app_state_in_memory(&config).expect("app state creation failed")
+    create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed")
 }
 
 /// Build a test app with all services and JWT middleware
@@ -195,7 +197,7 @@ macro_rules! register_user {
 
 #[actix_web::test]
 async fn test_cari_soft_delete_and_restore_lifecycle() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -334,7 +336,7 @@ async fn test_cari_soft_delete_and_restore_lifecycle() {
 
 #[actix_web::test]
 async fn test_stock_warehouse_soft_delete_and_restore() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -399,7 +401,7 @@ async fn test_stock_warehouse_soft_delete_and_restore() {
 
 #[actix_web::test]
 async fn test_chart_of_accounts_soft_delete_and_restore() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -452,7 +454,7 @@ async fn test_chart_of_accounts_soft_delete_and_restore() {
 
 #[actix_web::test]
 async fn test_project_soft_delete_and_restore() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -516,7 +518,7 @@ async fn test_project_soft_delete_and_restore() {
 
 #[actix_web::test]
 async fn test_webhook_soft_delete_and_restore() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -569,7 +571,7 @@ async fn test_webhook_soft_delete_and_restore() {
 
 #[actix_web::test]
 async fn test_list_deleted_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (admin_token, _) = register_admin!(&app_state, 1);
@@ -604,7 +606,7 @@ async fn test_list_deleted_requires_admin() {
 
 #[actix_web::test]
 async fn test_restore_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (admin_token, user_id) = register_admin!(&app_state, 1);
@@ -667,7 +669,7 @@ async fn test_restore_requires_admin() {
 
 #[actix_web::test]
 async fn test_destroy_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (admin_token, user_id) = register_admin!(&app_state, 1);
@@ -750,7 +752,7 @@ async fn test_destroy_requires_admin() {
 
 #[actix_web::test]
 async fn test_deleted_records_excluded_from_search() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -817,7 +819,7 @@ async fn test_deleted_records_excluded_from_search() {
 
 #[actix_web::test]
 async fn test_deleted_records_excluded_from_type_filter() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -868,7 +870,7 @@ async fn test_deleted_records_excluded_from_type_filter() {
 
 #[actix_web::test]
 async fn test_deleted_records_excluded_from_get_by_id() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -930,7 +932,7 @@ async fn test_deleted_records_excluded_from_get_by_id() {
 
 #[actix_web::test]
 async fn test_tenant_isolation_deleted_records() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token1, user_id1) = register_admin!(&app_state, 1);
@@ -998,7 +1000,7 @@ async fn test_tenant_isolation_deleted_records() {
 
 #[actix_web::test]
 async fn test_tenant_isolation_normal_queries_ignore_other_tenant_deleted() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token1, user_id1) = register_admin!(&app_state, 1);
@@ -1073,7 +1075,7 @@ async fn test_tenant_isolation_normal_queries_ignore_other_tenant_deleted() {
 
 #[actix_web::test]
 async fn test_non_admin_cannot_soft_delete() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (admin_token, user_id) = register_admin!(&app_state, 1);
@@ -1129,7 +1131,7 @@ async fn test_non_admin_cannot_soft_delete() {
 
 #[actix_web::test]
 async fn test_unauthenticated_cannot_access_soft_delete_endpoints() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Unauthenticated requests to soft delete endpoints should be rejected
@@ -1162,7 +1164,7 @@ async fn test_unauthenticated_cannot_access_soft_delete_endpoints() {
 
 #[actix_web::test]
 async fn test_non_admin_cannot_access_stock_deleted() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (user_token, _) = register_user!(&app, 1);
@@ -1187,7 +1189,7 @@ async fn test_non_admin_cannot_access_stock_deleted() {
 
 #[actix_web::test]
 async fn test_soft_delete_sets_deleted_at_and_deleted_by() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1270,7 +1272,7 @@ async fn test_soft_delete_sets_deleted_at_and_deleted_by() {
 
 #[actix_web::test]
 async fn test_multiple_domains_support_soft_delete() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1375,7 +1377,7 @@ async fn test_multiple_domains_support_soft_delete() {
 
 #[actix_web::test]
 async fn test_double_soft_delete_idempotent() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1425,7 +1427,7 @@ async fn test_double_soft_delete_idempotent() {
 
 #[actix_web::test]
 async fn test_restore_non_deleted_record_is_idempotent() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1466,7 +1468,7 @@ async fn test_restore_non_deleted_record_is_idempotent() {
 
 #[actix_web::test]
 async fn test_destroy_without_soft_delete() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1517,7 +1519,7 @@ async fn test_destroy_without_soft_delete() {
 
 #[actix_web::test]
 async fn test_soft_delete_nonexistent_record_returns_404() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1538,7 +1540,7 @@ async fn test_soft_delete_nonexistent_record_returns_404() {
 
 #[actix_web::test]
 async fn test_restore_nonexistent_record_returns_404() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1559,7 +1561,7 @@ async fn test_restore_nonexistent_record_returns_404() {
 
 #[actix_web::test]
 async fn test_update_deleted_record_behavior() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1616,7 +1618,7 @@ async fn test_update_deleted_record_behavior() {
 
 #[actix_web::test]
 async fn test_employee_soft_delete_and_restore() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1690,7 +1692,7 @@ async fn test_employee_soft_delete_and_restore() {
 
 #[actix_web::test]
 async fn test_crm_lead_soft_delete_and_restore() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1764,7 +1766,7 @@ async fn test_crm_lead_soft_delete_and_restore() {
 
 #[actix_web::test]
 async fn test_asset_soft_delete_and_restore() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1846,7 +1848,7 @@ async fn test_asset_soft_delete_and_restore() {
 
 #[actix_web::test]
 async fn test_soft_delete_then_create_same_code() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1909,7 +1911,7 @@ async fn test_soft_delete_then_create_same_code() {
 
 #[actix_web::test]
 async fn test_notification_soft_delete_and_restore_lifecycle() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2036,7 +2038,7 @@ async fn test_notification_soft_delete_and_restore_lifecycle() {
 
 #[actix_web::test]
 async fn test_notification_destroy_permanently_removes_record() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2107,7 +2109,7 @@ async fn test_notification_destroy_permanently_removes_record() {
 
 #[actix_web::test]
 async fn test_notification_list_deleted_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (admin_token, _) = register_admin!(&app_state, 1);
@@ -2142,7 +2144,7 @@ async fn test_notification_list_deleted_requires_admin() {
 
 #[actix_web::test]
 async fn test_notification_restore_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (admin_token, _) = register_admin!(&app_state, 1);
@@ -2215,7 +2217,7 @@ async fn test_notification_restore_requires_admin() {
 
 #[actix_web::test]
 async fn test_notification_destroy_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (admin_token, _) = register_admin!(&app_state, 1);
@@ -2288,7 +2290,7 @@ async fn test_notification_destroy_requires_admin() {
 
 #[actix_web::test]
 async fn test_tenant_isolation_deleted_notifications() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token1, _) = register_admin!(&app_state, 1);
@@ -2362,7 +2364,7 @@ async fn test_tenant_isolation_deleted_notifications() {
 
 #[actix_web::test]
 async fn test_notification_double_soft_delete_idempotent() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2416,7 +2418,7 @@ async fn test_notification_double_soft_delete_idempotent() {
 
 #[actix_web::test]
 async fn test_notification_restore_non_deleted_record_returns_400() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2464,7 +2466,7 @@ async fn test_notification_restore_non_deleted_record_returns_400() {
 
 #[actix_web::test]
 async fn test_notification_soft_delete_nonexistent_record_returns_404() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2484,7 +2486,7 @@ async fn test_notification_soft_delete_nonexistent_record_returns_404() {
 
 #[actix_web::test]
 async fn test_notification_destroy_nonexistent_deleted_record_returns_404() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2508,7 +2510,7 @@ async fn test_notification_destroy_nonexistent_deleted_record_returns_404() {
 
 #[actix_web::test]
 async fn test_all_soft_delete_endpoints_return_consistent_status_codes() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);

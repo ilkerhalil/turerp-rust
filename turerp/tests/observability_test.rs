@@ -26,12 +26,14 @@ use turerp::utils::jwt::JwtService;
 // Helpers
 // ============================================================================
 
-fn create_test_app_state() -> turerp::app::AppState {
+async fn create_test_app_state() -> turerp::app::AppState {
     let config = Config {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    create_app_state_in_memory(&config).expect("app state creation failed")
+    create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed")
 }
 
 fn build_observability_app(
@@ -190,7 +192,7 @@ http_requests_total{method="GET",path="/",status="200"} 1
 
     #[actix_web::test]
     async fn test_metrics_middleware_records_histogram() {
-        let _app_state = create_test_app_state();
+        let _app_state = create_test_app_state().await;
         let _jwt = JwtService::new(
             Config::default().jwt.secret.clone(),
             Config::default().jwt.access_token_expiration,
@@ -229,7 +231,7 @@ mod kpi_tests {
 
     #[actix_web::test]
     async fn test_kpi_endpoints_require_auth() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let jwt = JwtService::new(
             Config::default().jwt.secret.clone(),
             Config::default().jwt.access_token_expiration,
@@ -253,7 +255,7 @@ mod kpi_tests {
 
     #[actix_web::test]
     async fn test_kpi_endpoints_return_structure() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let token = admin_token_for_state(&app_state, 1);
         let jwt = JwtService::new(
             Config::default().jwt.secret.clone(),
@@ -636,7 +638,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_health_endpoint_no_auth() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let _jwt = JwtService::new(
             Config::default().jwt.secret.clone(),
             Config::default().jwt.access_token_expiration,
@@ -665,7 +667,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_health_live_endpoint() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let _jwt = JwtService::new(
             Config::default().jwt.secret.clone(),
             Config::default().jwt.access_token_expiration,
@@ -692,7 +694,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_sli_crud() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let token = admin_token_for_state(&app_state, 1);
         let app = build_observability_app(&app_state);
         let app = actix_web::test::init_service(app).await;
@@ -743,7 +745,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_slo_crud_and_compliance() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let token = admin_token_for_state(&app_state, 1);
         let app = build_observability_app(&app_state);
         let app = actix_web::test::init_service(app).await;
@@ -812,7 +814,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_alert_rule_crud() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let token = admin_token_for_state(&app_state, 1);
         let app = build_observability_app(&app_state);
         let app = actix_web::test::init_service(app).await;
@@ -862,7 +864,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_alert_evaluation_api() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let token = admin_token_for_state(&app_state, 1);
         let app = build_observability_app(&app_state);
         let app = actix_web::test::init_service(app).await;
@@ -905,7 +907,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_alert_list_and_resolve() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let token = admin_token_for_state(&app_state, 1);
         let app = build_observability_app(&app_state);
         let app = actix_web::test::init_service(app).await;
@@ -965,7 +967,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_dashboard_summary_endpoint() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let token = admin_token_for_state(&app_state, 1);
         let app = build_observability_app(&app_state);
         let app = actix_web::test::init_service(app).await;
@@ -987,7 +989,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_sparkline_endpoint() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let token = admin_token_for_state(&app_state, 1);
         let app = build_observability_app(&app_state);
         let app = actix_web::test::init_service(app).await;
@@ -1007,7 +1009,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_observability_admin_required_for_mutations() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let user_token = user_token_for_state(&app_state, 1);
         let app = build_observability_app(&app_state);
         let app = actix_web::test::init_service(app).await;
@@ -1029,7 +1031,7 @@ mod observability_api_tests {
 
     #[actix_web::test]
     async fn test_slo_compliance_cached() {
-        let app_state = create_test_app_state();
+        let app_state = create_test_app_state().await;
         let token = admin_token_for_state(&app_state, 1);
         let app = build_observability_app(&app_state);
         let app = actix_web::test::init_service(app).await;

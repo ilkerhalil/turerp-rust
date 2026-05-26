@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_currency_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -40,7 +40,7 @@ async fn test_create_currency_success() {
 
 #[actix_web::test]
 async fn test_list_currencies_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -76,7 +76,7 @@ async fn test_list_currencies_paginated() {
 
 #[actix_web::test]
 async fn test_list_currencies_active_only() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -121,7 +121,7 @@ async fn test_list_currencies_active_only() {
 
 #[actix_web::test]
 async fn test_get_currency_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -150,7 +150,7 @@ async fn test_get_currency_success() {
 
 #[actix_web::test]
 async fn test_get_currency_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -162,7 +162,7 @@ async fn test_get_currency_not_found() {
 
 #[actix_web::test]
 async fn test_update_currency_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -200,7 +200,7 @@ async fn test_update_currency_success() {
 
 #[actix_web::test]
 async fn test_soft_delete_and_restore_currency() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -247,7 +247,7 @@ async fn test_soft_delete_and_restore_currency() {
 
 #[actix_web::test]
 async fn test_list_deleted_currencies() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -289,7 +289,7 @@ async fn test_list_deleted_currencies() {
 
 #[actix_web::test]
 async fn test_destroy_currency_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -357,7 +357,7 @@ macro_rules! ensure_currency_exists {
 
 #[actix_web::test]
 async fn test_create_exchange_rate_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -386,7 +386,7 @@ async fn test_create_exchange_rate_success() {
 
 #[actix_web::test]
 async fn test_list_exchange_rates_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -423,7 +423,7 @@ async fn test_list_exchange_rates_paginated() {
 
 #[actix_web::test]
 async fn test_soft_delete_and_restore_exchange_rate() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -464,7 +464,7 @@ async fn test_soft_delete_and_restore_exchange_rate() {
 
 #[actix_web::test]
 async fn test_list_deleted_exchange_rates() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -510,7 +510,7 @@ async fn test_list_deleted_exchange_rates() {
 
 #[actix_web::test]
 async fn test_convert_amount() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -545,7 +545,7 @@ async fn test_convert_amount() {
 
 #[actix_web::test]
 async fn test_get_effective_exchange_rate() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -584,7 +584,7 @@ async fn test_get_effective_exchange_rate() {
 
 #[actix_web::test]
 async fn test_currency_unauthorized_without_token() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -603,7 +603,7 @@ async fn test_currency_unauthorized_without_token() {
 
 #[actix_web::test]
 async fn test_currency_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

@@ -22,7 +22,7 @@ fn create_cari_payload(user_id: i64) -> serde_json::Value {
 
 #[actix_web::test]
 async fn test_create_cari_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -42,7 +42,7 @@ async fn test_create_cari_success() {
 
 #[actix_web::test]
 async fn test_list_cari_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -79,7 +79,7 @@ async fn test_list_cari_paginated() {
 
 #[actix_web::test]
 async fn test_get_cari_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -108,7 +108,7 @@ async fn test_get_cari_success() {
 
 #[actix_web::test]
 async fn test_get_cari_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -120,7 +120,7 @@ async fn test_get_cari_not_found() {
 
 #[actix_web::test]
 async fn test_update_cari_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -153,7 +153,7 @@ async fn test_update_cari_success() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_cari() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -212,7 +212,7 @@ async fn test_delete_and_restore_cari() {
 
 #[actix_web::test]
 async fn test_list_deleted_cari() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -252,7 +252,7 @@ async fn test_list_deleted_cari() {
 
 #[actix_web::test]
 async fn test_destroy_cari_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -300,7 +300,7 @@ async fn test_destroy_cari_permanently() {
 
 #[actix_web::test]
 async fn test_search_cari() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -336,7 +336,7 @@ async fn test_search_cari() {
 
 #[actix_web::test]
 async fn test_cari_unauthorized_without_token() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get().uri("/api/v1/caris").to_request();

@@ -8,7 +8,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_get_all_kpis() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -28,7 +28,7 @@ async fn test_get_all_kpis() {
 
 #[actix_web::test]
 async fn test_get_single_kpi() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -46,7 +46,7 @@ async fn test_get_single_kpi() {
 
 #[actix_web::test]
 async fn test_get_sales_chart() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -64,7 +64,7 @@ async fn test_get_sales_chart() {
 
 #[actix_web::test]
 async fn test_get_revenue_by_category_chart() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -78,7 +78,7 @@ async fn test_get_revenue_by_category_chart() {
 
 #[actix_web::test]
 async fn test_get_top_products_chart() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -92,7 +92,7 @@ async fn test_get_top_products_chart() {
 
 #[actix_web::test]
 async fn test_create_and_list_widgets() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -122,7 +122,7 @@ async fn test_create_and_list_widgets() {
 
 #[actix_web::test]
 async fn test_delete_widget() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -152,7 +152,7 @@ async fn test_delete_widget() {
 
 #[actix_web::test]
 async fn test_dashboard_requires_auth() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let req = test::TestRequest::get()
@@ -164,7 +164,7 @@ async fn test_dashboard_requires_auth() {
 
 #[actix_web::test]
 async fn test_dashboard_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token1, _) = register_admin(&app_state, 1).await;
     let (token2, _) = register_admin(&app_state, 2).await;

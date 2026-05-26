@@ -11,6 +11,19 @@ use crate::middleware::TenantContextExt;
 ///
 /// Extracts tenant_id from the request extensions (set by TenantMiddleware)
 /// and injects it into the GraphQL context along with application state.
+#[utoipa::path(
+    post,
+    path = "/api/v1/graphql",
+    tag = "GraphQL",
+    request_body = String,
+    responses(
+        (status = 200, description = "GraphQL response"),
+        (status = 401, description = "Not authenticated")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn graphql_handler(
     app_state: web::Data<AppState>,
     req: HttpRequest,
@@ -27,6 +40,14 @@ pub async fn graphql_handler(
 }
 
 /// GraphQL Playground endpoint (for development)
+#[utoipa::path(
+    get,
+    path = "/api/v1/graphql",
+    tag = "GraphQL",
+    responses(
+        (status = 200, description = "GraphQL Playground HTML")
+    )
+)]
 pub async fn graphql_playground() -> HttpResponse {
     HttpResponse::Ok()
         .content_type("text/html; charset=utf-8")
