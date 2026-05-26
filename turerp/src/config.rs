@@ -426,6 +426,7 @@ pub struct Config {
     pub security_headers: SecurityHeadersConfig,
     pub secrets: SecretsConfig,
     pub encryption_key: String,
+    pub graphql_introspection: bool,
 }
 
 impl Default for Config {
@@ -452,6 +453,7 @@ impl Default for Config {
             security_headers: SecurityHeadersConfig::default(),
             secrets: SecretsConfig::default(),
             encryption_key: String::new(),
+            graphql_introspection: true,
         }
     }
 }
@@ -569,6 +571,10 @@ impl Config {
         let security_headers = SecurityHeadersConfig::from_env();
         let secrets = SecretsConfig::from_env();
         let encryption_key = std::env::var("TURERP_ENCRYPTION_KEY").unwrap_or_default();
+        let graphql_introspection = std::env::var("TURERP_GRAPHQL_INTROSPECTION")
+            .ok()
+            .map(|v| v.to_lowercase() == "true" || v == "1")
+            .unwrap_or_else(|| !matches!(environment, Environment::Production));
 
         Ok(Self {
             environment,
@@ -584,6 +590,7 @@ impl Config {
             security_headers,
             secrets,
             encryption_key,
+            graphql_introspection,
         })
     }
 
@@ -915,6 +922,12 @@ mod tests {
         assert!(jwt.secret.contains("dev"));
         assert_eq!(jwt.access_token_expiration, 3600);
         assert_eq!(jwt.refresh_token_expiration, 604800);
+    }
+
+    #[test]
+    fn test_graphql_introspection_default() {
+        let config = Config::default();
+        assert!(config.graphql_introspection);
     }
 
     #[test]

@@ -2807,7 +2807,7 @@ async fn test_webhook_crud() {
             "url": "https://example.com/webhook",
             "description": "Test webhook",
             "event_types": ["invoice_created", "payment_received"],
-            "secret": "my-super-secret-123"
+            "secret": "my-super-secret-key-for-webhook-testing"
         }))
         .to_request();
 

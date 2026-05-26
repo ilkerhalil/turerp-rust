@@ -4,18 +4,8 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use async_graphql_actix_web::{GraphQLRequest, GraphQLResponse};
 
 use crate::app::AppState;
-use crate::graphql::{create_schema, AppSchema, GraphQlContext};
+use crate::graphql::GraphQlContext;
 use crate::middleware::TenantContextExt;
-
-/// Cached GraphQL schema instance
-///
-/// The schema is built once and shared across all requests.
-/// Tenant isolation is enforced per-request via GraphQL context data.
-fn schema() -> &'static AppSchema {
-    use std::sync::OnceLock;
-    static SCHEMA: OnceLock<AppSchema> = OnceLock::new();
-    SCHEMA.get_or_init(create_schema)
-}
 
 /// GraphQL endpoint handler
 ///
@@ -29,7 +19,8 @@ pub async fn graphql_handler(
     let tenant_id = req.tenant_id().unwrap_or(0);
     let gctx = GraphQlContext::new(std::sync::Arc::new(app_state.get_ref().clone()), tenant_id);
 
-    schema()
+    app_state
+        .schema
         .execute(gql_req.into_inner().data(gctx))
         .await
         .into()

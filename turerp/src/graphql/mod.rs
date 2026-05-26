@@ -17,8 +17,12 @@ pub use types::*;
 pub type AppSchema = Schema<QueryRoot, EmptyMutation, EmptySubscription>;
 
 /// Create a new GraphQL schema
-pub fn create_schema() -> AppSchema {
-    Schema::build(QueryRoot, EmptyMutation, EmptySubscription).finish()
+pub fn create_schema(enable_introspection: bool) -> AppSchema {
+    let mut builder = Schema::build(QueryRoot, EmptyMutation, EmptySubscription);
+    if !enable_introspection {
+        builder = builder.disable_introspection();
+    }
+    builder.finish()
 }
 
 #[cfg(test)]
@@ -30,7 +34,7 @@ mod tests {
     use std::sync::Arc;
 
     fn test_schema() -> AppSchema {
-        create_schema()
+        create_schema(true)
     }
 
     fn test_context(tenant_id: i64) -> GraphQlContext {
@@ -153,5 +157,36 @@ mod tests {
             .execute("{ users(page: 1, perPage: 10) { items { id } } }")
             .await;
         assert!(!res.errors.is_empty(), "expected error without context");
+    }
+
+    #[tokio::test]
+    async fn test_introspection_enabled() {
+        let schema = create_schema(true);
+        let res = schema.execute("{ __schema { types { name } } }").await;
+        assert!(
+            res.errors.is_empty(),
+            "introspection should be enabled: {:?}",
+            res.errors
+        );
+    }
+
+    #[tokio::test]
+    async fn test_introspection_disabled() {
+        let schema = create_schema(false);
+        let res = schema.execute("{ __schema { types { name } } }").await;
+        // When introspection is disabled, async-graphql may either return an error
+        // or omit the introspection fields from the result. We accept either signal.
+        let errors = res.errors.clone();
+        let data_json = res.data.into_json().unwrap();
+        let schema_null = data_json
+            .get("__schema")
+            .map(|v| v.is_null())
+            .unwrap_or(true);
+        assert!(
+            !errors.is_empty() || schema_null,
+            "introspection should be disabled: errors={:?}, data={}",
+            errors,
+            data_json
+        );
     }
 }

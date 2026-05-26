@@ -1477,7 +1477,7 @@ async fn test_sql_injection_in_webhook_endpoints() {
             "url": malicious_url,
             "description": "'; DROP TABLE webhook_deliveries;--",
             "event_types": ["' OR '1'='1"],
-            "secret": "valid-secret-123"
+            "secret": "valid-secret-key-for-webhook-testing"
         }))
         .to_request();
 

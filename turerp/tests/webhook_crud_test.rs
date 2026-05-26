@@ -21,7 +21,7 @@ async fn test_create_webhook_success() {
             "url": "https://example.com/webhook",
             "description": "Test webhook",
             "event_types": ["invoice_created", "invoice_updated"],
-            "secret": "my-secret-key"
+            "secret": "my-super-secret-key-for-webhook-testing"
         }))
         .to_request();
 
@@ -50,7 +50,7 @@ async fn test_list_webhooks() {
                 "url": format!("https://example.com/webhook-{}", i),
                 "description": format!("Webhook {}", i),
                 "event_types": ["invoice_created"],
-                "secret": "my-secret-key"
+                "secret": "my-super-secret-key-for-webhook-testing"
             }))
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -78,7 +78,7 @@ async fn test_get_webhook_success() {
             "url": "https://example.com/get-test",
             "description": "Get test",
             "event_types": ["test"],
-            "secret": "my-secret-key"
+            "secret": "my-super-secret-key-for-webhook-testing"
         }))
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -128,7 +128,7 @@ async fn test_update_webhook_success() {
             "url": "https://example.com/original",
             "description": "Original",
             "event_types": ["test"],
-            "secret": "my-secret-key"
+            "secret": "my-super-secret-key-for-webhook-testing"
         }))
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -172,7 +172,7 @@ async fn test_delete_and_restore_webhook() {
             "url": "https://example.com/del-test",
             "description": "Delete test",
             "event_types": ["test"],
-            "secret": "my-secret-key"
+            "secret": "my-super-secret-key-for-webhook-testing"
         }))
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -232,7 +232,7 @@ async fn test_list_deleted_webhooks() {
             "url": "https://example.com/lst-del",
             "description": "List deleted test",
             "event_types": ["test"],
-            "secret": "my-secret-key"
+            "secret": "my-super-secret-key-for-webhook-testing"
         }))
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -277,7 +277,7 @@ async fn test_destroy_webhook_permanently() {
             "url": "https://example.com/dest-test",
             "description": "Destroy test",
             "event_types": ["test"],
-            "secret": "my-secret-key"
+            "secret": "my-super-secret-key-for-webhook-testing"
         }))
         .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -330,7 +330,7 @@ async fn test_webhook_unauthorized() {
             "url": "https://example.com/unauth",
             "description": "Should fail",
             "event_types": ["test"],
-            "secret": "my-secret-key"
+            "secret": "my-super-secret-key-for-webhook-testing"
         }))
         .to_request();
     let resp = test::call_service(&app, req).await;
@@ -348,7 +348,7 @@ async fn test_webhook_normal_user_forbidden() {
             "url": "https://example.com/forbidden",
             "description": "Should fail",
             "event_types": ["test"],
-            "secret": "my-secret-key"
+            "secret": "my-super-secret-key-for-webhook-testing"
         }))
         .to_request();
     let resp = test::call_service(&app, req).await;
