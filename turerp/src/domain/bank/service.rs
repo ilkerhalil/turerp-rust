@@ -246,17 +246,13 @@ impl BankService {
             // For now, skip validation and create transactions
         }
 
-        let mut created = Vec::new();
         // Use a default account_id if we can't look up the statement
         let account_id = statement_id; // This is a simplification - in real code we'd look up the statement
 
-        for tx in transactions {
-            let created_tx = self
-                .repo
-                .create_transaction(tenant_id, account_id, tx)
-                .await?;
-            created.push(created_tx);
-        }
+        let created = self
+            .repo
+            .create_transactions_batch(tenant_id, account_id, &transactions)
+            .await?;
 
         self.repo
             .mark_statement_processed(statement_id, tenant_id)

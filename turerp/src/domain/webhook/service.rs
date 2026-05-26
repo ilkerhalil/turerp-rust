@@ -124,8 +124,9 @@ impl WebhookService {
 
         let payload = serde_json::to_string(event).unwrap_or_else(|_| "{}".to_string());
 
-        for webhook in webhooks {
-            let delivery = WebhookDelivery {
+        let deliveries: Vec<WebhookDelivery> = webhooks
+            .iter()
+            .map(|webhook| WebhookDelivery {
                 id: 0,
                 webhook_id: webhook.id,
                 tenant_id,
@@ -139,11 +140,12 @@ impl WebhookService {
                 scheduled_at: None,
                 created_at: Utc::now(),
                 delivered_at: None,
-            };
+            })
+            .collect();
 
-            let created = self.delivery_repo.create(delivery).await?;
+        let created = self.delivery_repo.create_many(&deliveries).await?;
 
-            // Spawn async delivery so event bus isn't blocked
+        for (created_delivery, webhook) in created.into_iter().zip(webhooks) {
             let repo = self.delivery_repo.clone();
             let client = self.http_client.clone();
             let wh_url = webhook.url.clone();
@@ -153,7 +155,14 @@ impl WebhookService {
 
             tokio::spawn(async move {
                 if let Err(e) = deliver_webhook(
-                    &client, &repo, created.id, tenant_id, &wh_url, &wh_secret, &evt_type, &pl,
+                    &client,
+                    &repo,
+                    created_delivery.id,
+                    tenant_id,
+                    &wh_url,
+                    &wh_secret,
+                    &evt_type,
+                    &pl,
                 )
                 .await
                 {

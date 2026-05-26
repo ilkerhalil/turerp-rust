@@ -465,6 +465,48 @@ impl BankRepository for PostgresBankRepository {
         Ok(row.into())
     }
 
+    async fn create_transactions_batch(
+        &self,
+        tenant_id: i64,
+        account_id: i64,
+        transactions: &[ParsedBankTransaction],
+    ) -> Result<Vec<BankTransaction>, ApiError> {
+        if transactions.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let match_status = MatchStatus::Unmatched.to_string();
+
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO bank_transactions (tenant_id, account_id, transaction_date, description, amount, currency, balance_after, reference_no, match_status, created_at)",
+        );
+
+        query_builder.push_values(transactions, |mut b, tx| {
+            b.push_bind(tenant_id)
+                .push_bind(account_id)
+                .push_bind(tx.transaction_date)
+                .push_bind(&tx.description)
+                .push_bind(tx.amount)
+                .push_bind(&tx.currency)
+                .push_bind(tx.balance_after)
+                .push_bind(&tx.reference_no)
+                .push_bind(&match_status)
+                .push("NOW()");
+        });
+
+        query_builder.push(
+            " RETURNING id, tenant_id, account_id, transaction_date, description, amount, currency, balance_after, reference_no, matched_invoice_id, matched_payment_id, match_status, created_at",
+        );
+
+        let rows: Vec<BankTransactionRow> = query_builder
+            .build_query_as()
+            .fetch_all(&*self.pool)
+            .await
+            .map_err(|e| map_sqlx_error(e, "Bank transaction"))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
     async fn find_transactions_by_account(
         &self,
         account_id: i64,

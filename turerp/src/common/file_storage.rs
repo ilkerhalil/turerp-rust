@@ -106,9 +106,9 @@ pub struct LocalFileStorage {
 }
 
 impl LocalFileStorage {
-    pub fn new(base_path: impl Into<PathBuf>) -> Self {
+    pub async fn new(base_path: impl Into<PathBuf>) -> Self {
         let base = base_path.into();
-        let _ = std::fs::create_dir_all(&base);
+        let _ = tokio::fs::create_dir_all(&base).await;
         Self {
             base_path: base,
             metadata: parking_lot::RwLock::new(Vec::new()),
@@ -280,7 +280,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_and_download() {
-        let storage = LocalFileStorage::new(test_storage_path());
+        let storage = LocalFileStorage::new(test_storage_path()).await;
 
         let upload = FileUpload {
             tenant_id: 1,
@@ -304,7 +304,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_metadata() {
-        let storage = LocalFileStorage::new(test_storage_path());
+        let storage = LocalFileStorage::new(test_storage_path()).await;
 
         let upload = FileUpload {
             tenant_id: 1,
@@ -324,7 +324,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_file() {
-        let storage = LocalFileStorage::new(test_storage_path());
+        let storage = LocalFileStorage::new(test_storage_path()).await;
 
         let upload = FileUpload {
             tenant_id: 1,
@@ -350,7 +350,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_files() {
-        let storage = LocalFileStorage::new(test_storage_path());
+        let storage = LocalFileStorage::new(test_storage_path()).await;
 
         for i in 0..5 {
             storage
@@ -376,7 +376,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tenant_isolation() {
-        let storage = LocalFileStorage::new(test_storage_path());
+        let storage = LocalFileStorage::new(test_storage_path()).await;
 
         storage
             .upload(FileUpload {
@@ -412,7 +412,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_storage_used() {
-        let storage = LocalFileStorage::new(test_storage_path());
+        let storage = LocalFileStorage::new(test_storage_path()).await;
 
         storage
             .upload(FileUpload {
@@ -446,7 +446,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_presigned_url_not_supported() {
-        let storage = LocalFileStorage::new(test_storage_path());
+        let storage = LocalFileStorage::new(test_storage_path()).await;
 
         let result = storage.presigned_url(1, 1, 3600).await;
         assert!(result.is_err());

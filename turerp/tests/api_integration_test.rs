@@ -61,12 +61,14 @@ fn configure_v1_routes(cfg: &mut web::ServiceConfig) {
 }
 
 /// Create app state with default config for testing
-fn create_test_app_state() -> turerp::app::AppState {
+async fn create_test_app_state() -> turerp::app::AppState {
     let config = Config {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    create_app_state_in_memory(&config).expect("app state creation failed")
+    create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed")
 }
 
 /// Create JWT service for testing from config
@@ -234,7 +236,7 @@ async fn health_check() -> actix_web::Result<HttpResponse> {
 
 #[actix_web::test]
 async fn test_auth_register() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
 
     let app = test::init_service(
         App::new()
@@ -266,7 +268,7 @@ async fn test_auth_register() {
 
 #[actix_web::test]
 async fn test_auth_register_validation_error() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
 
     let app = test::init_service(
         App::new()
@@ -289,7 +291,7 @@ async fn test_auth_register_validation_error() {
 
 #[actix_web::test]
 async fn test_auth_login() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
 
     let app = test::init_service(
         App::new()
@@ -332,7 +334,7 @@ async fn test_auth_login() {
 
 #[actix_web::test]
 async fn test_auth_login_invalid_credentials() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
 
     let app = test::init_service(
         App::new()
@@ -356,7 +358,7 @@ async fn test_auth_login_invalid_credentials() {
 
 #[actix_web::test]
 async fn test_auth_me_unauthorized() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let jwt_service = create_test_jwt_service_from_config();
 
     let app = test::init_service(
@@ -377,7 +379,7 @@ async fn test_auth_me_unauthorized() {
 
 #[actix_web::test]
 async fn test_auth_me_with_valid_token() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let jwt_service = create_test_jwt_service_from_config();
 
     let app = test::init_service(
@@ -429,7 +431,7 @@ async fn test_auth_me_with_valid_token() {
 
 #[actix_web::test]
 async fn test_users_create_unauthorized() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let jwt_service = create_test_jwt_service_from_config();
 
     let app = test::init_service(
@@ -458,7 +460,7 @@ async fn test_users_create_unauthorized() {
 
 #[actix_web::test]
 async fn test_users_create_authorized() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
 
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
@@ -487,7 +489,7 @@ async fn test_users_create_authorized() {
 
 #[actix_web::test]
 async fn test_users_list_authorized() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
 
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
@@ -508,7 +510,7 @@ async fn test_users_list_authorized() {
 
 #[actix_web::test]
 async fn test_users_list_unauthorized() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let jwt_service = create_test_jwt_service_from_config();
 
     let app = test::init_service(
@@ -527,7 +529,7 @@ async fn test_users_list_unauthorized() {
 
 #[actix_web::test]
 async fn test_users_get_by_id_authorized() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
 
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
@@ -567,7 +569,7 @@ async fn test_users_get_by_id_authorized() {
 
 #[actix_web::test]
 async fn test_users_update_authorized() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
 
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
@@ -610,7 +612,7 @@ async fn test_users_update_authorized() {
 
 #[actix_web::test]
 async fn test_users_delete_authorized() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
 
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
@@ -662,7 +664,7 @@ async fn test_users_delete_authorized() {
 
 #[actix_web::test]
 async fn test_cari_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -756,7 +758,7 @@ async fn test_cari_crud() {
 
 #[actix_web::test]
 async fn test_cari_search() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -788,7 +790,7 @@ async fn test_cari_search() {
 
 #[actix_web::test]
 async fn test_cari_write_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Register a normal user (not admin)
@@ -813,7 +815,7 @@ async fn test_cari_write_requires_admin() {
 
 #[actix_web::test]
 async fn test_cari_read_allows_authenticated() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Admin creates a cari
@@ -851,7 +853,7 @@ async fn test_cari_read_allows_authenticated() {
 
 #[actix_web::test]
 async fn test_stock_warehouse_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -922,7 +924,7 @@ async fn test_stock_warehouse_crud() {
 
 #[actix_web::test]
 async fn test_stock_movement_create() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -969,7 +971,7 @@ async fn test_stock_movement_create() {
 
 #[actix_web::test]
 async fn test_invoice_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1065,7 +1067,7 @@ async fn test_invoice_crud() {
 
 #[actix_web::test]
 async fn test_invoice_write_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_user!(&app, 1);
@@ -1101,7 +1103,7 @@ async fn test_invoice_write_requires_admin() {
 
 #[actix_web::test]
 async fn test_sales_order_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1184,7 +1186,7 @@ async fn test_sales_order_crud() {
 
 #[actix_web::test]
 async fn test_sales_quotation_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1240,7 +1242,7 @@ async fn test_sales_quotation_crud() {
 
 #[actix_web::test]
 async fn test_hr_employee_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1305,7 +1307,7 @@ async fn test_hr_employee_crud() {
 
 #[actix_web::test]
 async fn test_hr_leave_types() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1326,7 +1328,7 @@ async fn test_hr_leave_types() {
 
 #[actix_web::test]
 async fn test_accounting_account_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1376,7 +1378,7 @@ async fn test_accounting_account_crud() {
 
 #[actix_web::test]
 async fn test_accounting_journal_entry() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -1476,7 +1478,7 @@ async fn test_accounting_journal_entry() {
 
 #[actix_web::test]
 async fn test_project_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1536,7 +1538,7 @@ async fn test_project_crud() {
 
 #[actix_web::test]
 async fn test_manufacturing_work_order() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1578,7 +1580,7 @@ async fn test_manufacturing_work_order() {
 
 #[actix_web::test]
 async fn test_crm_lead_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1625,7 +1627,7 @@ async fn test_crm_lead_crud() {
 
 #[actix_web::test]
 async fn test_crm_opportunity_create() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1652,7 +1654,7 @@ async fn test_crm_opportunity_create() {
 
 #[actix_web::test]
 async fn test_tenant_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1728,7 +1730,7 @@ async fn test_tenant_crud() {
 
 #[actix_web::test]
 async fn test_asset_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1782,7 +1784,7 @@ async fn test_asset_crud() {
 
 #[actix_web::test]
 async fn test_chart_of_accounts_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1874,7 +1876,7 @@ async fn test_chart_of_accounts_crud() {
 
 #[actix_web::test]
 async fn test_chart_of_accounts_tree_and_trial_balance() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -1948,7 +1950,7 @@ async fn test_chart_of_accounts_tree_and_trial_balance() {
 
 #[actix_web::test]
 async fn test_chart_of_accounts_write_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_user!(&app, 1);
@@ -1975,7 +1977,7 @@ async fn test_chart_of_accounts_write_requires_admin() {
 
 #[actix_web::test]
 async fn test_tax_rate_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2038,7 +2040,7 @@ async fn test_tax_rate_crud() {
 
 #[actix_web::test]
 async fn test_tax_calculate() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2081,7 +2083,7 @@ async fn test_tax_calculate() {
 
 #[actix_web::test]
 async fn test_tax_period_lifecycle() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2134,7 +2136,7 @@ async fn test_tax_period_lifecycle() {
 
 #[actix_web::test]
 async fn test_tax_write_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_user!(&app, 1);
@@ -2161,7 +2163,7 @@ async fn test_tax_write_requires_admin() {
 
 #[actix_web::test]
 async fn test_bulk_restore_tax_rates_all_success() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2242,7 +2244,7 @@ async fn test_bulk_restore_tax_rates_all_success() {
 
 #[actix_web::test]
 async fn test_bulk_restore_tax_rates_partial_failure() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2294,7 +2296,7 @@ async fn test_bulk_restore_tax_rates_partial_failure() {
 
 #[actix_web::test]
 async fn test_bulk_restore_tax_rates_empty_list() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2312,7 +2314,7 @@ async fn test_bulk_restore_tax_rates_empty_list() {
 
 #[actix_web::test]
 async fn test_bulk_restore_tax_periods_all_success() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2366,7 +2368,7 @@ async fn test_bulk_restore_tax_periods_all_success() {
 
 #[actix_web::test]
 async fn test_bulk_restore_tax_periods_partial_failure() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2415,7 +2417,7 @@ async fn test_bulk_restore_tax_periods_partial_failure() {
 
 #[actix_web::test]
 async fn test_bulk_restore_tax_periods_empty_list() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2433,7 +2435,7 @@ async fn test_bulk_restore_tax_periods_empty_list() {
 
 #[actix_web::test]
 async fn test_bulk_restore_tax_rates_oversized_list() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2452,7 +2454,7 @@ async fn test_bulk_restore_tax_rates_oversized_list() {
 
 #[actix_web::test]
 async fn test_bulk_restore_tax_rates_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Admin in tenant 1 creates and deletes a tax rate
@@ -2508,7 +2510,7 @@ async fn test_bulk_restore_tax_rates_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_business_endpoints_require_auth() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // All these endpoints should return 401 without auth
@@ -2555,7 +2557,7 @@ async fn test_business_endpoints_require_auth() {
 
 #[actix_web::test]
 async fn test_cari_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Admin in tenant 1 creates a cari
@@ -2596,7 +2598,7 @@ async fn test_cari_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_hr_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Admin in tenant 1 creates an employee
@@ -2642,7 +2644,7 @@ async fn test_hr_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_chart_of_accounts_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Admin in tenant 1 creates account
@@ -2684,7 +2686,7 @@ async fn test_chart_of_accounts_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_tax_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Admin in tenant 1 creates tax rate
@@ -2730,7 +2732,7 @@ async fn test_tax_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_admin_only_write_endpoints() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (user_token, _) = register_user!(&app, 1);
@@ -2794,7 +2796,7 @@ async fn test_admin_only_write_endpoints() {
 
 #[actix_web::test]
 async fn test_webhook_crud() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2887,7 +2889,7 @@ async fn test_webhook_crud() {
 
 #[actix_web::test]
 async fn test_webhook_validation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2921,7 +2923,7 @@ async fn test_webhook_validation() {
 
 #[actix_web::test]
 async fn test_webhook_test_endpoint() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2955,7 +2957,7 @@ async fn test_webhook_test_endpoint() {
 
 #[actix_web::test]
 async fn test_webhook_deliveries_list() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -2992,7 +2994,7 @@ async fn test_webhook_deliveries_list() {
 
 #[actix_web::test]
 async fn test_webhook_write_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_user!(&app, 1);
@@ -3012,7 +3014,7 @@ async fn test_webhook_write_requires_admin() {
 
 #[actix_web::test]
 async fn test_webhook_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     // Admin in tenant 1 creates webhook
@@ -3055,7 +3057,7 @@ async fn test_webhook_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_search_basic() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -3111,7 +3113,7 @@ async fn test_search_basic() {
 
 #[actix_web::test]
 async fn test_search_fuzzy_matching() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -3153,7 +3155,7 @@ async fn test_search_fuzzy_matching() {
 
 #[actix_web::test]
 async fn test_search_turkish_case_handling() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -3194,7 +3196,7 @@ async fn test_search_turkish_case_handling() {
 
 #[actix_web::test]
 async fn test_search_accent_insensitive() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -3235,7 +3237,7 @@ async fn test_search_accent_insensitive() {
 
 #[actix_web::test]
 async fn test_search_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token1, _) = register_admin!(&app_state, 1);
@@ -3291,7 +3293,7 @@ async fn test_search_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_search_entity_type_filter() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -3410,7 +3412,7 @@ async fn test_search_entity_type_filter() {
 
 #[actix_web::test]
 async fn test_search_unauthenticated_denied() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let req = test::TestRequest::get()
@@ -3423,7 +3425,7 @@ async fn test_search_unauthenticated_denied() {
 
 #[actix_web::test]
 async fn test_search_index_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (user_token, _) = register_user!(&app, 1);
@@ -3445,7 +3447,7 @@ async fn test_search_index_requires_admin() {
 
 #[actix_web::test]
 async fn test_search_remove_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (admin_token, _) = register_admin!(&app_state, 1);
@@ -3478,7 +3480,7 @@ async fn test_search_remove_requires_admin() {
 
 #[actix_web::test]
 async fn test_search_reindex_requires_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (user_token, _) = register_user!(&app, 1);
@@ -3494,7 +3496,7 @@ async fn test_search_reindex_requires_admin() {
 
 #[actix_web::test]
 async fn test_search_sql_injection_prevention() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -3527,7 +3529,7 @@ async fn test_search_sql_injection_prevention() {
 
 #[actix_web::test]
 async fn test_search_performance() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -3576,7 +3578,7 @@ async fn test_search_performance() {
 
 #[actix_web::test]
 async fn test_search_remove_document() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -3636,7 +3638,7 @@ async fn test_search_remove_document() {
 
 #[actix_web::test]
 async fn test_search_reindex() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -3687,7 +3689,7 @@ async fn test_search_reindex() {
 
 #[actix_web::test]
 async fn test_search_limit_parameter() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -3726,7 +3728,7 @@ async fn test_search_limit_parameter() {
 
 #[actix_web::test]
 async fn test_search_cari_endpoint() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -3783,7 +3785,7 @@ async fn test_search_cari_endpoint() {
 
 #[actix_web::test]
 async fn test_search_cari_fuzzy() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -3824,7 +3826,7 @@ async fn test_search_cari_fuzzy() {
 
 #[actix_web::test]
 async fn test_search_cari_turkish() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -3870,7 +3872,7 @@ async fn test_search_cari_turkish() {
 
 #[actix_web::test]
 async fn test_search_cari_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token1, user_id1) = register_admin!(&app_state, 1);
@@ -3929,7 +3931,7 @@ async fn test_search_cari_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_search_invoice_endpoint() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -3998,7 +4000,7 @@ async fn test_search_invoice_endpoint() {
 
 #[actix_web::test]
 async fn test_search_invoice_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token1, user_id1) = register_admin!(&app_state, 1);
@@ -4072,7 +4074,7 @@ async fn test_search_invoice_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_report_generate_invoice_pdf() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4112,7 +4114,7 @@ async fn test_report_generate_invoice_pdf() {
 
 #[actix_web::test]
 async fn test_report_generate_trial_balance_excel() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4150,7 +4152,7 @@ async fn test_report_generate_trial_balance_excel() {
 
 #[actix_web::test]
 async fn test_report_generate_csv() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4186,7 +4188,7 @@ async fn test_report_generate_csv() {
 
 #[actix_web::test]
 async fn test_report_generate_edefter_xml() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4224,7 +4226,7 @@ async fn test_report_generate_edefter_xml() {
 
 #[actix_web::test]
 async fn test_report_generate_json() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4261,7 +4263,7 @@ async fn test_report_generate_json() {
 
 #[actix_web::test]
 async fn test_report_generate_invalid_format() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4283,7 +4285,7 @@ async fn test_report_generate_invalid_format() {
 
 #[actix_web::test]
 async fn test_report_list_and_download() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4338,7 +4340,7 @@ async fn test_report_list_and_download() {
 
 #[actix_web::test]
 async fn test_report_download_not_found() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4354,7 +4356,7 @@ async fn test_report_download_not_found() {
 
 #[actix_web::test]
 async fn test_report_delete() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4408,7 +4410,7 @@ async fn test_report_delete() {
 
 #[actix_web::test]
 async fn test_report_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token1, _) = register_admin!(&app_state, 1);
@@ -4462,7 +4464,7 @@ async fn test_report_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_job_schedule_generate_report() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4491,7 +4493,7 @@ async fn test_job_schedule_generate_report() {
 
 #[actix_web::test]
 async fn test_job_generate_report_lifecycle() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4557,7 +4559,7 @@ async fn test_job_generate_report_lifecycle() {
 
 #[actix_web::test]
 async fn test_job_generate_report_retry_on_failure() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -4615,7 +4617,7 @@ async fn test_job_generate_report_retry_on_failure() {
 
 #[actix_web::test]
 async fn test_job_schedule_all_types() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -4666,7 +4668,7 @@ async fn test_job_schedule_all_types() {
 
 #[actix_web::test]
 async fn test_job_cancel() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -4705,7 +4707,7 @@ async fn test_job_cancel() {
 
 #[actix_web::test]
 async fn test_job_cancel_running_fails() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -4737,7 +4739,7 @@ async fn test_job_cancel_running_fails() {
 
 #[actix_web::test]
 async fn test_job_retry_failed() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -4793,7 +4795,7 @@ async fn test_job_retry_failed() {
 
 #[actix_web::test]
 async fn test_job_list_by_status() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -4834,7 +4836,7 @@ async fn test_job_list_by_status() {
 
 #[actix_web::test]
 async fn test_job_unauthorized() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let req = test::TestRequest::post()
@@ -4848,7 +4850,7 @@ async fn test_job_unauthorized() {
 
 #[actix_web::test]
 async fn test_job_non_admin_forbidden() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_user!(&app, 1);
 
@@ -4864,7 +4866,7 @@ async fn test_job_non_admin_forbidden() {
 
 #[actix_web::test]
 async fn test_job_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token1, _) = register_admin!(&app_state, 1);
@@ -4916,7 +4918,7 @@ async fn test_job_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_job_scheduled_future() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -4950,7 +4952,7 @@ async fn test_job_scheduled_future() {
 
 #[actix_web::test]
 async fn test_job_cleanup_endpoint() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -4994,7 +4996,7 @@ async fn test_job_cleanup_endpoint() {
 
 #[actix_web::test]
 async fn test_job_not_found() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -5009,7 +5011,7 @@ async fn test_job_not_found() {
 
 #[actix_web::test]
 async fn test_job_invalid_status_filter() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -5024,7 +5026,7 @@ async fn test_job_invalid_status_filter() {
 
 #[actix_web::test]
 async fn test_job_next_priority_ordering() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -5067,7 +5069,7 @@ async fn test_job_next_priority_ordering() {
 
 #[actix_web::test]
 async fn test_job_fail_invalid_job_id() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -5083,7 +5085,7 @@ async fn test_job_fail_invalid_job_id() {
 
 #[actix_web::test]
 async fn test_job_invalid_type() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -5099,7 +5101,7 @@ async fn test_job_invalid_type() {
 
 #[actix_web::test]
 async fn test_job_retry_non_failed_fails() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
     let (token, _) = register_admin!(&app_state, 1);
 
@@ -5129,7 +5131,7 @@ async fn test_job_retry_non_failed_fails() {
 
 #[actix_web::test]
 async fn test_send_email_notification() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -5167,7 +5169,7 @@ async fn test_send_email_notification() {
 
 #[actix_web::test]
 async fn test_send_sms_notification() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -5202,7 +5204,7 @@ async fn test_send_sms_notification() {
 
 #[actix_web::test]
 async fn test_send_in_app_notification() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -5237,7 +5239,7 @@ async fn test_send_in_app_notification() {
 
 #[actix_web::test]
 async fn test_get_in_app_notifications() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -5282,7 +5284,7 @@ async fn test_get_in_app_notifications() {
 
 #[actix_web::test]
 async fn test_get_unread_in_app_notifications() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -5336,7 +5338,7 @@ async fn test_get_unread_in_app_notifications() {
 
 #[actix_web::test]
 async fn test_get_unread_count() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -5377,7 +5379,7 @@ async fn test_get_unread_count() {
 
 #[actix_web::test]
 async fn test_mark_notification_read() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -5419,7 +5421,7 @@ async fn test_mark_notification_read() {
 
 #[actix_web::test]
 async fn test_mark_all_notifications_read() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, user_id) = register_admin!(&app_state, 1);
@@ -5462,7 +5464,7 @@ async fn test_mark_all_notifications_read() {
 
 #[actix_web::test]
 async fn test_retry_notification() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -5506,7 +5508,7 @@ async fn test_retry_notification() {
 
 #[actix_web::test]
 async fn test_notification_soft_delete() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -5549,7 +5551,7 @@ async fn test_notification_soft_delete() {
 
 #[actix_web::test]
 async fn test_notification_list_deleted_and_restore() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -5632,7 +5634,7 @@ async fn test_notification_list_deleted_and_restore() {
 
 #[actix_web::test]
 async fn test_notification_destroy() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -5700,7 +5702,7 @@ async fn test_notification_destroy() {
 
 #[actix_web::test]
 async fn test_send_notification_invalid_channel() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token, _) = register_admin!(&app_state, 1);
@@ -5723,7 +5725,7 @@ async fn test_send_notification_invalid_channel() {
 
 #[actix_web::test]
 async fn test_notification_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_full_test_app(&app_state)).await;
 
     let (token1, user1_id) = register_admin!(&app_state, 1);

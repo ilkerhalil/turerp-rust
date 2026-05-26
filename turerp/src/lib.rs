@@ -563,7 +563,7 @@ pub mod app {
     }
 
     /// Create application state with in-memory storage (postgres mode - for testing)
-    pub fn create_app_state_in_memory(config: &Config) -> Result<AppState, ApiError> {
+    pub async fn create_app_state_in_memory(config: &Config) -> Result<AppState, ApiError> {
         let cache_service: Arc<dyn crate::cache::CacheService> =
             Arc::new(crate::cache::InMemoryCacheService::new())
                 as Arc<dyn crate::cache::CacheService>;
@@ -970,11 +970,14 @@ pub mod app {
         );
 
         // File Storage
-        let file_storage: Arc<dyn crate::common::file_storage::FileStorage> =
-            Arc::new(crate::common::file_storage::LocalFileStorage::new(format!(
+        let file_storage: Arc<dyn crate::common::file_storage::FileStorage> = Arc::new(
+            crate::common::file_storage::LocalFileStorage::new(format!(
                 "/tmp/turerp-test-files-{}",
                 std::process::id()
-            ))) as Arc<dyn crate::common::file_storage::FileStorage>;
+            ))
+            .await,
+        )
+            as Arc<dyn crate::common::file_storage::FileStorage>;
 
         // Rate limit stats
         let rate_limit_stats = crate::middleware::rate_limit::RateLimitStatsStore::default();
@@ -1057,7 +1060,7 @@ pub mod app {
                 .await;
         });
 
-        let i18n = I18n::init();
+        let i18n = I18n::init().await;
 
         Ok(AppState {
             auth: AuthState {
@@ -1564,7 +1567,7 @@ pub mod app {
         let circuit_breaker_registry = CircuitBreakerRegistry::new();
         let retry_stats: BoxRetryStats = Arc::new(crate::common::retry::RetryStats::new());
 
-        let i18n = I18n::init();
+        let i18n = I18n::init().await;
 
         // Observability
         let observability_repo = PostgresObservabilityRepository::new(pool.clone()).into_boxed();
@@ -1572,11 +1575,14 @@ pub mod app {
             ObservabilityService::new(observability_repo, cache_service.clone())
                 .with_notification(notification_service.clone());
 
-        let file_storage: Arc<dyn crate::common::file_storage::FileStorage> =
-            Arc::new(crate::common::file_storage::LocalFileStorage::new(format!(
+        let file_storage: Arc<dyn crate::common::file_storage::FileStorage> = Arc::new(
+            crate::common::file_storage::LocalFileStorage::new(format!(
                 "/tmp/turerp-test-files-{}",
                 std::process::id()
-            ))) as Arc<dyn crate::common::file_storage::FileStorage>;
+            ))
+            .await,
+        )
+            as Arc<dyn crate::common::file_storage::FileStorage>;
 
         // Import Service
         let import_service: Arc<dyn crate::common::import::ImportService> =
@@ -1703,7 +1709,7 @@ pub mod app {
     pub async fn create_app_state_unified(config: &Config) -> Result<AppState, ApiError> {
         if config.database.url.is_empty() {
             tracing::info!("Using in-memory storage (no database URL configured)");
-            Ok(create_app_state_in_memory(config)?)
+            Ok(create_app_state_in_memory(config).await?)
         } else {
             tracing::info!("Using PostgreSQL storage");
             create_app_state(config).await
@@ -1733,7 +1739,9 @@ mod tests {
             encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
             ..Config::default()
         };
-        let state = app::create_app_state_in_memory(&config).expect("app state creation failed");
+        let state = app::create_app_state_in_memory(&config)
+            .await
+            .expect("app state creation failed");
         // Verify services are created
         assert!(std::sync::Arc::strong_count(&state.auth.auth_service) > 0);
         assert!(std::sync::Arc::strong_count(&state.auth.user_service) > 0);

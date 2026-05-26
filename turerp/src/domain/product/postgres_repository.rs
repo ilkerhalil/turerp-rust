@@ -148,6 +148,25 @@ impl ProductRepository for PostgresProductRepository {
         Ok(result.map(|r| r.into()))
     }
 
+    async fn find_by_ids(&self, ids: &[i64], tenant_id: i64) -> Result<Vec<Product>, ApiError> {
+        let rows: Vec<ProductRow> = sqlx::query_as(
+            r#"
+            SELECT id, tenant_id, company_id, code, name, description, category_id, unit_id,
+                   barcode, purchase_price, sale_price, tax_rate, is_active,
+                   created_at, updated_at, deleted_at, deleted_by
+            FROM products
+            WHERE tenant_id = $1 AND id = ANY($2) AND deleted_at IS NULL
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(ids)
+        .fetch_all(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to find products by ids: {}", e)))?;
+
+        Ok(rows.into_iter().map(|r| r.into()).collect())
+    }
+
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
         let ck = cache_key(tenant_id, "products", "all");
         if let Some(cached) = cache_get::<Vec<Product>>(&*self.cache, &ck).await? {

@@ -28,7 +28,7 @@ static TRANSLATIONS: OnceLock<HashMap<String, HashMap<String, String>>> = OnceLo
 pub fn resolve(i18n: &Option<actix_web::web::Data<I18n>>) -> &I18n {
     i18n.as_ref().map(|d| d.get_ref()).unwrap_or_else(|| {
         static FALLBACK: OnceLock<I18n> = OnceLock::new();
-        FALLBACK.get_or_init(I18n::init)
+        FALLBACK.get_or_init(|| I18n)
     })
 }
 
@@ -48,32 +48,32 @@ pub struct I18n;
 impl I18n {
     /// Initialise translations by scanning `locales/` for `*.json` files.
     /// Safe to call multiple times — only the first call loads data.
-    pub fn init() -> Self {
-        let _ = TRANSLATIONS.get_or_init(|| {
-            let mut bundles = HashMap::new();
-            for locale in SUPPORTED_LOCALES {
-                let path = format!("locales/{}.json", locale);
-                match std::fs::read_to_string(&path) {
-                    Ok(content) => {
-                        match serde_json::from_str::<HashMap<String, String>>(&content) {
-                            Ok(map) => {
-                                bundles.insert(locale.to_string(), map);
-                            }
-                            Err(e) => {
-                                tracing::error!("Failed to parse {}: {}", path, e);
-                            }
-                        }
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                        tracing::warn!("Translation file not found: {}", path);
+    pub async fn init() -> Self {
+        if TRANSLATIONS.get().is_some() {
+            return Self;
+        }
+
+        let mut bundles = HashMap::new();
+        for locale in SUPPORTED_LOCALES {
+            let path = format!("locales/{}.json", locale);
+            match tokio::fs::read_to_string(&path).await {
+                Ok(content) => match serde_json::from_str::<HashMap<String, String>>(&content) {
+                    Ok(map) => {
+                        bundles.insert(locale.to_string(), map);
                     }
                     Err(e) => {
-                        tracing::error!("Failed to read {}: {}", path, e);
+                        tracing::error!("Failed to parse {}: {}", path, e);
                     }
+                },
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    tracing::warn!("Translation file not found: {}", path);
+                }
+                Err(e) => {
+                    tracing::error!("Failed to read {}: {}", path, e);
                 }
             }
-            bundles
-        });
+        }
+        let _ = TRANSLATIONS.set(bundles);
         Self
     }
 
@@ -119,8 +119,8 @@ impl I18n {
 mod tests {
     use super::*;
 
-    fn ensure_loaded() {
-        I18n::init();
+    async fn ensure_loaded() {
+        I18n::init().await;
     }
 
     #[test]
@@ -132,9 +132,9 @@ mod tests {
         assert_eq!(I18n::normalize_locale("  EN  "), "en");
     }
 
-    #[test]
-    fn test_translation_lookup() {
-        ensure_loaded();
+    #[tokio::test]
+    async fn test_translation_lookup() {
+        ensure_loaded().await;
         let i18n = I18n;
 
         // Default locale should at least have generic keys
@@ -146,18 +146,18 @@ mod tests {
         assert_eq!(msg, "nonexistent.key");
     }
 
-    #[test]
-    fn test_translation_args_interpolation() {
-        ensure_loaded();
+    #[tokio::test]
+    async fn test_translation_args_interpolation() {
+        ensure_loaded().await;
         let i18n = I18n;
 
         let msg = i18n.t_args("en", "errors.not_found", &[("resource", "Invoice")]);
         assert!(msg.contains("Invoice"));
     }
 
-    #[test]
-    fn test_fallback_to_default_locale() {
-        ensure_loaded();
+    #[tokio::test]
+    async fn test_fallback_to_default_locale() {
+        ensure_loaded().await;
         let i18n = I18n;
 
         // Request unsupported locale; should fall back to English

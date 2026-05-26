@@ -70,6 +70,14 @@ pub trait BankRepository: Send + Sync {
         tx: crate::domain::bank::model::ParsedBankTransaction,
     ) -> Result<BankTransaction, ApiError>;
 
+    /// Create multiple bank transactions in a single batch
+    async fn create_transactions_batch(
+        &self,
+        tenant_id: i64,
+        account_id: i64,
+        transactions: &[crate::domain::bank::model::ParsedBankTransaction],
+    ) -> Result<Vec<BankTransaction>, ApiError>;
+
     /// Find transactions by account
     async fn find_transactions_by_account(
         &self,
@@ -424,6 +432,42 @@ impl BankRepository for InMemoryBankRepository {
 
         inner.transactions.insert(id, transaction.clone());
         Ok(transaction)
+    }
+
+    async fn create_transactions_batch(
+        &self,
+        tenant_id: i64,
+        account_id: i64,
+        transactions: &[crate::domain::bank::model::ParsedBankTransaction],
+    ) -> Result<Vec<BankTransaction>, ApiError> {
+        let mut inner = self.inner.lock();
+        let mut created = Vec::with_capacity(transactions.len());
+
+        for tx in transactions {
+            let id = inner.next_transaction_id;
+            inner.next_transaction_id += 1;
+
+            let transaction = BankTransaction {
+                id,
+                tenant_id,
+                account_id,
+                transaction_date: tx.transaction_date,
+                description: tx.description.clone(),
+                amount: tx.amount,
+                currency: tx.currency.clone(),
+                balance_after: tx.balance_after,
+                reference_no: tx.reference_no.clone(),
+                matched_invoice_id: None,
+                matched_payment_id: None,
+                match_status: MatchStatus::Unmatched,
+                created_at: chrono::Utc::now(),
+            };
+
+            inner.transactions.insert(id, transaction.clone());
+            created.push(transaction);
+        }
+
+        Ok(created)
     }
 
     async fn find_transactions_by_account(

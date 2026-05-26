@@ -61,6 +61,7 @@ anyhow = "1.0"
 async-trait = "0.1"
 tokio = { version = "1", features = ["full"] }
 futures = "0.3"
+num_cpus = "1"
 
 # Secrets management (HashiCorp Vault)
 vaultrs = "0.7"

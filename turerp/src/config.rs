@@ -59,11 +59,11 @@ impl DatabaseConfig {
             max_connections: std::env::var("TURERP_DB_MAX_CONNECTIONS")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(10),
+                .unwrap_or_else(|| num_cpus::get() as u32 * 4),
             min_connections: std::env::var("TURERP_DB_MIN_CONNECTIONS")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(5),
+                .unwrap_or(10),
         })
     }
 }
@@ -436,8 +436,8 @@ impl Default for Config {
             server: ServerConfig::default(),
             database: DatabaseConfig {
                 url: String::new(),
-                max_connections: 10,
-                min_connections: 5,
+                max_connections: num_cpus::get() as u32 * 4,
+                min_connections: 10,
             },
             redis: RedisConfig::default(),
             jwt: JwtConfig {

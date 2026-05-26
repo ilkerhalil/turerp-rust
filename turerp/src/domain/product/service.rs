@@ -134,6 +134,14 @@ impl ProductService {
         Ok(product)
     }
 
+    pub async fn get_products_batch(
+        &self,
+        ids: &[i64],
+        tenant_id: i64,
+    ) -> Result<Vec<Product>, ApiError> {
+        self.product_repo.find_by_ids(ids, tenant_id).await
+    }
+
     pub async fn get_products_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
         let ck = cache_key(tenant_id, "products", "all");
 
