@@ -1113,9 +1113,7 @@ impl NotificationService for crate::domain::notification::service::NotificationS
             .collect())
     }
 
-    fn register_template(&self, template: EmailTemplate) {
-        let _ = template;
-    }
+    fn register_template(&self, _template: EmailTemplate) {}
 
     async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         crate::domain::notification::service::NotificationService::retry(self, id, tenant_id).await

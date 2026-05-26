@@ -54,6 +54,7 @@ impl ObservabilityService {
     // ── Health Checks ───────────────────────────────────────────────
 
     /// Run a system health check
+    #[tracing::instrument(skip(self))]
     pub async fn run_health_check(
         &self,
         db_check: Option<&sqlx::PgPool>,
@@ -150,11 +151,13 @@ impl ObservabilityService {
     }
 
     /// Get recent health check history
+    #[tracing::instrument(skip(self))]
     pub async fn get_health_history(&self, limit: i64) -> Result<Vec<HealthCheckResult>, ApiError> {
         self.repo.get_recent_health_checks(limit).await
     }
 
     /// Get liveness status (always healthy if running)
+    #[tracing::instrument(skip(self))]
     pub async fn get_liveness(&self) -> Result<SystemHealthSummary, ApiError> {
         let now = chrono::Utc::now();
         Ok(SystemHealthSummary {
@@ -174,6 +177,7 @@ impl ObservabilityService {
     // ── SLI / SLO ───────────────────────────────────────────────────
 
     /// Create an SLI definition
+    #[tracing::instrument(skip(self))]
     pub async fn create_sli(
         &self,
         name: String,
@@ -194,11 +198,13 @@ impl ObservabilityService {
     }
 
     /// List all SLIs
+    #[tracing::instrument(skip(self))]
     pub async fn list_slis(&self) -> Result<Vec<SliDefinition>, ApiError> {
         self.repo.list_slis().await
     }
 
     /// Record an SLI measurement
+    #[tracing::instrument(skip(self))]
     pub async fn record_sli(&self, sli_id: String, value: f64) -> Result<(), ApiError> {
         let measurement = SliMeasurement {
             sli_id,
@@ -209,6 +215,7 @@ impl ObservabilityService {
     }
 
     /// Create an SLO definition
+    #[tracing::instrument(skip(self))]
     pub async fn create_slo(
         &self,
         name: String,
@@ -232,11 +239,13 @@ impl ObservabilityService {
     }
 
     /// List all SLOs
+    #[tracing::instrument(skip(self))]
     pub async fn list_slos(&self) -> Result<Vec<SloDefinition>, ApiError> {
         self.repo.list_slos().await
     }
 
     /// Evaluate SLO compliance for all SLOs
+    #[tracing::instrument(skip(self))]
     pub async fn evaluate_slo_compliance(&self) -> Result<Vec<SloCompliance>, ApiError> {
         let slos = self.repo.list_slos().await?;
         let mut compliance_list = Vec::with_capacity(slos.len());
@@ -282,6 +291,7 @@ impl ObservabilityService {
     }
 
     /// Get latest SLO compliance
+    #[tracing::instrument(skip(self))]
     pub async fn get_slo_compliance(&self) -> Result<Vec<SloCompliance>, ApiError> {
         let cache_key = cache_key(0, "observability", "slo_compliance");
         if let Some(cached) = cache_get::<Vec<SloCompliance>>(&*self.cache, &cache_key).await? {
@@ -302,6 +312,7 @@ impl ObservabilityService {
     // ── Alerting ────────────────────────────────────────────────────
 
     /// Create an alert rule
+    #[tracing::instrument(skip(self))]
     pub async fn create_alert_rule(
         &self,
         name: String,
@@ -334,16 +345,19 @@ impl ObservabilityService {
     }
 
     /// List all alert rules
+    #[tracing::instrument(skip(self))]
     pub async fn list_alert_rules(&self) -> Result<Vec<AlertRule>, ApiError> {
         self.repo.list_alert_rules().await
     }
 
     /// Delete an alert rule
+    #[tracing::instrument(skip(self))]
     pub async fn delete_alert_rule(&self, id: &str) -> Result<(), ApiError> {
         self.repo.delete_alert_rule(id).await
     }
 
     /// Evaluate alert rules and create alerts
+    #[tracing::instrument(skip(self))]
     pub async fn evaluate_alert_rules(
         &self,
         metrics: &HashMap<String, f64>,
@@ -444,11 +458,13 @@ impl ObservabilityService {
     }
 
     /// List recent alerts
+    #[tracing::instrument(skip(self))]
     pub async fn list_alerts(&self, limit: i64) -> Result<Vec<Alert>, ApiError> {
         self.repo.list_alerts(limit).await
     }
 
     /// Resolve an alert
+    #[tracing::instrument(skip(self))]
     pub async fn resolve_alert(&self, id: &str) -> Result<(), ApiError> {
         self.repo.resolve_alert(id).await
     }
@@ -456,6 +472,7 @@ impl ObservabilityService {
     // ── Dashboard ─────────────────────────────────────────────────
 
     /// Get dashboard summary data
+    #[tracing::instrument(skip(self))]
     pub async fn get_dashboard_summary(&self) -> Result<DashboardSummary, ApiError> {
         let slos = self.get_slo_compliance().await?;
         let alerts = self.list_alerts(10).await?;
@@ -470,6 +487,7 @@ impl ObservabilityService {
     }
 
     /// Get sparkline data for a metric
+    #[tracing::instrument(skip(self))]
     pub async fn get_sparkline(
         &self,
         metric: &str,

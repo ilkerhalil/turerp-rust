@@ -53,6 +53,7 @@ impl AuthService {
     }
 
     /// Register a new user
+    #[tracing::instrument(skip(self))]
     pub async fn register(&self, request: RegisterRequest) -> Result<LoginResponse, ApiError> {
         // Validate input
         request
@@ -108,6 +109,7 @@ impl AuthService {
     }
 
     /// Login user
+    #[tracing::instrument(skip(self))]
     pub async fn login(
         &self,
         request: LoginRequest,
@@ -154,13 +156,16 @@ impl AuthService {
             Ok(user) => {
                 // Reset failed attempts on successful login
                 if let Some(pool) = &self.pool {
-                    let _ = sqlx::query(
+                    if let Err(e) = sqlx::query(
                         "DELETE FROM login_attempts WHERE username = $1 AND tenant_id = $2",
                     )
                     .bind(&request.username)
                     .bind(tenant_id)
                     .execute(pool.as_ref())
-                    .await;
+                    .await
+                    {
+                        tracing::warn!(error = %e, "Failed to reset login attempts");
+                    }
                 }
 
                 // Check if MFA is enabled for this user
@@ -227,6 +232,7 @@ impl AuthService {
     }
 
     /// Refresh access token
+    #[tracing::instrument(skip(self))]
     pub async fn refresh_token(&self, request: RefreshTokenRequest) -> Result<TokenPair, ApiError> {
         let hash = Self::token_hash(&request.refresh_token);
         if self.revoked_token_store.is_revoked(&hash).await {
@@ -238,6 +244,7 @@ impl AuthService {
     }
 
     /// Revoke refresh token on logout
+    #[tracing::instrument(skip(self))]
     pub async fn logout(&self, request: LogoutRequest) -> Result<(), ApiError> {
         let claims = self.jwt_service.decode_token(&request.refresh_token)?;
         let exp = DateTime::from_timestamp(claims.exp, 0).unwrap_or_else(Utc::now);

@@ -11,7 +11,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_upload_and_list_files() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -48,7 +48,7 @@ async fn test_upload_and_list_files() {
 
 #[actix_web::test]
 async fn test_list_files_requires_auth() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let req = test::TestRequest::get().uri("/api/v1/files").to_request();
@@ -58,7 +58,7 @@ async fn test_list_files_requires_auth() {
 
 #[actix_web::test]
 async fn test_file_tenant_isolation() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token1, _) = register_admin(&app_state, 1).await;
     let (token2, _) = register_admin(&app_state, 2).await;
@@ -99,7 +99,7 @@ async fn test_file_tenant_isolation() {
 
 #[actix_web::test]
 async fn test_download_file() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -141,7 +141,7 @@ async fn test_download_file() {
 
 #[actix_web::test]
 async fn test_delete_file() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -186,7 +186,7 @@ async fn test_delete_file() {
 
 #[actix_web::test]
 async fn test_get_file_metadata() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 

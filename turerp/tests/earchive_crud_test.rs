@@ -43,7 +43,7 @@ fn build_test_app_with_earchive(
 
 #[actix_web::test]
 async fn test_generate_earchive_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_earchive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -71,7 +71,7 @@ async fn test_generate_earchive_success() {
 
 #[actix_web::test]
 async fn test_get_earchive_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_earchive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -107,7 +107,7 @@ async fn test_get_earchive_success() {
 
 #[actix_web::test]
 async fn test_get_earchive_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_earchive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -123,7 +123,7 @@ async fn test_get_earchive_not_found() {
 
 #[actix_web::test]
 async fn test_generate_earchive_smm() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_earchive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -151,7 +151,7 @@ async fn test_generate_earchive_smm() {
 
 #[actix_web::test]
 async fn test_sign_earchive() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_earchive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -187,7 +187,7 @@ async fn test_sign_earchive() {
 
 #[actix_web::test]
 async fn test_send_earchive() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_earchive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -233,7 +233,7 @@ async fn test_send_earchive() {
 
 #[actix_web::test]
 async fn test_cancel_earchive() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_earchive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -273,7 +273,7 @@ async fn test_cancel_earchive() {
 
 #[actix_web::test]
 async fn test_earchive_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_earchive(&state)).await;
 
     let req = test::TestRequest::post()
@@ -289,7 +289,7 @@ async fn test_earchive_unauthorized() {
 
 #[actix_web::test]
 async fn test_earchive_normal_user_forbidden() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_earchive(&state)).await;
     let (token, _user_id) = register_user!(&app, 1);
 

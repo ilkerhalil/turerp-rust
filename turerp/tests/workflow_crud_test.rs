@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_template_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -46,7 +46,7 @@ async fn test_create_template_success() {
 
 #[actix_web::test]
 async fn test_list_templates() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -84,7 +84,7 @@ async fn test_list_templates() {
 
 #[actix_web::test]
 async fn test_start_workflow_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -115,7 +115,7 @@ async fn test_start_workflow_success() {
 
 #[actix_web::test]
 async fn test_get_instance_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -158,7 +158,7 @@ async fn test_get_instance_success() {
 
 #[actix_web::test]
 async fn test_get_instance_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -174,7 +174,7 @@ async fn test_get_instance_not_found() {
 
 #[actix_web::test]
 async fn test_approve_step_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -214,7 +214,7 @@ async fn test_approve_step_success() {
 
 #[actix_web::test]
 async fn test_reject_step_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -255,7 +255,7 @@ async fn test_reject_step_success() {
 
 #[actix_web::test]
 async fn test_resubmit_workflow_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -306,7 +306,7 @@ async fn test_resubmit_workflow_success() {
 
 #[actix_web::test]
 async fn test_get_instance_audit_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -347,7 +347,7 @@ async fn test_get_instance_audit_success() {
 
 #[actix_web::test]
 async fn test_workflow_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()

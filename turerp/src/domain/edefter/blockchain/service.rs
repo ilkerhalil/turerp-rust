@@ -62,6 +62,7 @@ impl BlockchainLedgerService {
     ///
     /// Each entry gets a `HashChainEntry` with its hash and the previous
     /// entry's hash, creating an immutable linked sequence.
+    #[tracing::instrument(skip(self))]
     pub async fn build_hash_chain(
         &self,
         tenant_id: i64,
@@ -98,6 +99,7 @@ impl BlockchainLedgerService {
     /// 1. Leaves are the entry hashes
     /// 2. Odd-length layers duplicate the last hash
     /// 3. Each parent = SHA-256(left + right)
+    #[tracing::instrument(skip(self))]
     pub async fn build_merkle_tree(
         &self,
         tenant_id: i64,
@@ -142,6 +144,7 @@ impl BlockchainLedgerService {
     /// 1. Hash chain continuity (each entry's previous_hash matches)
     /// 2. Entry hash correctness (re-computed hash matches stored)
     /// 3. Merkle root match (if expected root provided)
+    #[tracing::instrument(skip(self))]
     pub async fn verify_period_integrity(
         &self,
         tenant_id: i64,
@@ -233,6 +236,7 @@ impl BlockchainLedgerService {
     }
 
     /// Get the stored ledger hash state for a period.
+    #[tracing::instrument(skip(self))]
     pub async fn get_ledger_hash_state(
         &self,
         tenant_id: i64,
@@ -242,6 +246,7 @@ impl BlockchainLedgerService {
     }
 
     /// Get the hash chain for a period.
+    #[tracing::instrument(skip(self))]
     pub async fn get_hash_chain(
         &self,
         tenant_id: i64,
@@ -251,6 +256,7 @@ impl BlockchainLedgerService {
     }
 
     /// Get the stored Merkle tree for a period.
+    #[tracing::instrument(skip(self))]
     pub async fn get_merkle_tree(
         &self,
         tenant_id: i64,

@@ -17,6 +17,9 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    env:
+      # Reduce parallel linking to avoid OOM on GitHub Actions runners
+      CARGO_BUILD_JOBS: 1
 
     steps:
       - name: Checkout code

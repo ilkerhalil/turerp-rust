@@ -17,12 +17,14 @@ use turerp::domain::purchase::model::{CreatePurchaseOrder, CreatePurchaseOrderLi
 use turerp::middleware::JwtAuthMiddleware;
 use turerp::utils::jwt::JwtService;
 
-fn create_test_app_state() -> turerp::app::AppState {
+async fn create_test_app_state() -> turerp::app::AppState {
     let config = Config {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    create_app_state_in_memory(&config).expect("app state creation failed")
+    create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed")
 }
 
 fn build_test_app(
@@ -88,7 +90,7 @@ async fn create_vendor_cari(state: &turerp::app::AppState, tenant_id: i64) -> i6
 
 #[actix_web::test]
 async fn test_vendor_register_and_login() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_vendor_cari(&state, 1).await;
@@ -134,7 +136,7 @@ async fn test_vendor_register_and_login() {
 
 #[actix_web::test]
 async fn test_vendor_login_invalid_credentials() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -151,7 +153,7 @@ async fn test_vendor_login_invalid_credentials() {
 
 #[actix_web::test]
 async fn test_vendor_orders_requires_auth() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -164,7 +166,7 @@ async fn test_vendor_orders_requires_auth() {
 
 #[actix_web::test]
 async fn test_vendor_invoices_requires_auth() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -177,7 +179,7 @@ async fn test_vendor_invoices_requires_auth() {
 
 #[actix_web::test]
 async fn test_vendor_payments_requires_auth() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -190,7 +192,7 @@ async fn test_vendor_payments_requires_auth() {
 
 #[actix_web::test]
 async fn test_vendor_delivery_notes_requires_auth() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -203,7 +205,7 @@ async fn test_vendor_delivery_notes_requires_auth() {
 
 #[actix_web::test]
 async fn test_vendor_delivery_notes_crud() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_vendor_cari(&state, 1).await;
@@ -356,7 +358,7 @@ async fn create_payment_for_invoice(
 
 #[actix_web::test]
 async fn test_vendor_order_history() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_vendor_cari(&state, 1).await;
@@ -406,7 +408,7 @@ async fn test_vendor_order_history() {
 
 #[actix_web::test]
 async fn test_vendor_invoice_list() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_vendor_cari(&state, 1).await;
@@ -456,7 +458,7 @@ async fn test_vendor_invoice_list() {
 
 #[actix_web::test]
 async fn test_vendor_payment_history() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_vendor_cari(&state, 1).await;
@@ -507,7 +509,7 @@ async fn test_vendor_payment_history() {
 
 #[actix_web::test]
 async fn test_vendor_isolation() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     // Create two vendors
@@ -625,7 +627,7 @@ async fn test_vendor_isolation() {
 
 #[actix_web::test]
 async fn test_vendor_register_duplicate_email() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_vendor_cari(&state, 1).await;
@@ -658,7 +660,7 @@ async fn test_vendor_register_duplicate_email() {
 
 #[actix_web::test]
 async fn test_vendor_register_requires_vendor_cari() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     // Create a customer cari (not vendor)

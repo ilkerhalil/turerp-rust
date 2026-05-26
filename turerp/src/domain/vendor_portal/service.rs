@@ -188,7 +188,8 @@ impl VendorPortal for VendorPortalService {
         let _ = self
             .vendor_user_repo
             .update_last_login(user.id, tenant_id)
-            .await;
+            .await
+            .ok();
 
         let claims = VendorAuthClaims::new(
             user.id,
@@ -277,7 +278,7 @@ impl VendorPortal for VendorPortalService {
                 expected_delivery_date: order.expected_delivery_date.map(|d| d.date_naive()),
                 total_amount: order.total_amount,
                 currency: order.currency,
-                item_count: 0, // TODO: populate from order lines once PurchaseService exposes them
+                item_count: 0, // FIXME: populate from PurchaseOrderLineRepository::find_by_order(order.id) once PurchaseService exposes a line-count method
             })
             .collect();
 

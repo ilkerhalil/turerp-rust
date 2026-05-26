@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_lead_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -41,7 +41,7 @@ async fn test_create_lead_success() {
 
 #[actix_web::test]
 async fn test_list_leads_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -76,7 +76,7 @@ async fn test_list_leads_paginated() {
 
 #[actix_web::test]
 async fn test_get_lead_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -109,7 +109,7 @@ async fn test_get_lead_success() {
 
 #[actix_web::test]
 async fn test_get_lead_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -125,7 +125,7 @@ async fn test_get_lead_not_found() {
 
 #[actix_web::test]
 async fn test_update_lead_status_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -161,7 +161,7 @@ async fn test_update_lead_status_success() {
 
 #[actix_web::test]
 async fn test_unauthorized_crm_access() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -177,7 +177,7 @@ async fn test_unauthorized_crm_access() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_lead() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -241,7 +241,7 @@ async fn test_delete_and_restore_lead() {
 
 #[actix_web::test]
 async fn test_list_deleted_leads() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -285,7 +285,7 @@ async fn test_list_deleted_leads() {
 
 #[actix_web::test]
 async fn test_destroy_lead_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

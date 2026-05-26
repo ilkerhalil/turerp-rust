@@ -36,6 +36,7 @@ impl ShiftService {
     }
 
     // Shift operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_shift(&self, create: CreateShift) -> Result<ShiftResponse, ApiError> {
         create
             .validate()
@@ -44,6 +45,7 @@ impl ShiftService {
         Ok(ShiftResponse::from(shift))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_shift(&self, id: i64, tenant_id: i64) -> Result<ShiftResponse, ApiError> {
         let shift = self
             .shift_repo
@@ -53,6 +55,7 @@ impl ShiftService {
         Ok(ShiftResponse::from(shift))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_shifts_by_tenant(
         &self,
         tenant_id: i64,
@@ -61,6 +64,7 @@ impl ShiftService {
         Ok(shifts.into_iter().map(ShiftResponse::from).collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_shifts_paginated(
         &self,
         tenant_id: i64,
@@ -81,6 +85,7 @@ impl ShiftService {
         ))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_shift(
         &self,
         id: i64,
@@ -91,11 +96,13 @@ impl ShiftService {
         Ok(ShiftResponse::from(shift))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_shift(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.shift_repo.delete(id, tenant_id).await
     }
 
     // Shift soft-delete operations
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_shift(
         &self,
         id: i64,
@@ -105,11 +112,13 @@ impl ShiftService {
         self.shift_repo.soft_delete(id, tenant_id, deleted_by).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_shift(&self, id: i64, tenant_id: i64) -> Result<ShiftResponse, ApiError> {
         let shift = self.shift_repo.restore(id, tenant_id).await?;
         Ok(ShiftResponse::from(shift))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_shifts(
         &self,
         tenant_id: i64,
@@ -118,11 +127,13 @@ impl ShiftService {
         Ok(shifts.into_iter().map(ShiftResponse::from).collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_shift(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.shift_repo.destroy(id, tenant_id).await
     }
 
     // Shift assignment operations
+    #[tracing::instrument(skip(self))]
     pub async fn assign_employee(
         &self,
         assignment: CreateShiftAssignment,
@@ -130,6 +141,7 @@ impl ShiftService {
         self.assignment_repo.create(assignment).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_assignments_by_employee(
         &self,
         employee_id: i64,
@@ -137,6 +149,7 @@ impl ShiftService {
         self.assignment_repo.find_by_employee(employee_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_assignments_by_shift(
         &self,
         shift_id: i64,
@@ -144,27 +157,33 @@ impl ShiftService {
         self.assignment_repo.find_by_shift(shift_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn remove_assignment(&self, id: i64) -> Result<(), ApiError> {
         self.assignment_repo.delete(id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_assignment(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
         self.assignment_repo.soft_delete(id, deleted_by).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_assignment(&self, id: i64) -> Result<ShiftAssignment, ApiError> {
         self.assignment_repo.restore(id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_assignments(&self) -> Result<Vec<ShiftAssignment>, ApiError> {
         self.assignment_repo.find_deleted().await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_assignment(&self, id: i64) -> Result<(), ApiError> {
         self.assignment_repo.destroy(id).await
     }
 
     // Attendance tracking operations
+    #[tracing::instrument(skip(self))]
     pub async fn clock_in(
         &self,
         req: ClockInRequest,
@@ -173,6 +192,7 @@ impl ShiftService {
         Ok(AttendanceRecordResponse::from(record))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn clock_out(
         &self,
         req: ClockOutRequest,
@@ -181,6 +201,7 @@ impl ShiftService {
         Ok(AttendanceRecordResponse::from(record))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_attendance_by_employee(
         &self,
         employee_id: i64,
@@ -192,6 +213,7 @@ impl ShiftService {
             .collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_attendance_by_period(
         &self,
         employee_id: i64,
@@ -208,19 +230,23 @@ impl ShiftService {
             .collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_attendance(&self, id: i64) -> Result<(), ApiError> {
         self.attendance_repo.delete(id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_attendance(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
         self.attendance_repo.soft_delete(id, deleted_by).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_attendance(&self, id: i64) -> Result<AttendanceRecordResponse, ApiError> {
         let record = self.attendance_repo.restore(id).await?;
         Ok(AttendanceRecordResponse::from(record))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_attendance(&self) -> Result<Vec<AttendanceRecordResponse>, ApiError> {
         let records = self.attendance_repo.find_deleted().await?;
         Ok(records
@@ -229,11 +255,13 @@ impl ShiftService {
             .collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_attendance(&self, id: i64) -> Result<(), ApiError> {
         self.attendance_repo.destroy(id).await
     }
 
     // Overtime calculation
+    #[tracing::instrument(skip(self))]
     pub async fn calculate_overtime(
         &self,
         employee_id: i64,
@@ -275,6 +303,7 @@ impl ShiftService {
     }
 
     // Shift report generation
+    #[tracing::instrument(skip(self))]
     pub async fn generate_shift_report(
         &self,
         _tenant_id: i64,

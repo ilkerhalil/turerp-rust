@@ -28,11 +28,13 @@ impl AssetsService {
     }
 
     /// Create a new asset
+    #[tracing::instrument(skip(self))]
     pub async fn create_asset(&self, create: CreateAsset) -> Result<Asset, ApiError> {
         self.asset_repo.create(create).await
     }
 
     /// Get an asset by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_asset(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
         self.asset_repo
             .find_by_id(id, tenant_id)
@@ -41,11 +43,13 @@ impl AssetsService {
     }
 
     /// Get all assets for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn get_assets_by_tenant(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError> {
         self.asset_repo.find_by_tenant(tenant_id).await
     }
 
     /// Get assets by tenant with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn get_assets_by_tenant_paginated(
         &self,
         tenant_id: i64,
@@ -58,6 +62,7 @@ impl AssetsService {
     }
 
     /// Get assets by status
+    #[tracing::instrument(skip(self))]
     pub async fn get_assets_by_status(
         &self,
         tenant_id: i64,
@@ -67,6 +72,7 @@ impl AssetsService {
     }
 
     /// Get assets by category
+    #[tracing::instrument(skip(self))]
     pub async fn get_assets_by_category(
         &self,
         tenant_id: i64,
@@ -78,6 +84,7 @@ impl AssetsService {
     }
 
     /// Update an asset
+    #[tracing::instrument(skip(self))]
     pub async fn update_asset(
         &self,
         id: i64,
@@ -88,6 +95,7 @@ impl AssetsService {
     }
 
     /// Update asset status
+    #[tracing::instrument(skip(self))]
     pub async fn update_asset_status(
         &self,
         id: i64,
@@ -98,6 +106,7 @@ impl AssetsService {
     }
 
     /// Calculate and record depreciation for an asset
+    #[tracing::instrument(skip(self))]
     pub async fn calculate_depreciation(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
         let asset = self.get_asset(id, tenant_id).await?;
         let annual_depreciation = asset.calculate_annual_depreciation();
@@ -107,6 +116,7 @@ impl AssetsService {
     }
 
     /// Record manual depreciation for an asset
+    #[tracing::instrument(skip(self))]
     pub async fn record_depreciation(
         &self,
         id: i64,
@@ -124,24 +134,28 @@ impl AssetsService {
     }
 
     /// Dispose an asset
+    #[tracing::instrument(skip(self))]
     pub async fn dispose_asset(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
         self.update_asset_status(id, tenant_id, AssetStatus::Disposed)
             .await
     }
 
     /// Write off an asset
+    #[tracing::instrument(skip(self))]
     pub async fn write_off_asset(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
         self.update_asset_status(id, tenant_id, AssetStatus::WrittenOff)
             .await
     }
 
     /// Put asset under maintenance
+    #[tracing::instrument(skip(self))]
     pub async fn start_maintenance(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
         self.update_asset_status(id, tenant_id, AssetStatus::UnderMaintenance)
             .await
     }
 
     /// End maintenance and return to active/in-use
+    #[tracing::instrument(skip(self))]
     pub async fn end_maintenance(
         &self,
         id: i64,
@@ -157,11 +171,13 @@ impl AssetsService {
     }
 
     /// Delete an asset
+    #[tracing::instrument(skip(self))]
     pub async fn delete_asset(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.asset_repo.delete(id, tenant_id).await
     }
 
     /// Soft delete an asset
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_asset(
         &self,
         id: i64,
@@ -172,21 +188,25 @@ impl AssetsService {
     }
 
     /// Restore a soft-deleted asset
+    #[tracing::instrument(skip(self))]
     pub async fn restore_asset(&self, id: i64, tenant_id: i64) -> Result<Asset, ApiError> {
         self.asset_repo.restore(id, tenant_id).await
     }
 
     /// List soft-deleted assets (admin only)
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_assets(&self, tenant_id: i64) -> Result<Vec<Asset>, ApiError> {
         self.asset_repo.find_deleted(tenant_id).await
     }
 
     /// Hard delete (destroy) an asset (admin only)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_asset(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.asset_repo.destroy(id, tenant_id).await
     }
 
     /// Create a maintenance record
+    #[tracing::instrument(skip(self))]
     pub async fn create_maintenance_record(
         &self,
         record: CreateMaintenanceRecord,
@@ -195,6 +215,7 @@ impl AssetsService {
     }
 
     /// Get maintenance records for an asset
+    #[tracing::instrument(skip(self))]
     pub async fn get_maintenance_records(
         &self,
         asset_id: i64,
@@ -203,6 +224,7 @@ impl AssetsService {
     }
 
     /// Create a category
+    #[tracing::instrument(skip(self))]
     pub async fn create_category(
         &self,
         category: super::model::AssetCategory,
@@ -215,6 +237,7 @@ impl AssetsService {
     }
 
     /// Get all categories for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn get_categories(&self, tenant_id: i64) -> Result<Vec<AssetCategory>, ApiError> {
         let repo = self
             .category_repo
@@ -224,6 +247,7 @@ impl AssetsService {
     }
 
     /// Delete a category
+    #[tracing::instrument(skip(self))]
     pub async fn delete_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let repo = self
             .category_repo

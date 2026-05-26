@@ -20,6 +20,7 @@ impl ApiKeyService {
     }
 
     /// Create a new API key — returns the plain key only once
+    #[tracing::instrument(skip(self))]
     pub async fn create_api_key(
         &self,
         create: CreateApiKey,
@@ -52,6 +53,7 @@ impl ApiKeyService {
     }
 
     /// Get an API key by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_api_key(&self, id: i64, tenant_id: i64) -> Result<ApiKeyResponse, ApiError> {
         let key = self
             .repo
@@ -62,12 +64,14 @@ impl ApiKeyService {
     }
 
     /// List API keys for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_api_keys(&self, tenant_id: i64) -> Result<Vec<ApiKeyResponse>, ApiError> {
         let keys = self.repo.find_by_tenant(tenant_id).await?;
         Ok(keys.into_iter().map(ApiKeyResponse::from).collect())
     }
 
     /// List API keys for a tenant with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_api_keys_paginated(
         &self,
         tenant_id: i64,
@@ -85,6 +89,7 @@ impl ApiKeyService {
     }
 
     /// Update an API key
+    #[tracing::instrument(skip(self))]
     pub async fn update_api_key(
         &self,
         id: i64,
@@ -106,11 +111,13 @@ impl ApiKeyService {
     }
 
     /// Delete an API key
+    #[tracing::instrument(skip(self))]
     pub async fn delete_api_key(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.delete(id, tenant_id).await
     }
 
     /// Soft delete an API key
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_api_key(
         &self,
         id: i64,
@@ -121,11 +128,13 @@ impl ApiKeyService {
     }
 
     /// Restore a soft-deleted API key
+    #[tracing::instrument(skip(self))]
     pub async fn restore_api_key(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.restore(id, tenant_id).await
     }
 
     /// List deleted API keys for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_api_keys(
         &self,
         tenant_id: i64,
@@ -135,11 +144,13 @@ impl ApiKeyService {
     }
 
     /// Permanently destroy a soft-deleted API key
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_api_key(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id, tenant_id).await
     }
 
     /// Authenticate an API key (used by middleware/extractor)
+    #[tracing::instrument(skip(self))]
     pub async fn authenticate(&self, plain_key: &str) -> Result<ApiKey, ApiError> {
         let key_hash = hash_api_key(plain_key);
         let key = self
@@ -162,7 +173,7 @@ impl ApiKeyService {
         let repo = self.repo.clone();
         let key_id = key.id;
         tokio::spawn(async move {
-            let _ = repo.touch_last_used(key_id).await;
+            let _ = repo.touch_last_used(key_id).await.ok();
         });
 
         Ok(key)

@@ -73,6 +73,7 @@ impl UserService {
     }
 
     /// Create a new user
+    #[tracing::instrument(skip(self))]
     pub async fn create_user(&self, create: CreateUser) -> Result<UserResponse, ApiError> {
         // Validate password complexity first
         create.validate_password().map_err(ApiError::Validation)?;
@@ -115,6 +116,7 @@ impl UserService {
     }
 
     /// Get user by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_user(&self, id: i64, tenant_id: i64) -> Result<UserResponse, ApiError> {
         let user = self
             .repo
@@ -126,6 +128,7 @@ impl UserService {
     }
 
     /// Get cached permissions for a user
+    #[tracing::instrument(skip(self))]
     pub async fn get_user_permissions(
         &self,
         user_id: i64,
@@ -159,6 +162,7 @@ impl UserService {
     }
 
     /// Get user by username
+    #[tracing::instrument(skip(self))]
     pub async fn get_user_by_username(
         &self,
         username: &str,
@@ -171,12 +175,14 @@ impl UserService {
     }
 
     /// Get all users for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn get_all_users(&self, tenant_id: i64) -> Result<Vec<UserResponse>, ApiError> {
         let users = self.repo.find_all(tenant_id).await?;
         Ok(users.into_iter().map(|u| u.into()).collect())
     }
 
     /// Get all users for a tenant with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn get_all_users_paginated(
         &self,
         tenant_id: i64,
@@ -196,6 +202,7 @@ impl UserService {
     }
 
     /// Update a user
+    #[tracing::instrument(skip(self))]
     pub async fn update_user(
         &self,
         id: i64,
@@ -236,6 +243,7 @@ impl UserService {
     }
 
     /// Delete a user
+    #[tracing::instrument(skip(self))]
     pub async fn delete_user(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.delete(id, tenant_id).await?;
         self.invalidate_permissions_cache(tenant_id, id).await;
@@ -243,6 +251,7 @@ impl UserService {
     }
 
     /// Soft delete a user
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_user(
         &self,
         id: i64,
@@ -255,6 +264,7 @@ impl UserService {
     }
 
     /// Restore a soft-deleted user
+    #[tracing::instrument(skip(self))]
     pub async fn restore_user(&self, id: i64, tenant_id: i64) -> Result<UserResponse, ApiError> {
         let user = self.repo.restore(id, tenant_id).await?;
         self.invalidate_permissions_cache(tenant_id, id).await;
@@ -262,12 +272,14 @@ impl UserService {
     }
 
     /// List all deleted users for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_users(&self, tenant_id: i64) -> Result<Vec<UserResponse>, ApiError> {
         let users = self.repo.find_deleted(tenant_id).await?;
         Ok(users.into_iter().map(|u| u.into()).collect())
     }
 
     /// Permanently destroy a user
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_user(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id, tenant_id).await?;
         self.invalidate_permissions_cache(tenant_id, id).await;
@@ -275,6 +287,7 @@ impl UserService {
     }
 
     /// Verify user credentials
+    #[tracing::instrument(skip(self))]
     pub async fn verify_credentials(
         &self,
         username: &str,

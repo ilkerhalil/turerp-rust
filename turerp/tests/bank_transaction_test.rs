@@ -8,7 +8,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_reconciliation_rule() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -37,7 +37,7 @@ async fn test_create_reconciliation_rule() {
 
 #[actix_web::test]
 async fn test_get_reconciliation_rules() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -72,7 +72,7 @@ async fn test_get_reconciliation_rules() {
 
 #[actix_web::test]
 async fn test_update_reconciliation_rule() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -112,7 +112,7 @@ async fn test_update_reconciliation_rule() {
 
 #[actix_web::test]
 async fn test_delete_reconciliation_rule() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -151,7 +151,7 @@ async fn test_delete_reconciliation_rule() {
 
 #[actix_web::test]
 async fn test_get_transactions_empty() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -190,7 +190,7 @@ async fn test_get_transactions_empty() {
 
 #[actix_web::test]
 async fn test_get_unmatched_transactions_empty() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -229,7 +229,7 @@ async fn test_get_unmatched_transactions_empty() {
 
 #[actix_web::test]
 async fn test_get_reconciliation_report() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -254,7 +254,7 @@ async fn test_get_reconciliation_report() {
 
 #[actix_web::test]
 async fn test_auto_reconcile_admin_only() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -273,7 +273,7 @@ async fn test_auto_reconcile_admin_only() {
 
 #[actix_web::test]
 async fn test_auto_reconcile_forbidden_for_non_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_user!(&app, 1);
 
@@ -288,7 +288,7 @@ async fn test_auto_reconcile_forbidden_for_non_admin() {
 
 #[actix_web::test]
 async fn test_upload_statement_mt940() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -331,7 +331,7 @@ async fn test_upload_statement_mt940() {
 
 #[actix_web::test]
 async fn test_upload_statement_forbidden_for_non_admin() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (admin_token, _) = register_admin(&app_state, 1).await;
     let (user_token, _) = register_user!(&app, 1);
@@ -368,7 +368,7 @@ async fn test_upload_statement_forbidden_for_non_admin() {
 
 #[actix_web::test]
 async fn test_match_transaction() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 

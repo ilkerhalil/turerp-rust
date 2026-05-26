@@ -36,6 +36,7 @@ impl WorkflowService {
     // ---- Pre-built templates ----
 
     /// Create a 2-step purchase order approval template: manager -> admin
+    #[tracing::instrument(skip(self))]
     pub async fn create_purchase_order_approval_template(
         &self,
         tenant_id: i64,
@@ -59,6 +60,7 @@ impl WorkflowService {
     }
 
     /// Create a 3-step expense approval template: manager -> finance -> admin
+    #[tracing::instrument(skip(self))]
     pub async fn create_expense_approval_template(
         &self,
         tenant_id: i64,
@@ -83,6 +85,7 @@ impl WorkflowService {
     }
 
     /// Create a 2-step invoice verification template: accountant -> admin
+    #[tracing::instrument(skip(self))]
     pub async fn create_invoice_verification_template(
         &self,
         tenant_id: i64,
@@ -106,6 +109,7 @@ impl WorkflowService {
     }
 
     /// Create a 2-step stock transfer approval template: warehouse -> admin
+    #[tracing::instrument(skip(self))]
     pub async fn create_stock_transfer_approval_template(
         &self,
         tenant_id: i64,
@@ -131,6 +135,7 @@ impl WorkflowService {
     // ---- Template operations ----
 
     /// Create a new workflow template
+    #[tracing::instrument(skip(self))]
     pub async fn create_template(
         &self,
         create: CreateWorkflowTemplate,
@@ -140,6 +145,7 @@ impl WorkflowService {
     }
 
     /// List all templates for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_templates(&self, tenant_id: i64) -> Result<Vec<WorkflowTemplate>, ApiError> {
         self.repo.find_templates(tenant_id).await
     }
@@ -147,6 +153,7 @@ impl WorkflowService {
     // ---- Workflow execution ----
 
     /// Start a new workflow instance from a template
+    #[tracing::instrument(skip(self))]
     pub async fn start_workflow(
         &self,
         template_id: i64,
@@ -277,6 +284,7 @@ impl WorkflowService {
     }
 
     /// Approve the current step and advance to next or complete
+    #[tracing::instrument(skip(self))]
     pub async fn approve_step(
         &self,
         instance_id: i64,
@@ -389,6 +397,7 @@ impl WorkflowService {
     }
 
     /// Reject the current step and mark instance as rejected
+    #[tracing::instrument(skip(self))]
     pub async fn reject_step(
         &self,
         instance_id: i64,
@@ -483,6 +492,7 @@ impl WorkflowService {
     }
 
     /// Resubmit a rejected workflow back to pending
+    #[tracing::instrument(skip(self))]
     pub async fn resubmit(
         &self,
         instance_id: i64,
@@ -571,6 +581,7 @@ impl WorkflowService {
     }
 
     /// Get pending approvals for a user
+    #[tracing::instrument(skip(self))]
     pub async fn get_pending_approvals(
         &self,
         user_id: i64,
@@ -582,6 +593,7 @@ impl WorkflowService {
     }
 
     /// Escalate overdue steps (pending > 24h)
+    #[tracing::instrument(skip(self))]
     pub async fn escalate_overdue(&self) -> Result<Vec<WorkflowInstance>, ApiError> {
         let overdue = self.repo.find_overdue_steps(24).await?;
         let mut escalated = Vec::new();
@@ -666,11 +678,13 @@ impl WorkflowService {
     // ---- Role-based assignment ----
 
     /// Resolve a role to user IDs within a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn assign_by_role(&self, tenant_id: i64, role: &str) -> Result<Vec<i64>, ApiError> {
         self.repo.find_users_by_role(tenant_id, role).await
     }
 
     /// Get pending workflow instances for users with a given role
+    #[tracing::instrument(skip(self))]
     pub async fn get_pending_approvals_by_role(
         &self,
         role: String,
@@ -811,6 +825,7 @@ impl WorkflowService {
     // ---- Escalation ----
 
     /// Check and execute escalation for a step
+    #[tracing::instrument(skip(self))]
     pub async fn check_escalation(
         &self,
         instance: &WorkflowInstance,
@@ -967,6 +982,7 @@ impl WorkflowService {
     // ---- Read operations ----
 
     /// Get a workflow instance by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_instance(
         &self,
         id: i64,
@@ -1002,6 +1018,7 @@ impl WorkflowService {
     }
 
     /// Get audit trail for an instance
+    #[tracing::instrument(skip(self))]
     pub async fn get_instance_audit_log(
         &self,
         instance_id: i64,

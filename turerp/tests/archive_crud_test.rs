@@ -42,7 +42,7 @@ fn build_test_app_with_archive(
 
 #[actix_web::test]
 async fn test_create_archive_policy_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -72,7 +72,7 @@ async fn test_create_archive_policy_success() {
 
 #[actix_web::test]
 async fn test_list_archive_policies_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -112,7 +112,7 @@ async fn test_list_archive_policies_paginated() {
 
 #[actix_web::test]
 async fn test_get_archive_policy_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -150,7 +150,7 @@ async fn test_get_archive_policy_success() {
 
 #[actix_web::test]
 async fn test_get_archive_policy_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -166,7 +166,7 @@ async fn test_get_archive_policy_not_found() {
 
 #[actix_web::test]
 async fn test_update_archive_policy_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -210,7 +210,7 @@ async fn test_update_archive_policy_success() {
 
 #[actix_web::test]
 async fn test_delete_archive_policy() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -252,7 +252,7 @@ async fn test_delete_archive_policy() {
 
 #[actix_web::test]
 async fn test_list_active_archive_policies() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -294,7 +294,7 @@ async fn test_list_active_archive_policies() {
 
 #[actix_web::test]
 async fn test_create_and_get_archive_job() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -346,7 +346,7 @@ async fn test_create_and_get_archive_job() {
 
 #[actix_web::test]
 async fn test_list_archive_jobs() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -398,7 +398,7 @@ async fn test_list_archive_jobs() {
 
 #[actix_web::test]
 async fn test_restore_archive_records() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -427,7 +427,7 @@ async fn test_restore_archive_records() {
 
 #[actix_web::test]
 async fn test_list_archive_records_with_filter() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -464,7 +464,7 @@ async fn test_list_archive_records_with_filter() {
 
 #[actix_web::test]
 async fn test_archive_unauthorized_without_token() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
 
     let req = test::TestRequest::post()
@@ -482,7 +482,7 @@ async fn test_archive_unauthorized_without_token() {
 
 #[actix_web::test]
 async fn test_archive_job_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_archive(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

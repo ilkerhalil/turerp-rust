@@ -45,6 +45,7 @@ impl InterCompanyService {
     }
 
     /// Create a cross-company sales invoice and corresponding purchase invoice.
+    #[tracing::instrument(skip(self))]
     pub async fn create_cross_company_invoice(
         &self,
         tenant_id: i64,
@@ -174,6 +175,7 @@ impl InterCompanyService {
 
     /// Transfer stock between companies within the same tenant.
     #[allow(clippy::too_many_arguments)]
+    #[tracing::instrument(skip(self))]
     pub async fn transfer_stock_between_companies(
         &self,
         tenant_id: i64,

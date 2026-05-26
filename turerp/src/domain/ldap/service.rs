@@ -214,6 +214,7 @@ impl LdapSyncService {
     }
 
     /// Get the LDAP configuration for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn get_ldap_config(
         &self,
         tenant_id: i64,
@@ -223,6 +224,7 @@ impl LdapSyncService {
     }
 
     /// Create or replace the LDAP configuration for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn create_ldap_config(
         &self,
         tenant_id: i64,
@@ -236,6 +238,7 @@ impl LdapSyncService {
     }
 
     /// Update the LDAP configuration for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn update_ldap_config(
         &self,
         tenant_id: i64,
@@ -249,11 +252,13 @@ impl LdapSyncService {
     }
 
     /// Delete the LDAP configuration for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn delete_ldap_config(&self, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.delete(tenant_id).await
     }
 
     /// Test LDAP connection using the stored configuration
+    #[tracing::instrument(skip(self))]
     pub async fn test_connection(&self, tenant_id: i64) -> Result<bool, ApiError> {
         let config = self
             .repo
@@ -267,6 +272,7 @@ impl LdapSyncService {
     }
 
     /// Test LDAP connection with explicit parameters (before saving config)
+    #[tracing::instrument(skip(self))]
     pub async fn test_connection_with_params(
         &self,
         request: crate::domain::ldap::model::TestLdapConnectionRequest,
@@ -294,6 +300,7 @@ impl LdapSyncService {
     }
 
     /// Synchronize users from LDAP into the application
+    #[tracing::instrument(skip(self))]
     pub async fn sync_users(&self, tenant_id: i64) -> Result<LdapSyncResult, ApiError> {
         let config = self
             .repo

@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_cost_center_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -44,7 +44,7 @@ async fn test_create_cost_center_success() {
 
 #[actix_web::test]
 async fn test_list_cost_centers_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -86,7 +86,7 @@ async fn test_list_cost_centers_paginated() {
 
 #[actix_web::test]
 async fn test_list_cost_centers_by_type() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -139,7 +139,7 @@ async fn test_list_cost_centers_by_type() {
 
 #[actix_web::test]
 async fn test_get_cost_center_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -177,7 +177,7 @@ async fn test_get_cost_center_success() {
 
 #[actix_web::test]
 async fn test_get_cost_center_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -193,7 +193,7 @@ async fn test_get_cost_center_not_found() {
 
 #[actix_web::test]
 async fn test_update_cost_center_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -240,7 +240,7 @@ async fn test_update_cost_center_success() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_cost_center() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -309,7 +309,7 @@ async fn test_delete_and_restore_cost_center() {
 
 #[actix_web::test]
 async fn test_list_deleted_cost_centers() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -358,7 +358,7 @@ async fn test_list_deleted_cost_centers() {
 
 #[actix_web::test]
 async fn test_destroy_cost_center_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -411,7 +411,7 @@ async fn test_destroy_cost_center_permanently() {
 
 #[actix_web::test]
 async fn test_bulk_restore_cost_centers() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

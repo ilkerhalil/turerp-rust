@@ -16,6 +16,7 @@ impl FileService {
     }
 
     /// Create a new file metadata record
+    #[tracing::instrument(skip(self))]
     pub async fn create(&self, create: CreateFileRecord) -> Result<FileRecord, ApiError> {
         if create.filename.trim().is_empty() {
             return Err(ApiError::Validation("Filename is required".to_string()));
@@ -48,6 +49,7 @@ impl FileService {
     }
 
     /// Get a file metadata record by ID
+    #[tracing::instrument(skip(self))]
     pub async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<FileRecord, ApiError> {
         self.repo
             .find_by_id(id, tenant_id)
@@ -56,11 +58,13 @@ impl FileService {
     }
 
     /// List all file metadata records for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn find_all(&self, tenant_id: i64) -> Result<Vec<FileRecord>, ApiError> {
         self.repo.find_all(tenant_id).await
     }
 
     /// Update file metadata
+    #[tracing::instrument(skip(self))]
     pub async fn update(
         &self,
         id: i64,
@@ -90,11 +94,13 @@ impl FileService {
     }
 
     /// Soft delete a file
+    #[tracing::instrument(skip(self))]
     pub async fn delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         self.repo.soft_delete(id, tenant_id, deleted_by).await
     }
 
     /// Find files linked to a specific entity
+    #[tracing::instrument(skip(self))]
     pub async fn find_by_entity(
         &self,
         tenant_id: i64,
@@ -107,21 +113,25 @@ impl FileService {
     }
 
     /// Restore a soft-deleted file
+    #[tracing::instrument(skip(self))]
     pub async fn restore(&self, id: i64, tenant_id: i64) -> Result<FileRecord, ApiError> {
         self.repo.restore(id, tenant_id).await
     }
 
     /// List soft-deleted files for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<FileRecord>, ApiError> {
         self.repo.find_deleted(tenant_id).await
     }
 
     /// Permanently destroy a file record
+    #[tracing::instrument(skip(self))]
     pub async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id, tenant_id).await
     }
 
     /// Get total storage used by a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn storage_used(&self, tenant_id: i64) -> Result<i64, ApiError> {
         self.repo.storage_used(tenant_id).await
     }

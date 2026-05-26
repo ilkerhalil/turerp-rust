@@ -83,12 +83,14 @@ impl MfaService {
     }
 
     /// Check if a user has MFA enabled
+    #[tracing::instrument(skip(self))]
     pub async fn is_mfa_enabled(&self, user_id: i64, tenant_id: i64) -> Result<bool, ApiError> {
         let settings = self.repo.find_by_user_id(user_id, tenant_id).await?;
         Ok(settings.map(|s| s.mfa_enabled).unwrap_or(false))
     }
 
     /// Start MFA setup — generate secret and return QR URI
+    #[tracing::instrument(skip(self))]
     pub async fn setup_mfa(
         &self,
         user_id: i64,
@@ -110,6 +112,7 @@ impl MfaService {
     }
 
     /// Verify setup code and enable MFA
+    #[tracing::instrument(skip(self))]
     pub async fn verify_setup(
         &self,
         user_id: i64,
@@ -159,6 +162,7 @@ impl MfaService {
     }
 
     /// Disable MFA for a user
+    #[tracing::instrument(skip(self))]
     pub async fn disable_mfa(
         &self,
         user_id: i64,
@@ -185,6 +189,7 @@ impl MfaService {
     }
 
     /// Get MFA status for a user
+    #[tracing::instrument(skip(self))]
     pub async fn get_mfa_status(
         &self,
         user_id: i64,
@@ -201,6 +206,7 @@ impl MfaService {
     }
 
     /// Generate new backup codes
+    #[tracing::instrument(skip(self))]
     pub async fn regenerate_backup_codes(
         &self,
         user_id: i64,
@@ -232,6 +238,7 @@ impl MfaService {
     }
 
     /// Validate an MFA challenge (TOTP or backup code)
+    #[tracing::instrument(skip(self))]
     pub async fn validate_mfa_challenge(
         &self,
         user_id: i64,

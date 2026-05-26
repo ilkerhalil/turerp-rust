@@ -42,6 +42,7 @@ impl WebhookService {
 
     // --- CRUD ---
 
+    #[tracing::instrument(skip(self))]
     pub async fn create_webhook(
         &self,
         tenant_id: i64,
@@ -51,14 +52,17 @@ impl WebhookService {
         self.webhook_repo.create(tenant_id, dto).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_webhook(&self, id: i64, tenant_id: i64) -> Result<Option<Webhook>, ApiError> {
         self.webhook_repo.find_by_id(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_webhooks(&self, tenant_id: i64) -> Result<Vec<Webhook>, ApiError> {
         self.webhook_repo.find_by_tenant(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_webhook(
         &self,
         id: i64,
@@ -71,6 +75,7 @@ impl WebhookService {
         self.webhook_repo.update(id, tenant_id, dto).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_webhook(
         &self,
         id: i64,
@@ -82,20 +87,24 @@ impl WebhookService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_webhook(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.webhook_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_webhooks(&self, tenant_id: i64) -> Result<Vec<Webhook>, ApiError> {
         self.webhook_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_webhook(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.webhook_repo.destroy(id, tenant_id).await
     }
 
     // --- Delivery ---
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deliveries(
         &self,
         webhook_id: i64,
@@ -110,6 +119,7 @@ impl WebhookService {
 
     /// Trigger webhook deliveries for a domain event.
     /// Creates delivery records synchronously, then spawns async HTTP POSTs.
+    #[tracing::instrument(skip(self))]
     pub async fn trigger(&self, event: &DomainEvent) -> Result<(), ApiError> {
         let tenant_id = event.tenant_id();
         let event_type = event.event_type().to_string();
@@ -175,6 +185,7 @@ impl WebhookService {
     }
 
     /// Retry a failed delivery immediately.
+    #[tracing::instrument(skip(self))]
     pub async fn retry_delivery(
         &self,
         delivery_id: i64,

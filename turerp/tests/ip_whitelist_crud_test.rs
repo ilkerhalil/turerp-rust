@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_add_ip_whitelist_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -42,7 +42,7 @@ async fn test_add_ip_whitelist_success() {
 
 #[actix_web::test]
 async fn test_list_ip_whitelist() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -76,7 +76,7 @@ async fn test_list_ip_whitelist() {
 
 #[actix_web::test]
 async fn test_get_ip_whitelist_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -114,7 +114,7 @@ async fn test_get_ip_whitelist_success() {
 
 #[actix_web::test]
 async fn test_get_ip_whitelist_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -130,7 +130,7 @@ async fn test_get_ip_whitelist_not_found() {
 
 #[actix_web::test]
 async fn test_update_ip_whitelist_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -174,7 +174,7 @@ async fn test_update_ip_whitelist_success() {
 
 #[actix_web::test]
 async fn test_remove_ip_whitelist_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -220,7 +220,7 @@ async fn test_remove_ip_whitelist_success() {
 
 #[actix_web::test]
 async fn test_add_ip_whitelist_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -239,7 +239,7 @@ async fn test_add_ip_whitelist_unauthorized() {
 
 #[actix_web::test]
 async fn test_update_ip_whitelist_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

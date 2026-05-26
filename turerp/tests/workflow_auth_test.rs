@@ -11,7 +11,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_tenant_isolation_templates() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token1, _) = register_admin(&app_state, 1).await;
@@ -51,7 +51,7 @@ async fn test_tenant_isolation_templates() {
 
 #[actix_web::test]
 async fn test_tenant_isolation_instances() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token1, _) = register_admin(&app_state, 1).await;
@@ -95,7 +95,7 @@ async fn test_tenant_isolation_instances() {
 
 #[actix_web::test]
 async fn test_unauthorized_access() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     // No auth token
@@ -118,7 +118,7 @@ async fn test_unauthorized_access() {
 
 #[actix_web::test]
 async fn test_normal_user_can_start_workflow() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (admin_token, _) = register_admin(&app_state, 1).await;
@@ -149,7 +149,7 @@ async fn test_normal_user_can_start_workflow() {
 
 #[actix_web::test]
 async fn test_start_workflow_missing_fields() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
 
     let (token, _) = register_admin(&app_state, 1).await;

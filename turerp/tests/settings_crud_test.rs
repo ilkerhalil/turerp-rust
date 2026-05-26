@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_setting_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -43,7 +43,7 @@ async fn test_create_setting_success() {
 
 #[actix_web::test]
 async fn test_list_settings_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -83,7 +83,7 @@ async fn test_list_settings_paginated() {
 
 #[actix_web::test]
 async fn test_list_settings_by_group() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -119,7 +119,7 @@ async fn test_list_settings_by_group() {
 
 #[actix_web::test]
 async fn test_get_setting_by_key_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -154,7 +154,7 @@ async fn test_get_setting_by_key_success() {
 
 #[actix_web::test]
 async fn test_get_setting_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -170,7 +170,7 @@ async fn test_get_setting_not_found() {
 
 #[actix_web::test]
 async fn test_update_setting_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -217,7 +217,7 @@ async fn test_update_setting_success() {
 
 #[actix_web::test]
 async fn test_soft_delete_and_restore_setting() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -277,7 +277,7 @@ async fn test_soft_delete_and_restore_setting() {
 
 #[actix_web::test]
 async fn test_list_deleted_settings() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -324,7 +324,7 @@ async fn test_list_deleted_settings() {
 
 #[actix_web::test]
 async fn test_destroy_setting_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -378,7 +378,7 @@ async fn test_destroy_setting_permanently() {
 
 #[actix_web::test]
 async fn test_bulk_update_settings() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -416,7 +416,7 @@ async fn test_bulk_update_settings() {
 
 #[actix_web::test]
 async fn test_seed_settings() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -436,7 +436,7 @@ async fn test_seed_settings() {
 
 #[actix_web::test]
 async fn test_settings_unauthorized_without_token() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -456,7 +456,7 @@ async fn test_settings_unauthorized_without_token() {
 
 #[actix_web::test]
 async fn test_setting_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

@@ -87,6 +87,7 @@ impl ProductService {
     }
 
     // Product operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_product(&self, create: CreateProduct) -> Result<Product, ApiError> {
         create
             .validate()
@@ -110,6 +111,7 @@ impl ProductService {
         Ok(product)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_product(&self, id: i64, tenant_id: i64) -> Result<Product, ApiError> {
         let ck = cache_key(tenant_id, "products", &id.to_string());
 
@@ -134,6 +136,7 @@ impl ProductService {
         Ok(product)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_products_batch(
         &self,
         ids: &[i64],
@@ -142,6 +145,7 @@ impl ProductService {
         self.product_repo.find_by_ids(ids, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_products_by_tenant(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
         let ck = cache_key(tenant_id, "products", "all");
 
@@ -162,6 +166,7 @@ impl ProductService {
         Ok(products)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_products_paginated(
         &self,
         tenant_id: i64,
@@ -197,6 +202,7 @@ impl ProductService {
         Ok(result)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn search_products(
         &self,
         tenant_id: i64,
@@ -206,6 +212,7 @@ impl ProductService {
         self.product_repo.search(tenant_id, query).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_product(
         &self,
         id: i64,
@@ -217,6 +224,7 @@ impl ProductService {
         Ok(product)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_product(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.product_repo.delete(id, tenant_id).await?;
         self.invalidate_product_cache(tenant_id).await;
@@ -224,6 +232,7 @@ impl ProductService {
     }
 
     /// Soft delete a product (sets deleted_at)
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_product(
         &self,
         id: i64,
@@ -238,6 +247,7 @@ impl ProductService {
     }
 
     /// Restore a soft-deleted product
+    #[tracing::instrument(skip(self))]
     pub async fn restore_product(&self, id: i64, tenant_id: i64) -> Result<Product, ApiError> {
         let product = self.product_repo.restore(id, tenant_id).await?;
         self.invalidate_product_cache(tenant_id).await;
@@ -245,11 +255,13 @@ impl ProductService {
     }
 
     /// List soft-deleted products
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_products(&self, tenant_id: i64) -> Result<Vec<Product>, ApiError> {
         self.product_repo.find_deleted(tenant_id).await
     }
 
     /// Permanently delete a product (hard delete)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_product(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.product_repo.destroy(id, tenant_id).await?;
         self.invalidate_product_cache(tenant_id).await;
@@ -257,6 +269,7 @@ impl ProductService {
     }
 
     // Category operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_category(&self, create: CreateCategory) -> Result<Category, ApiError> {
         create
             .validate()
@@ -266,6 +279,7 @@ impl ProductService {
         Ok(category)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_category(&self, id: i64, tenant_id: i64) -> Result<Category, ApiError> {
         let ck = cache_key(tenant_id, "categories", &id.to_string());
 
@@ -290,6 +304,7 @@ impl ProductService {
         Ok(category)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_categories_by_tenant(
         &self,
         tenant_id: i64,
@@ -313,6 +328,7 @@ impl ProductService {
         Ok(categories)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_categories_paginated(
         &self,
         tenant_id: i64,
@@ -348,6 +364,7 @@ impl ProductService {
         Ok(result)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_category(
         &self,
         id: i64,
@@ -359,6 +376,7 @@ impl ProductService {
         Ok(category)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.category_repo.delete(id, tenant_id).await?;
         self.invalidate_category_cache(tenant_id).await;
@@ -366,6 +384,7 @@ impl ProductService {
     }
 
     /// Soft delete a category (sets deleted_at)
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_category(
         &self,
         id: i64,
@@ -380,6 +399,7 @@ impl ProductService {
     }
 
     /// Restore a soft-deleted category
+    #[tracing::instrument(skip(self))]
     pub async fn restore_category(&self, id: i64, tenant_id: i64) -> Result<Category, ApiError> {
         let category = self.category_repo.restore(id, tenant_id).await?;
         self.invalidate_category_cache(tenant_id).await;
@@ -387,11 +407,13 @@ impl ProductService {
     }
 
     /// List soft-deleted categories
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_categories(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
         self.category_repo.find_deleted(tenant_id).await
     }
 
     /// Permanently delete a category (hard delete)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.category_repo.destroy(id, tenant_id).await?;
         self.invalidate_category_cache(tenant_id).await;
@@ -399,6 +421,7 @@ impl ProductService {
     }
 
     // Unit operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_unit(&self, create: CreateUnit) -> Result<Unit, ApiError> {
         create
             .validate()
@@ -408,6 +431,7 @@ impl ProductService {
         Ok(unit)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_unit(&self, id: i64, tenant_id: i64) -> Result<Unit, ApiError> {
         let ck = cache_key(tenant_id, "units", &id.to_string());
 
@@ -432,6 +456,7 @@ impl ProductService {
         Ok(unit)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_units_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
         let ck = cache_key(tenant_id, "units", "all");
 
@@ -452,6 +477,7 @@ impl ProductService {
         Ok(units)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_units_paginated(
         &self,
         tenant_id: i64,
@@ -483,6 +509,7 @@ impl ProductService {
         Ok(result)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_unit(
         &self,
         id: i64,
@@ -494,6 +521,7 @@ impl ProductService {
         Ok(unit)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_unit(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.unit_repo.delete(id, tenant_id).await?;
         self.invalidate_unit_cache(tenant_id).await;
@@ -501,6 +529,7 @@ impl ProductService {
     }
 
     /// Soft delete a unit (sets deleted_at)
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_unit(
         &self,
         id: i64,
@@ -515,6 +544,7 @@ impl ProductService {
     }
 
     /// Restore a soft-deleted unit
+    #[tracing::instrument(skip(self))]
     pub async fn restore_unit(&self, id: i64, tenant_id: i64) -> Result<Unit, ApiError> {
         let unit = self.unit_repo.restore(id, tenant_id).await?;
         self.invalidate_unit_cache(tenant_id).await;
@@ -522,11 +552,13 @@ impl ProductService {
     }
 
     /// List soft-deleted units
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_units(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
         self.unit_repo.find_deleted(tenant_id).await
     }
 
     /// Permanently delete a unit (hard delete)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_unit(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.unit_repo.destroy(id, tenant_id).await?;
         self.invalidate_unit_cache(tenant_id).await;
@@ -534,6 +566,7 @@ impl ProductService {
     }
 
     // Product variant operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_variant(
         &self,
         create: CreateProductVariant,
@@ -560,6 +593,7 @@ impl ProductService {
         Ok(variant.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_variants_by_product(
         &self,
         product_id: i64,
@@ -580,6 +614,7 @@ impl ProductService {
         Ok(variants.into_iter().map(|v| v.into()).collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_variant(&self, id: i64) -> Result<ProductVariantResponse, ApiError> {
         let variant_repo = self
             .variant_repo
@@ -593,6 +628,7 @@ impl ProductService {
         Ok(variant.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_variant(
         &self,
         id: i64,
@@ -607,6 +643,7 @@ impl ProductService {
         Ok(variant.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_variant(&self, id: i64) -> Result<(), ApiError> {
         let variant_repo = self
             .variant_repo
@@ -617,6 +654,7 @@ impl ProductService {
     }
 
     /// Soft delete a product variant (sets deleted_at)
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_variant(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let variant_repo = self
             .variant_repo
@@ -627,6 +665,7 @@ impl ProductService {
     }
 
     /// Restore a soft-deleted product variant
+    #[tracing::instrument(skip(self))]
     pub async fn restore_variant(&self, id: i64) -> Result<ProductVariantResponse, ApiError> {
         let variant_repo = self
             .variant_repo
@@ -638,6 +677,7 @@ impl ProductService {
     }
 
     /// List soft-deleted product variants for a product
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_variants(
         &self,
         product_id: i64,
@@ -652,6 +692,7 @@ impl ProductService {
     }
 
     /// Permanently delete a product variant (hard delete)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_variant(&self, id: i64) -> Result<(), ApiError> {
         let variant_repo = self
             .variant_repo

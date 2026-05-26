@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_unmatch_transaction() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 
@@ -88,7 +88,7 @@ async fn test_unmatch_transaction() {
 
 #[actix_web::test]
 async fn test_get_reconciliation_rule_by_id() {
-    let app_state = create_test_app_state();
+    let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
     let (token, _) = register_admin(&app_state, 1).await;
 

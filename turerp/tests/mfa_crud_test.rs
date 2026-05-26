@@ -60,7 +60,7 @@ fn generate_totp_code(secret: &str) -> String {
 
 #[actix_web::test]
 async fn test_mfa_setup_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_mfa(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -83,7 +83,7 @@ async fn test_mfa_setup_success() {
 
 #[actix_web::test]
 async fn test_mfa_verify_setup_and_status() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_mfa(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -135,7 +135,7 @@ async fn test_mfa_verify_setup_and_status() {
 
 #[actix_web::test]
 async fn test_mfa_disable_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_mfa(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -181,7 +181,7 @@ async fn test_mfa_disable_success() {
 
 #[actix_web::test]
 async fn test_mfa_regenerate_backup_codes() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_mfa(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -225,7 +225,7 @@ async fn test_mfa_regenerate_backup_codes() {
 
 #[actix_web::test]
 async fn test_mfa_status_no_setup() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_mfa(&state)).await;
     let (token, user_id) = register_admin(&state, 1).await;
 
@@ -247,7 +247,7 @@ async fn test_mfa_status_no_setup() {
 
 #[actix_web::test]
 async fn test_mfa_verify_setup_invalid_code() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_mfa(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -278,7 +278,7 @@ async fn test_mfa_verify_setup_invalid_code() {
 
 #[actix_web::test]
 async fn test_mfa_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_mfa(&state)).await;
 
     let req = test::TestRequest::post()
@@ -290,7 +290,7 @@ async fn test_mfa_unauthorized() {
 
 #[actix_web::test]
 async fn test_mfa_regenerate_without_mfa_enabled() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_mfa(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_tax_rate_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -39,7 +39,7 @@ async fn test_create_tax_rate_success() {
 
 #[actix_web::test]
 async fn test_list_tax_rates_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -74,7 +74,7 @@ async fn test_list_tax_rates_paginated() {
 
 #[actix_web::test]
 async fn test_list_tax_rates_by_type() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -118,7 +118,7 @@ async fn test_list_tax_rates_by_type() {
 
 #[actix_web::test]
 async fn test_get_tax_rate_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -153,7 +153,7 @@ async fn test_get_tax_rate_success() {
 
 #[actix_web::test]
 async fn test_get_tax_rate_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -169,7 +169,7 @@ async fn test_get_tax_rate_not_found() {
 
 #[actix_web::test]
 async fn test_update_tax_rate_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -213,7 +213,7 @@ async fn test_update_tax_rate_success() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_tax_rate() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -274,7 +274,7 @@ async fn test_delete_and_restore_tax_rate() {
 
 #[actix_web::test]
 async fn test_list_deleted_tax_rates() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -318,7 +318,7 @@ async fn test_list_deleted_tax_rates() {
 
 #[actix_web::test]
 async fn test_destroy_tax_rate_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -365,7 +365,7 @@ async fn test_destroy_tax_rate_permanently() {
 
 #[actix_web::test]
 async fn test_bulk_restore_tax_rates() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -418,7 +418,7 @@ async fn test_bulk_restore_tax_rates() {
 
 #[actix_web::test]
 async fn test_get_effective_tax_rate() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -450,7 +450,7 @@ async fn test_get_effective_tax_rate() {
 
 #[actix_web::test]
 async fn test_calculate_tax() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -495,7 +495,7 @@ async fn test_calculate_tax() {
 
 #[actix_web::test]
 async fn test_tax_unauthorized_without_token() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -514,7 +514,7 @@ async fn test_tax_unauthorized_without_token() {
 
 #[actix_web::test]
 async fn test_tax_rate_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 

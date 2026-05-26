@@ -22,6 +22,7 @@ impl QualityControlService {
     }
 
     // Inspection methods
+    #[tracing::instrument(skip(self))]
     pub async fn create_inspection(
         &self,
         create: CreateInspection,
@@ -29,6 +30,7 @@ impl QualityControlService {
         self.inspection_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_inspection(&self, id: i64, tenant_id: i64) -> Result<Inspection, ApiError> {
         self.inspection_repo
             .find_by_id(id, tenant_id)
@@ -36,6 +38,7 @@ impl QualityControlService {
             .ok_or_else(|| ApiError::NotFound("Inspection not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_inspections_by_tenant(
         &self,
         tenant_id: i64,
@@ -43,6 +46,7 @@ impl QualityControlService {
         self.inspection_repo.find_by_tenant(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_inspections_by_work_order(
         &self,
         work_order_id: i64,
@@ -50,6 +54,7 @@ impl QualityControlService {
         self.inspection_repo.find_by_work_order(work_order_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_inspection(
         &self,
         id: i64,
@@ -58,6 +63,7 @@ impl QualityControlService {
         self.inspection_repo.update(id, update).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_inspection(
         &self,
         id: i64,
@@ -70,6 +76,7 @@ impl QualityControlService {
     }
 
     // NCR methods
+    #[tracing::instrument(skip(self))]
     pub async fn create_ncr(
         &self,
         create: CreateNonConformanceReport,
@@ -77,6 +84,7 @@ impl QualityControlService {
         self.ncr_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_ncr(&self, id: i64, tenant_id: i64) -> Result<NonConformanceReport, ApiError> {
         self.ncr_repo
             .find_by_id(id, tenant_id)
@@ -84,6 +92,7 @@ impl QualityControlService {
             .ok_or_else(|| ApiError::NotFound("NCR not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_ncrs_by_tenant(
         &self,
         tenant_id: i64,
@@ -91,6 +100,7 @@ impl QualityControlService {
         self.ncr_repo.find_by_tenant(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_ncrs_by_inspection(
         &self,
         inspection_id: i64,
@@ -98,6 +108,7 @@ impl QualityControlService {
         self.ncr_repo.find_by_inspection(inspection_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_ncr(
         &self,
         id: i64,
@@ -106,6 +117,7 @@ impl QualityControlService {
         self.ncr_repo.update(id, update).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_ncr(
         &self,
         id: i64,
@@ -116,6 +128,7 @@ impl QualityControlService {
     }
 
     // Inspection soft-delete methods
+    #[tracing::instrument(skip(self))]
     pub async fn restore_inspection(
         &self,
         id: i64,
@@ -124,6 +137,7 @@ impl QualityControlService {
         self.inspection_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_inspections(
         &self,
         tenant_id: i64,
@@ -131,11 +145,13 @@ impl QualityControlService {
         self.inspection_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_inspection(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.inspection_repo.destroy(id, tenant_id).await
     }
 
     // NCR soft-delete methods
+    #[tracing::instrument(skip(self))]
     pub async fn restore_ncr(
         &self,
         id: i64,
@@ -144,6 +160,7 @@ impl QualityControlService {
         self.ncr_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_ncrs(
         &self,
         tenant_id: i64,
@@ -151,6 +168,7 @@ impl QualityControlService {
         self.ncr_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_ncr(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.ncr_repo.destroy(id, tenant_id).await
     }

@@ -23,6 +23,7 @@ impl DocumentService {
     // --- Document Operations ---
 
     /// Create a new document metadata record
+    #[tracing::instrument(skip(self))]
     pub async fn create_document(&self, create: CreateDocument) -> Result<Document, ApiError> {
         if create.name.trim().is_empty() {
             return Err(ApiError::Validation(
@@ -44,6 +45,7 @@ impl DocumentService {
     }
 
     /// Get a document by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_document(&self, id: i64, tenant_id: i64) -> Result<Document, ApiError> {
         self.repo
             .find_by_id(id, tenant_id)
@@ -52,6 +54,7 @@ impl DocumentService {
     }
 
     /// Search documents with filters
+    #[tracing::instrument(skip(self))]
     pub async fn search_documents(
         &self,
         tenant_id: i64,
@@ -61,6 +64,7 @@ impl DocumentService {
     }
 
     /// Update document metadata
+    #[tracing::instrument(skip(self))]
     pub async fn update_document(
         &self,
         id: i64,
@@ -71,6 +75,7 @@ impl DocumentService {
     }
 
     /// Soft delete a document
+    #[tracing::instrument(skip(self))]
     pub async fn delete_document(
         &self,
         id: i64,
@@ -81,21 +86,25 @@ impl DocumentService {
     }
 
     /// Restore a soft-deleted document
+    #[tracing::instrument(skip(self))]
     pub async fn restore_document(&self, id: i64, tenant_id: i64) -> Result<Document, ApiError> {
         self.repo.restore(id, tenant_id).await
     }
 
     /// List soft-deleted documents
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_documents(&self, tenant_id: i64) -> Result<Vec<Document>, ApiError> {
         self.repo.find_deleted(tenant_id).await
     }
 
     /// Permanently destroy a document
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_document(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id, tenant_id).await
     }
 
     /// Bulk restore soft-deleted documents
+    #[tracing::instrument(skip(self))]
     pub async fn bulk_restore_documents(
         &self,
         ids: Vec<i64>,
@@ -125,6 +134,7 @@ impl DocumentService {
     // --- Versioning Operations ---
 
     /// Create a new version of a document
+    #[tracing::instrument(skip(self))]
     pub async fn create_version(
         &self,
         version: CreateDocumentVersion,
@@ -144,6 +154,7 @@ impl DocumentService {
     }
 
     /// List all versions of a document
+    #[tracing::instrument(skip(self))]
     pub async fn list_versions(
         &self,
         document_id: i64,
@@ -153,6 +164,7 @@ impl DocumentService {
     }
 
     /// Get a specific version
+    #[tracing::instrument(skip(self))]
     pub async fn get_version(
         &self,
         version_id: i64,
@@ -167,6 +179,7 @@ impl DocumentService {
     // --- Category Operations ---
 
     /// Create a document category
+    #[tracing::instrument(skip(self))]
     pub async fn create_category(
         &self,
         category: CreateDocumentCategory,
@@ -180,6 +193,7 @@ impl DocumentService {
     }
 
     /// Get a category by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_category(
         &self,
         id: i64,
@@ -192,11 +206,13 @@ impl DocumentService {
     }
 
     /// List all categories for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_categories(&self, tenant_id: i64) -> Result<Vec<DocumentCategory>, ApiError> {
         self.repo.list_categories(tenant_id).await
     }
 
     /// Update a category
+    #[tracing::instrument(skip(self))]
     pub async fn update_category(
         &self,
         id: i64,
@@ -207,6 +223,7 @@ impl DocumentService {
     }
 
     /// Delete a category
+    #[tracing::instrument(skip(self))]
     pub async fn delete_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.delete_category(id, tenant_id).await
     }
@@ -214,6 +231,7 @@ impl DocumentService {
     // --- Entity Link Operations ---
 
     /// Link a document to a business entity
+    #[tracing::instrument(skip(self))]
     pub async fn link_document(&self, link: CreateDocumentLink) -> Result<DocumentLink, ApiError> {
         if link.entity_type.trim().is_empty() {
             return Err(ApiError::Validation("Entity type is required".to_string()));
@@ -227,11 +245,13 @@ impl DocumentService {
     }
 
     /// Remove a document-entity link
+    #[tracing::instrument(skip(self))]
     pub async fn unlink_document(&self, link_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.delete_link(link_id, tenant_id).await
     }
 
     /// List links for a document
+    #[tracing::instrument(skip(self))]
     pub async fn list_document_links(
         &self,
         document_id: i64,
@@ -243,6 +263,7 @@ impl DocumentService {
     }
 
     /// List links for an entity
+    #[tracing::instrument(skip(self))]
     pub async fn list_entity_links(
         &self,
         tenant_id: i64,
@@ -255,6 +276,7 @@ impl DocumentService {
     }
 
     /// Find documents linked to an entity
+    #[tracing::instrument(skip(self))]
     pub async fn find_documents_by_entity(
         &self,
         tenant_id: i64,

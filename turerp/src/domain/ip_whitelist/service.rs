@@ -23,6 +23,7 @@ impl IpWhitelistService {
     /// Check if an IP is allowed for a tenant
     ///
     /// If the tenant has no whitelist entries, all IPs are allowed (opt-in).
+    #[tracing::instrument(skip(self))]
     pub async fn is_ip_allowed(&self, tenant_id: i64, ip: &str) -> bool {
         let entries = match self.repo.find_by_tenant(tenant_id).await {
             Ok(e) => e,
@@ -45,6 +46,7 @@ impl IpWhitelistService {
     }
 
     /// Check if an IP is allowed, returning detailed result
+    #[tracing::instrument(skip(self))]
     pub async fn check_ip(
         &self,
         tenant_id: i64,
@@ -75,6 +77,7 @@ impl IpWhitelistService {
     }
 
     /// Add a new whitelist entry
+    #[tracing::instrument(skip(self))]
     pub async fn add_entry(
         &self,
         tenant_id: i64,
@@ -88,16 +91,19 @@ impl IpWhitelistService {
     }
 
     /// Remove a whitelist entry
+    #[tracing::instrument(skip(self))]
     pub async fn remove_entry(&self, tenant_id: i64, id: i64) -> Result<(), ApiError> {
         self.repo.delete(id, tenant_id).await
     }
 
     /// List all whitelist entries for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_entries(&self, tenant_id: i64) -> Result<Vec<IpWhitelistEntry>, ApiError> {
         self.repo.find_by_tenant(tenant_id).await
     }
 
     /// Update a whitelist entry
+    #[tracing::instrument(skip(self))]
     pub async fn update_entry(
         &self,
         tenant_id: i64,
@@ -116,6 +122,7 @@ impl IpWhitelistService {
     }
 
     /// Get a single entry by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_entry(&self, tenant_id: i64, id: i64) -> Result<IpWhitelistEntry, ApiError> {
         self.repo
             .find_by_id(id, tenant_id)

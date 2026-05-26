@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_efatura_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -37,7 +37,7 @@ async fn test_create_efatura_success() {
 
 #[actix_web::test]
 async fn test_get_efatura_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -69,7 +69,7 @@ async fn test_get_efatura_success() {
 
 #[actix_web::test]
 async fn test_get_efatura_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -85,7 +85,7 @@ async fn test_get_efatura_not_found() {
 
 #[actix_web::test]
 async fn test_send_efatura() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -117,7 +117,7 @@ async fn test_send_efatura() {
 
 #[actix_web::test]
 async fn test_cancel_efatura() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -154,7 +154,7 @@ async fn test_cancel_efatura() {
 
 #[actix_web::test]
 async fn test_efatura_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -170,7 +170,7 @@ async fn test_efatura_unauthorized() {
 
 #[actix_web::test]
 async fn test_efatura_normal_user_forbidden() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_user!(&app, 1);
 

@@ -23,6 +23,7 @@ impl EDefterService {
     }
 
     /// Create a new ledger period
+    #[tracing::instrument(skip(self))]
     pub async fn create_period(
         &self,
         create: CreateLedgerPeriod,
@@ -43,6 +44,7 @@ impl EDefterService {
     }
 
     /// Get a ledger period by ID
+    #[tracing::instrument(skip(self))]
     pub async fn get_period(&self, id: i64, tenant_id: i64) -> Result<LedgerPeriod, ApiError> {
         self.repo
             .find_period_by_id(id, tenant_id)
@@ -51,6 +53,7 @@ impl EDefterService {
     }
 
     /// List ledger periods with optional year/type filters and pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_periods(
         &self,
         tenant_id: i64,
@@ -68,6 +71,7 @@ impl EDefterService {
     /// Accepts a list of YevmiyeEntry items to add to the period.
     /// This is the cross-module integration point between Accounting and e-Defter:
     /// the API layer calls this with data derived from journal entries.
+    #[tracing::instrument(skip(self))]
     pub async fn populate_from_accounting(
         &self,
         period_id: i64,
@@ -95,6 +99,7 @@ impl EDefterService {
     }
 
     /// Validate that debit and credit totals balance for a period's entries
+    #[tracing::instrument(skip(self))]
     pub async fn validate_balance(
         &self,
         period_id: i64,
@@ -126,6 +131,7 @@ impl EDefterService {
     }
 
     /// Generate GIB-format Yevmiye defteri XML for a period
+    #[tracing::instrument(skip(self))]
     pub async fn generate_yevmiye_xml(
         &self,
         period_id: i64,
@@ -139,6 +145,7 @@ impl EDefterService {
     }
 
     /// Generate GIB-format Buyuk defter XML for a period
+    #[tracing::instrument(skip(self))]
     pub async fn generate_buyuk_defter_xml(
         &self,
         period_id: i64,
@@ -154,6 +161,7 @@ impl EDefterService {
     /// Sign a berat (certificate) for a period.
     ///
     /// Creates a mock BeratInfo and updates the period status to Signed.
+    #[tracing::instrument(skip(self))]
     pub async fn sign_berat(&self, period_id: i64, tenant_id: i64) -> Result<BeratInfo, ApiError> {
         let period = self.get_period(period_id, tenant_id).await?;
 
@@ -185,6 +193,7 @@ impl EDefterService {
     /// Send a signed ledger period to the saklayici (archiver).
     ///
     /// Placeholder for actual GIB integration; updates status to Sent.
+    #[tracing::instrument(skip(self))]
     pub async fn send_to_saklayici(
         &self,
         period_id: i64,
@@ -205,6 +214,7 @@ impl EDefterService {
     }
 
     /// Check the current status of a ledger period
+    #[tracing::instrument(skip(self))]
     pub async fn check_status(
         &self,
         period_id: i64,
@@ -215,6 +225,7 @@ impl EDefterService {
     }
 
     /// Find all Yevmiye entries for a period (for blockchain integration)
+    #[tracing::instrument(skip(self))]
     pub async fn find_entries_for_blockchain(
         &self,
         period_id: i64,

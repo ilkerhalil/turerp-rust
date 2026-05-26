@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_work_order_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -45,7 +45,7 @@ async fn test_create_work_order_success() {
 
 #[actix_web::test]
 async fn test_list_work_orders_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -86,7 +86,7 @@ async fn test_list_work_orders_paginated() {
 
 #[actix_web::test]
 async fn test_get_work_order_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -126,7 +126,7 @@ async fn test_get_work_order_success() {
 
 #[actix_web::test]
 async fn test_get_work_order_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -142,7 +142,7 @@ async fn test_get_work_order_not_found() {
 
 #[actix_web::test]
 async fn test_update_work_order_status_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -187,7 +187,7 @@ async fn test_update_work_order_status_success() {
 
 #[actix_web::test]
 async fn test_soft_delete_and_restore_work_order() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -258,7 +258,7 @@ async fn test_soft_delete_and_restore_work_order() {
 
 #[actix_web::test]
 async fn test_list_deleted_work_orders() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -309,7 +309,7 @@ async fn test_list_deleted_work_orders() {
 
 #[actix_web::test]
 async fn test_destroy_work_order_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -368,7 +368,7 @@ async fn test_destroy_work_order_permanently() {
 
 #[actix_web::test]
 async fn test_create_work_order_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()

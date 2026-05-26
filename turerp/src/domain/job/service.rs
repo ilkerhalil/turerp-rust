@@ -30,6 +30,7 @@ impl JobService {
     }
 
     /// Start background tasks: cron evaluation and stalled job recovery
+    #[tracing::instrument(skip(self))]
     pub async fn start_background_tasks(&self) {
         let repo = self.repo.clone();
         let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
@@ -63,10 +64,11 @@ impl JobService {
     }
 
     /// Shut down background tasks
+    #[tracing::instrument(skip(self))]
     pub async fn shutdown(&self) {
         let tx = self.shutdown.lock().take();
         if let Some(tx) = tx {
-            let _ = tx.send(()).await;
+            let _ = tx.send(()).await.ok();
         }
     }
 
@@ -118,16 +120,19 @@ impl JobService {
     }
 
     /// Get dashboard counts for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn dashboard(&self, tenant_id: i64) -> Result<JobCounts, ApiError> {
         self.repo.count_by_status(tenant_id).await
     }
 
     /// Get recent jobs for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn recent_jobs(&self, tenant_id: i64, limit: i64) -> Result<Vec<Job>, ApiError> {
         self.repo.list_recent(tenant_id, limit).await
     }
 
     /// Create a recurring schedule
+    #[tracing::instrument(skip(self))]
     pub async fn create_schedule(
         &self,
         schedule: CreateJobSchedule,
@@ -140,16 +145,19 @@ impl JobService {
     }
 
     /// List schedules for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>, ApiError> {
         self.repo.list_schedules(tenant_id).await
     }
 
     /// Toggle a schedule on/off
+    #[tracing::instrument(skip(self))]
     pub async fn toggle_schedule(&self, id: i64, active: bool) -> Result<(), ApiError> {
         self.repo.toggle_schedule(id, active).await
     }
 
     /// List jobs by status for a tenant (used by API)
+    #[tracing::instrument(skip(self))]
     pub async fn list_by_status(
         &self,
         tenant_id: i64,
@@ -490,41 +498,49 @@ impl From<CommonJob> for Job {
 
 impl JobService {
     /// Soft delete a job
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_job(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
         self.repo.soft_delete(id, deleted_by).await
     }
 
     /// Restore a soft-deleted job
+    #[tracing::instrument(skip(self))]
     pub async fn restore_job(&self, id: i64) -> Result<(), ApiError> {
         self.repo.restore(id).await
     }
 
     /// List deleted jobs for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn deleted_jobs(&self, tenant_id: i64) -> Result<Vec<Job>, ApiError> {
         self.repo.find_deleted(tenant_id).await
     }
 
     /// Permanently destroy a soft-deleted job
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_job(&self, id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id).await
     }
 
     /// Soft delete a job schedule
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_schedule(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
         self.repo.soft_delete_schedule(id, deleted_by).await
     }
 
     /// Restore a soft-deleted schedule
+    #[tracing::instrument(skip(self))]
     pub async fn restore_schedule(&self, id: i64) -> Result<(), ApiError> {
         self.repo.restore_schedule(id).await
     }
 
     /// List deleted schedules for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn deleted_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>, ApiError> {
         self.repo.find_deleted_schedules(tenant_id).await
     }
 
     /// Permanently destroy a soft-deleted schedule
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_schedule(&self, id: i64) -> Result<(), ApiError> {
         self.repo.destroy_schedule(id).await
     }

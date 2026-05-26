@@ -11,6 +11,21 @@ use crate::i18n::{resolve, I18n, Locale};
 use crate::middleware::AuthUser;
 
 /// Create user endpoint (requires authentication)
+#[utoipa::path(
+    post,
+    path = "/api/users",
+    tag = "Users (Legacy)",
+    request_body = CreateUser,
+    responses(
+        (status = 201, description = "User created successfully", body = UserResponse),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 409, description = "User already exists")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn create_user(
     _auth_user: AuthUser,
     user_service: web::Data<UserService>,
@@ -27,6 +42,22 @@ pub async fn create_user(
 }
 
 /// Get user by ID endpoint (requires authentication)
+#[utoipa::path(
+    get,
+    path = "/api/users/{id}",
+    tag = "Users (Legacy)",
+    params(
+        ("id" = i64, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "User found", body = UserResponse),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 404, description = "User not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_user(
     auth_user: AuthUser,
     user_service: web::Data<UserService>,
@@ -43,6 +74,19 @@ pub async fn get_user(
 }
 
 /// Get all users endpoint (requires authentication)
+#[utoipa::path(
+    get,
+    path = "/api/users",
+    tag = "Users (Legacy)",
+    params(PaginationParams),
+    responses(
+        (status = 200, description = "Paginated list of users"),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn get_users(
     auth_user: AuthUser,
     user_service: web::Data<UserService>,
@@ -66,6 +110,23 @@ pub async fn get_users(
 }
 
 /// Update user endpoint (requires authentication)
+#[utoipa::path(
+    put,
+    path = "/api/users/{id}",
+    tag = "Users (Legacy)",
+    params(
+        ("id" = i64, Path, description = "User ID")
+    ),
+    request_body = UpdateUser,
+    responses(
+        (status = 200, description = "User updated", body = UserResponse),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 404, description = "User not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn update_user(
     auth_user: AuthUser,
     user_service: web::Data<UserService>,
@@ -87,6 +148,22 @@ pub async fn update_user(
 }
 
 /// Delete user endpoint (requires authentication)
+#[utoipa::path(
+    delete,
+    path = "/api/users/{id}",
+    tag = "Users (Legacy)",
+    params(
+        ("id" = i64, Path, description = "User ID")
+    ),
+    responses(
+        (status = 200, description = "User deleted", body = MessageResponse),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token"),
+        (status = 404, description = "User not found")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn delete_user(
     auth_user: AuthUser,
     user_service: web::Data<UserService>,

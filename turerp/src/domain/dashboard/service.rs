@@ -38,6 +38,7 @@ impl DashboardService {
     }
 
     /// Get all KPIs for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn get_all_kpis(
         &self,
         tenant_id: i64,
@@ -87,6 +88,7 @@ impl DashboardService {
     }
 
     /// Get a single KPI widget
+    #[tracing::instrument(skip(self))]
     pub async fn get_kpi_widget(
         &self,
         tenant_id: i64,
@@ -161,6 +163,7 @@ impl DashboardService {
     }
 
     /// Get sales time-series chart data
+    #[tracing::instrument(skip(self))]
     pub async fn get_sales_chart(
         &self,
         tenant_id: i64,
@@ -195,6 +198,7 @@ impl DashboardService {
     }
 
     /// Get revenue by category pie chart data
+    #[tracing::instrument(skip(self))]
     pub async fn get_revenue_by_category_chart(
         &self,
         tenant_id: i64,
@@ -221,6 +225,7 @@ impl DashboardService {
     }
 
     /// Get top products bar chart data
+    #[tracing::instrument(skip(self))]
     pub async fn get_top_products_chart(
         &self,
         tenant_id: i64,
@@ -248,6 +253,7 @@ impl DashboardService {
     }
 
     /// Save a widget configuration
+    #[tracing::instrument(skip(self))]
     pub async fn save_widget(
         &self,
         tenant_id: i64,
@@ -278,6 +284,7 @@ impl DashboardService {
     }
 
     /// List saved widget configurations for a tenant
+    #[tracing::instrument(skip(self))]
     pub async fn list_widgets(
         &self,
         tenant_id: i64,
@@ -287,6 +294,7 @@ impl DashboardService {
     }
 
     /// Delete a widget configuration
+    #[tracing::instrument(skip(self))]
     pub async fn delete_widget(&self, tenant_id: i64, widget_id: i64) -> Result<(), ApiError> {
         let mut widgets = self.widgets.lock();
         let tenant_widgets = widgets.entry(tenant_id).or_default();

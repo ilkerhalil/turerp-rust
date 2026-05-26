@@ -17,12 +17,14 @@ use turerp::domain::sales::model::{CreateSalesOrder, CreateSalesOrderLine};
 use turerp::middleware::JwtAuthMiddleware;
 use turerp::utils::jwt::JwtService;
 
-fn create_test_app_state() -> turerp::app::AppState {
+async fn create_test_app_state() -> turerp::app::AppState {
     let config = Config {
         encryption_key: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=".to_string(),
         ..Config::default()
     };
-    create_app_state_in_memory(&config).expect("app state creation failed")
+    create_app_state_in_memory(&config)
+        .await
+        .expect("app state creation failed")
 }
 
 fn build_test_app(
@@ -88,7 +90,7 @@ async fn create_customer_cari(state: &turerp::app::AppState, tenant_id: i64) -> 
 
 #[actix_web::test]
 async fn test_portal_register_and_login() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_customer_cari(&state, 1).await;
@@ -134,7 +136,7 @@ async fn test_portal_register_and_login() {
 
 #[actix_web::test]
 async fn test_portal_login_invalid_credentials() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -151,7 +153,7 @@ async fn test_portal_login_invalid_credentials() {
 
 #[actix_web::test]
 async fn test_portal_orders_requires_auth() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -164,7 +166,7 @@ async fn test_portal_orders_requires_auth() {
 
 #[actix_web::test]
 async fn test_portal_invoices_requires_auth() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -177,7 +179,7 @@ async fn test_portal_invoices_requires_auth() {
 
 #[actix_web::test]
 async fn test_portal_payments_requires_auth() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -190,7 +192,7 @@ async fn test_portal_payments_requires_auth() {
 
 #[actix_web::test]
 async fn test_portal_support_tickets_requires_auth() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::get()
@@ -203,7 +205,7 @@ async fn test_portal_support_tickets_requires_auth() {
 
 #[actix_web::test]
 async fn test_portal_support_tickets_crud() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_customer_cari(&state, 1).await;
@@ -360,7 +362,7 @@ async fn create_payment_for_invoice(
 
 #[actix_web::test]
 async fn test_portal_order_history() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_customer_cari(&state, 1).await;
@@ -410,7 +412,7 @@ async fn test_portal_order_history() {
 
 #[actix_web::test]
 async fn test_portal_invoice_list() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_customer_cari(&state, 1).await;
@@ -460,7 +462,7 @@ async fn test_portal_invoice_list() {
 
 #[actix_web::test]
 async fn test_portal_payment_history() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_customer_cari(&state, 1).await;
@@ -511,7 +513,7 @@ async fn test_portal_payment_history() {
 
 #[actix_web::test]
 async fn test_portal_customer_isolation() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     // Create two customers
@@ -629,7 +631,7 @@ async fn test_portal_customer_isolation() {
 
 #[actix_web::test]
 async fn test_portal_register_duplicate_email() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let cari_id = create_customer_cari(&state, 1).await;

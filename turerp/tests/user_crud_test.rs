@@ -42,7 +42,7 @@ fn build_test_app_with_users(
 
 #[actix_web::test]
 async fn test_create_user_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_users(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -71,7 +71,7 @@ async fn test_create_user_success() {
 
 #[actix_web::test]
 async fn test_get_user_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_users(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -108,7 +108,7 @@ async fn test_get_user_success() {
 
 #[actix_web::test]
 async fn test_get_user_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_users(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -120,7 +120,7 @@ async fn test_get_user_not_found() {
 
 #[actix_web::test]
 async fn test_list_users_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_users(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -159,7 +159,7 @@ async fn test_list_users_paginated() {
 
 #[actix_web::test]
 async fn test_update_user_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_users(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -204,7 +204,7 @@ async fn test_update_user_success() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_user() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_users(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -276,7 +276,7 @@ async fn test_delete_and_restore_user() {
 
 #[actix_web::test]
 async fn test_list_deleted_users() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_users(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -324,7 +324,7 @@ async fn test_list_deleted_users() {
 
 #[actix_web::test]
 async fn test_destroy_user_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_users(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -384,7 +384,7 @@ async fn test_destroy_user_permanently() {
 
 #[actix_web::test]
 async fn test_user_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_users(&state)).await;
 
     let req = test::TestRequest::post()
@@ -403,7 +403,7 @@ async fn test_user_unauthorized() {
 
 #[actix_web::test]
 async fn test_user_normal_user_forbidden() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_users(&state)).await;
     let (token, _user_id) = register_user!(&app, 1);
 

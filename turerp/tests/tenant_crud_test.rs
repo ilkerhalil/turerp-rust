@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_tenant_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -39,7 +39,7 @@ async fn test_create_tenant_success() {
 
 #[actix_web::test]
 async fn test_list_tenants_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -77,7 +77,7 @@ async fn test_list_tenants_paginated() {
 
 #[actix_web::test]
 async fn test_get_tenant_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -112,7 +112,7 @@ async fn test_get_tenant_success() {
 
 #[actix_web::test]
 async fn test_get_tenant_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -128,7 +128,7 @@ async fn test_get_tenant_not_found() {
 
 #[actix_web::test]
 async fn test_update_tenant_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -170,7 +170,7 @@ async fn test_update_tenant_success() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_tenant() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -235,7 +235,7 @@ async fn test_delete_and_restore_tenant() {
 
 #[actix_web::test]
 async fn test_list_deleted_tenants() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -280,7 +280,7 @@ async fn test_list_deleted_tenants() {
 
 #[actix_web::test]
 async fn test_destroy_tenant_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -333,7 +333,7 @@ async fn test_destroy_tenant_permanently() {
 
 #[actix_web::test]
 async fn test_tenant_config_crud() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -419,7 +419,7 @@ async fn test_tenant_config_crud() {
 
 #[actix_web::test]
 async fn test_tenant_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()

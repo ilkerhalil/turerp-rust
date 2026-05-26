@@ -14,6 +14,18 @@ use crate::middleware::AuthUser;
 use tracing;
 
 /// Register endpoint (public - no authentication required)
+#[utoipa::path(
+    post,
+    path = "/api/auth/register",
+    tag = "Auth (Legacy)",
+    request_body = RegisterRequest,
+    responses(
+        (status = 201, description = "User registered successfully", body = LoginResponse),
+        (status = 400, description = "Validation error - password requirements not met"),
+        (status = 409, description = "User already exists"),
+        (status = 429, description = "Rate limit exceeded")
+    )
+)]
 #[tracing::instrument(skip(auth_service, _user_service, payload))]
 pub async fn register(
     auth_service: web::Data<AuthService>,
@@ -32,6 +44,20 @@ pub async fn register(
 }
 
 /// Login endpoint (public - no authentication required)
+#[utoipa::path(
+    post,
+    path = "/api/auth/login",
+    tag = "Auth (Legacy)",
+    request_body = LoginRequest,
+    params(
+        ("tenant_id" = i64, Query, description = "Tenant ID (required)")
+    ),
+    responses(
+        (status = 200, description = "Login successful", body = LoginResponse),
+        (status = 401, description = "Invalid credentials"),
+        (status = 429, description = "Rate limit exceeded")
+    )
+)]
 #[tracing::instrument(skip(auth_service, payload, params))]
 pub async fn login(
     auth_service: web::Data<AuthService>,
@@ -53,6 +79,16 @@ pub async fn login(
 }
 
 /// Refresh token endpoint (public - no authentication required)
+#[utoipa::path(
+    post,
+    path = "/api/auth/refresh",
+    tag = "Auth (Legacy)",
+    request_body = RefreshTokenRequest,
+    responses(
+        (status = 200, description = "Tokens refreshed successfully", body = TokenPair),
+        (status = 401, description = "Invalid refresh token")
+    )
+)]
 #[tracing::instrument(skip(auth_service, payload))]
 pub async fn refresh_token(
     auth_service: web::Data<AuthService>,
@@ -70,6 +106,16 @@ pub async fn refresh_token(
 }
 
 /// Logout endpoint (revokes refresh token)
+#[utoipa::path(
+    post,
+    path = "/api/auth/logout",
+    tag = "Auth (Legacy)",
+    request_body = LogoutRequest,
+    responses(
+        (status = 200, description = "Logout successful"),
+        (status = 401, description = "Invalid refresh token")
+    )
+)]
 #[tracing::instrument(skip(auth_service, payload))]
 pub async fn logout(
     auth_service: web::Data<AuthService>,
@@ -87,6 +133,18 @@ pub async fn logout(
 }
 
 /// Get current user endpoint (requires authentication)
+#[utoipa::path(
+    get,
+    path = "/api/auth/me",
+    tag = "Auth (Legacy)",
+    responses(
+        (status = 200, description = "Current user info", body = UserResponse),
+        (status = 401, description = "Not authenticated - missing or invalid JWT token")
+    ),
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn me(
     auth_user: AuthUser,
     user_service: web::Data<UserService>,

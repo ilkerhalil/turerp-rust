@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_feature_flag_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -42,7 +42,7 @@ async fn test_create_feature_flag_success() {
 
 #[actix_web::test]
 async fn test_list_feature_flags_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -84,7 +84,7 @@ async fn test_list_feature_flags_paginated() {
 
 #[actix_web::test]
 async fn test_get_feature_flag_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -122,7 +122,7 @@ async fn test_get_feature_flag_success() {
 
 #[actix_web::test]
 async fn test_get_feature_flag_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -138,7 +138,7 @@ async fn test_get_feature_flag_not_found() {
 
 #[actix_web::test]
 async fn test_update_feature_flag_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -185,7 +185,7 @@ async fn test_update_feature_flag_success() {
 
 #[actix_web::test]
 async fn test_soft_delete_and_restore_feature_flag() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -249,7 +249,7 @@ async fn test_soft_delete_and_restore_feature_flag() {
 
 #[actix_web::test]
 async fn test_destroy_feature_flag_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -306,7 +306,7 @@ async fn test_destroy_feature_flag_permanently() {
 
 #[actix_web::test]
 async fn test_enable_disable_feature_flag() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -356,7 +356,7 @@ async fn test_enable_disable_feature_flag() {
 
 #[actix_web::test]
 async fn test_check_feature_enabled() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -395,7 +395,7 @@ async fn test_check_feature_enabled() {
 
 #[actix_web::test]
 async fn test_feature_flag_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     // No token
@@ -414,7 +414,7 @@ async fn test_feature_flag_unauthorized() {
 
 #[actix_web::test]
 async fn test_feature_flag_normal_user_forbidden() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_user!(&app, 1);
 

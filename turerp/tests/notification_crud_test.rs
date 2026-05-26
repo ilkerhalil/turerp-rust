@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_send_notification_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -52,7 +52,7 @@ async fn test_send_notification_success() {
 
 #[actix_web::test]
 async fn test_get_notification_history() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -93,7 +93,7 @@ async fn test_get_notification_history() {
 
 #[actix_web::test]
 async fn test_get_unread_count() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -129,7 +129,7 @@ async fn test_get_unread_count() {
 
 #[actix_web::test]
 async fn test_mark_notification_read() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -172,7 +172,7 @@ async fn test_mark_notification_read() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_notification() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -250,7 +250,7 @@ async fn test_delete_and_restore_notification() {
 
 #[actix_web::test]
 async fn test_destroy_notification_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -308,7 +308,7 @@ async fn test_destroy_notification_permanently() {
 
 #[actix_web::test]
 async fn test_mark_notification_read_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -324,7 +324,7 @@ async fn test_mark_notification_read_not_found() {
 
 #[actix_web::test]
 async fn test_notification_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()

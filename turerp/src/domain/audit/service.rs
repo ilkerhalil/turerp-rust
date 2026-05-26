@@ -20,16 +20,19 @@ impl AuditService {
     }
 
     /// Create a single audit log entry
+    #[tracing::instrument(skip(self))]
     pub async fn create_log(&self, log: CreateAuditLog) -> Result<AuditLog, ApiError> {
         self.repo.create(log).await
     }
 
     /// Create multiple audit log entries in batch
+    #[tracing::instrument(skip(self))]
     pub async fn create_batch(&self, logs: Vec<CreateAuditLog>) -> Result<(), ApiError> {
         self.repo.create_batch(logs).await
     }
 
     /// Get audit logs for a tenant with filtering and pagination
+    #[tracing::instrument(skip(self))]
     pub async fn get_logs(
         &self,
         tenant_id: i64,

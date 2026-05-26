@@ -35,10 +35,12 @@ impl ManufacturingService {
     }
 
     // Work Order methods
+    #[tracing::instrument(skip(self))]
     pub async fn create_work_order(&self, create: CreateWorkOrder) -> Result<WorkOrder, ApiError> {
         self.work_order_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_work_order(&self, id: i64, tenant_id: i64) -> Result<WorkOrder, ApiError> {
         self.work_order_repo
             .find_by_id(id, tenant_id)
@@ -46,6 +48,7 @@ impl ManufacturingService {
             .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_work_orders_by_tenant(
         &self,
         tenant_id: i64,
@@ -54,6 +57,7 @@ impl ManufacturingService {
     }
 
     /// Get work orders by tenant with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn get_work_orders_by_tenant_paginated(
         &self,
         tenant_id: i64,
@@ -65,6 +69,7 @@ impl ManufacturingService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_work_orders_by_product(
         &self,
         product_id: i64,
@@ -72,6 +77,7 @@ impl ManufacturingService {
         self.work_order_repo.find_by_product(product_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_work_order_status(
         &self,
         id: i64,
@@ -80,6 +86,7 @@ impl ManufacturingService {
         self.work_order_repo.update_status(id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn add_work_order_operation(
         &self,
         create: CreateWorkOrderOperation,
@@ -87,6 +94,7 @@ impl ManufacturingService {
         self.work_order_repo.add_operation(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_work_order_operations(
         &self,
         work_order_id: i64,
@@ -94,6 +102,7 @@ impl ManufacturingService {
         self.work_order_repo.get_operations(work_order_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn add_work_order_material(
         &self,
         create: CreateWorkOrderMaterial,
@@ -101,6 +110,7 @@ impl ManufacturingService {
         self.work_order_repo.add_material(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_work_order_materials(
         &self,
         work_order_id: i64,
@@ -109,6 +119,7 @@ impl ManufacturingService {
     }
 
     // BOM methods
+    #[tracing::instrument(skip(self))]
     pub async fn create_bom(
         &self,
         create: CreateBillOfMaterials,
@@ -116,6 +127,7 @@ impl ManufacturingService {
         self.bom_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_bom(&self, id: i64, tenant_id: i64) -> Result<BillOfMaterials, ApiError> {
         self.bom_repo
             .find_by_id(id, tenant_id)
@@ -123,6 +135,7 @@ impl ManufacturingService {
             .ok_or_else(|| ApiError::NotFound("BOM not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_boms_by_product(
         &self,
         product_id: i64,
@@ -130,6 +143,7 @@ impl ManufacturingService {
         self.bom_repo.find_by_product(product_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_primary_bom_by_product(
         &self,
         product_id: i64,
@@ -137,6 +151,7 @@ impl ManufacturingService {
         self.bom_repo.find_primary_by_product(product_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn add_bom_line(
         &self,
         create: CreateBillOfMaterialsLine,
@@ -144,15 +159,18 @@ impl ManufacturingService {
         self.bom_repo.add_line(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_bom_lines(&self, bom_id: i64) -> Result<Vec<BillOfMaterialsLine>, ApiError> {
         self.bom_repo.get_lines(bom_id).await
     }
 
     // Routing methods
+    #[tracing::instrument(skip(self))]
     pub async fn create_routing(&self, create: CreateRouting) -> Result<Routing, ApiError> {
         self.routing_repo.create(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_routing(&self, id: i64, tenant_id: i64) -> Result<Routing, ApiError> {
         self.routing_repo
             .find_by_id(id, tenant_id)
@@ -160,10 +178,12 @@ impl ManufacturingService {
             .ok_or_else(|| ApiError::NotFound("Routing not found".to_string()))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_routings_by_product(&self, product_id: i64) -> Result<Vec<Routing>, ApiError> {
         self.routing_repo.find_by_product(product_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_primary_routing_by_product(
         &self,
         product_id: i64,
@@ -171,6 +191,7 @@ impl ManufacturingService {
         self.routing_repo.find_primary_by_product(product_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn add_routing_operation(
         &self,
         create: CreateRoutingOperation,
@@ -178,6 +199,7 @@ impl ManufacturingService {
         self.routing_repo.add_operation(create).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_routing_operations(
         &self,
         routing_id: i64,
@@ -186,6 +208,7 @@ impl ManufacturingService {
     }
 
     // Calculate material requirements from BOM
+    #[tracing::instrument(skip(self))]
     pub async fn calculate_material_requirements(
         &self,
         product_id: i64,
@@ -209,6 +232,7 @@ impl ManufacturingService {
     }
 
     // Calculate production time from routing
+    #[tracing::instrument(skip(self))]
     pub async fn calculate_production_time(&self, product_id: i64) -> Result<Decimal, ApiError> {
         let routing = self
             .routing_repo
@@ -225,6 +249,7 @@ impl ManufacturingService {
     }
 
     // Work Order soft-delete methods
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_work_order(
         &self,
         id: i64,
@@ -236,10 +261,12 @@ impl ManufacturingService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_work_order(&self, id: i64, tenant_id: i64) -> Result<WorkOrder, ApiError> {
         self.work_order_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_work_orders(
         &self,
         tenant_id: i64,
@@ -247,11 +274,13 @@ impl ManufacturingService {
         self.work_order_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_work_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.work_order_repo.destroy(id, tenant_id).await
     }
 
     // BOM soft-delete methods
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_bom(
         &self,
         id: i64,
@@ -261,10 +290,12 @@ impl ManufacturingService {
         self.bom_repo.soft_delete(id, tenant_id, deleted_by).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_bom(&self, id: i64, tenant_id: i64) -> Result<BillOfMaterials, ApiError> {
         self.bom_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_boms(
         &self,
         tenant_id: i64,
@@ -272,11 +303,13 @@ impl ManufacturingService {
         self.bom_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_bom(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.bom_repo.destroy(id, tenant_id).await
     }
 
     // Routing soft-delete methods
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_routing(
         &self,
         id: i64,
@@ -288,14 +321,17 @@ impl ManufacturingService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_routing(&self, id: i64, tenant_id: i64) -> Result<Routing, ApiError> {
         self.routing_repo.restore(id, tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_routings(&self, tenant_id: i64) -> Result<Vec<Routing>, ApiError> {
         self.routing_repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_routing(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.routing_repo.destroy(id, tenant_id).await
     }

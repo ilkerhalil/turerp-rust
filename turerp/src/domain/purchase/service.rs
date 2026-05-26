@@ -61,6 +61,7 @@ impl PurchaseService {
     }
 
     // Purchase Order operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_purchase_order(
         &self,
         create: CreatePurchaseOrder,
@@ -83,6 +84,7 @@ impl PurchaseService {
         Ok(PurchaseOrderResponse::from((order, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_purchase_order(
         &self,
         id: i64,
@@ -99,6 +101,7 @@ impl PurchaseService {
         Ok(PurchaseOrderResponse::from((order, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_orders_by_tenant(
         &self,
         tenant_id: i64,
@@ -106,6 +109,7 @@ impl PurchaseService {
         self.order_repo.find_by_tenant(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_orders_by_cari(
         &self,
         cari_id: i64,
@@ -113,6 +117,7 @@ impl PurchaseService {
         self.order_repo.find_by_cari(cari_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_orders_by_status(
         &self,
         tenant_id: i64,
@@ -121,6 +126,7 @@ impl PurchaseService {
         self.order_repo.find_by_status(tenant_id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_order_status(
         &self,
         id: i64,
@@ -129,12 +135,14 @@ impl PurchaseService {
         self.order_repo.update_status(id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.order_line_repo.delete_by_order(id).await?;
         self.order_repo.delete(id, tenant_id).await
     }
 
     /// Soft delete a purchase order (sets deleted_at)
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_order(
         &self,
         id: i64,
@@ -148,6 +156,7 @@ impl PurchaseService {
     }
 
     /// Restore a soft-deleted purchase order
+    #[tracing::instrument(skip(self))]
     pub async fn restore_order(
         &self,
         id: i64,
@@ -159,6 +168,7 @@ impl PurchaseService {
     }
 
     /// Restore a soft-deleted purchase order and return as response
+    #[tracing::instrument(skip(self))]
     pub async fn restore_order_response(
         &self,
         id: i64,
@@ -170,6 +180,7 @@ impl PurchaseService {
     }
 
     /// List soft-deleted purchase orders
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_orders(
         &self,
         tenant_id: i64,
@@ -178,12 +189,14 @@ impl PurchaseService {
     }
 
     /// Permanently delete a purchase order (admin only, after soft delete)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.order_line_repo.delete_by_order(id).await?;
         self.order_repo.destroy(id, tenant_id).await
     }
 
     // Goods Receipt operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_goods_receipt(
         &self,
         create: CreateGoodsReceipt,
@@ -263,6 +276,7 @@ impl PurchaseService {
         Ok(GoodsReceiptResponse::from((receipt, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_goods_receipt(
         &self,
         id: i64,
@@ -279,6 +293,7 @@ impl PurchaseService {
         Ok(GoodsReceiptResponse::from((receipt, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_receipts_by_order(
         &self,
         order_id: i64,
@@ -286,6 +301,7 @@ impl PurchaseService {
         self.receipt_repo.find_by_order(order_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_receipt_status(
         &self,
         id: i64,
@@ -294,12 +310,14 @@ impl PurchaseService {
         self.receipt_repo.update_status(id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_receipt(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.receipt_line_repo.delete_by_receipt(id).await?;
         self.receipt_repo.delete(id, tenant_id).await
     }
 
     /// Soft delete a goods receipt (sets deleted_at)
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_receipt(
         &self,
         id: i64,
@@ -315,6 +333,7 @@ impl PurchaseService {
     }
 
     /// Restore a soft-deleted goods receipt
+    #[tracing::instrument(skip(self))]
     pub async fn restore_receipt(
         &self,
         id: i64,
@@ -326,6 +345,7 @@ impl PurchaseService {
     }
 
     /// Restore a soft-deleted goods receipt and return as response
+    #[tracing::instrument(skip(self))]
     pub async fn restore_receipt_response(
         &self,
         id: i64,
@@ -337,6 +357,7 @@ impl PurchaseService {
     }
 
     /// List soft-deleted goods receipts
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_receipts(
         &self,
         tenant_id: i64,
@@ -345,12 +366,14 @@ impl PurchaseService {
     }
 
     /// Permanently delete a goods receipt (admin only, after soft delete)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_receipt(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.receipt_line_repo.delete_by_receipt(id).await?;
         self.receipt_repo.destroy(id, tenant_id).await
     }
 
     // Purchase Request operations
+    #[tracing::instrument(skip(self))]
     pub async fn create_purchase_request(
         &self,
         create: CreatePurchaseRequest,
@@ -380,6 +403,7 @@ impl PurchaseService {
         Ok(PurchaseRequestResponse::from((request, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_purchase_request(
         &self,
         id: i64,
@@ -403,6 +427,7 @@ impl PurchaseService {
         Ok(PurchaseRequestResponse::from((request, lines)))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_requests_by_tenant(
         &self,
         tenant_id: i64,
@@ -415,6 +440,7 @@ impl PurchaseService {
     }
 
     /// Get purchase requests by tenant with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn get_requests_by_tenant_paginated(
         &self,
         tenant_id: i64,
@@ -430,6 +456,7 @@ impl PurchaseService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_requests_by_status(
         &self,
         tenant_id: i64,
@@ -443,6 +470,7 @@ impl PurchaseService {
     }
 
     /// Get purchase requests by status with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn get_requests_by_status_paginated(
         &self,
         tenant_id: i64,
@@ -459,6 +487,7 @@ impl PurchaseService {
             .await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_requests_by_requester(
         &self,
         requested_by: i64,
@@ -470,6 +499,7 @@ impl PurchaseService {
         request_repo.find_by_requester(requested_by).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_purchase_request(
         &self,
         id: i64,
@@ -482,6 +512,7 @@ impl PurchaseService {
         request_repo.update(id, update).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_request_status(
         &self,
         id: i64,
@@ -511,6 +542,7 @@ impl PurchaseService {
         request_repo.update_status(id, status).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_purchase_request(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let request_repo = self.request_repo.as_ref().ok_or_else(|| {
             ApiError::Internal("Purchase request repository not configured".to_string())
@@ -525,6 +557,7 @@ impl PurchaseService {
     }
 
     /// Soft delete a purchase request (sets deleted_at)
+    #[tracing::instrument(skip(self))]
     pub async fn soft_delete_request(
         &self,
         id: i64,
@@ -546,6 +579,7 @@ impl PurchaseService {
     }
 
     /// Restore a soft-deleted purchase request
+    #[tracing::instrument(skip(self))]
     pub async fn restore_request(
         &self,
         id: i64,
@@ -565,6 +599,7 @@ impl PurchaseService {
     }
 
     /// Restore a soft-deleted purchase request and return as response
+    #[tracing::instrument(skip(self))]
     pub async fn restore_request_response(
         &self,
         id: i64,
@@ -581,6 +616,7 @@ impl PurchaseService {
     }
 
     /// List soft-deleted purchase requests
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_requests(
         &self,
         tenant_id: i64,
@@ -593,6 +629,7 @@ impl PurchaseService {
     }
 
     /// Permanently delete a purchase request (admin only, after soft delete)
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_request(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let request_repo = self.request_repo.as_ref().ok_or_else(|| {
             ApiError::Internal("Purchase request repository not configured".to_string())

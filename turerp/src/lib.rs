@@ -1034,30 +1034,33 @@ pub mod app {
 
             // Register business metrics subscribers on event bus
             let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
-            let _ = event_bus
+            event_bus
                 .subscribe(Arc::new(
                     crate::common::business_metrics::InstrumentedEventSubscriber::new(
                         Arc::new(crate::common::AccountingEntrySubscriber),
                         metrics_recorder.clone(),
                     ),
                 ))
-                .await;
-            let _ = event_bus
+                .await
+                .ok();
+            event_bus
                 .subscribe(Arc::new(
                     crate::common::business_metrics::InstrumentedEventSubscriber::new(
                         Arc::new(crate::common::StockDecrementSubscriber),
                         metrics_recorder.clone(),
                     ),
                 ))
-                .await;
-            let _ = event_bus
+                .await
+                .ok();
+            event_bus
                 .subscribe(Arc::new(
                     crate::common::business_metrics::InstrumentedEventSubscriber::new(
                         Arc::new(crate::common::TaxPeriodSubscriber),
                         metrics_recorder.clone(),
                     ),
                 ))
-                .await;
+                .await
+                .ok();
         });
 
         let i18n = I18n::init().await;
@@ -1192,8 +1195,8 @@ pub mod app {
         );
         let mfa_repo = PostgresMfaRepository::new(pool.clone()).into_boxed();
         let mfa_service = MfaService::new(mfa_repo, jwt_service.clone());
-        let revoked_token_store = Arc::new(crate::domain::auth::InMemoryRevokedTokenStore::new())
-            as crate::domain::auth::BoxRevokedTokenStore;
+        let revoked_token_store =
+            crate::domain::auth::PostgresRevokedTokenStore::new(pool.clone()).into_boxed();
         let auth_service = AuthService::new(
             user_service.clone(),
             jwt_service.clone(),
@@ -1530,30 +1533,33 @@ pub mod app {
 
         // Register business metrics subscribers on event bus
         let metrics_recorder = crate::common::business_metrics::BusinessMetricsRecorder::new();
-        let _ = event_bus
+        event_bus
             .subscribe(Arc::new(
                 crate::common::business_metrics::InstrumentedEventSubscriber::new(
                     Arc::new(crate::common::AccountingEntrySubscriber),
                     metrics_recorder.clone(),
                 ),
             ))
-            .await;
-        let _ = event_bus
+            .await
+            .ok();
+        event_bus
             .subscribe(Arc::new(
                 crate::common::business_metrics::InstrumentedEventSubscriber::new(
                     Arc::new(crate::common::StockDecrementSubscriber),
                     metrics_recorder.clone(),
                 ),
             ))
-            .await;
-        let _ = event_bus
+            .await
+            .ok();
+        event_bus
             .subscribe(Arc::new(
                 crate::common::business_metrics::InstrumentedEventSubscriber::new(
                     Arc::new(crate::common::TaxPeriodSubscriber),
                     metrics_recorder.clone(),
                 ),
             ))
-            .await;
+            .await
+            .ok();
 
         // Search
         let search_service: Arc<dyn SearchService> = if config.database.url.is_empty() {
@@ -1595,10 +1601,9 @@ pub mod app {
             ));
 
         // Inter-Company Service
-        let inter_company_repo = Arc::new(
-            crate::domain::inter_company::repository::InMemoryInterCompanyRepository::new(),
-        )
-            as crate::domain::inter_company::repository::BoxInterCompanyRepository;
+        let inter_company_repo =
+            crate::domain::inter_company::PostgresInterCompanyRepository::new(pool.clone())
+                .into_boxed();
         let inter_company_service = crate::domain::inter_company::service::InterCompanyService::new(
             Arc::new(company_service.clone()),
             Arc::new(invoice_service.clone()),

@@ -96,7 +96,7 @@ fn shift_payload(name: &str) -> serde_json::Value {
 
 #[actix_web::test]
 async fn test_create_shift_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_shift(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -117,7 +117,7 @@ async fn test_create_shift_success() {
 
 #[actix_web::test]
 async fn test_list_shifts_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_shift(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -148,7 +148,7 @@ async fn test_list_shifts_paginated() {
 
 #[actix_web::test]
 async fn test_get_shift_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_shift(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -178,7 +178,7 @@ async fn test_get_shift_success() {
 
 #[actix_web::test]
 async fn test_get_shift_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_shift(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -190,7 +190,7 @@ async fn test_get_shift_not_found() {
 
 #[actix_web::test]
 async fn test_update_shift_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_shift(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -228,7 +228,7 @@ async fn test_update_shift_success() {
 
 #[actix_web::test]
 async fn test_soft_delete_and_restore_shift() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_shift(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -289,7 +289,7 @@ async fn test_soft_delete_and_restore_shift() {
 
 #[actix_web::test]
 async fn test_list_deleted_shifts() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_shift(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -330,7 +330,7 @@ async fn test_list_deleted_shifts() {
 
 #[actix_web::test]
 async fn test_destroy_shift_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_shift(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -379,7 +379,7 @@ async fn test_destroy_shift_permanently() {
 
 #[actix_web::test]
 async fn test_create_shift_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app_with_shift(&state)).await;
 
     let req = test::TestRequest::post()

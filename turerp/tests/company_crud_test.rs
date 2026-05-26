@@ -12,7 +12,7 @@ use common::*;
 
 #[actix_web::test]
 async fn test_create_company_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -47,7 +47,7 @@ async fn test_create_company_success() {
 
 #[actix_web::test]
 async fn test_get_company_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -85,7 +85,7 @@ async fn test_get_company_success() {
 
 #[actix_web::test]
 async fn test_get_company_not_found() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -101,7 +101,7 @@ async fn test_get_company_not_found() {
 
 #[actix_web::test]
 async fn test_list_companies_paginated() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -142,7 +142,7 @@ async fn test_list_companies_paginated() {
 
 #[actix_web::test]
 async fn test_update_company_success() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -189,7 +189,7 @@ async fn test_update_company_success() {
 
 #[actix_web::test]
 async fn test_delete_and_restore_company() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -262,7 +262,7 @@ async fn test_delete_and_restore_company() {
 
 #[actix_web::test]
 async fn test_list_deleted_companies() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -311,7 +311,7 @@ async fn test_list_deleted_companies() {
 
 #[actix_web::test]
 async fn test_destroy_company_permanently() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
@@ -372,7 +372,7 @@ async fn test_destroy_company_permanently() {
 
 #[actix_web::test]
 async fn test_company_unauthorized() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
@@ -390,7 +390,7 @@ async fn test_company_unauthorized() {
 
 #[actix_web::test]
 async fn test_company_normal_user_forbidden() {
-    let state = create_test_app_state();
+    let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_user!(&app, 1);
 

@@ -21,6 +21,7 @@ impl BarcodeService {
     }
 
     /// Generate a barcode image and store the record
+    #[tracing::instrument(skip(self))]
     pub async fn generate_barcode(
         &self,
         tenant_id: i64,
@@ -52,6 +53,7 @@ impl BarcodeService {
     }
 
     /// Get barcode for an entity
+    #[tracing::instrument(skip(self))]
     pub async fn get_barcode(
         &self,
         tenant_id: i64,
@@ -64,11 +66,13 @@ impl BarcodeService {
     }
 
     /// Delete a barcode by id
+    #[tracing::instrument(skip(self))]
     pub async fn delete_barcode(&self, tenant_id: i64, id: i64) -> Result<(), ApiError> {
         self.repo.delete(id, tenant_id).await
     }
 
     /// List barcodes for a tenant with pagination
+    #[tracing::instrument(skip(self))]
     pub async fn list_barcodes(
         &self,
         tenant_id: i64,

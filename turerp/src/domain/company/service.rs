@@ -17,6 +17,7 @@ impl CompanyService {
         Self { repo }
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn create_company(&self, create: CreateCompany) -> Result<CompanyResponse, ApiError> {
         create
             .validate()
@@ -38,6 +39,7 @@ impl CompanyService {
         Ok(company.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_company(&self, id: i64, tenant_id: i64) -> Result<CompanyResponse, ApiError> {
         let company = self.repo.find_by_id(id, tenant_id).await?.ok_or_else(|| {
             tracing::warn!(tenant_id, company_id = id, "Company not found");
@@ -46,6 +48,7 @@ impl CompanyService {
         Ok(company.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_company_by_code(
         &self,
         code: &str,
@@ -62,6 +65,7 @@ impl CompanyService {
         Ok(company.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_all_companies(
         &self,
         tenant_id: i64,
@@ -70,6 +74,7 @@ impl CompanyService {
         Ok(companies.into_iter().map(|c| c.into()).collect())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn get_all_companies_paginated(
         &self,
         tenant_id: i64,
@@ -88,6 +93,7 @@ impl CompanyService {
         ))
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn update_company(
         &self,
         id: i64,
@@ -114,6 +120,7 @@ impl CompanyService {
         Ok(company.into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn delete_company(
         &self,
         id: i64,
@@ -125,16 +132,19 @@ impl CompanyService {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn restore_company(&self, id: i64, tenant_id: i64) -> Result<Company, ApiError> {
         let company = self.repo.restore(id, tenant_id).await?;
         tracing::info!(tenant_id, company_id = id, "Restored company");
         Ok(company)
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn list_deleted_companies(&self, tenant_id: i64) -> Result<Vec<Company>, ApiError> {
         self.repo.find_deleted(tenant_id).await
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn destroy_company(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         self.repo.destroy(id, tenant_id).await?;
         tracing::info!(tenant_id, company_id = id, "Destroyed company");

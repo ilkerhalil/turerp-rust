@@ -1278,7 +1278,6 @@ impl PayrollRepository for PostgresPayrollRepository {
         period_start: DateTime<Utc>,
         period_end: DateTime<Utc>,
     ) -> Result<Option<Payroll>, ApiError> {
-        // TODO: expand when schema migration is created
         let result: Option<PayrollRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, company_id, employee_id, period_start, period_end,
