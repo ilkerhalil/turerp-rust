@@ -78,15 +78,23 @@ impl PostgresInterCompanyRepository {
     }
 
     /// Fetch lines for a given invoice.
+    ///
+    /// Tenant isolation: `inter_company_invoice_lines` does not carry `tenant_id`,
+    /// so we JOIN the parent `inter_company_invoices` and filter on its `tenant_id`.
+    /// This prevents an invoice id belonging to another tenant from leaking its lines.
     async fn fetch_invoice_lines(
         &self,
         invoice_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<InterCompanyInvoiceLine>, ApiError> {
         let rows: Vec<InterCompanyInvoiceLineRow> = sqlx::query_as(concat!(
-            "SELECT invoice_id, product_id, description, quantity, unit_price, vat_rate ",
-            "FROM inter_company_invoice_lines WHERE invoice_id = $1"
+            "SELECT l.invoice_id, l.product_id, l.description, l.quantity, l.unit_price, l.vat_rate ",
+            "FROM inter_company_invoice_lines l ",
+            "JOIN inter_company_invoices i ON i.id = l.invoice_id ",
+            "WHERE l.invoice_id = $1 AND i.tenant_id = $2"
         ))
         .bind(invoice_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "InterCompanyInvoiceLine"))?;
@@ -181,7 +189,7 @@ impl InterCompanyRepository for PostgresInterCompanyRepository {
 
         match row {
             Some(r) => {
-                let lines = self.fetch_invoice_lines(r.id).await?;
+                let lines = self.fetch_invoice_lines(r.id, tenant_id).await?;
                 Ok(Some(InterCompanyInvoice {
                     id: r.id,
                     tenant_id: r.tenant_id,
@@ -209,7 +217,7 @@ impl InterCompanyRepository for PostgresInterCompanyRepository {
 
         let mut invoices = Vec::with_capacity(rows.len());
         for row in rows {
-            let lines = self.fetch_invoice_lines(row.id).await?;
+            let lines = self.fetch_invoice_lines(row.id, tenant_id).await?;
             invoices.push(InterCompanyInvoice {
                 id: row.id,
                 tenant_id: row.tenant_id,
