@@ -6,6 +6,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 /// Database role
@@ -102,7 +103,7 @@ pub struct InMemoryDbRouter {
     session_writes: parking_lot::RwLock<std::collections::HashSet<String>>,
     read_after_write: ReadAfterWriteMode,
     stats: parking_lot::RwLock<RouterStats>,
-    round_robin: parking_lot::RwLock<usize>,
+    round_robin: AtomicUsize,
 }
 
 impl InMemoryDbRouter {
@@ -120,7 +121,7 @@ impl InMemoryDbRouter {
                 active_replicas: 0,
                 total_replicas: 0,
             }),
-            round_robin: parking_lot::RwLock::new(0),
+            round_robin: AtomicUsize::new(0),
         }
     }
 
@@ -158,9 +159,12 @@ impl InMemoryDbRouter {
         if healthy.is_empty() {
             return None;
         }
-        let mut idx = self.round_robin.write();
-        *idx = (*idx + 1) % healthy.len();
-        Some(healthy[*idx].id.clone())
+        let idx = self
+            .round_robin
+            .fetch_add(1, Ordering::SeqCst)
+            .wrapping_add(1)
+            % healthy.len();
+        Some(healthy[idx].id.clone())
     }
 
     fn should_route_to_master(&self, session_id: Option<&str>) -> bool {

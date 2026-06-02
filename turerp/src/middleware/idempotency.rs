@@ -15,9 +15,8 @@ use actix_web::http::StatusCode;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
 use async_trait::async_trait;
 use futures::future::LocalBoxFuture;
-use parking_lot::RwLock;
+use moka::{future::Cache, Expiry};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
@@ -79,9 +78,28 @@ pub trait IdempotencyStore: Send + Sync {
     async fn remove(&self, key: &str);
 }
 
+/// Per-entry expiry driven by `CachedResponse.expires_at`.
+struct IdempotencyExpiry;
+
+impl Expiry<String, CachedResponse> for IdempotencyExpiry {
+    fn expire_after_create(
+        &self,
+        _key: &String,
+        value: &CachedResponse,
+        created_at: Instant,
+    ) -> Option<Duration> {
+        Some(
+            value
+                .expires_at
+                .checked_duration_since(created_at)
+                .unwrap_or(Duration::ZERO),
+        )
+    }
+}
+
 /// In-memory idempotency store (for development / single-instance deployment)
 pub struct InMemoryIdempotencyStore {
-    cache: RwLock<HashMap<String, CachedResponse>>,
+    cache: Cache<String, CachedResponse>,
 }
 
 impl Default for InMemoryIdempotencyStore {
@@ -93,40 +111,26 @@ impl Default for InMemoryIdempotencyStore {
 impl InMemoryIdempotencyStore {
     pub fn new() -> Self {
         Self {
-            cache: RwLock::new(HashMap::new()),
+            cache: Cache::builder()
+                .max_capacity(MAX_CACHE_SIZE as u64)
+                .expire_after(IdempotencyExpiry)
+                .build(),
         }
-    }
-
-    fn evict_expired(&self) {
-        let mut cache = self.cache.write();
-        cache.retain(|_, v| v.expires_at > Instant::now());
     }
 }
 
 #[async_trait]
 impl IdempotencyStore for InMemoryIdempotencyStore {
     async fn get(&self, key: &str) -> Option<CachedResponse> {
-        self.evict_expired();
-        self.cache.read().get(key).cloned()
+        self.cache.get(key).await
     }
 
     async fn set(&self, key: &str, response: CachedResponse) {
-        self.evict_expired();
-        let mut cache = self.cache.write();
-        if cache.len() >= MAX_CACHE_SIZE {
-            if let Some(oldest_key) = cache
-                .iter()
-                .min_by_key(|(_, v)| v.expires_at)
-                .map(|(k, _)| k.clone())
-            {
-                cache.remove(&oldest_key);
-            }
-        }
-        cache.insert(key.to_string(), response);
+        self.cache.insert(key.to_string(), response).await;
     }
 
     async fn remove(&self, key: &str) {
-        self.cache.write().remove(key);
+        self.cache.invalidate(key).await;
     }
 }
 
@@ -449,7 +453,7 @@ mod tests {
             };
             store.set(&format!("key-{i}"), cached).await;
         }
-        let cache = store.cache.read();
-        assert!(cache.len() <= MAX_CACHE_SIZE);
+        store.cache.run_pending_tasks().await;
+        assert!(store.cache.entry_count() <= MAX_CACHE_SIZE as u64);
     }
 }

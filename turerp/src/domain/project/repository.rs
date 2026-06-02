@@ -51,24 +51,45 @@ pub trait ProjectRepository: Send + Sync {
 
 #[async_trait]
 pub trait WbsItemRepository: Send + Sync {
-    async fn create(&self, item: CreateWbsItem) -> Result<WbsItem, ApiError>;
-    async fn find_by_project(&self, project_id: i64) -> Result<Vec<WbsItem>, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<WbsItem>, ApiError>;
+    /// Create a WBS item. Caller (service layer) must verify that
+    /// `project_id` belongs to `tenant_id` before calling.
+    async fn create(&self, tenant_id: i64, item: CreateWbsItem) -> Result<WbsItem, ApiError>;
+    async fn find_by_project(
+        &self,
+        project_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<WbsItem>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<WbsItem>, ApiError>;
     async fn update_progress(
         &self,
         id: i64,
+        tenant_id: i64,
         progress: Decimal,
         hours: Decimal,
     ) -> Result<WbsItem, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 #[async_trait]
 pub trait ProjectCostRepository: Send + Sync {
-    async fn create(&self, cost: CreateProjectCost) -> Result<ProjectCost, ApiError>;
-    async fn find_by_project(&self, project_id: i64) -> Result<Vec<ProjectCost>, ApiError>;
-    async fn find_total_by_project(&self, project_id: i64) -> Result<Decimal, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    /// Create a project cost. Caller (service layer) must verify that
+    /// `project_id` belongs to `tenant_id` before calling.
+    async fn create(
+        &self,
+        tenant_id: i64,
+        cost: CreateProjectCost,
+    ) -> Result<ProjectCost, ApiError>;
+    async fn find_by_project(
+        &self,
+        project_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<ProjectCost>, ApiError>;
+    async fn find_total_by_project(
+        &self,
+        project_id: i64,
+        tenant_id: i64,
+    ) -> Result<Decimal, ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 pub type BoxProjectRepository = Arc<dyn ProjectRepository>;
@@ -328,7 +349,7 @@ impl Default for InMemoryWbsItemRepository {
 
 #[async_trait]
 impl WbsItemRepository for InMemoryWbsItemRepository {
-    async fn create(&self, create: CreateWbsItem) -> Result<WbsItem, ApiError> {
+    async fn create(&self, _tenant_id: i64, create: CreateWbsItem) -> Result<WbsItem, ApiError> {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
@@ -349,7 +370,11 @@ impl WbsItemRepository for InMemoryWbsItemRepository {
         inner.items.insert(id, item.clone());
         Ok(item)
     }
-    async fn find_by_project(&self, project_id: i64) -> Result<Vec<WbsItem>, ApiError> {
+    async fn find_by_project(
+        &self,
+        project_id: i64,
+        _tenant_id: i64,
+    ) -> Result<Vec<WbsItem>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .items
@@ -358,13 +383,14 @@ impl WbsItemRepository for InMemoryWbsItemRepository {
             .cloned()
             .collect())
     }
-    async fn find_by_id(&self, id: i64) -> Result<Option<WbsItem>, ApiError> {
+    async fn find_by_id(&self, id: i64, _tenant_id: i64) -> Result<Option<WbsItem>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner.items.get(&id).cloned())
     }
     async fn update_progress(
         &self,
         id: i64,
+        _tenant_id: i64,
         progress: Decimal,
         hours: Decimal,
     ) -> Result<WbsItem, ApiError> {
@@ -377,7 +403,7 @@ impl WbsItemRepository for InMemoryWbsItemRepository {
         item.actual_hours = hours;
         Ok(item.clone())
     }
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, _tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         inner.items.remove(&id);
         Ok(())
@@ -411,7 +437,11 @@ impl Default for InMemoryProjectCostRepository {
 
 #[async_trait]
 impl ProjectCostRepository for InMemoryProjectCostRepository {
-    async fn create(&self, create: CreateProjectCost) -> Result<ProjectCost, ApiError> {
+    async fn create(
+        &self,
+        _tenant_id: i64,
+        create: CreateProjectCost,
+    ) -> Result<ProjectCost, ApiError> {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
@@ -431,7 +461,11 @@ impl ProjectCostRepository for InMemoryProjectCostRepository {
         inner.costs.insert(id, cost.clone());
         Ok(cost)
     }
-    async fn find_by_project(&self, project_id: i64) -> Result<Vec<ProjectCost>, ApiError> {
+    async fn find_by_project(
+        &self,
+        project_id: i64,
+        _tenant_id: i64,
+    ) -> Result<Vec<ProjectCost>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .costs
@@ -440,7 +474,11 @@ impl ProjectCostRepository for InMemoryProjectCostRepository {
             .cloned()
             .collect())
     }
-    async fn find_total_by_project(&self, project_id: i64) -> Result<Decimal, ApiError> {
+    async fn find_total_by_project(
+        &self,
+        project_id: i64,
+        _tenant_id: i64,
+    ) -> Result<Decimal, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .costs
@@ -449,7 +487,7 @@ impl ProjectCostRepository for InMemoryProjectCostRepository {
             .map(|x| x.amount)
             .sum())
     }
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, _tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         inner.costs.remove(&id);
         Ok(())
