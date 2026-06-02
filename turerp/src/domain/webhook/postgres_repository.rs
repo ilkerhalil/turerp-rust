@@ -440,53 +440,32 @@ impl WebhookDeliveryRepository for PostgresWebhookDeliveryRepository {
             return Ok(Vec::new());
         }
 
-        let mut query = String::from(
-            r#"
-            INSERT INTO webhook_deliveries
-                (webhook_id, tenant_id, event_type, payload, status, attempt_count, scheduled_at, created_at)
-            VALUES
-            "#,
+        // Build the batch INSERT with QueryBuilder::push_values. This keeps all
+        // row placeholders and bind positions under sqlx's control so we never
+        // hand-roll `$N` numbering or string-interpolate user data.
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO webhook_deliveries \
+             (webhook_id, tenant_id, event_type, payload, status, attempt_count, scheduled_at, created_at) ",
         );
 
-        for (i, _) in deliveries.iter().enumerate() {
-            let offset = i * 8;
-            if i > 0 {
-                query.push_str(", ");
-            }
-            query.push_str(&format!(
-                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
-                offset + 1,
-                offset + 2,
-                offset + 3,
-                offset + 4,
-                offset + 5,
-                offset + 6,
-                offset + 7,
-                offset + 8,
-            ));
-        }
+        qb.push_values(deliveries, |mut b, d| {
+            b.push_bind(d.webhook_id)
+                .push_bind(d.tenant_id)
+                .push_bind(&d.event_type)
+                .push_bind(&d.payload)
+                .push_bind(d.status.to_string())
+                .push_bind(d.attempt_count)
+                .push_bind(d.scheduled_at)
+                .push_bind(d.created_at);
+        });
 
-        query.push_str(
-            r#"
-            RETURNING id, webhook_id, tenant_id, event_type, payload, status, http_status,
-                response_body, error_message, attempt_count, scheduled_at, created_at, delivered_at
-            "#,
+        qb.push(
+            " RETURNING id, webhook_id, tenant_id, event_type, payload, status, http_status, \
+             response_body, error_message, attempt_count, scheduled_at, created_at, delivered_at",
         );
 
-        let mut q = sqlx::query_as::<_, WebhookDeliveryRow>(&query);
-        for d in deliveries {
-            q = q
-                .bind(d.webhook_id)
-                .bind(d.tenant_id)
-                .bind(&d.event_type)
-                .bind(&d.payload)
-                .bind(d.status.to_string())
-                .bind(d.attempt_count)
-                .bind(d.scheduled_at)
-                .bind(d.created_at);
-        }
-
-        let rows = q
+        let rows: Vec<WebhookDeliveryRow> = qb
+            .build_query_as()
             .fetch_all(&*self.pool)
             .await
             .map_err(|e| map_sqlx_error(e, "WebhookDelivery"))?;

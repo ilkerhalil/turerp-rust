@@ -114,53 +114,35 @@ impl AuditLogRepository for PostgresAuditLogRepository {
         let per_page = query.per_page.max(1);
         let offset = (page.saturating_sub(1)) * per_page;
 
-        // Build dynamic WHERE clause
-        let mut sql = String::from(
-            "SELECT id, tenant_id, user_id, username, action, path, status_code, request_id, ip_address, user_agent, created_at, COUNT(*) OVER() as total_count FROM audit_logs WHERE tenant_id = $1",
+        // Build dynamic WHERE clause with QueryBuilder so all filter values are
+        // bound parameters (no string interpolation of user input).
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "SELECT id, tenant_id, user_id, username, action, path, status_code, request_id, \
+             ip_address, user_agent, created_at, COUNT(*) OVER() AS total_count \
+             FROM audit_logs WHERE tenant_id = ",
         );
-        let mut param_idx = 2u32;
-
-        if query.user_id.is_some() {
-            sql.push_str(&format!(" AND user_id = ${}", param_idx));
-            param_idx += 1;
-        }
-        if query.path.is_some() {
-            sql.push_str(&format!(" AND path ILIKE ${}", param_idx));
-            param_idx += 1;
-        }
-        if query.from_date.is_some() {
-            sql.push_str(&format!(" AND created_at >= ${}", param_idx));
-            param_idx += 1;
-        }
-        if query.to_date.is_some() {
-            sql.push_str(&format!(" AND created_at <= ${}", param_idx));
-            param_idx += 1;
-        }
-
-        sql.push_str(&format!(
-            " ORDER BY created_at DESC LIMIT ${} OFFSET ${}",
-            param_idx,
-            param_idx + 1
-        ));
-
-        let mut q = sqlx::query_as::<_, AuditLogRowWithTotal>(&sql).bind(tenant_id);
+        qb.push_bind(tenant_id);
 
         if let Some(user_id) = query.user_id {
-            q = q.bind(user_id);
+            qb.push(" AND user_id = ").push_bind(user_id);
         }
         if let Some(ref path) = query.path {
-            q = q.bind(format!("%{}%", path));
+            qb.push(" AND path ILIKE ").push_bind(format!("%{}%", path));
         }
         if let Some(from_date) = query.from_date {
-            q = q.bind(from_date);
+            qb.push(" AND created_at >= ").push_bind(from_date);
         }
         if let Some(to_date) = query.to_date {
-            q = q.bind(to_date);
+            qb.push(" AND created_at <= ").push_bind(to_date);
         }
 
-        q = q.bind(per_page as i64).bind(offset as i64);
+        qb.push(" ORDER BY created_at DESC LIMIT ")
+            .push_bind(per_page as i64)
+            .push(" OFFSET ")
+            .push_bind(offset as i64);
 
-        let rows = q
+        let rows: Vec<AuditLogRowWithTotal> = qb
+            .build_query_as()
             .fetch_all(&*self.pool)
             .await
             .map_err(|e| map_sqlx_error(e, "AuditLog"))?;
@@ -191,48 +173,28 @@ impl AuditLogRepository for PostgresAuditLogRepository {
             return Ok(());
         }
 
-        // Build a batch INSERT with parameterized values
-        let mut query_builder = String::from(
-            "INSERT INTO audit_logs (tenant_id, user_id, username, action, path, status_code, request_id, ip_address, user_agent, created_at) VALUES ",
+        // Build a batch INSERT using QueryBuilder::push_values so the row
+        // placeholders and per-row parameter positions are generated safely.
+        let mut qb: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "INSERT INTO audit_logs \
+             (tenant_id, user_id, username, action, path, status_code, request_id, ip_address, user_agent, created_at) ",
         );
 
-        let chunks = logs.len();
-        for i in 0..chunks {
-            if i > 0 {
-                query_builder.push_str(", ");
-            }
-            let base = i * 10;
-            query_builder.push_str(&format!(
-                "(${},{},{},{},{},{},{},{},{},{})",
-                base + 1,
-                base + 2,
-                base + 3,
-                base + 4,
-                base + 5,
-                base + 6,
-                base + 7,
-                base + 8,
-                base + 9,
-                base + 10
-            ));
-        }
+        qb.push_values(logs, |mut b, log| {
+            b.push_bind(log.tenant_id)
+                .push_bind(log.user_id)
+                .push_bind(log.username)
+                .push_bind(log.action)
+                .push_bind(log.path)
+                .push_bind(log.status_code)
+                .push_bind(log.request_id)
+                .push_bind(log.ip_address)
+                .push_bind(log.user_agent)
+                .push_bind(log.created_at);
+        });
 
-        let mut q = sqlx::query(&query_builder);
-        for log in logs {
-            q = q
-                .bind(log.tenant_id)
-                .bind(log.user_id)
-                .bind(log.username)
-                .bind(log.action)
-                .bind(log.path)
-                .bind(log.status_code)
-                .bind(log.request_id)
-                .bind(log.ip_address)
-                .bind(log.user_agent)
-                .bind(log.created_at);
-        }
-
-        q.execute(&*self.pool)
+        qb.build()
+            .execute(&*self.pool)
             .await
             .map_err(|e| ApiError::Database(format!("Failed to batch insert audit logs: {}", e)))?;
 
