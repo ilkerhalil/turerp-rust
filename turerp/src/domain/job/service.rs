@@ -187,7 +187,23 @@ impl JobScheduler for JobService {
     }
 
     async fn get_job(&self, id: i64) -> Result<Option<CommonJob>, String> {
-        let j = self.repo.find_by_id(id).await.map_err(Self::map_err)?;
+        // Worker / system context: no tenant filter at the scheduler layer.
+        // The caller (worker) supplies the tenant_id via tenant-scoped service
+        // methods when needed.
+        let tenant_id = match self
+            .repo
+            .find_tenant_by_id(id)
+            .await
+            .map_err(Self::map_err)?
+        {
+            Some(t) => t,
+            None => return Ok(None),
+        };
+        let j = self
+            .repo
+            .find_by_id(id, tenant_id)
+            .await
+            .map_err(Self::map_err)?;
         Ok(j.map(Into::into))
     }
 
@@ -197,22 +213,54 @@ impl JobScheduler for JobService {
     }
 
     async fn mark_running(&self, id: i64) -> Result<(), String> {
-        self.repo.mark_running(id).await.map_err(Self::map_err)
+        // System context (worker): look up the job's tenant before mutating.
+        let tenant_id = self
+            .repo
+            .find_tenant_by_id(id)
+            .await
+            .map_err(Self::map_err)?
+            .ok_or_else(|| format!("Job {} not found", id))?;
+        self.repo
+            .mark_running(id, tenant_id)
+            .await
+            .map_err(Self::map_err)
     }
 
     async fn mark_completed(&self, id: i64) -> Result<(), String> {
-        self.repo.mark_completed(id).await.map_err(Self::map_err)
+        let tenant_id = self
+            .repo
+            .find_tenant_by_id(id)
+            .await
+            .map_err(Self::map_err)?
+            .ok_or_else(|| format!("Job {} not found", id))?;
+        self.repo
+            .mark_completed(id, tenant_id)
+            .await
+            .map_err(Self::map_err)
     }
 
     async fn mark_failed(&self, id: i64, error: &str) -> Result<(), String> {
+        let tenant_id = self
+            .repo
+            .find_tenant_by_id(id)
+            .await
+            .map_err(Self::map_err)?
+            .ok_or_else(|| format!("Job {} not found", id))?;
         self.repo
-            .mark_failed(id, error)
+            .mark_failed(id, tenant_id, error)
             .await
             .map_err(Self::map_err)
     }
 
     async fn cancel(&self, id: i64) -> Result<(), String> {
-        self.repo.cancel(id).await.map_err(Self::map_err)
+        // System context: look up the job's tenant first.
+        let tenant_id = self
+            .repo
+            .find_tenant_by_id(id)
+            .await
+            .map_err(Self::map_err)?
+            .ok_or_else(|| format!("Job {} not found", id))?;
+        self.repo.cancel(id, tenant_id).await.map_err(Self::map_err)
     }
 
     async fn list_by_status(
@@ -237,7 +285,13 @@ impl JobScheduler for JobService {
     }
 
     async fn retry(&self, id: i64) -> Result<(), String> {
-        self.repo.retry(id).await.map_err(Self::map_err)
+        let tenant_id = self
+            .repo
+            .find_tenant_by_id(id)
+            .await
+            .map_err(Self::map_err)?
+            .ok_or_else(|| format!("Job {} not found", id))?;
+        self.repo.retry(id, tenant_id).await.map_err(Self::map_err)
     }
 
     async fn cleanup(&self, older_than: Duration) -> Result<u64, String> {
@@ -497,16 +551,66 @@ impl From<CommonJob> for Job {
 }
 
 impl JobService {
-    /// Soft delete a job
+    /// Find a job scoped to a tenant.
     #[tracing::instrument(skip(self))]
-    pub async fn soft_delete_job(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
-        self.repo.soft_delete(id, deleted_by).await
+    pub async fn get_job_for_tenant(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<Job>, ApiError> {
+        self.repo.find_by_id(id, tenant_id).await
     }
 
-    /// Restore a soft-deleted job
+    /// Mark a job as running (tenant-scoped).
     #[tracing::instrument(skip(self))]
-    pub async fn restore_job(&self, id: i64) -> Result<(), ApiError> {
-        self.repo.restore(id).await
+    pub async fn mark_running_for_tenant(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.mark_running(id, tenant_id).await
+    }
+
+    /// Mark a job as completed (tenant-scoped).
+    #[tracing::instrument(skip(self))]
+    pub async fn mark_completed_for_tenant(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.mark_completed(id, tenant_id).await
+    }
+
+    /// Mark a job as failed (tenant-scoped).
+    #[tracing::instrument(skip(self))]
+    pub async fn mark_failed_for_tenant(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        error: &str,
+    ) -> Result<(), ApiError> {
+        self.repo.mark_failed(id, tenant_id, error).await
+    }
+
+    /// Cancel a job (tenant-scoped).
+    #[tracing::instrument(skip(self))]
+    pub async fn cancel_for_tenant(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.cancel(id, tenant_id).await
+    }
+
+    /// Retry a job (tenant-scoped).
+    #[tracing::instrument(skip(self))]
+    pub async fn retry_for_tenant(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.retry(id, tenant_id).await
+    }
+
+    /// Soft delete a job (tenant-scoped).
+    #[tracing::instrument(skip(self))]
+    pub async fn soft_delete_job(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.repo.soft_delete(id, tenant_id, deleted_by).await
+    }
+
+    /// Restore a soft-deleted job (tenant-scoped).
+    #[tracing::instrument(skip(self))]
+    pub async fn restore_job(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.restore(id, tenant_id).await
     }
 
     /// List deleted jobs for a tenant
@@ -515,10 +619,10 @@ impl JobService {
         self.repo.find_deleted(tenant_id).await
     }
 
-    /// Permanently destroy a soft-deleted job
+    /// Permanently destroy a soft-deleted job (tenant-scoped).
     #[tracing::instrument(skip(self))]
-    pub async fn destroy_job(&self, id: i64) -> Result<(), ApiError> {
-        self.repo.destroy(id).await
+    pub async fn destroy_job(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.destroy(id, tenant_id).await
     }
 
     /// Soft delete a job schedule

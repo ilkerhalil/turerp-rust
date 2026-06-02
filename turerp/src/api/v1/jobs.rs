@@ -188,7 +188,7 @@ pub async fn next_pending_job(
     }
 }
 
-/// Get a job by ID
+/// Get a job by ID (tenant-scoped).
 #[utoipa::path(
     get,
     path = "/api/v1/jobs/{id}",
@@ -214,7 +214,7 @@ pub async fn get_job(
     }
 }
 
-/// Mark a job as running
+/// Mark a job as running.
 #[utoipa::path(
     post,
     path = "/api/v1/jobs/{id}/start",
@@ -240,7 +240,7 @@ pub async fn start_job(
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Job marked as running"})))
 }
 
-/// Mark a job as completed
+/// Mark a job as completed.
 #[utoipa::path(
     post,
     path = "/api/v1/jobs/{id}/complete",
@@ -266,7 +266,7 @@ pub async fn complete_job(
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Job completed"})))
 }
 
-/// Mark a job as failed
+/// Mark a job as failed.
 #[utoipa::path(
     post,
     path = "/api/v1/jobs/{id}/fail",
@@ -294,7 +294,7 @@ pub async fn fail_job(
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Job marked as failed"})))
 }
 
-/// Cancel a pending/scheduled job
+/// Cancel a pending/scheduled job.
 #[utoipa::path(
     post,
     path = "/api/v1/jobs/{id}/cancel",
@@ -317,7 +317,7 @@ pub async fn cancel_job(
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Job cancelled"})))
 }
 
-/// Retry a failed job
+/// Retry a failed job.
 #[utoipa::path(
     post,
     path = "/api/v1/jobs/{id}/retry",

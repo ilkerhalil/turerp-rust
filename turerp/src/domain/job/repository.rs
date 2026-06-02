@@ -16,48 +16,56 @@ use crate::error::ApiError;
 /// Job repository trait for persistent storage
 #[async_trait::async_trait]
 pub trait JobRepository: Send + Sync {
-    /// Create a new job
+    /// Create a new job. `CreateJob` carries the `tenant_id` directly.
     async fn create(&self, job: CreateJob) -> Result<Job, ApiError>;
 
-    /// Find a job by ID
-    async fn find_by_id(&self, id: i64) -> Result<Option<Job>, ApiError>;
+    /// Find a job by ID scoped to a tenant.
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Job>, ApiError>;
 
-    /// Find the next pending job (highest priority, oldest first)
+    /// Internal lookup: returns the tenant_id of a job without filtering.
+    /// Used by the worker (which has no tenant context) to resolve the
+    /// correct tenant before mutating the job.
+    async fn find_tenant_by_id(&self, id: i64) -> Result<Option<i64>, ApiError>;
+
+    /// Find the next pending job (highest priority, oldest first).
+    /// Used by the background worker — no tenant filter (jobs are a shared
+    /// execution queue), but each job carries its own `tenant_id`.
     async fn find_next_pending(&self) -> Result<Option<Job>, ApiError>;
 
-    /// Mark a job as running and increment attempts
-    async fn mark_running(&self, id: i64) -> Result<(), ApiError>;
+    /// Mark a job as running and increment attempts. `tenant_id` ensures
+    /// the worker can only operate on jobs it legitimately dequeued.
+    async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
-    /// Mark a job as completed
-    async fn mark_completed(&self, id: i64) -> Result<(), ApiError>;
+    /// Mark a job as completed (tenant-scoped).
+    async fn mark_completed(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
-    /// Mark a job as failed (with retry logic)
-    async fn mark_failed(&self, id: i64, error: &str) -> Result<(), ApiError>;
+    /// Mark a job as failed (with retry logic, tenant-scoped).
+    async fn mark_failed(&self, id: i64, tenant_id: i64, error: &str) -> Result<(), ApiError>;
 
-    /// Cancel a pending or scheduled job
-    async fn cancel(&self, id: i64) -> Result<(), ApiError>;
+    /// Cancel a pending or scheduled job (tenant-scoped).
+    async fn cancel(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// List jobs by status for a tenant
     async fn list_by_status(&self, tenant_id: i64, status: JobStatus)
         -> Result<Vec<Job>, ApiError>;
 
-    /// Retry a failed job
-    async fn retry(&self, id: i64) -> Result<(), ApiError>;
+    /// Retry a failed job (tenant-scoped).
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Clean up old completed/failed/cancelled jobs
     async fn cleanup(&self, older_than: Duration) -> Result<u64, ApiError>;
 
-    /// Soft delete a job
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Soft delete a job (tenant-scoped).
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
 
-    /// Restore a soft-deleted job
-    async fn restore(&self, id: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted job (tenant-scoped).
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// List deleted jobs for a tenant
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Job>, ApiError>;
 
-    /// Permanently destroy a soft-deleted job
-    async fn destroy(&self, id: i64) -> Result<(), ApiError>;
+    /// Permanently destroy a soft-deleted job (tenant-scoped).
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Soft delete a job schedule
     async fn soft_delete_schedule(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
@@ -186,13 +194,22 @@ impl JobRepository for InMemoryJobRepository {
         Ok(job)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Job>, ApiError> {
+    async fn find_by_id(&self, id: i64, _tenant_id: i64) -> Result<Option<Job>, ApiError> {
         Ok(self
             .jobs
             .read()
             .iter()
             .find(|j| j.id == id && !j.is_deleted())
             .cloned())
+    }
+
+    async fn find_tenant_by_id(&self, id: i64) -> Result<Option<i64>, ApiError> {
+        Ok(self
+            .jobs
+            .read()
+            .iter()
+            .find(|j| j.id == id && !j.is_deleted())
+            .map(|j| j.tenant_id))
     }
 
     async fn find_next_pending(&self) -> Result<Option<Job>, ApiError> {
@@ -212,7 +229,7 @@ impl JobRepository for InMemoryJobRepository {
             .cloned())
     }
 
-    async fn mark_running(&self, id: i64) -> Result<(), ApiError> {
+    async fn mark_running(&self, id: i64, _tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -225,7 +242,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn mark_completed(&self, id: i64) -> Result<(), ApiError> {
+    async fn mark_completed(&self, id: i64, _tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -237,7 +254,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn mark_failed(&self, id: i64, error: &str) -> Result<(), ApiError> {
+    async fn mark_failed(&self, id: i64, _tenant_id: i64, error: &str) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -256,7 +273,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn cancel(&self, id: i64) -> Result<(), ApiError> {
+    async fn cancel(&self, id: i64, _tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -287,7 +304,7 @@ impl JobRepository for InMemoryJobRepository {
             .collect())
     }
 
-    async fn retry(&self, id: i64) -> Result<(), ApiError> {
+    async fn retry(&self, id: i64, _tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -324,7 +341,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok((before - jobs.len()) as u64)
     }
 
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, _tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -337,7 +354,7 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn restore(&self, id: i64) -> Result<(), ApiError> {
+    async fn restore(&self, id: i64, _tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
@@ -360,7 +377,7 @@ impl JobRepository for InMemoryJobRepository {
             .collect())
     }
 
-    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, _tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let len_before = jobs.len();
         jobs.retain(|j| !(j.id == id && j.is_deleted()));
@@ -561,7 +578,7 @@ mod tests {
             .unwrap();
         assert_eq!(job.status, JobStatus::Pending);
 
-        let found = repo.find_by_id(job.id).await.unwrap();
+        let found = repo.find_by_id(job.id, 1).await.unwrap();
         assert!(found.is_some());
     }
 
@@ -602,10 +619,10 @@ mod tests {
             .await
             .unwrap();
 
-        repo.mark_running(job.id).await.unwrap();
-        repo.mark_failed(job.id, "db error").await.unwrap();
+        repo.mark_running(job.id, 1).await.unwrap();
+        repo.mark_failed(job.id, 1, "db error").await.unwrap();
 
-        let after = repo.find_by_id(job.id).await.unwrap().unwrap();
+        let after = repo.find_by_id(job.id, 1).await.unwrap().unwrap();
         assert_eq!(after.status, JobStatus::Pending);
         assert_eq!(after.attempts, 1);
         assert!(after.scheduled_at.is_some());
@@ -628,10 +645,10 @@ mod tests {
             .await
             .unwrap();
 
-        repo.mark_running(job.id).await.unwrap();
-        repo.mark_failed(job.id, "fatal").await.unwrap();
+        repo.mark_running(job.id, 1).await.unwrap();
+        repo.mark_failed(job.id, 1, "fatal").await.unwrap();
 
-        let after = repo.find_by_id(job.id).await.unwrap().unwrap();
+        let after = repo.find_by_id(job.id, 1).await.unwrap().unwrap();
         assert_eq!(after.status, JobStatus::Failed);
     }
 
@@ -654,7 +671,7 @@ mod tests {
             .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
             .await
             .unwrap();
-        repo.mark_running(job.id).await.unwrap();
+        repo.mark_running(job.id, 1).await.unwrap();
 
         // Artificially backdate started_at
         {
@@ -665,7 +682,7 @@ mod tests {
         let reset = repo.reset_stalled(Duration::from_secs(60)).await.unwrap();
         assert_eq!(reset, 1);
 
-        let after = repo.find_by_id(job.id).await.unwrap().unwrap();
+        let after = repo.find_by_id(job.id, 1).await.unwrap().unwrap();
         assert_eq!(after.status, JobStatus::Pending);
         assert_eq!(after.attempts, 2);
     }
