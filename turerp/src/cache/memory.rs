@@ -3,11 +3,13 @@
 use crate::cache::CacheService;
 use crate::error::ApiError;
 use async_trait::async_trait;
+use moka::future::Cache;
 use parking_lot::RwLock;
-use std::collections::HashMap;
+use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
 /// A cached entry with optional TTL
+#[derive(Clone, Debug)]
 struct CacheEntry {
     value: String,
     expires_at: Option<Instant>,
@@ -24,54 +26,22 @@ impl CacheEntry {
 
 /// In-memory cache implementing the crate cache trait
 pub struct InMemoryCacheService {
-    cache: RwLock<HashMap<String, CacheEntry>>,
-    max_entries: usize,
+    cache: Cache<String, CacheEntry>,
+    keys: RwLock<HashSet<String>>,
 }
 
 impl InMemoryCacheService {
     pub fn new() -> Self {
         Self {
-            cache: RwLock::new(HashMap::new()),
-            max_entries: 10_000,
+            cache: Cache::builder().max_capacity(10_000).build(),
+            keys: RwLock::new(HashSet::new()),
         }
     }
 
     pub fn with_max_entries(max_entries: usize) -> Self {
         Self {
-            cache: RwLock::new(HashMap::new()),
-            max_entries,
-        }
-    }
-
-    fn evict_expired(&self) {
-        let mut cache = self.cache.write();
-        cache.retain(|_, v| !v.is_expired());
-    }
-
-    fn evict_if_needed(&self) {
-        let mut cache = self.cache.write();
-        if cache.len() >= self.max_entries {
-            // Try to evict an expired entry first
-            if let Some(evict_key) = cache
-                .iter()
-                .filter(|(_, v)| v.is_expired())
-                .map(|(k, _)| k.clone())
-                .next()
-            {
-                cache.remove(&evict_key);
-                return;
-            }
-            // Otherwise evict the entry closest to expiry
-            if let Some(evict_key) = cache
-                .iter()
-                .min_by_key(|(_, v)| {
-                    v.expires_at
-                        .unwrap_or(Instant::now() + Duration::from_secs(86400))
-                })
-                .map(|(k, _)| k.clone())
-            {
-                cache.remove(&evict_key);
-            }
+            cache: Cache::builder().max_capacity(max_entries as u64).build(),
+            keys: RwLock::new(HashSet::new()),
         }
     }
 }
@@ -125,11 +95,14 @@ fn glob_matches(pattern: &str, text: &str) -> bool {
 #[async_trait]
 impl CacheService for InMemoryCacheService {
     async fn get_raw(&self, key: &str) -> Result<Option<String>, ApiError> {
-        self.evict_expired();
-        let cache = self.cache.read();
-        match cache.get(key) {
-            Some(entry) if !entry.is_expired() => Ok(Some(entry.value.clone())),
-            _ => Ok(None),
+        match self.cache.get(key).await {
+            Some(entry) if !entry.is_expired() => Ok(Some(entry.value)),
+            Some(_) => {
+                self.cache.invalidate(key).await;
+                self.keys.write().remove(key);
+                Ok(None)
+            }
+            None => Ok(None),
         }
     }
 
@@ -139,36 +112,40 @@ impl CacheService for InMemoryCacheService {
         value: &str,
         ttl_seconds: Option<u64>,
     ) -> Result<(), ApiError> {
-        self.evict_expired();
-        self.evict_if_needed();
-        let mut cache = self.cache.write();
         let expires_at = ttl_seconds.map(|ttl| Instant::now() + Duration::from_secs(ttl));
-        cache.insert(
-            key.to_string(),
-            CacheEntry {
-                value: value.to_string(),
-                expires_at,
-            },
-        );
+        let entry = CacheEntry {
+            value: value.to_string(),
+            expires_at,
+        };
+        self.cache.insert(key.to_string(), entry).await;
+        self.keys.write().insert(key.to_string());
         Ok(())
     }
 
     async fn delete(&self, key: &str) -> Result<(), ApiError> {
-        self.cache.write().remove(key);
+        self.cache.invalidate(key).await;
+        self.keys.write().remove(key);
         Ok(())
     }
 
     async fn delete_pattern(&self, pattern: &str) -> Result<u64, ApiError> {
-        self.evict_expired();
-        let mut cache = self.cache.write();
-        let keys_to_remove: Vec<String> = cache
-            .keys()
-            .filter(|k| glob_matches(pattern, k))
-            .cloned()
-            .collect();
+        let keys_to_remove: Vec<String> = {
+            let keys = self.keys.read();
+            keys.iter()
+                .filter(|k| glob_matches(pattern, k))
+                .cloned()
+                .collect()
+        };
+
         let count = keys_to_remove.len() as u64;
-        for key in keys_to_remove {
-            cache.remove(&key);
+        for key in &keys_to_remove {
+            self.cache.invalidate(key).await;
+        }
+        {
+            let mut keys = self.keys.write();
+            for key in keys_to_remove {
+                keys.remove(&key);
+            }
         }
         Ok(count)
     }

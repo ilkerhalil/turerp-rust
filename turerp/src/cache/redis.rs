@@ -75,11 +75,26 @@ impl CacheService for RedisCacheService {
 
     async fn delete_pattern(&self, pattern: &str) -> Result<u64, ApiError> {
         let mut conn = (*self.client).clone();
-        let keys: Vec<String> = redis::cmd("KEYS")
-            .arg(pattern)
-            .query_async(&mut conn)
-            .await
-            .map_err(|e| ApiError::Internal(format!("Redis KEYS error: {}", e)))?;
+        let mut cursor: u64 = 0;
+        let mut keys = Vec::new();
+
+        loop {
+            let (next_cursor, batch): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg(pattern)
+                .arg("COUNT")
+                .arg(100)
+                .query_async(&mut conn)
+                .await
+                .map_err(|e| ApiError::Internal(format!("Redis SCAN error: {}", e)))?;
+
+            keys.extend(batch);
+            cursor = next_cursor;
+            if cursor == 0 {
+                break;
+            }
+        }
 
         if keys.is_empty() {
             return Ok(0);

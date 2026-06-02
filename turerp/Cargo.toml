@@ -69,6 +69,9 @@ vaultrs = "0.7"
 # Redis caching
 redis = { version = "0.27", features = ["tokio-comp"] }
 
+# In-memory caching (TTL + eviction)
+moka = { version = "0.12", features = ["future"] }
+
 # Rate limiting
 governor = "0.8"
 nonzero_ext = "0.3"

@@ -47,6 +47,9 @@ pub struct DatabaseConfig {
     pub url: String,
     pub max_connections: u32,
     pub min_connections: u32,
+    pub acquire_timeout_secs: u64,
+    pub idle_timeout_secs: u64,
+    pub max_lifetime_secs: u64,
 }
 
 impl DatabaseConfig {
@@ -64,6 +67,18 @@ impl DatabaseConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(10),
+            acquire_timeout_secs: std::env::var("TURERP_DB_ACQUIRE_TIMEOUT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(30),
+            idle_timeout_secs: std::env::var("TURERP_DB_IDLE_TIMEOUT")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(600),
+            max_lifetime_secs: std::env::var("TURERP_DB_MAX_LIFETIME")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1800),
         })
     }
 }
@@ -438,6 +453,9 @@ impl Default for Config {
                 url: String::new(),
                 max_connections: num_cpus::get() as u32 * 4,
                 min_connections: 10,
+                acquire_timeout_secs: 30,
+                idle_timeout_secs: 600,
+                max_lifetime_secs: 1800,
             },
             redis: RedisConfig::default(),
             jwt: JwtConfig {
@@ -755,6 +773,9 @@ mod tests {
                 url: "postgres://postgres:postgres@localhost:5432/turerp".to_string(),
                 max_connections: 10,
                 min_connections: 5,
+                acquire_timeout_secs: 30,
+                idle_timeout_secs: 600,
+                max_lifetime_secs: 1800,
             },
             ..Default::default()
         };
@@ -937,6 +958,9 @@ mod tests {
                 url: "postgres://user:pass@host/db".to_string(),
                 max_connections: 10,
                 min_connections: 5,
+                acquire_timeout_secs: 30,
+                idle_timeout_secs: 600,
+                max_lifetime_secs: 1800,
             },
             ..Default::default()
         };
@@ -951,6 +975,9 @@ mod tests {
                 url: "postgres://user:pass@host/db".to_string(),
                 max_connections: 10,
                 min_connections: 5,
+                acquire_timeout_secs: 30,
+                idle_timeout_secs: 600,
+                max_lifetime_secs: 1800,
             },
             ..Default::default()
         };
@@ -966,6 +993,9 @@ mod tests {
                 url: "postgres://user:pass@host/db?sslmode=require".to_string(),
                 max_connections: 10,
                 min_connections: 5,
+                acquire_timeout_secs: 30,
+                idle_timeout_secs: 600,
+                max_lifetime_secs: 1800,
             },
             ..Default::default()
         };
@@ -999,6 +1029,9 @@ mod tests {
                 url: "not-a-valid-url".to_string(),
                 max_connections: 10,
                 min_connections: 5,
+                acquire_timeout_secs: 30,
+                idle_timeout_secs: 600,
+                max_lifetime_secs: 1800,
             },
             ..Default::default()
         };
