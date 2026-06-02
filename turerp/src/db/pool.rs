@@ -90,10 +90,6 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             sql: include_str!("../../migrations/015_currency.sql"),
         },
         Migration {
-            version: "015_mfa",
-            sql: include_str!("../../migrations/015_mfa.sql"),
-        },
-        Migration {
             version: "016_full_text_search",
             sql: include_str!("../../migrations/016_full_text_search.sql"),
         },
@@ -118,20 +114,12 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             sql: include_str!("../../migrations/021_files_table.sql"),
         },
         Migration {
-            version: "021_outbox",
-            sql: include_str!("../../migrations/021_outbox.sql"),
-        },
-        Migration {
             version: "022_cdc_triggers",
             sql: include_str!("../../migrations/022_cdc_triggers.sql"),
         },
         Migration {
             version: "023_companies",
             sql: include_str!("../../migrations/023_companies.sql"),
-        },
-        Migration {
-            version: "023_cost_centers",
-            sql: include_str!("../../migrations/023_cost_centers.sql"),
         },
         Migration {
             version: "024_workflows",
@@ -172,6 +160,22 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
         Migration {
             version: "033_stock_movements_tenant_id",
             sql: include_str!("../../migrations/033_stock_movements_tenant_id.sql"),
+        },
+        Migration {
+            version: "034_inter_company_and_revoked_tokens",
+            sql: include_str!("../../migrations/034_inter_company_and_revoked_tokens.sql"),
+        },
+        Migration {
+            version: "035_mfa",
+            sql: include_str!("../../migrations/035_mfa.sql"),
+        },
+        Migration {
+            version: "036_outbox",
+            sql: include_str!("../../migrations/036_outbox.sql"),
+        },
+        Migration {
+            version: "037_cost_centers",
+            sql: include_str!("../../migrations/037_cost_centers.sql"),
         },
     ];
 

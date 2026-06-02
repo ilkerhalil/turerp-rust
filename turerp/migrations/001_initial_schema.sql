@@ -69,17 +69,26 @@ ON CONFLICT (id) DO NOTHING;
 -- For production, use environment variables to create initial admin:
 --   INITIAL_ADMIN_USERNAME, INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_PASSWORD
 -- Or run: DELETE FROM users WHERE username = 'admin' before deployment
-INSERT INTO users (username, email, full_name, password, tenant_id, role, is_active)
-VALUES (
-    'admin',
-    'admin@turerp.local',
-    'System Administrator',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIBdtk4dKG',  -- password: Admin123!
-    1,
-    'admin',
-    true
-)
-ON CONFLICT DO NOTHING;
+-- Conditionalized with a DO block so re-runs on partially-applied DBs are safe
+-- and to avoid the "ambiguous ON CONFLICT target" error (the users table has
+-- two unique indexes: (username, tenant_id) and (email, tenant_id)).
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM users WHERE username = 'admin' AND tenant_id = 1
+    ) THEN
+        INSERT INTO users (username, email, full_name, password, tenant_id, role, is_active)
+        VALUES (
+            'admin',
+            'admin@turerp.local',
+            'System Administrator',
+            '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIBdtk4dKG',  -- password: Admin123!
+            1,
+            'admin',
+            true
+        );
+    END IF;
+END $$;
 
 -- Cari (Customer/Vendor) table
 CREATE TABLE IF NOT EXISTS cari (
