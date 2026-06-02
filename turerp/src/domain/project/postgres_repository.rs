@@ -483,7 +483,21 @@ impl PostgresWbsItemRepository {
 
 #[async_trait]
 impl WbsItemRepository for PostgresWbsItemRepository {
-    async fn create(&self, create: CreateWbsItem) -> Result<WbsItem, ApiError> {
+    async fn create(&self, tenant_id: i64, create: CreateWbsItem) -> Result<WbsItem, ApiError> {
+        // Verify the parent project belongs to this tenant before insert.
+        let project_tenant: Option<i64> = sqlx::query_scalar(
+            "SELECT tenant_id FROM projects WHERE id = $1 AND deleted_at IS NULL",
+        )
+        .bind(create.project_id)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to verify project tenant: {}", e)))?;
+
+        match project_tenant {
+            Some(t) if t == tenant_id => {}
+            _ => return Err(ApiError::NotFound("Project not found".to_string())),
+        }
+
         let row: WbsItemRow = sqlx::query_as(
             r#"
             INSERT INTO wbs_items (project_id, parent_id, name, code,
@@ -508,17 +522,23 @@ impl WbsItemRepository for PostgresWbsItemRepository {
         Ok(row.into())
     }
 
-    async fn find_by_project(&self, project_id: i64) -> Result<Vec<WbsItem>, ApiError> {
+    async fn find_by_project(
+        &self,
+        project_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<WbsItem>, ApiError> {
         let rows: Vec<WbsItemRow> = sqlx::query_as(
             r#"
-            SELECT id, project_id, parent_id, name, code,
-                   planned_hours, actual_hours, progress, sort_order
-            FROM wbs_items
-            WHERE project_id = $1
-            ORDER BY sort_order
+            SELECT w.id, w.project_id, w.parent_id, w.name, w.code,
+                   w.planned_hours, w.actual_hours, w.progress, w.sort_order
+            FROM wbs_items w
+            JOIN projects p ON p.id = w.project_id
+            WHERE w.project_id = $1 AND p.tenant_id = $2 AND p.deleted_at IS NULL
+            ORDER BY w.sort_order
             "#,
         )
         .bind(project_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find WBS items by project: {}", e)))?;
@@ -526,16 +546,18 @@ impl WbsItemRepository for PostgresWbsItemRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<WbsItem>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<WbsItem>, ApiError> {
         let result: Option<WbsItemRow> = sqlx::query_as(
             r#"
-            SELECT id, project_id, parent_id, name, code,
-                   planned_hours, actual_hours, progress, sort_order
-            FROM wbs_items
-            WHERE id = $1
+            SELECT w.id, w.project_id, w.parent_id, w.name, w.code,
+                   w.planned_hours, w.actual_hours, w.progress, w.sort_order
+            FROM wbs_items w
+            JOIN projects p ON p.id = w.project_id
+            WHERE w.id = $1 AND p.tenant_id = $2 AND p.deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find WBS item by id: {}", e)))?;
@@ -546,36 +568,44 @@ impl WbsItemRepository for PostgresWbsItemRepository {
     async fn update_progress(
         &self,
         id: i64,
+        tenant_id: i64,
         progress: Decimal,
         hours: Decimal,
     ) -> Result<WbsItem, ApiError> {
-        let row: WbsItemRow = sqlx::query_as(
+        let row: Option<WbsItemRow> = sqlx::query_as(
             r#"
-            UPDATE wbs_items
+            UPDATE wbs_items w
             SET progress = $1, actual_hours = $2
-            WHERE id = $3
-            RETURNING id, project_id, parent_id, name, code,
-                      planned_hours, actual_hours, progress, sort_order
+            FROM projects p
+            WHERE w.id = $3 AND w.project_id = p.id
+              AND p.tenant_id = $4 AND p.deleted_at IS NULL
+            RETURNING w.id, w.project_id, w.parent_id, w.name, w.code,
+                      w.planned_hours, w.actual_hours, w.progress, w.sort_order
             "#,
         )
         .bind(progress)
         .bind(hours)
         .bind(id)
-        .fetch_one(&*self.pool)
+        .bind(tenant_id)
+        .fetch_optional(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "WbsItem"))?;
 
-        Ok(row.into())
+        row.map(|r| r.into())
+            .ok_or_else(|| ApiError::NotFound("WBS item not found".to_string()))
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM wbs_items
-            WHERE id = $1
+            DELETE FROM wbs_items w
+            USING projects p
+            WHERE w.id = $1 AND w.project_id = p.id
+              AND p.tenant_id = $2 AND p.deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete WBS item: {}", e)))?;
@@ -611,7 +641,25 @@ impl PostgresProjectCostRepository {
 
 #[async_trait]
 impl ProjectCostRepository for PostgresProjectCostRepository {
-    async fn create(&self, create: CreateProjectCost) -> Result<ProjectCost, ApiError> {
+    async fn create(
+        &self,
+        tenant_id: i64,
+        create: CreateProjectCost,
+    ) -> Result<ProjectCost, ApiError> {
+        // Verify the parent project belongs to this tenant before insert.
+        let project_tenant: Option<i64> = sqlx::query_scalar(
+            "SELECT tenant_id FROM projects WHERE id = $1 AND deleted_at IS NULL",
+        )
+        .bind(create.project_id)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to verify project tenant: {}", e)))?;
+
+        match project_tenant {
+            Some(t) if t == tenant_id => {}
+            _ => return Err(ApiError::NotFound("Project not found".to_string())),
+        }
+
         let cost_type_str = create.cost_type.to_string();
 
         let row: ProjectCostRow = sqlx::query_as(
@@ -636,17 +684,23 @@ impl ProjectCostRepository for PostgresProjectCostRepository {
         Ok(row.into())
     }
 
-    async fn find_by_project(&self, project_id: i64) -> Result<Vec<ProjectCost>, ApiError> {
+    async fn find_by_project(
+        &self,
+        project_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<ProjectCost>, ApiError> {
         let rows: Vec<ProjectCostRow> = sqlx::query_as(
             r#"
-            SELECT id, project_id, wbs_item_id, cost_type, amount,
-                   description, incurred_at, created_at
-            FROM project_costs
-            WHERE project_id = $1
-            ORDER BY incurred_at DESC
+            SELECT c.id, c.project_id, c.wbs_item_id, c.cost_type, c.amount,
+                   c.description, c.incurred_at, c.created_at
+            FROM project_costs c
+            JOIN projects p ON p.id = c.project_id
+            WHERE c.project_id = $1 AND p.tenant_id = $2 AND p.deleted_at IS NULL
+            ORDER BY c.incurred_at DESC
             "#,
         )
         .bind(project_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -656,13 +710,21 @@ impl ProjectCostRepository for PostgresProjectCostRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn find_total_by_project(&self, project_id: i64) -> Result<Decimal, ApiError> {
+    async fn find_total_by_project(
+        &self,
+        project_id: i64,
+        tenant_id: i64,
+    ) -> Result<Decimal, ApiError> {
         let result: (Decimal,) = sqlx::query_as(
             r#"
-            SELECT COALESCE(SUM(amount), 0) FROM project_costs WHERE project_id = $1
+            SELECT COALESCE(SUM(c.amount), 0)
+            FROM project_costs c
+            JOIN projects p ON p.id = c.project_id
+            WHERE c.project_id = $1 AND p.tenant_id = $2 AND p.deleted_at IS NULL
             "#,
         )
         .bind(project_id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find total cost by project: {}", e)))?;
@@ -670,14 +732,17 @@ impl ProjectCostRepository for PostgresProjectCostRepository {
         Ok(result.0)
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM project_costs
-            WHERE id = $1
+            DELETE FROM project_costs c
+            USING projects p
+            WHERE c.id = $1 AND c.project_id = p.id
+              AND p.tenant_id = $2 AND p.deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete project cost: {}", e)))?;

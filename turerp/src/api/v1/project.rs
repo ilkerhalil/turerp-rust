@@ -123,15 +123,16 @@ pub async fn update_project_status(
     security(("bearer_auth" = []))
 )]
 pub async fn create_wbs_item(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     project_service: web::Data<ProjectService>,
     payload: web::Json<CreateWbsItem>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    let tenant_id = admin_user.0.tenant_id;
     json_resp!(
-        project_service.create_wbs_item(payload.into_inner()),
+        project_service.create_wbs_item(tenant_id, payload.into_inner()),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -146,7 +147,7 @@ pub async fn create_wbs_item(
     security(("bearer_auth" = []))
 )]
 pub async fn get_wbs_by_project(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -154,7 +155,7 @@ pub async fn get_wbs_by_project(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        project_service.get_wbs_by_project(*path),
+        project_service.get_wbs_by_project(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -170,7 +171,7 @@ pub async fn get_wbs_by_project(
     security(("bearer_auth" = []))
 )]
 pub async fn update_wbs_progress(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateWbsProgressRequest>,
@@ -180,7 +181,7 @@ pub async fn update_wbs_progress(
     let i18n = resolve(&i18n);
     let req = payload.into_inner();
     json_resp!(
-        project_service.update_wbs_progress(*path, req.progress, req.hours),
+        project_service.update_wbs_progress(*path, admin_user.0.tenant_id, req.progress, req.hours),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -195,7 +196,7 @@ pub async fn update_wbs_progress(
     security(("bearer_auth" = []))
 )]
 pub async fn create_project_cost(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     project_service: web::Data<ProjectService>,
     payload: web::Json<crate::domain::project::model::CreateProjectCost>,
     locale: Locale,
@@ -203,7 +204,7 @@ pub async fn create_project_cost(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        project_service.create_project_cost(payload.into_inner()),
+        project_service.create_project_cost(admin_user.0.tenant_id, payload.into_inner()),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -218,7 +219,7 @@ pub async fn create_project_cost(
     security(("bearer_auth" = []))
 )]
 pub async fn get_project_costs(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     project_service: web::Data<ProjectService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -226,7 +227,7 @@ pub async fn get_project_costs(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        project_service.get_project_costs(*path),
+        project_service.get_project_costs(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

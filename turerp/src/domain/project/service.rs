@@ -69,32 +69,63 @@ impl ProjectService {
         self.project_repo.update_status(id, tenant_id, status).await
     }
     #[tracing::instrument(skip(self))]
-    pub async fn create_wbs_item(&self, create: CreateWbsItem) -> Result<WbsItem, ApiError> {
-        self.wbs_repo.create(create).await
+    pub async fn create_wbs_item(
+        &self,
+        tenant_id: i64,
+        create: CreateWbsItem,
+    ) -> Result<WbsItem, ApiError> {
+        self.wbs_repo.create(tenant_id, create).await
     }
     #[tracing::instrument(skip(self))]
-    pub async fn get_wbs_by_project(&self, project_id: i64) -> Result<Vec<WbsItem>, ApiError> {
-        self.wbs_repo.find_by_project(project_id).await
+    pub async fn get_wbs_by_project(
+        &self,
+        project_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<WbsItem>, ApiError> {
+        // Verify project belongs to tenant before delegating to repo.
+        self.get_project(project_id, tenant_id).await?;
+        self.wbs_repo.find_by_project(project_id, tenant_id).await
+    }
+    #[tracing::instrument(skip(self))]
+    pub async fn get_wbs_item(&self, id: i64, tenant_id: i64) -> Result<WbsItem, ApiError> {
+        self.wbs_repo
+            .find_by_id(id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("WBS item not found".to_string()))
     }
     #[tracing::instrument(skip(self))]
     pub async fn update_wbs_progress(
         &self,
         id: i64,
+        tenant_id: i64,
         progress: Decimal,
         hours: Decimal,
     ) -> Result<WbsItem, ApiError> {
-        self.wbs_repo.update_progress(id, progress, hours).await
+        self.wbs_repo
+            .update_progress(id, tenant_id, progress, hours)
+            .await
+    }
+    #[tracing::instrument(skip(self))]
+    pub async fn delete_wbs_item(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.wbs_repo.delete(id, tenant_id).await
     }
     #[tracing::instrument(skip(self))]
     pub async fn create_project_cost(
         &self,
+        tenant_id: i64,
         create: CreateProjectCost,
     ) -> Result<ProjectCost, ApiError> {
-        self.cost_repo.create(create).await
+        self.cost_repo.create(tenant_id, create).await
     }
     #[tracing::instrument(skip(self))]
-    pub async fn get_project_costs(&self, project_id: i64) -> Result<Vec<ProjectCost>, ApiError> {
-        self.cost_repo.find_by_project(project_id).await
+    pub async fn get_project_costs(
+        &self,
+        project_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<ProjectCost>, ApiError> {
+        // Verify project belongs to tenant before delegating to repo.
+        self.get_project(project_id, tenant_id).await?;
+        self.cost_repo.find_by_project(project_id, tenant_id).await
     }
     #[tracing::instrument(skip(self))]
     pub async fn get_profitability(
@@ -104,7 +135,10 @@ impl ProjectService {
         revenue: Decimal,
     ) -> Result<ProjectProfitability, ApiError> {
         let project = self.get_project(project_id, tenant_id).await?;
-        let actual_cost = self.cost_repo.find_total_by_project(project_id).await?;
+        let actual_cost = self
+            .cost_repo
+            .find_total_by_project(project_id, tenant_id)
+            .await?;
         let profit = revenue - actual_cost;
         let margin = if revenue > Decimal::ZERO {
             (profit / revenue) * Decimal::ONE_HUNDRED
@@ -201,13 +235,16 @@ mod tests {
             .await
             .unwrap();
         let wbs = service
-            .create_wbs_item(CreateWbsItem {
-                project_id: project.id,
-                parent_id: None,
-                name: "Phase 1".to_string(),
-                code: "1.0".to_string(),
-                planned_hours: dec!(40),
-            })
+            .create_wbs_item(
+                1,
+                CreateWbsItem {
+                    project_id: project.id,
+                    parent_id: None,
+                    name: "Phase 1".to_string(),
+                    code: "1.0".to_string(),
+                    planned_hours: dec!(40),
+                },
+            )
             .await
             .unwrap();
         assert_eq!(wbs.planned_hours, dec!(40));
@@ -229,14 +266,17 @@ mod tests {
             .await
             .unwrap();
         let cost = service
-            .create_project_cost(CreateProjectCost {
-                project_id: project.id,
-                wbs_item_id: None,
-                cost_type: CostType::Labor,
-                amount: dec!(500),
-                description: "Work".to_string(),
-                incurred_at: chrono::Utc::now(),
-            })
+            .create_project_cost(
+                1,
+                CreateProjectCost {
+                    project_id: project.id,
+                    wbs_item_id: None,
+                    cost_type: CostType::Labor,
+                    amount: dec!(500),
+                    description: "Work".to_string(),
+                    incurred_at: chrono::Utc::now(),
+                },
+            )
             .await
             .unwrap();
         assert_eq!(cost.amount, dec!(500));
