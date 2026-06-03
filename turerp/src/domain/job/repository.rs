@@ -853,4 +853,48 @@ mod tests {
             "tenant 2 must not update tenant 1's schedule"
         );
     }
+
+    // --- mark_completed / mark_failed tenant isolation ---
+
+    #[tokio::test]
+    async fn test_repo_mark_completed_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let job = repo
+            .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        repo.mark_running(job.id, 1).await.unwrap();
+
+        // tenant 2 cannot mark tenant 1's job completed
+        let result = repo.mark_completed(job.id, 2).await;
+        assert!(
+            result.is_err(),
+            "tenant 2 must not mark tenant 1's job completed"
+        );
+
+        // tenant 1 can still mark it completed
+        let result = repo.mark_completed(job.id, 1).await;
+        assert!(result.is_ok(), "tenant 1 must be able to complete own job");
+    }
+
+    #[tokio::test]
+    async fn test_repo_mark_failed_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let job = repo
+            .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        repo.mark_running(job.id, 1).await.unwrap();
+
+        // tenant 2 cannot mark tenant 1's job failed
+        let result = repo.mark_failed(job.id, 2, "injected error").await;
+        assert!(
+            result.is_err(),
+            "tenant 2 must not mark tenant 1's job failed"
+        );
+
+        // tenant 1 can still mark it failed
+        let result = repo.mark_failed(job.id, 1, "legit error").await;
+        assert!(result.is_ok(), "tenant 1 must be able to fail own job");
+    }
 }
