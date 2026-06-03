@@ -14,62 +14,76 @@ use crate::domain::job::model::{
 use crate::error::ApiError;
 
 /// Job repository trait for persistent storage
+///
+/// All admin-API-exposed methods take `tenant_id` to prevent cross-tenant
+/// access. Background-worker methods (`find_next_pending`, `list_due_schedules`,
+/// `reset_stalled`, `cleanup`) intentionally stay tenant-agnostic because they
+/// are invoked by system processes, not by tenant users.
 #[async_trait::async_trait]
 pub trait JobRepository: Send + Sync {
     /// Create a new job
     async fn create(&self, job: CreateJob) -> Result<Job, ApiError>;
 
-    /// Find a job by ID
-    async fn find_by_id(&self, id: i64) -> Result<Option<Job>, ApiError>;
+    /// Find a job by ID, scoped to the given tenant
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Job>, ApiError>;
 
     /// Find the next pending job (highest priority, oldest first)
+    ///
+    /// System-level: invoked by background worker, not by tenant users.
     async fn find_next_pending(&self) -> Result<Option<Job>, ApiError>;
 
-    /// Mark a job as running and increment attempts
-    async fn mark_running(&self, id: i64) -> Result<(), ApiError>;
+    /// Mark a job as running and increment attempts, scoped to tenant
+    async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
-    /// Mark a job as completed
-    async fn mark_completed(&self, id: i64) -> Result<(), ApiError>;
+    /// Mark a job as completed, scoped to tenant
+    async fn mark_completed(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
-    /// Mark a job as failed (with retry logic)
-    async fn mark_failed(&self, id: i64, error: &str) -> Result<(), ApiError>;
+    /// Mark a job as failed (with retry logic), scoped to tenant
+    async fn mark_failed(&self, id: i64, tenant_id: i64, error: &str) -> Result<(), ApiError>;
 
-    /// Cancel a pending or scheduled job
-    async fn cancel(&self, id: i64) -> Result<(), ApiError>;
+    /// Cancel a pending or scheduled job, scoped to tenant
+    async fn cancel(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// List jobs by status for a tenant
     async fn list_by_status(&self, tenant_id: i64, status: JobStatus)
         -> Result<Vec<Job>, ApiError>;
 
-    /// Retry a failed job
-    async fn retry(&self, id: i64) -> Result<(), ApiError>;
+    /// Retry a failed job, scoped to tenant
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Clean up old completed/failed/cancelled jobs
+    ///
+    /// System-level: invoked by background task, not by tenant users.
     async fn cleanup(&self, older_than: Duration) -> Result<u64, ApiError>;
 
-    /// Soft delete a job
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Soft delete a job, scoped to tenant
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
 
-    /// Restore a soft-deleted job
-    async fn restore(&self, id: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted job, scoped to tenant
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// List deleted jobs for a tenant
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Job>, ApiError>;
 
-    /// Permanently destroy a soft-deleted job
-    async fn destroy(&self, id: i64) -> Result<(), ApiError>;
+    /// Permanently destroy a soft-deleted job, scoped to tenant
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
-    /// Soft delete a job schedule
-    async fn soft_delete_schedule(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Soft delete a job schedule, scoped to tenant
+    async fn soft_delete_schedule(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError>;
 
-    /// Restore a soft-deleted job schedule
-    async fn restore_schedule(&self, id: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted job schedule, scoped to tenant
+    async fn restore_schedule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// List deleted schedules for a tenant
     async fn find_deleted_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>, ApiError>;
 
-    /// Permanently destroy a soft-deleted schedule
-    async fn destroy_schedule(&self, id: i64) -> Result<(), ApiError>;
+    /// Permanently destroy a soft-deleted schedule, scoped to tenant
+    async fn destroy_schedule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     // Cron schedule methods
 
@@ -79,18 +93,21 @@ pub trait JobRepository: Send + Sync {
     /// List recurring schedules for a tenant
     async fn list_schedules(&self, tenant_id: i64) -> Result<Vec<JobSchedule>, ApiError>;
 
-    /// Update next_run_at and last_run_at for a schedule
+    /// Update next_run_at and last_run_at for a schedule, scoped to tenant
     async fn update_schedule_next_run(
         &self,
         id: i64,
+        tenant_id: i64,
         next_run: DateTime<Utc>,
         last_run: DateTime<Utc>,
     ) -> Result<(), ApiError>;
 
-    /// Enable or disable a schedule
-    async fn toggle_schedule(&self, id: i64, active: bool) -> Result<(), ApiError>;
+    /// Enable or disable a schedule, scoped to tenant
+    async fn toggle_schedule(&self, id: i64, tenant_id: i64, active: bool) -> Result<(), ApiError>;
 
     /// List schedules that are due to run
+    ///
+    /// System-level: invoked by background cron task, not by tenant users.
     async fn list_due_schedules(&self) -> Result<Vec<JobSchedule>, ApiError>;
 
     // Dashboard methods
@@ -102,6 +119,8 @@ pub trait JobRepository: Send + Sync {
     async fn list_recent(&self, tenant_id: i64, limit: i64) -> Result<Vec<Job>, ApiError>;
 
     /// Reset stalled running jobs back to pending
+    ///
+    /// System-level: invoked by background heartbeat task, not by tenant users.
     async fn reset_stalled(&self, timeout: Duration) -> Result<u64, ApiError>;
 }
 
@@ -186,12 +205,12 @@ impl JobRepository for InMemoryJobRepository {
         Ok(job)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Job>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Job>, ApiError> {
         Ok(self
             .jobs
             .read()
             .iter()
-            .find(|j| j.id == id && !j.is_deleted())
+            .find(|j| j.id == id && j.tenant_id == tenant_id && !j.is_deleted())
             .cloned())
     }
 
@@ -212,11 +231,11 @@ impl JobRepository for InMemoryJobRepository {
             .cloned())
     }
 
-    async fn mark_running(&self, id: i64) -> Result<(), ApiError> {
+    async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id && !j.is_deleted())
+            .find(|j| j.id == id && j.tenant_id == tenant_id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         job.status = JobStatus::Running;
         job.started_at = Some(Utc::now());
@@ -225,11 +244,11 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn mark_completed(&self, id: i64) -> Result<(), ApiError> {
+    async fn mark_completed(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id && !j.is_deleted())
+            .find(|j| j.id == id && j.tenant_id == tenant_id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         job.status = JobStatus::Completed;
         job.completed_at = Some(Utc::now());
@@ -237,11 +256,11 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn mark_failed(&self, id: i64, error: &str) -> Result<(), ApiError> {
+    async fn mark_failed(&self, id: i64, tenant_id: i64, error: &str) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id && !j.is_deleted())
+            .find(|j| j.id == id && j.tenant_id == tenant_id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         job.last_error = Some(error.to_string());
         if job.attempts >= job.max_attempts {
@@ -256,11 +275,11 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn cancel(&self, id: i64) -> Result<(), ApiError> {
+    async fn cancel(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id && !j.is_deleted())
+            .find(|j| j.id == id && j.tenant_id == tenant_id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         if job.status != JobStatus::Pending && job.status != JobStatus::Scheduled {
             return Err(ApiError::BadRequest(
@@ -287,11 +306,11 @@ impl JobRepository for InMemoryJobRepository {
             .collect())
     }
 
-    async fn retry(&self, id: i64) -> Result<(), ApiError> {
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id && !j.is_deleted())
+            .find(|j| j.id == id && j.tenant_id == tenant_id && !j.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         if job.status != JobStatus::Failed {
             return Err(ApiError::BadRequest(
@@ -324,11 +343,11 @@ impl JobRepository for InMemoryJobRepository {
         Ok((before - jobs.len()) as u64)
     }
 
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && j.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         if job.is_deleted() {
             return Err(ApiError::Conflict(format!("Job {} is already deleted", id)));
@@ -337,11 +356,11 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn restore(&self, id: i64) -> Result<(), ApiError> {
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && j.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Job {} not found", id)))?;
         if !job.is_deleted() {
             return Err(ApiError::BadRequest(format!("Job {} is not deleted", id)));
@@ -360,10 +379,10 @@ impl JobRepository for InMemoryJobRepository {
             .collect())
     }
 
-    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let len_before = jobs.len();
-        jobs.retain(|j| !(j.id == id && j.is_deleted()));
+        jobs.retain(|j| !(j.id == id && j.tenant_id == tenant_id && j.is_deleted()));
         if jobs.len() == len_before {
             return Err(ApiError::NotFound(format!("Deleted job {} not found", id)));
         }
@@ -404,13 +423,14 @@ impl JobRepository for InMemoryJobRepository {
     async fn update_schedule_next_run(
         &self,
         id: i64,
+        tenant_id: i64,
         next_run: DateTime<Utc>,
         last_run: DateTime<Utc>,
     ) -> Result<(), ApiError> {
         let mut schedules = self.schedules.write();
         let s = schedules
             .iter_mut()
-            .find(|s| s.id == id && !s.is_deleted())
+            .find(|s| s.id == id && s.tenant_id == tenant_id && !s.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Schedule {} not found", id)))?;
         s.next_run_at = Some(next_run);
         s.last_run_at = Some(last_run);
@@ -418,11 +438,11 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn toggle_schedule(&self, id: i64, active: bool) -> Result<(), ApiError> {
+    async fn toggle_schedule(&self, id: i64, tenant_id: i64, active: bool) -> Result<(), ApiError> {
         let mut schedules = self.schedules.write();
         let s = schedules
             .iter_mut()
-            .find(|s| s.id == id && !s.is_deleted())
+            .find(|s| s.id == id && s.tenant_id == tenant_id && !s.is_deleted())
             .ok_or_else(|| ApiError::NotFound(format!("Schedule {} not found", id)))?;
         s.is_active = active;
         s.updated_at = Some(Utc::now());
@@ -492,11 +512,16 @@ impl JobRepository for InMemoryJobRepository {
         Ok(count)
     }
 
-    async fn soft_delete_schedule(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete_schedule(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
         let mut schedules = self.schedules.write();
         let s = schedules
             .iter_mut()
-            .find(|s| s.id == id)
+            .find(|s| s.id == id && s.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Schedule {} not found", id)))?;
         if s.is_deleted() {
             return Err(ApiError::Conflict(format!(
@@ -508,11 +533,11 @@ impl JobRepository for InMemoryJobRepository {
         Ok(())
     }
 
-    async fn restore_schedule(&self, id: i64) -> Result<(), ApiError> {
+    async fn restore_schedule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut schedules = self.schedules.write();
         let s = schedules
             .iter_mut()
-            .find(|s| s.id == id)
+            .find(|s| s.id == id && s.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Schedule {} not found", id)))?;
         if !s.is_deleted() {
             return Err(ApiError::BadRequest(format!(
@@ -534,10 +559,10 @@ impl JobRepository for InMemoryJobRepository {
             .collect())
     }
 
-    async fn destroy_schedule(&self, id: i64) -> Result<(), ApiError> {
+    async fn destroy_schedule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut schedules = self.schedules.write();
         let len_before = schedules.len();
-        schedules.retain(|s| !(s.id == id && s.is_deleted()));
+        schedules.retain(|s| !(s.id == id && s.tenant_id == tenant_id && s.is_deleted()));
         if schedules.len() == len_before {
             return Err(ApiError::NotFound(format!(
                 "Deleted schedule {} not found",
@@ -561,7 +586,7 @@ mod tests {
             .unwrap();
         assert_eq!(job.status, JobStatus::Pending);
 
-        let found = repo.find_by_id(job.id).await.unwrap();
+        let found = repo.find_by_id(job.id, 1).await.unwrap();
         assert!(found.is_some());
     }
 
@@ -602,10 +627,10 @@ mod tests {
             .await
             .unwrap();
 
-        repo.mark_running(job.id).await.unwrap();
-        repo.mark_failed(job.id, "db error").await.unwrap();
+        repo.mark_running(job.id, 1).await.unwrap();
+        repo.mark_failed(job.id, 1, "db error").await.unwrap();
 
-        let after = repo.find_by_id(job.id).await.unwrap().unwrap();
+        let after = repo.find_by_id(job.id, 1).await.unwrap().unwrap();
         assert_eq!(after.status, JobStatus::Pending);
         assert_eq!(after.attempts, 1);
         assert!(after.scheduled_at.is_some());
@@ -628,10 +653,10 @@ mod tests {
             .await
             .unwrap();
 
-        repo.mark_running(job.id).await.unwrap();
-        repo.mark_failed(job.id, "fatal").await.unwrap();
+        repo.mark_running(job.id, 1).await.unwrap();
+        repo.mark_failed(job.id, 1, "fatal").await.unwrap();
 
-        let after = repo.find_by_id(job.id).await.unwrap().unwrap();
+        let after = repo.find_by_id(job.id, 1).await.unwrap().unwrap();
         assert_eq!(after.status, JobStatus::Failed);
     }
 
@@ -654,7 +679,7 @@ mod tests {
             .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
             .await
             .unwrap();
-        repo.mark_running(job.id).await.unwrap();
+        repo.mark_running(job.id, 1).await.unwrap();
 
         // Artificially backdate started_at
         {
@@ -665,7 +690,7 @@ mod tests {
         let reset = repo.reset_stalled(Duration::from_secs(60)).await.unwrap();
         assert_eq!(reset, 1);
 
-        let after = repo.find_by_id(job.id).await.unwrap().unwrap();
+        let after = repo.find_by_id(job.id, 1).await.unwrap().unwrap();
         assert_eq!(after.status, JobStatus::Pending);
         assert_eq!(after.attempts, 2);
     }
@@ -688,8 +713,144 @@ mod tests {
         let list = repo.list_schedules(1).await.unwrap();
         assert_eq!(list.len(), 1);
 
-        repo.toggle_schedule(s.id, false).await.unwrap();
+        repo.toggle_schedule(s.id, 1, false).await.unwrap();
         let after = repo.list_schedules(1).await.unwrap();
         assert!(!after[0].is_active);
+    }
+
+    // ---- Tenant isolation tests (security) ----
+
+    #[tokio::test]
+    async fn test_repo_find_by_id_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let job = repo
+            .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        // Tenant 2 must NOT be able to read tenant 1's job
+        let result = repo.find_by_id(job.id, 2).await.unwrap();
+        assert!(result.is_none(), "tenant 2 should not see tenant 1's job");
+        // Tenant 1 can read it
+        let result = repo.find_by_id(job.id, 1).await.unwrap();
+        assert!(result.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_repo_mark_running_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let job = repo
+            .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        let result = repo.mark_running(job.id, 2).await;
+        assert!(
+            result.is_err(),
+            "tenant 2 must not mark tenant 1's job as running"
+        );
+        // Tenant 1 succeeds
+        assert!(repo.mark_running(job.id, 1).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_repo_cancel_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let job = repo
+            .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        let result = repo.cancel(job.id, 2).await;
+        assert!(result.is_err(), "tenant 2 must not cancel tenant 1's job");
+    }
+
+    #[tokio::test]
+    async fn test_repo_retry_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let job = repo
+            .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1).with_max_attempts(1))
+            .await
+            .unwrap();
+        repo.mark_running(job.id, 1).await.unwrap();
+        repo.mark_failed(job.id, 1, "err").await.unwrap();
+        let result = repo.retry(job.id, 2).await;
+        assert!(result.is_err(), "tenant 2 must not retry tenant 1's job");
+    }
+
+    #[tokio::test]
+    async fn test_repo_soft_delete_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let job = repo
+            .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        let result = repo.soft_delete(job.id, 2, 99).await;
+        assert!(
+            result.is_err(),
+            "tenant 2 must not soft-delete tenant 1's job"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_repo_restore_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let job = repo
+            .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        repo.soft_delete(job.id, 1, 1).await.unwrap();
+        let result = repo.restore(job.id, 2).await;
+        assert!(result.is_err(), "tenant 2 must not restore tenant 1's job");
+    }
+
+    #[tokio::test]
+    async fn test_repo_destroy_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let job = repo
+            .create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+        repo.soft_delete(job.id, 1, 1).await.unwrap();
+        let result = repo.destroy(job.id, 2).await;
+        assert!(result.is_err(), "tenant 2 must not destroy tenant 1's job");
+    }
+
+    #[tokio::test]
+    async fn test_repo_toggle_schedule_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let s = repo
+            .create_schedule(CreateJobSchedule {
+                job_type: JobType::SendReminders { tenant_id: 1 },
+                cron_expression: "0 0 0 * * *".to_string(),
+                priority: JobPriority::Normal,
+                tenant_id: 1,
+                max_attempts: 3,
+            })
+            .await
+            .unwrap();
+        let result = repo.toggle_schedule(s.id, 2, false).await;
+        assert!(
+            result.is_err(),
+            "tenant 2 must not toggle tenant 1's schedule"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_repo_update_schedule_next_run_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        let s = repo
+            .create_schedule(CreateJobSchedule {
+                job_type: JobType::SendReminders { tenant_id: 1 },
+                cron_expression: "0 0 0 * * *".to_string(),
+                priority: JobPriority::Normal,
+                tenant_id: 1,
+                max_attempts: 3,
+            })
+            .await
+            .unwrap();
+        let now = Utc::now();
+        let result = repo.update_schedule_next_run(s.id, 2, now, now).await;
+        assert!(
+            result.is_err(),
+            "tenant 2 must not update tenant 1's schedule"
+        );
     }
 }

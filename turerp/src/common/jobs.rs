@@ -140,36 +140,41 @@ impl CreateJob {
 }
 
 /// Job scheduler trait
+///
+/// User-facing methods (get_job, mark_*, cancel, retry) take `tenant_id`
+/// to enforce cross-tenant access control. System-level methods
+/// (`schedule`, `next_pending`, `cleanup`) are tenant-agnostic because
+/// the worker process is the trusted caller.
 #[async_trait::async_trait]
 pub trait JobScheduler: Send + Sync {
-    /// Schedule a new job
+    /// Schedule a new job (system-level)
     async fn schedule(&self, job: CreateJob) -> Result<Job, String>;
 
-    /// Get a job by ID
-    async fn get_job(&self, id: i64) -> Result<Option<Job>, String>;
+    /// Get a job by ID, scoped to tenant
+    async fn get_job(&self, id: i64, tenant_id: i64) -> Result<Option<Job>, String>;
 
-    /// Get the next pending job (for worker processes)
+    /// Get the next pending job (for worker processes, system-level)
     async fn next_pending(&self) -> Result<Option<Job>, String>;
 
-    /// Mark a job as running
-    async fn mark_running(&self, id: i64) -> Result<(), String>;
+    /// Mark a job as running, scoped to tenant
+    async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), String>;
 
-    /// Mark a job as completed
-    async fn mark_completed(&self, id: i64) -> Result<(), String>;
+    /// Mark a job as completed, scoped to tenant
+    async fn mark_completed(&self, id: i64, tenant_id: i64) -> Result<(), String>;
 
-    /// Mark a job as failed (with error message)
-    async fn mark_failed(&self, id: i64, error: &str) -> Result<(), String>;
+    /// Mark a job as failed (with error message), scoped to tenant
+    async fn mark_failed(&self, id: i64, tenant_id: i64, error: &str) -> Result<(), String>;
 
-    /// Cancel a pending job
-    async fn cancel(&self, id: i64) -> Result<(), String>;
+    /// Cancel a pending job, scoped to tenant
+    async fn cancel(&self, id: i64, tenant_id: i64) -> Result<(), String>;
 
     /// List jobs by status for a tenant
     async fn list_by_status(&self, tenant_id: i64, status: JobStatus) -> Result<Vec<Job>, String>;
 
-    /// Retry a failed job
-    async fn retry(&self, id: i64) -> Result<(), String>;
+    /// Retry a failed job, scoped to tenant
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), String>;
 
-    /// Clean up old completed/failed jobs
+    /// Clean up old completed/failed jobs (system-level)
     async fn cleanup(&self, older_than: Duration) -> Result<u64, String>;
 }
 
@@ -228,8 +233,13 @@ impl JobScheduler for InMemoryJobScheduler {
         Ok(job)
     }
 
-    async fn get_job(&self, id: i64) -> Result<Option<Job>, String> {
-        Ok(self.jobs.read().iter().find(|j| j.id == id).cloned())
+    async fn get_job(&self, id: i64, tenant_id: i64) -> Result<Option<Job>, String> {
+        Ok(self
+            .jobs
+            .read()
+            .iter()
+            .find(|j| j.id == id && j.tenant_id == tenant_id)
+            .cloned())
     }
 
     async fn next_pending(&self) -> Result<Option<Job>, String> {
@@ -258,11 +268,11 @@ impl JobScheduler for InMemoryJobScheduler {
             .cloned())
     }
 
-    async fn mark_running(&self, id: i64) -> Result<(), String> {
+    async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && j.tenant_id == tenant_id)
             .ok_or_else(|| format!("Job {} not found", id))?;
         job.status = JobStatus::Running;
         job.started_at = Some(Utc::now());
@@ -270,22 +280,22 @@ impl JobScheduler for InMemoryJobScheduler {
         Ok(())
     }
 
-    async fn mark_completed(&self, id: i64) -> Result<(), String> {
+    async fn mark_completed(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && j.tenant_id == tenant_id)
             .ok_or_else(|| format!("Job {} not found", id))?;
         job.status = JobStatus::Completed;
         job.completed_at = Some(Utc::now());
         Ok(())
     }
 
-    async fn mark_failed(&self, id: i64, error: &str) -> Result<(), String> {
+    async fn mark_failed(&self, id: i64, tenant_id: i64, error: &str) -> Result<(), String> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && j.tenant_id == tenant_id)
             .ok_or_else(|| format!("Job {} not found", id))?;
         job.last_error = Some(error.to_string());
         if job.attempts >= job.max_attempts {
@@ -300,11 +310,11 @@ impl JobScheduler for InMemoryJobScheduler {
         Ok(())
     }
 
-    async fn cancel(&self, id: i64) -> Result<(), String> {
+    async fn cancel(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && j.tenant_id == tenant_id)
             .ok_or_else(|| format!("Job {} not found", id))?;
         if job.status != JobStatus::Pending && job.status != JobStatus::Scheduled {
             return Err("Can only cancel pending or scheduled jobs".to_string());
@@ -324,11 +334,11 @@ impl JobScheduler for InMemoryJobScheduler {
             .collect())
     }
 
-    async fn retry(&self, id: i64) -> Result<(), String> {
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         let mut jobs = self.jobs.write();
         let job = jobs
             .iter_mut()
-            .find(|j| j.id == id)
+            .find(|j| j.id == id && j.tenant_id == tenant_id)
             .ok_or_else(|| format!("Job {} not found", id))?;
         if job.status != JobStatus::Failed {
             return Err("Can only retry failed jobs".to_string());
@@ -395,14 +405,14 @@ mod tests {
         assert_eq!(pending.id, id);
 
         // Mark running
-        scheduler.mark_running(id).await.unwrap();
-        let running = scheduler.get_job(id).await.unwrap().unwrap();
+        scheduler.mark_running(id, 1).await.unwrap();
+        let running = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(running.status, JobStatus::Running);
         assert_eq!(running.attempts, 1);
 
         // Mark completed
-        scheduler.mark_completed(id).await.unwrap();
-        let completed = scheduler.get_job(id).await.unwrap().unwrap();
+        scheduler.mark_completed(id, 1).await.unwrap();
+        let completed = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(completed.status, JobStatus::Completed);
         assert!(completed.completed_at.is_some());
     }
@@ -425,11 +435,14 @@ mod tests {
             .unwrap();
         let id = job.id;
 
-        scheduler.mark_running(id).await.unwrap();
-        scheduler.mark_failed(id, "Database error").await.unwrap();
+        scheduler.mark_running(id, 1).await.unwrap();
+        scheduler
+            .mark_failed(id, 1, "Database error")
+            .await
+            .unwrap();
 
         // Should be back to pending (retry)
-        let retry_job = scheduler.get_job(id).await.unwrap().unwrap();
+        let retry_job = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(retry_job.status, JobStatus::Pending);
         assert!(retry_job.scheduled_at.is_some()); // Scheduled for later
     }
@@ -452,10 +465,10 @@ mod tests {
             .unwrap();
         let id = job.id;
 
-        scheduler.mark_running(id).await.unwrap();
-        scheduler.mark_failed(id, "Fatal error").await.unwrap();
+        scheduler.mark_running(id, 1).await.unwrap();
+        scheduler.mark_failed(id, 1, "Fatal error").await.unwrap();
 
-        let failed = scheduler.get_job(id).await.unwrap().unwrap();
+        let failed = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(failed.status, JobStatus::Failed);
     }
 
@@ -467,8 +480,8 @@ mod tests {
             .await
             .unwrap();
 
-        scheduler.cancel(job.id).await.unwrap();
-        let cancelled = scheduler.get_job(job.id).await.unwrap().unwrap();
+        scheduler.cancel(job.id, 1).await.unwrap();
+        let cancelled = scheduler.get_job(job.id, 1).await.unwrap().unwrap();
         assert_eq!(cancelled.status, JobStatus::Cancelled);
     }
 
@@ -537,8 +550,8 @@ mod tests {
             .await
             .unwrap();
 
-        scheduler.mark_running(job.id).await.unwrap();
-        scheduler.mark_completed(job.id).await.unwrap();
+        scheduler.mark_running(job.id, 1).await.unwrap();
+        scheduler.mark_completed(job.id, 1).await.unwrap();
 
         let cleaned = scheduler.cleanup(Duration::from_secs(0)).await.unwrap();
         assert_eq!(cleaned, 1);
@@ -554,11 +567,11 @@ mod tests {
             .await
             .unwrap();
 
-        scheduler.mark_running(job.id).await.unwrap();
-        scheduler.mark_failed(job.id, "error").await.unwrap();
+        scheduler.mark_running(job.id, 1).await.unwrap();
+        scheduler.mark_failed(job.id, 1, "error").await.unwrap();
 
-        scheduler.retry(job.id).await.unwrap();
-        let retried = scheduler.get_job(job.id).await.unwrap().unwrap();
+        scheduler.retry(job.id, 1).await.unwrap();
+        let retried = scheduler.get_job(job.id, 1).await.unwrap().unwrap();
         assert_eq!(retried.status, JobStatus::Pending);
         assert_eq!(retried.attempts, 0);
     }
@@ -651,25 +664,25 @@ mod tests {
         let id = job.id;
 
         // First failure: backoff = 2^1 = 2 seconds
-        scheduler.mark_running(id).await.unwrap();
-        scheduler.mark_failed(id, "err1").await.unwrap();
-        let j1 = scheduler.get_job(id).await.unwrap().unwrap();
+        scheduler.mark_running(id, 1).await.unwrap();
+        scheduler.mark_failed(id, 1, "err1").await.unwrap();
+        let j1 = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(j1.attempts, 1);
         let delay1 = j1.scheduled_at.unwrap() - Utc::now();
         assert!(delay1.num_seconds() >= 1 && delay1.num_seconds() <= 3);
 
         // Second failure: backoff = 2^2 = 4 seconds
-        scheduler.mark_running(id).await.unwrap();
-        scheduler.mark_failed(id, "err2").await.unwrap();
-        let j2 = scheduler.get_job(id).await.unwrap().unwrap();
+        scheduler.mark_running(id, 1).await.unwrap();
+        scheduler.mark_failed(id, 1, "err2").await.unwrap();
+        let j2 = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(j2.attempts, 2);
         let delay2 = j2.scheduled_at.unwrap() - Utc::now();
         assert!(delay2.num_seconds() >= 3 && delay2.num_seconds() <= 5);
 
         // Third failure: backoff = 2^3 = 8 seconds
-        scheduler.mark_running(id).await.unwrap();
-        scheduler.mark_failed(id, "err3").await.unwrap();
-        let j3 = scheduler.get_job(id).await.unwrap().unwrap();
+        scheduler.mark_running(id, 1).await.unwrap();
+        scheduler.mark_failed(id, 1, "err3").await.unwrap();
+        let j3 = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(j3.attempts, 3);
         let delay3 = j3.scheduled_at.unwrap() - Utc::now();
         assert!(delay3.num_seconds() >= 7 && delay3.num_seconds() <= 9);
@@ -683,8 +696,8 @@ mod tests {
             .await
             .unwrap();
 
-        scheduler.mark_running(job.id).await.unwrap();
-        let result = scheduler.cancel(job.id).await;
+        scheduler.mark_running(job.id, 1).await.unwrap();
+        let result = scheduler.cancel(job.id, 1).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Can only cancel"));
     }
@@ -697,7 +710,7 @@ mod tests {
             .await
             .unwrap();
 
-        let result = scheduler.retry(job.id).await;
+        let result = scheduler.retry(job.id, 1).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Can only retry failed jobs"));
     }
@@ -717,15 +730,15 @@ mod tests {
             .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
             .await
             .unwrap();
-        scheduler.mark_running(running.id).await.unwrap();
+        scheduler.mark_running(running.id, 1).await.unwrap();
 
         // Completed job
         let completed = scheduler
             .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
             .await
             .unwrap();
-        scheduler.mark_running(completed.id).await.unwrap();
-        scheduler.mark_completed(completed.id).await.unwrap();
+        scheduler.mark_running(completed.id, 1).await.unwrap();
+        scheduler.mark_completed(completed.id, 1).await.unwrap();
 
         // Cleanup with 0 duration should remove only completed
         let cleaned = scheduler.cleanup(Duration::from_secs(0)).await.unwrap();
@@ -753,8 +766,8 @@ mod tests {
             .schedule(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
             .await
             .unwrap();
-        scheduler.mark_running(old.id).await.unwrap();
-        scheduler.mark_completed(old.id).await.unwrap();
+        scheduler.mark_running(old.id, 1).await.unwrap();
+        scheduler.mark_completed(old.id, 1).await.unwrap();
 
         // Immediate cleanup with huge duration should keep everything
         let cleaned = scheduler
@@ -815,14 +828,14 @@ mod tests {
     #[tokio::test]
     async fn test_get_job_not_found() {
         let scheduler = InMemoryJobScheduler::new();
-        let result = scheduler.get_job(999).await.unwrap();
+        let result = scheduler.get_job(999, 1).await.unwrap();
         assert!(result.is_none());
     }
 
     #[tokio::test]
     async fn test_mark_running_not_found() {
         let scheduler = InMemoryJobScheduler::new();
-        let result = scheduler.mark_running(999).await;
+        let result = scheduler.mark_running(999, 1).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not found"));
     }
@@ -830,21 +843,21 @@ mod tests {
     #[tokio::test]
     async fn test_mark_completed_not_found() {
         let scheduler = InMemoryJobScheduler::new();
-        let result = scheduler.mark_completed(999).await;
+        let result = scheduler.mark_completed(999, 1).await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_mark_failed_not_found() {
         let scheduler = InMemoryJobScheduler::new();
-        let result = scheduler.mark_failed(999, "error").await;
+        let result = scheduler.mark_failed(999, 1, "error").await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_retry_not_found() {
         let scheduler = InMemoryJobScheduler::new();
-        let result = scheduler.retry(999).await;
+        let result = scheduler.retry(999, 1).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not found"));
     }
@@ -852,7 +865,7 @@ mod tests {
     #[tokio::test]
     async fn test_cancel_not_found() {
         let scheduler = InMemoryJobScheduler::new();
-        let result = scheduler.cancel(999).await;
+        let result = scheduler.cancel(999, 1).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not found"));
     }
@@ -869,15 +882,15 @@ mod tests {
         let id = job.id;
 
         // Pending -> Running
-        scheduler.mark_running(id).await.unwrap();
-        let j = scheduler.get_job(id).await.unwrap().unwrap();
+        scheduler.mark_running(id, 1).await.unwrap();
+        let j = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(j.status, JobStatus::Running);
         assert_eq!(j.attempts, 1);
         assert!(j.started_at.is_some());
 
         // Running -> Failed (max attempts reached)
-        scheduler.mark_failed(id, "boom").await.unwrap();
-        let j = scheduler.get_job(id).await.unwrap().unwrap();
+        scheduler.mark_failed(id, 1, "boom").await.unwrap();
+        let j = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(j.status, JobStatus::Failed);
         assert_eq!(j.last_error, Some("boom".to_string()));
         assert!(j.completed_at.is_some());
@@ -895,23 +908,23 @@ mod tests {
         let id = job.id;
 
         // Attempt 1 fails -> retry
-        scheduler.mark_running(id).await.unwrap();
-        scheduler.mark_failed(id, "a").await.unwrap();
-        let j = scheduler.get_job(id).await.unwrap().unwrap();
+        scheduler.mark_running(id, 1).await.unwrap();
+        scheduler.mark_failed(id, 1, "a").await.unwrap();
+        let j = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(j.status, JobStatus::Pending);
         assert_eq!(j.attempts, 1);
 
         // Attempt 2 fails -> retry
-        scheduler.mark_running(id).await.unwrap();
-        scheduler.mark_failed(id, "b").await.unwrap();
-        let j = scheduler.get_job(id).await.unwrap().unwrap();
+        scheduler.mark_running(id, 1).await.unwrap();
+        scheduler.mark_failed(id, 1, "b").await.unwrap();
+        let j = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(j.status, JobStatus::Pending);
         assert_eq!(j.attempts, 2);
 
         // Attempt 3 fails -> final failure
-        scheduler.mark_running(id).await.unwrap();
-        scheduler.mark_failed(id, "c").await.unwrap();
-        let j = scheduler.get_job(id).await.unwrap().unwrap();
+        scheduler.mark_running(id, 1).await.unwrap();
+        scheduler.mark_failed(id, 1, "c").await.unwrap();
+        let j = scheduler.get_job(id, 1).await.unwrap().unwrap();
         assert_eq!(j.status, JobStatus::Failed);
         assert_eq!(j.attempts, 3);
         assert_eq!(j.last_error, Some("c".to_string()));

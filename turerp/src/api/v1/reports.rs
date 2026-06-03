@@ -166,7 +166,7 @@ pub async fn process_report_job(
     };
 
     scheduler
-        .mark_running(job.id)
+        .mark_running(job.id, job.tenant_id)
         .await
         .map_err(ApiError::Internal)?;
 
@@ -204,7 +204,7 @@ pub async fn process_report_job(
         Ok(report) => {
             engine.store_job_mapping(job.id, report.id).await.ok();
             scheduler
-                .mark_completed(job.id)
+                .mark_completed(job.id, job.tenant_id)
                 .await
                 .map_err(ApiError::Internal)?;
             Ok(HttpResponse::Ok().json(serde_json::json!({
@@ -215,7 +215,7 @@ pub async fn process_report_job(
         }
         Err(e) => {
             scheduler
-                .mark_failed(job.id, &e.to_string())
+                .mark_failed(job.id, job.tenant_id, &e.to_string())
                 .await
                 .map_err(ApiError::Internal)?;
             Err(ApiError::Internal(format!(

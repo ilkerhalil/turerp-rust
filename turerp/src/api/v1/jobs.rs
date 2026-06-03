@@ -201,12 +201,15 @@ pub async fn next_pending_job(
     security(("bearer_auth" = []))
 )]
 pub async fn get_job(
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<i64>,
     scheduler: web::Data<dyn JobScheduler>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
-    let job = scheduler.get_job(id).await.map_err(ApiError::Internal)?;
+    let job = scheduler
+        .get_job(id, admin.0.tenant_id)
+        .await
+        .map_err(ApiError::Internal)?;
 
     match job {
         Some(j) => Ok(HttpResponse::Ok().json(JobResponse::from_job(&j))),
@@ -227,13 +230,13 @@ pub async fn get_job(
     security(("bearer_auth" = []))
 )]
 pub async fn start_job(
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<i64>,
     scheduler: web::Data<dyn JobScheduler>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
     scheduler
-        .mark_running(id)
+        .mark_running(id, admin.0.tenant_id)
         .await
         .map_err(ApiError::Internal)?;
 
@@ -253,13 +256,13 @@ pub async fn start_job(
     security(("bearer_auth" = []))
 )]
 pub async fn complete_job(
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<i64>,
     scheduler: web::Data<dyn JobScheduler>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
     scheduler
-        .mark_completed(id)
+        .mark_completed(id, admin.0.tenant_id)
         .await
         .map_err(ApiError::Internal)?;
 
@@ -280,14 +283,14 @@ pub async fn complete_job(
     security(("bearer_auth" = []))
 )]
 pub async fn fail_job(
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<i64>,
     body: web::Json<FailJobRequest>,
     scheduler: web::Data<dyn JobScheduler>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
     scheduler
-        .mark_failed(id, &body.error)
+        .mark_failed(id, admin.0.tenant_id, &body.error)
         .await
         .map_err(ApiError::Internal)?;
 
@@ -307,12 +310,15 @@ pub async fn fail_job(
     security(("bearer_auth" = []))
 )]
 pub async fn cancel_job(
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<i64>,
     scheduler: web::Data<dyn JobScheduler>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
-    scheduler.cancel(id).await.map_err(ApiError::Internal)?;
+    scheduler
+        .cancel(id, admin.0.tenant_id)
+        .await
+        .map_err(ApiError::Internal)?;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Job cancelled"})))
 }
@@ -330,12 +336,15 @@ pub async fn cancel_job(
     security(("bearer_auth" = []))
 )]
 pub async fn retry_job(
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<i64>,
     scheduler: web::Data<dyn JobScheduler>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
-    scheduler.retry(id).await.map_err(ApiError::Internal)?;
+    scheduler
+        .retry(id, admin.0.tenant_id)
+        .await
+        .map_err(ApiError::Internal)?;
 
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Job queued for retry"})))
 }

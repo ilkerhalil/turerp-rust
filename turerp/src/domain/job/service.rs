@@ -88,7 +88,9 @@ impl JobService {
                         schedule_id = schedule.id,
                         "Invalid cron expression; disabling schedule"
                     );
-                    repo.toggle_schedule(schedule.id, false).await.ok();
+                    repo.toggle_schedule(schedule.id, schedule.tenant_id, false)
+                        .await
+                        .ok();
                     continue;
                 }
             };
@@ -109,7 +111,7 @@ impl JobService {
             );
 
             if let Err(e) = repo
-                .update_schedule_next_run(schedule.id, next_run, now)
+                .update_schedule_next_run(schedule.id, schedule.tenant_id, next_run, now)
                 .await
             {
                 tracing::warn!(error = %e, "Failed to update schedule next_run");
@@ -152,8 +154,13 @@ impl JobService {
 
     /// Toggle a schedule on/off
     #[tracing::instrument(skip(self))]
-    pub async fn toggle_schedule(&self, id: i64, active: bool) -> Result<(), ApiError> {
-        self.repo.toggle_schedule(id, active).await
+    pub async fn toggle_schedule(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        active: bool,
+    ) -> Result<(), ApiError> {
+        self.repo.toggle_schedule(id, tenant_id, active).await
     }
 
     /// List jobs by status for a tenant (used by API)
@@ -186,8 +193,12 @@ impl JobScheduler for JobService {
         Ok(j.into())
     }
 
-    async fn get_job(&self, id: i64) -> Result<Option<CommonJob>, String> {
-        let j = self.repo.find_by_id(id).await.map_err(Self::map_err)?;
+    async fn get_job(&self, id: i64, tenant_id: i64) -> Result<Option<CommonJob>, String> {
+        let j = self
+            .repo
+            .find_by_id(id, tenant_id)
+            .await
+            .map_err(Self::map_err)?;
         Ok(j.map(Into::into))
     }
 
@@ -196,23 +207,29 @@ impl JobScheduler for JobService {
         Ok(j.map(Into::into))
     }
 
-    async fn mark_running(&self, id: i64) -> Result<(), String> {
-        self.repo.mark_running(id).await.map_err(Self::map_err)
-    }
-
-    async fn mark_completed(&self, id: i64) -> Result<(), String> {
-        self.repo.mark_completed(id).await.map_err(Self::map_err)
-    }
-
-    async fn mark_failed(&self, id: i64, error: &str) -> Result<(), String> {
+    async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         self.repo
-            .mark_failed(id, error)
+            .mark_running(id, tenant_id)
             .await
             .map_err(Self::map_err)
     }
 
-    async fn cancel(&self, id: i64) -> Result<(), String> {
-        self.repo.cancel(id).await.map_err(Self::map_err)
+    async fn mark_completed(&self, id: i64, tenant_id: i64) -> Result<(), String> {
+        self.repo
+            .mark_completed(id, tenant_id)
+            .await
+            .map_err(Self::map_err)
+    }
+
+    async fn mark_failed(&self, id: i64, tenant_id: i64, error: &str) -> Result<(), String> {
+        self.repo
+            .mark_failed(id, tenant_id, error)
+            .await
+            .map_err(Self::map_err)
+    }
+
+    async fn cancel(&self, id: i64, tenant_id: i64) -> Result<(), String> {
+        self.repo.cancel(id, tenant_id).await.map_err(Self::map_err)
     }
 
     async fn list_by_status(
@@ -236,8 +253,8 @@ impl JobScheduler for JobService {
         Ok(jobs.into_iter().map(Into::into).collect())
     }
 
-    async fn retry(&self, id: i64) -> Result<(), String> {
-        self.repo.retry(id).await.map_err(Self::map_err)
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), String> {
+        self.repo.retry(id, tenant_id).await.map_err(Self::map_err)
     }
 
     async fn cleanup(&self, older_than: Duration) -> Result<u64, String> {
@@ -499,14 +516,19 @@ impl From<CommonJob> for Job {
 impl JobService {
     /// Soft delete a job
     #[tracing::instrument(skip(self))]
-    pub async fn soft_delete_job(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
-        self.repo.soft_delete(id, deleted_by).await
+    pub async fn soft_delete_job(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.repo.soft_delete(id, tenant_id, deleted_by).await
     }
 
     /// Restore a soft-deleted job
     #[tracing::instrument(skip(self))]
-    pub async fn restore_job(&self, id: i64) -> Result<(), ApiError> {
-        self.repo.restore(id).await
+    pub async fn restore_job(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.restore(id, tenant_id).await
     }
 
     /// List deleted jobs for a tenant
@@ -517,20 +539,27 @@ impl JobService {
 
     /// Permanently destroy a soft-deleted job
     #[tracing::instrument(skip(self))]
-    pub async fn destroy_job(&self, id: i64) -> Result<(), ApiError> {
-        self.repo.destroy(id).await
+    pub async fn destroy_job(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.destroy(id, tenant_id).await
     }
 
     /// Soft delete a job schedule
     #[tracing::instrument(skip(self))]
-    pub async fn soft_delete_schedule(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
-        self.repo.soft_delete_schedule(id, deleted_by).await
+    pub async fn soft_delete_schedule(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.repo
+            .soft_delete_schedule(id, tenant_id, deleted_by)
+            .await
     }
 
     /// Restore a soft-deleted schedule
     #[tracing::instrument(skip(self))]
-    pub async fn restore_schedule(&self, id: i64) -> Result<(), ApiError> {
-        self.repo.restore_schedule(id).await
+    pub async fn restore_schedule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.restore_schedule(id, tenant_id).await
     }
 
     /// List deleted schedules for a tenant
@@ -541,8 +570,8 @@ impl JobService {
 
     /// Permanently destroy a soft-deleted schedule
     #[tracing::instrument(skip(self))]
-    pub async fn destroy_schedule(&self, id: i64) -> Result<(), ApiError> {
-        self.repo.destroy_schedule(id).await
+    pub async fn destroy_schedule(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.destroy_schedule(id, tenant_id).await
     }
 }
 
@@ -564,7 +593,7 @@ mod tests {
             .await
             .unwrap();
 
-        let found = svc.get_job(job.id).await.unwrap();
+        let found = svc.get_job(job.id, 1).await.unwrap();
         assert!(found.is_some());
     }
 
@@ -585,10 +614,10 @@ mod tests {
             .await
             .unwrap();
 
-        svc.mark_running(job.id).await.unwrap();
-        svc.mark_completed(job.id).await.unwrap();
+        svc.mark_running(job.id, 1).await.unwrap();
+        svc.mark_completed(job.id, 1).await.unwrap();
 
-        let found = svc.get_job(job.id).await.unwrap().unwrap();
+        let found = svc.get_job(job.id, 1).await.unwrap().unwrap();
         assert_eq!(found.status, crate::common::jobs::JobStatus::Completed);
     }
 

@@ -84,7 +84,7 @@ impl JobExecutor {
 
         tracing::info!("Executing job {}: {:?}", job.id, job.job_type);
 
-        if let Err(e) = scheduler.mark_running(job.id).await {
+        if let Err(e) = scheduler.mark_running(job.id, job.tenant_id).await {
             tracing::warn!("Failed to mark job {} running: {}", job.id, e);
             return Ok(());
         }
@@ -122,13 +122,13 @@ impl JobExecutor {
 
                 match result {
                     Ok(()) => {
-                        if let Err(e) = scheduler.mark_completed(job.id).await {
+                        if let Err(e) = scheduler.mark_completed(job.id, job.tenant_id).await {
                             tracing::warn!("Failed to mark job {} completed: {}", job.id, e);
                         }
                     }
                     Err(e) => {
                         tracing::error!("Job {} failed: {}", job.id, e);
-                        if let Err(e2) = scheduler.mark_failed(job.id, &e).await {
+                        if let Err(e2) = scheduler.mark_failed(job.id, job.tenant_id, &e).await {
                             tracing::warn!("Failed to mark job {} failed: {}", job.id, e2);
                         }
                     }
@@ -137,7 +137,10 @@ impl JobExecutor {
             other => {
                 let msg = format!("No executor registered for job type: {:?}", other);
                 tracing::warn!("{}", msg);
-                scheduler.mark_failed(job.id, &msg).await.ok();
+                scheduler
+                    .mark_failed(job.id, job.tenant_id, &msg)
+                    .await
+                    .ok();
             }
         }
 
