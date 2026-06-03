@@ -288,12 +288,14 @@ impl JobScheduler for PostgresJobScheduler {
         Ok(Job::from(row))
     }
 
-    async fn get_job(&self, id: i64) -> Result<Option<Job>, String> {
-        let row = sqlx::query_as::<_, JobRow>("SELECT * FROM jobs WHERE id = $1")
-            .bind(id)
-            .fetch_optional(&*self.pool)
-            .await
-            .map_err(|e| format!("Failed to get job: {}", e))?;
+    async fn get_job(&self, id: i64, tenant_id: i64) -> Result<Option<Job>, String> {
+        let row =
+            sqlx::query_as::<_, JobRow>("SELECT * FROM jobs WHERE id = $1 AND tenant_id = $2")
+                .bind(id)
+                .bind(tenant_id)
+                .fetch_optional(&*self.pool)
+                .await
+                .map_err(|e| format!("Failed to get job: {}", e))?;
         Ok(row.map(Job::from))
     }
 
@@ -321,37 +323,40 @@ impl JobScheduler for PostgresJobScheduler {
         Ok(row.map(Job::from))
     }
 
-    async fn mark_running(&self, id: i64) -> Result<(), String> {
+    async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         sqlx::query(
-            "UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1"
+            "UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1 AND tenant_id = $2"
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| format!("Failed to mark job running: {}", e))?;
         Ok(())
     }
 
-    async fn mark_completed(&self, id: i64) -> Result<(), String> {
+    async fn mark_completed(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         sqlx::query(
-            "UPDATE jobs SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1"
+            "UPDATE jobs SET status = 'completed', completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND tenant_id = $2"
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| format!("Failed to mark job completed: {}", e))?;
         Ok(())
     }
 
-    async fn mark_failed(&self, id: i64, error: &str) -> Result<(), String> {
-        let job = self.get_job(id).await?;
+    async fn mark_failed(&self, id: i64, tenant_id: i64, error: &str) -> Result<(), String> {
+        let job = self.get_job(id, tenant_id).await?;
         if let Some(job) = job {
             if job.attempts >= job.max_attempts {
                 sqlx::query(
-                    "UPDATE jobs SET status = 'failed', last_error = $1, completed_at = NOW(), updated_at = NOW() WHERE id = $2"
+                    "UPDATE jobs SET status = 'failed', last_error = $1, completed_at = NOW(), updated_at = NOW() WHERE id = $2 AND tenant_id = $3"
                 )
                 .bind(error)
                 .bind(id)
+                .bind(tenant_id)
                 .execute(&*self.pool)
                 .await
                 .map_err(|e| format!("Failed to mark job failed: {}", e))?;
@@ -359,11 +364,12 @@ impl JobScheduler for PostgresJobScheduler {
                 let backoff = chrono::Duration::seconds(2_i64.pow(job.attempts));
                 let scheduled_at = Utc::now() + backoff;
                 sqlx::query(
-                    "UPDATE jobs SET status = 'pending', last_error = $1, scheduled_at = $2, updated_at = NOW() WHERE id = $3"
+                    "UPDATE jobs SET status = 'pending', last_error = $1, scheduled_at = $2, updated_at = NOW() WHERE id = $3 AND tenant_id = $4"
                 )
                 .bind(error)
                 .bind(scheduled_at)
                 .bind(id)
+                .bind(tenant_id)
                 .execute(&*self.pool)
                 .await
                 .map_err(|e| format!("Failed to retry job: {}", e))?;
@@ -372,11 +378,12 @@ impl JobScheduler for PostgresJobScheduler {
         Ok(())
     }
 
-    async fn cancel(&self, id: i64) -> Result<(), String> {
+    async fn cancel(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         sqlx::query(
-            "UPDATE jobs SET status = 'cancelled', completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND status IN ('pending', 'scheduled')"
+            "UPDATE jobs SET status = 'cancelled', completed_at = NOW(), updated_at = NOW() WHERE id = $1 AND tenant_id = $2 AND status IN ('pending', 'scheduled')"
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| format!("Failed to cancel job: {}", e))?;
@@ -395,11 +402,12 @@ impl JobScheduler for PostgresJobScheduler {
         Ok(rows.into_iter().map(Job::from).collect())
     }
 
-    async fn retry(&self, id: i64) -> Result<(), String> {
+    async fn retry(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         sqlx::query(
-            "UPDATE jobs SET status = 'pending', last_error = NULL, scheduled_at = NULL, completed_at = NULL, updated_at = NOW() WHERE id = $1"
+            "UPDATE jobs SET status = 'pending', last_error = NULL, scheduled_at = NULL, completed_at = NULL, updated_at = NOW() WHERE id = $1 AND tenant_id = $2"
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| format!("Failed to retry job: {}", e))?;

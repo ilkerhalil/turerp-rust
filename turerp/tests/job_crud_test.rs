@@ -882,3 +882,212 @@ async fn test_list_jobs_by_invalid_status() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
+
+// ============================================================================
+// Cross-tenant API Integration Tests
+// ============================================================================
+//
+// These tests verify that admin tokens for tenant A cannot read, mutate, or
+// cancel jobs that belong to tenant B — the heart of the Phase 3 audit fix.
+
+#[actix_web::test]
+async fn test_cross_tenant_get_returns_404() {
+    let state = create_test_app_state().await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token_a, _uid_a) = register_admin(&state, 1).await;
+    let (token_b, _uid_b) = register_admin(&state, 2).await;
+
+    // tenant 1 creates a job
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/jobs", &token_a)
+        .set_json(json!({
+            "job_type": "send_reminders",
+            "tenant_id": 1,
+        }))
+        .to_request();
+    let create_resp = test::call_service(&app, create_req).await;
+    assert_eq!(create_resp.status(), StatusCode::CREATED);
+    let body = to_bytes(create_resp.into_body()).await.unwrap();
+    let create_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = create_json["id"].as_i64().unwrap();
+
+    // tenant 2 attempts to read it -> should be 404 (not 200, not 403)
+    let req = auth_request(
+        actix_web::http::Method::GET,
+        &format!("/api/v1/jobs/{}", id),
+        &token_b,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        StatusCode::NOT_FOUND,
+        "tenant B must not see tenant A's job"
+    );
+}
+
+#[actix_web::test]
+async fn test_cross_tenant_cancel_is_blocked() {
+    let state = create_test_app_state().await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token_a, _) = register_admin(&state, 1).await;
+    let (token_b, _) = register_admin(&state, 2).await;
+
+    // tenant 1 creates a job
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/jobs", &token_a)
+        .set_json(json!({
+            "job_type": "send_reminders",
+            "tenant_id": 1,
+        }))
+        .to_request();
+    let create_resp = test::call_service(&app, create_req).await;
+    let body = to_bytes(create_resp.into_body()).await.unwrap();
+    let create_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = create_json["id"].as_i64().unwrap();
+
+    // tenant 2 tries to cancel tenant 1's job -> must fail
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        &format!("/api/v1/jobs/{}/cancel", id),
+        &token_b,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_client_error() || resp.status().is_server_error(),
+        "tenant B must not cancel tenant A's job; got {}",
+        resp.status()
+    );
+
+    // tenant 1 can still cancel its own job
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        &format!("/api/v1/jobs/{}/cancel", id),
+        &token_a,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+}
+
+#[actix_web::test]
+async fn test_cross_tenant_complete_is_blocked() {
+    let state = create_test_app_state().await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token_a, _) = register_admin(&state, 1).await;
+    let (token_b, _) = register_admin(&state, 2).await;
+
+    // tenant 1 creates a job
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/jobs", &token_a)
+        .set_json(json!({
+            "job_type": "send_reminders",
+            "tenant_id": 1,
+        }))
+        .to_request();
+    let create_resp = test::call_service(&app, create_req).await;
+    let body = to_bytes(create_resp.into_body()).await.unwrap();
+    let create_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let id = create_json["id"].as_i64().unwrap();
+
+    // Mark running first (as tenant 1, the rightful owner)
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        &format!("/api/v1/jobs/{}/start", id),
+        &token_a,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // tenant 2 tries to mark tenant 1's job complete -> must fail
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        &format!("/api/v1/jobs/{}/complete", id),
+        &token_b,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert!(
+        resp.status().is_client_error() || resp.status().is_server_error(),
+        "tenant B must not complete tenant A's job; got {}",
+        resp.status()
+    );
+
+    // Verify status is still 'running' (not 'completed')
+    let req = auth_request(
+        actix_web::http::Method::GET,
+        &format!("/api/v1/jobs/{}", id),
+        &token_a,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["status"], "running", "status must remain unchanged");
+}
+
+#[actix_web::test]
+async fn test_cross_tenant_list_does_not_leak() {
+    let state = create_test_app_state().await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token_a, _) = register_admin(&state, 1).await;
+    let (token_b, _) = register_admin(&state, 2).await;
+
+    // 3 jobs for tenant 1
+    for _ in 0..3 {
+        let req = auth_request(actix_web::http::Method::POST, "/api/v1/jobs", &token_a)
+            .set_json(json!({
+                "job_type": "send_reminders",
+                "tenant_id": 1,
+            }))
+            .to_request();
+        test::call_service(&app, req).await;
+    }
+    // 2 jobs for tenant 2
+    for _ in 0..2 {
+        let req = auth_request(actix_web::http::Method::POST, "/api/v1/jobs", &token_b)
+            .set_json(json!({
+                "job_type": "send_reminders",
+                "tenant_id": 2,
+            }))
+            .to_request();
+        test::call_service(&app, req).await;
+    }
+
+    // tenant 1 list -> only 3
+    let req = auth_request(
+        actix_web::http::Method::GET,
+        "/api/v1/jobs/status/pending",
+        &token_a,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = json.as_array().unwrap();
+    assert_eq!(items.len(), 3);
+    for item in items {
+        assert_eq!(
+            item["tenant_id"], 1,
+            "tenant A list must not contain tenant B jobs"
+        );
+    }
+
+    // tenant 2 list -> only 2
+    let req = auth_request(
+        actix_web::http::Method::GET,
+        "/api/v1/jobs/status/pending",
+        &token_b,
+    )
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    let body = to_bytes(resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let items = json.as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    for item in items {
+        assert_eq!(
+            item["tenant_id"], 2,
+            "tenant B list must not contain tenant A jobs"
+        );
+    }
+}
