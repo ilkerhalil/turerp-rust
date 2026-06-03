@@ -77,16 +77,24 @@ impl PostgresInterCompanyRepository {
         Arc::new(self) as BoxInterCompanyRepository
     }
 
-    /// Fetch lines for a given invoice.
+    /// Fetch lines for a given invoice, scoped to the tenant of the parent invoice.
+    ///
+    /// Joins to `inter_company_invoices` so that line items can only be read for
+    /// invoices that belong to the calling tenant. Without the JOIN, a tenant
+    /// that knows another tenant's `invoice_id` could read its line items.
     async fn fetch_invoice_lines(
         &self,
         invoice_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<InterCompanyInvoiceLine>, ApiError> {
         let rows: Vec<InterCompanyInvoiceLineRow> = sqlx::query_as(concat!(
-            "SELECT invoice_id, product_id, description, quantity, unit_price, vat_rate ",
-            "FROM inter_company_invoice_lines WHERE invoice_id = $1"
+            "SELECT l.invoice_id, l.product_id, l.description, l.quantity, l.unit_price, l.vat_rate ",
+            "FROM inter_company_invoice_lines l ",
+            "INNER JOIN inter_company_invoices i ON i.id = l.invoice_id ",
+            "WHERE l.invoice_id = $1 AND i.tenant_id = $2"
         ))
         .bind(invoice_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "InterCompanyInvoiceLine"))?;
@@ -181,7 +189,7 @@ impl InterCompanyRepository for PostgresInterCompanyRepository {
 
         match row {
             Some(r) => {
-                let lines = self.fetch_invoice_lines(r.id).await?;
+                let lines = self.fetch_invoice_lines(r.id, tenant_id).await?;
                 Ok(Some(InterCompanyInvoice {
                     id: r.id,
                     tenant_id: r.tenant_id,
@@ -209,7 +217,9 @@ impl InterCompanyRepository for PostgresInterCompanyRepository {
 
         let mut invoices = Vec::with_capacity(rows.len());
         for row in rows {
-            let lines = self.fetch_invoice_lines(row.id).await?;
+            // Each row is already filtered to the caller's tenant by the WHERE
+            // clause, so row.tenant_id == tenant_id here.
+            let lines = self.fetch_invoice_lines(row.id, row.tenant_id).await?;
             invoices.push(InterCompanyInvoice {
                 id: row.id,
                 tenant_id: row.tenant_id,
