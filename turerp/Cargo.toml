@@ -161,6 +161,9 @@ ldap3 = "0.11"
 utoipa = "4"
 utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 
+[dev-dependencies]
+# Production-readiness tests use std::fs to walk the repo tree; no extra deps needed.
+
 [[bin]]
 name = "gen_openapi"
 path = "src/bin/gen_openapi.rs"
