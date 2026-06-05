@@ -306,10 +306,14 @@ impl MetricsConfig {
 
 impl Default for RateLimitConfig {
     fn default() -> Self {
+        // Defaults bumped from 10 rpm / 3 burst (which would throttle
+        // every active user) to 120 rpm / 30 burst — generous enough
+        // for normal interactive use, but still enforced. Production
+        // deployments can override via env vars.
         Self {
             trusted_proxies: Vec::new(),
-            requests_per_minute: 10,
-            burst_size: 3,
+            requests_per_minute: 120,
+            burst_size: 30,
         }
     }
 }

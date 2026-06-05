@@ -415,8 +415,9 @@ impl JobScheduler for PostgresJobScheduler {
     }
 
     async fn cleanup(&self, older_than: Duration) -> Result<u64, String> {
-        let cutoff = Utc::now()
-            - chrono::Duration::from_std(older_than).unwrap_or(chrono::Duration::days(30));
+        let chrono_dur = chrono::Duration::from_std(older_than)
+            .map_err(|_| "older_than must be non-negative".to_string())?;
+        let cutoff = Utc::now() - chrono_dur;
         let result = sqlx::query(
             "DELETE FROM jobs WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < $1"
         )
@@ -426,5 +427,13 @@ impl JobScheduler for PostgresJobScheduler {
         .map_err(|e| format!("Failed to cleanup jobs: {}", e))?;
 
         Ok(result.rows_affected())
+    }
+
+    async fn health_check(&self) -> Result<(), String> {
+        sqlx::query("SELECT 1")
+            .execute(&*self.pool)
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("jobs table probe failed: {}", e))
     }
 }

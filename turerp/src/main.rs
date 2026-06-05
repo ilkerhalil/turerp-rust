@@ -50,78 +50,89 @@ async fn health_live() -> actix_web::Result<actix_web::HttpResponse> {
 }
 
 /// Readiness probe - checks database and cache connectivity
+/// with a per-probe timeout. A hung dependency would otherwise
+/// exhaust the actix worker pool while we wait for it.
 async fn health_ready(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
+    // Per-probe timeout. Set deliberately lower than the actix
+    // request timeout (30s by default) so a single slow probe
+    // does not consume the worker for that whole window.
+    let probe_timeout = std::time::Duration::from_secs(2);
     let cache = app_state.infra.cache_service.get_ref();
-    let cache_start = std::time::Instant::now();
-    let cache_result = cache.health_check().await;
-    let cache_latency_ms = cache_start.elapsed().as_millis();
-    let cache_healthy = cache_result.is_ok();
 
-    if let Err(ref e) = cache_result {
-        tracing::error!("Cache health check failed: {:?}", e);
+    let cache_start = std::time::Instant::now();
+    let cache_result = tokio::time::timeout(probe_timeout, cache.health_check()).await;
+    let cache_latency_ms = cache_start.elapsed().as_millis();
+    if let Err(_) | Ok(Err(_)) = &cache_result {
+        tracing::error!("Cache health check failed: {:?}", cache_result);
     }
 
-    // Check database if pool is configured
+    let mut deps = serde_json::Map::new();
+    let mut healthy = true;
+
+    match cache_result {
+        Ok(Ok(())) => {
+            deps.insert("cache".into(), serde_json::json!("ok"));
+        }
+        Ok(Err(e)) => {
+            deps.insert("cache".into(), serde_json::json!(format!("error: {}", e)));
+            healthy = false;
+        }
+        Err(_) => {
+            deps.insert("cache".into(), serde_json::json!("timeout"));
+            healthy = false;
+        }
+    }
+
     if let Some(ref pool) = app_state.infra.db_pool {
         let db_start = std::time::Instant::now();
-        let db_result = sqlx::query("SELECT 1").execute(&**pool.get_ref()).await;
+        let db_result = tokio::time::timeout(
+            probe_timeout,
+            sqlx::query("SELECT 1").execute(&**pool.get_ref()),
+        )
+        .await;
         let db_latency_ms = db_start.elapsed().as_millis();
-        let db_healthy = db_result.is_ok();
-
-        if !db_healthy {
-            tracing::error!("Database health check failed: {:?}", db_result.unwrap_err());
-        }
-
-        if db_healthy && cache_healthy {
-            Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
-                "status": "ok",
-                "service": "turerp-erp",
-                "version": env!("CARGO_PKG_VERSION"),
-                "storage": "postgresql",
-                "database": "healthy",
-                "database_latency_ms": db_latency_ms,
-                "cache": "healthy",
-                "cache_latency_ms": cache_latency_ms
-            })))
-        } else {
-            Ok(
-                actix_web::HttpResponse::ServiceUnavailable().json(serde_json::json!({
-                    "status": "unhealthy",
-                    "service": "turerp-erp",
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "storage": "postgresql",
-                    "database": if db_healthy { "healthy" } else { "unhealthy" },
-                    "database_latency_ms": db_latency_ms,
-                    "cache": if cache_healthy { "healthy" } else { "unhealthy" },
-                    "cache_latency_ms": cache_latency_ms
-                })),
-            )
-        }
-    } else {
-        // In-memory mode
-        match cache_result {
-            Ok(_) => Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
-                "status": "ok",
-                "service": "turerp-erp",
-                "version": env!("CARGO_PKG_VERSION"),
-                "storage": "in-memory",
-                "cache": "healthy"
-            }))),
-            Err(e) => {
-                tracing::error!("Cache health check failed: {}", e);
-                Ok(
-                    actix_web::HttpResponse::ServiceUnavailable().json(serde_json::json!({
-                        "status": "unhealthy",
-                        "service": "turerp-erp",
-                        "version": env!("CARGO_PKG_VERSION"),
-                        "storage": "in-memory",
-                        "cache": "unhealthy"
-                    })),
-                )
+        match db_result {
+            Ok(Ok(_)) => {
+                deps.insert("db".into(), serde_json::json!("ok"));
+            }
+            Ok(Err(e)) => {
+                deps.insert("db".into(), serde_json::json!(format!("error: {}", e)));
+                healthy = false;
+            }
+            Err(_) => {
+                deps.insert("db".into(), serde_json::json!("timeout"));
+                healthy = false;
             }
         }
+        deps.insert(
+            "db_latency_ms".into(),
+            serde_json::json!(db_latency_ms as u64),
+        );
+    } else {
+        deps.insert(
+            "db".into(),
+            serde_json::json!("not configured (in-memory mode)"),
+        );
+    }
+
+    deps.insert(
+        "cache_latency_ms".into(),
+        serde_json::json!(cache_latency_ms as u64),
+    );
+
+    let body = serde_json::json!({
+        "status": if healthy { "ok" } else { "degraded" },
+        "service": "turerp-erp",
+        "version": env!("CARGO_PKG_VERSION"),
+        "deps": deps,
+    });
+
+    if healthy {
+        Ok(actix_web::HttpResponse::Ok().json(body))
+    } else {
+        Ok(actix_web::HttpResponse::ServiceUnavailable().json(body))
     }
 }
 
