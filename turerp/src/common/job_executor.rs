@@ -36,14 +36,19 @@ impl JobExecutor {
     }
 
     /// Start the background polling loop.
-    pub async fn start(&self) {
+    ///
+    /// Returns the [`tokio::task::JoinHandle`] for the spawned task and a
+    /// [`tokio::sync::mpsc::Sender`] that, when signalled with `()`,
+    /// requests a clean shutdown. The handle can be awaited to confirm
+    /// the loop has actually exited before the process terminates.
+    pub fn start(&self) -> (tokio::task::JoinHandle<()>, tokio::sync::mpsc::Sender<()>) {
         let scheduler = self.job_scheduler.clone();
         let import_service = self.import_service.clone();
         let file_storage = self.file_storage.clone();
         let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
-        *self.shutdown.lock() = Some(tx);
+        *self.shutdown.lock() = Some(tx.clone());
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
             // Skip the immediate first tick.
             interval.tick().await;
@@ -62,6 +67,8 @@ impl JobExecutor {
                 }
             }
         });
+
+        (handle, tx)
     }
 
     /// Signal the executor to shut down.

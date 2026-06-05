@@ -321,25 +321,28 @@ async fn main() -> std::io::Result<()> {
         });
 
     // Start background job executor
-    let job_executor = turerp::common::job_executor::JobExecutor::new(
-        app_state.infra.job_scheduler.clone(),
-        app_state.infra.import_service.clone(),
-        app_state.document.file_storage.clone(),
-    );
-    job_executor.start().await;
+    let (job_handle, job_shutdown_tx) = {
+        let executor = turerp::common::job_executor::JobExecutor::new(
+            app_state.infra.job_scheduler.clone(),
+            app_state.infra.import_service.clone(),
+            app_state.document.file_storage.clone(),
+        );
+        executor.start()
+    };
+    tracing::info!("Job executor started");
 
     // Start background observability evaluator (alert rules + SLO + SLI collection)
-    let (_obs_shutdown_tx, obs_shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
-    {
+    let (obs_shutdown_tx, obs_shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
+    let obs_handle = {
         let observability_service = app_state.observability_service.get_ref().clone();
         let notification_service = app_state.infra.notification_service.clone().into_inner();
         let evaluator = turerp::common::background_evaluator::BackgroundEvaluator::new(
             observability_service,
             notification_service,
         );
-        evaluator.start(obs_shutdown_rx);
-        tracing::info!("Background observability evaluator started");
-    }
+        evaluator.start(obs_shutdown_rx)
+    };
+    tracing::info!("Background observability evaluator started");
 
     // Build rate-limit middleware with shared stats store so the dashboard can read them
     let rate_limit_middleware = {
@@ -375,8 +378,6 @@ async fn main() -> std::io::Result<()> {
         IdempotencyMiddleware::in_memory()
     };
 
-    // Macro to build the common Actix app (middleware + app_data).
-    // Avoids duplicating ~100 lines for postgres vs in-memory feature flags.
     // Macro to build the common Actix app (middleware + app_data).
     // Avoids duplicating ~100 lines for postgres vs in-memory feature flags.
     macro_rules! build_app_core {
@@ -416,7 +417,10 @@ async fn main() -> std::io::Result<()> {
         }};
     }
 
-    HttpServer::new(move || {
+    // Build a future that runs the HTTP server and triggers a clean worker
+    // shutdown on first signal. Actix's `run()` already handles graceful
+    // shutdown of in-flight HTTP requests; we add worker drain on top.
+    let server = HttpServer::new(move || {
         let mut app = build_app_core!(App::new());
         if let Some(ref pool) = app_state.infra.db_pool {
             app = app.app_data(pool.clone());
@@ -496,7 +500,65 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .bind(&bind_addr)?
-    .shutdown_timeout(30) // Graceful shutdown: 30 seconds
-    .run()
-    .await
+    .shutdown_timeout(30) // Graceful shutdown: 30 seconds for in-flight HTTP requests
+    .run();
+
+    // Race the HTTP server against SIGTERM/SIGINT. On signal, signal the
+    // background workers to stop, then wait for them with a 5s budget
+    // (anything past that risks a hung restart loop in the orchestrator).
+    tokio::select! {
+        result = server => {
+            result?;
+        }
+        _ = shutdown_signal() => {
+            tracing::info!("Shutdown signal received, draining background workers");
+        }
+    }
+
+    // Drain background workers within a hard 5s budget. The channels are
+    // bounded at capacity 1 so the sends cannot block; the joins are
+    // bounded by tokio::time::timeout so a stuck worker cannot hang us.
+    let drain = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let _ = job_shutdown_tx.send(()).await;
+        let _ = obs_shutdown_tx.send(()).await;
+        let _ = job_handle.await;
+        let _ = obs_handle.await;
+    })
+    .await;
+
+    match drain {
+        Ok(()) => tracing::info!("All background workers stopped cleanly"),
+        Err(_) => {
+            tracing::error!("Background workers did not stop within 5 seconds; exiting anyway")
+        }
+    }
+
+    Ok(())
+}
+
+/// Wait for SIGTERM (production) or Ctrl-C (dev) to coordinate shutdown.
+async fn shutdown_signal() {
+    use tokio::signal;
+
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl-C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => tracing::info!("Received Ctrl-C"),
+        _ = terminate => tracing::info!("Received SIGTERM"),
+    }
 }
