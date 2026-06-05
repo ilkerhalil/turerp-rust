@@ -3,9 +3,11 @@
 /// System user ID for background job operations (no authenticated user context).
 const SYSTEM_USER_ID: i64 = 0;
 
+use std::panic::AssertUnwindSafe;
 use std::time::Duration;
 
 use actix_web::web;
+use futures::FutureExt;
 
 use crate::common::file_storage::FileStorage;
 use crate::common::import::model::{EntityType, ImportFormat};
@@ -36,23 +38,58 @@ impl JobExecutor {
     }
 
     /// Start the background polling loop.
-    pub async fn start(&self) {
+    ///
+    /// Returns the [`tokio::task::JoinHandle`] for the spawned task and a
+    /// [`tokio::sync::mpsc::Sender`] that, when signalled with `()`,
+    /// requests a clean shutdown. The handle can be awaited to confirm
+    /// the loop has actually exited before the process terminates.
+    pub fn start(&self) -> (tokio::task::JoinHandle<()>, tokio::sync::mpsc::Sender<()>) {
         let scheduler = self.job_scheduler.clone();
         let import_service = self.import_service.clone();
         let file_storage = self.file_storage.clone();
         let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
-        *self.shutdown.lock() = Some(tx);
+        *self.shutdown.lock() = Some(tx.clone());
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
             // Skip the immediate first tick.
             interval.tick().await;
 
+            // Exponential backoff for panics so a bad tick does not
+            // take down the entire process, but consecutive panics
+            // do not tight-loop the runtime either. Capped at 30s.
+            let mut panic_backoff_secs: u64 = 0;
+
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
-                        if let Err(e) = Self::poll_and_execute(&scheduler, &import_service, &file_storage).await {
-                            tracing::warn!("Job executor poll failed: {}", e);
+                        // catch_unwind + AssertUnwindSafe: panics inside
+                        // poll_and_execute are converted to Result and
+                        // the loop survives.
+                        let poll = AssertUnwindSafe(Self::poll_and_execute(
+                            &scheduler,
+                            &import_service,
+                            &file_storage,
+                        ))
+                        .catch_unwind()
+                        .await;
+                        match poll {
+                            Ok(Ok(())) => {
+                                if panic_backoff_secs > 0 {
+                                    tracing::info!("Job executor recovered from panic");
+                                    panic_backoff_secs = 0;
+                                }
+                            }
+                            Ok(Err(e)) => tracing::warn!("Job executor poll failed: {}", e),
+                            Err(panic_payload) => {
+                                tracing::error!(
+                                    "Job executor panicked: {:?}; backing off {}s",
+                                    panic_payload,
+                                    panic_backoff_secs
+                                );
+                                panic_backoff_secs = (panic_backoff_secs * 2 + 1).min(30);
+                                tokio::time::sleep(Duration::from_secs(panic_backoff_secs)).await;
+                            }
                         }
                     }
                     _ = rx.recv() => {
@@ -62,6 +99,8 @@ impl JobExecutor {
                 }
             }
         });
+
+        (handle, tx)
     }
 
     /// Signal the executor to shut down.

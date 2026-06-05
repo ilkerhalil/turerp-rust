@@ -173,6 +173,14 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "033_stock_movements_tenant_id",
             sql: include_str!("../../migrations/033_stock_movements_tenant_id.sql"),
         },
+        Migration {
+            version: "034_inter_company_and_revoked_tokens",
+            sql: include_str!("../../migrations/034_inter_company_and_revoked_tokens.sql"),
+        },
+        Migration {
+            version: "035_core_tables",
+            sql: include_str!("../../migrations/035_core_tables.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).

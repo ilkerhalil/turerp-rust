@@ -176,6 +176,16 @@ pub trait JobScheduler: Send + Sync {
 
     /// Clean up old completed/failed jobs (system-level)
     async fn cleanup(&self, older_than: Duration) -> Result<u64, String>;
+
+    /// Liveness probe for `/health/ready`. Returns `Ok(())` if the
+    /// scheduler can accept new work, `Err(msg)` otherwise. The
+    /// implementation MUST be cheap (< 100ms) because it is
+    /// invoked on every readiness probe. In-memory schedulers
+    /// have nothing to check; persistent schedulers should run
+    /// a `SELECT 1` against the underlying table.
+    async fn health_check(&self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 /// In-memory job scheduler for development
@@ -353,8 +363,12 @@ impl JobScheduler for InMemoryJobScheduler {
     }
 
     async fn cleanup(&self, older_than: Duration) -> Result<u64, String> {
-        let cutoff =
-            Utc::now() - chrono::Duration::from_std(older_than).unwrap_or(chrono::Duration::MAX);
+        // Reject negative durations explicitly: `chrono::Duration::from_std`
+        // would otherwise error and the previous `unwrap_or(MAX)` would
+        // cause us to purge every terminal job in the system.
+        let chrono_dur = chrono::Duration::from_std(older_than)
+            .map_err(|_| "older_than must be non-negative".to_string())?;
+        let cutoff = Utc::now() - chrono_dur;
         let mut jobs = self.jobs.write();
         let before = jobs.len();
         jobs.retain(|j| {

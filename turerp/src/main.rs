@@ -50,78 +50,89 @@ async fn health_live() -> actix_web::Result<actix_web::HttpResponse> {
 }
 
 /// Readiness probe - checks database and cache connectivity
+/// with a per-probe timeout. A hung dependency would otherwise
+/// exhaust the actix worker pool while we wait for it.
 async fn health_ready(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
+    // Per-probe timeout. Set deliberately lower than the actix
+    // request timeout (30s by default) so a single slow probe
+    // does not consume the worker for that whole window.
+    let probe_timeout = std::time::Duration::from_secs(2);
     let cache = app_state.infra.cache_service.get_ref();
-    let cache_start = std::time::Instant::now();
-    let cache_result = cache.health_check().await;
-    let cache_latency_ms = cache_start.elapsed().as_millis();
-    let cache_healthy = cache_result.is_ok();
 
-    if let Err(ref e) = cache_result {
-        tracing::error!("Cache health check failed: {:?}", e);
+    let cache_start = std::time::Instant::now();
+    let cache_result = tokio::time::timeout(probe_timeout, cache.health_check()).await;
+    let cache_latency_ms = cache_start.elapsed().as_millis();
+    if let Err(_) | Ok(Err(_)) = &cache_result {
+        tracing::error!("Cache health check failed: {:?}", cache_result);
     }
 
-    // Check database if pool is configured
+    let mut deps = serde_json::Map::new();
+    let mut healthy = true;
+
+    match cache_result {
+        Ok(Ok(())) => {
+            deps.insert("cache".into(), serde_json::json!("ok"));
+        }
+        Ok(Err(e)) => {
+            deps.insert("cache".into(), serde_json::json!(format!("error: {}", e)));
+            healthy = false;
+        }
+        Err(_) => {
+            deps.insert("cache".into(), serde_json::json!("timeout"));
+            healthy = false;
+        }
+    }
+
     if let Some(ref pool) = app_state.infra.db_pool {
         let db_start = std::time::Instant::now();
-        let db_result = sqlx::query("SELECT 1").execute(&**pool.get_ref()).await;
+        let db_result = tokio::time::timeout(
+            probe_timeout,
+            sqlx::query("SELECT 1").execute(&**pool.get_ref()),
+        )
+        .await;
         let db_latency_ms = db_start.elapsed().as_millis();
-        let db_healthy = db_result.is_ok();
-
-        if !db_healthy {
-            tracing::error!("Database health check failed: {:?}", db_result.unwrap_err());
-        }
-
-        if db_healthy && cache_healthy {
-            Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
-                "status": "ok",
-                "service": "turerp-erp",
-                "version": env!("CARGO_PKG_VERSION"),
-                "storage": "postgresql",
-                "database": "healthy",
-                "database_latency_ms": db_latency_ms,
-                "cache": "healthy",
-                "cache_latency_ms": cache_latency_ms
-            })))
-        } else {
-            Ok(
-                actix_web::HttpResponse::ServiceUnavailable().json(serde_json::json!({
-                    "status": "unhealthy",
-                    "service": "turerp-erp",
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "storage": "postgresql",
-                    "database": if db_healthy { "healthy" } else { "unhealthy" },
-                    "database_latency_ms": db_latency_ms,
-                    "cache": if cache_healthy { "healthy" } else { "unhealthy" },
-                    "cache_latency_ms": cache_latency_ms
-                })),
-            )
-        }
-    } else {
-        // In-memory mode
-        match cache_result {
-            Ok(_) => Ok(actix_web::HttpResponse::Ok().json(serde_json::json!({
-                "status": "ok",
-                "service": "turerp-erp",
-                "version": env!("CARGO_PKG_VERSION"),
-                "storage": "in-memory",
-                "cache": "healthy"
-            }))),
-            Err(e) => {
-                tracing::error!("Cache health check failed: {}", e);
-                Ok(
-                    actix_web::HttpResponse::ServiceUnavailable().json(serde_json::json!({
-                        "status": "unhealthy",
-                        "service": "turerp-erp",
-                        "version": env!("CARGO_PKG_VERSION"),
-                        "storage": "in-memory",
-                        "cache": "unhealthy"
-                    })),
-                )
+        match db_result {
+            Ok(Ok(_)) => {
+                deps.insert("db".into(), serde_json::json!("ok"));
+            }
+            Ok(Err(e)) => {
+                deps.insert("db".into(), serde_json::json!(format!("error: {}", e)));
+                healthy = false;
+            }
+            Err(_) => {
+                deps.insert("db".into(), serde_json::json!("timeout"));
+                healthy = false;
             }
         }
+        deps.insert(
+            "db_latency_ms".into(),
+            serde_json::json!(db_latency_ms as u64),
+        );
+    } else {
+        deps.insert(
+            "db".into(),
+            serde_json::json!("not configured (in-memory mode)"),
+        );
+    }
+
+    deps.insert(
+        "cache_latency_ms".into(),
+        serde_json::json!(cache_latency_ms as u64),
+    );
+
+    let body = serde_json::json!({
+        "status": if healthy { "ok" } else { "degraded" },
+        "service": "turerp-erp",
+        "version": env!("CARGO_PKG_VERSION"),
+        "deps": deps,
+    });
+
+    if healthy {
+        Ok(actix_web::HttpResponse::Ok().json(body))
+    } else {
+        Ok(actix_web::HttpResponse::ServiceUnavailable().json(body))
     }
 }
 
@@ -321,25 +332,28 @@ async fn main() -> std::io::Result<()> {
         });
 
     // Start background job executor
-    let job_executor = turerp::common::job_executor::JobExecutor::new(
-        app_state.infra.job_scheduler.clone(),
-        app_state.infra.import_service.clone(),
-        app_state.document.file_storage.clone(),
-    );
-    job_executor.start().await;
+    let (job_handle, job_shutdown_tx) = {
+        let executor = turerp::common::job_executor::JobExecutor::new(
+            app_state.infra.job_scheduler.clone(),
+            app_state.infra.import_service.clone(),
+            app_state.document.file_storage.clone(),
+        );
+        executor.start()
+    };
+    tracing::info!("Job executor started");
 
     // Start background observability evaluator (alert rules + SLO + SLI collection)
-    let (_obs_shutdown_tx, obs_shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
-    {
+    let (obs_shutdown_tx, obs_shutdown_rx) = tokio::sync::mpsc::channel::<()>(1);
+    let obs_handle = {
         let observability_service = app_state.observability_service.get_ref().clone();
         let notification_service = app_state.infra.notification_service.clone().into_inner();
         let evaluator = turerp::common::background_evaluator::BackgroundEvaluator::new(
             observability_service,
             notification_service,
         );
-        evaluator.start(obs_shutdown_rx);
-        tracing::info!("Background observability evaluator started");
-    }
+        evaluator.start(obs_shutdown_rx)
+    };
+    tracing::info!("Background observability evaluator started");
 
     // Build rate-limit middleware with shared stats store so the dashboard can read them
     let rate_limit_middleware = {
@@ -375,8 +389,6 @@ async fn main() -> std::io::Result<()> {
         IdempotencyMiddleware::in_memory()
     };
 
-    // Macro to build the common Actix app (middleware + app_data).
-    // Avoids duplicating ~100 lines for postgres vs in-memory feature flags.
     // Macro to build the common Actix app (middleware + app_data).
     // Avoids duplicating ~100 lines for postgres vs in-memory feature flags.
     macro_rules! build_app_core {
@@ -416,7 +428,10 @@ async fn main() -> std::io::Result<()> {
         }};
     }
 
-    HttpServer::new(move || {
+    // Build a future that runs the HTTP server and triggers a clean worker
+    // shutdown on first signal. Actix's `run()` already handles graceful
+    // shutdown of in-flight HTTP requests; we add worker drain on top.
+    let server = HttpServer::new(move || {
         let mut app = build_app_core!(App::new());
         if let Some(ref pool) = app_state.infra.db_pool {
             app = app.app_data(pool.clone());
@@ -496,7 +511,65 @@ async fn main() -> std::io::Result<()> {
             )
     })
     .bind(&bind_addr)?
-    .shutdown_timeout(30) // Graceful shutdown: 30 seconds
-    .run()
-    .await
+    .shutdown_timeout(30) // Graceful shutdown: 30 seconds for in-flight HTTP requests
+    .run();
+
+    // Race the HTTP server against SIGTERM/SIGINT. On signal, signal the
+    // background workers to stop, then wait for them with a 5s budget
+    // (anything past that risks a hung restart loop in the orchestrator).
+    tokio::select! {
+        result = server => {
+            result?;
+        }
+        _ = shutdown_signal() => {
+            tracing::info!("Shutdown signal received, draining background workers");
+        }
+    }
+
+    // Drain background workers within a hard 5s budget. The channels are
+    // bounded at capacity 1 so the sends cannot block; the joins are
+    // bounded by tokio::time::timeout so a stuck worker cannot hang us.
+    let drain = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        let _ = job_shutdown_tx.send(()).await;
+        let _ = obs_shutdown_tx.send(()).await;
+        let _ = job_handle.await;
+        let _ = obs_handle.await;
+    })
+    .await;
+
+    match drain {
+        Ok(()) => tracing::info!("All background workers stopped cleanly"),
+        Err(_) => {
+            tracing::error!("Background workers did not stop within 5 seconds; exiting anyway")
+        }
+    }
+
+    Ok(())
+}
+
+/// Wait for SIGTERM (production) or Ctrl-C (dev) to coordinate shutdown.
+async fn shutdown_signal() {
+    use tokio::signal;
+
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl-C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => tracing::info!("Received Ctrl-C"),
+        _ = terminate => tracing::info!("Received SIGTERM"),
+    }
 }

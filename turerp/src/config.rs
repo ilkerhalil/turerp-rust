@@ -54,8 +54,13 @@ pub struct DatabaseConfig {
 
 impl DatabaseConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
-        let url = std::env::var("TURERP_DATABASE_URL")
-            .map_err(|_| ConfigError::Message("TURERP_DATABASE_URL must be set".to_string()))?;
+        let url = std::env::var("TURERP_DATABASE_URL").map_err(|_| {
+            ConfigError::Message(
+                "TURERP_DATABASE_URL must be set, e.g. \
+                 TURERP_DATABASE_URL=postgres://user:pass@host:5432/dbname"
+                    .to_string(),
+            )
+        })?;
 
         Ok(Self {
             url,
@@ -301,10 +306,14 @@ impl MetricsConfig {
 
 impl Default for RateLimitConfig {
     fn default() -> Self {
+        // Defaults bumped from 10 rpm / 3 burst (which would throttle
+        // every active user) to 120 rpm / 30 burst — generous enough
+        // for normal interactive use, but still enforced. Production
+        // deployments can override via env vars.
         Self {
             trusted_proxies: Vec::new(),
-            requests_per_minute: 10,
-            burst_size: 3,
+            requests_per_minute: 120,
+            burst_size: 30,
         }
     }
 }
@@ -616,6 +625,13 @@ impl Config {
     pub fn validate(&self) -> Result<(), ConfigError> {
         // In production, enforce security requirements
         if matches!(self.environment, Environment::Production) {
+            // P0: empty DATABASE_URL must crash in production
+            if self.database.url.is_empty() {
+                return Err(ConfigError::Message(
+                    "TURERP_DATABASE_URL must be set in production".to_string(),
+                ));
+            }
+
             // JWT secret must be strong
             if self.jwt.secret.len() < 32 {
                 return Err(ConfigError::Message(
@@ -634,6 +650,35 @@ impl Config {
                 }
             }
 
+            // P2: JWT access/refresh expirations must be sane
+            if self.jwt.access_token_expiration <= 0 || self.jwt.access_token_expiration > 86400 {
+                return Err(ConfigError::Message(
+                    "jwt.access_token_expiration must be in (0, 86400] seconds".to_string(),
+                ));
+            }
+            if self.jwt.refresh_token_expiration <= self.jwt.access_token_expiration
+                || self.jwt.refresh_token_expiration > 2_592_000
+            {
+                return Err(ConfigError::Message(
+                    "jwt.refresh_token_expiration must be > access and <= 2592000 seconds"
+                        .to_string(),
+                ));
+            }
+
+            // P2: rate-limit defaults that would throttle every user
+            if self.rate_limit.requests_per_minute < 60 {
+                return Err(ConfigError::Message(format!(
+                    "rate_limit.requests_per_minute must be >= 60 in production (got {})",
+                    self.rate_limit.requests_per_minute
+                )));
+            }
+            if self.rate_limit.burst_size < 10 {
+                return Err(ConfigError::Message(format!(
+                    "rate_limit.burst_size must be >= 10 in production (got {})",
+                    self.rate_limit.burst_size
+                )));
+            }
+
             // Encryption key must not be the hardcoded default or empty
             if self.encryption_key.is_empty()
                 || self.encryption_key == "dGVzdC1rZXktZm9yLXRlc3Rpbmctb25seS0xMjM0NTY="
@@ -642,6 +687,14 @@ impl Config {
                     "Encryption key must be explicitly set via TURERP_ENCRYPTION_KEY environment variable. Do not use the default test key in production."
                         .to_string(),
                 ));
+            }
+
+            // P2: encryption key must decode to exactly 32 bytes
+            if let Err(e) = self.encryption_key_bytes() {
+                return Err(ConfigError::Message(format!(
+                    "TURERP_ENCRYPTION_KEY is invalid: {}",
+                    e
+                )));
             }
 
             // CORS should not be wildcard in production
@@ -839,21 +892,45 @@ mod tests {
         assert!(config.validate().is_ok());
     }
 
-    #[test]
-    fn test_validate_production_weak_jwt_secret() {
-        let config = Config {
+    /// Build a production-mode `Config` that passes every check except
+    /// the one the test wants to exercise. Tests then mutate the field
+    /// they care about and assert on the failure message.
+    fn prod_base() -> Config {
+        use base64::engine::general_purpose::STANDARD;
+        use base64::Engine;
+        Config {
             environment: Environment::Production,
+            database: DatabaseConfig {
+                url: "postgres://x:y@localhost/z".into(),
+                max_connections: 10,
+                min_connections: 2,
+                acquire_timeout_secs: 30,
+                idle_timeout_secs: 600,
+                max_lifetime_secs: 1800,
+            },
             jwt: JwtConfig {
-                secret: "dev-secret-do-not-use-in-production".to_string(),
+                secret: "aGg3N2RmZ2hqOEBrc2RqZmhosdKJF8sdfkjhsdkjfh".into(),
                 access_token_expiration: 3600,
                 refresh_token_expiration: 604800,
             },
             cors: CorsConfig {
-                allowed_origins: vec!["https://example.com".to_string()],
+                allowed_origins: vec!["https://app.example.com".into()],
                 ..Default::default()
             },
+            encryption_key: STANDARD.encode([0u8; 32]),
+            rate_limit: RateLimitConfig {
+                requests_per_minute: 120,
+                burst_size: 30,
+                trusted_proxies: vec![],
+            },
             ..Default::default()
-        };
+        }
+    }
+
+    #[test]
+    fn test_validate_production_weak_jwt_secret() {
+        let mut config = prod_base();
+        config.jwt.secret = "dev-secret-do-not-use-in-production".to_string();
 
         let result = config.validate();
         assert!(result.is_err());
@@ -863,19 +940,8 @@ mod tests {
 
     #[test]
     fn test_validate_production_short_jwt_secret() {
-        let config = Config {
-            environment: Environment::Production,
-            jwt: JwtConfig {
-                secret: "short".to_string(),
-                access_token_expiration: 3600,
-                refresh_token_expiration: 604800,
-            },
-            cors: CorsConfig {
-                allowed_origins: vec!["https://example.com".to_string()],
-                ..Default::default()
-            },
-            ..Default::default()
-        };
+        let mut config = prod_base();
+        config.jwt.secret = "short".to_string();
 
         let result = config.validate();
         assert!(result.is_err());
@@ -885,43 +951,15 @@ mod tests {
 
     #[test]
     fn test_validate_production_strong_jwt_secret() {
-        let config = Config {
-            environment: Environment::Production,
-            jwt: JwtConfig {
-                secret: "aGg3N2RmZ2hqOEBrc2RqZmhosdKJF8sdfkjhsdkjfh".to_string(), // Strong random-looking secret
-                access_token_expiration: 3600,
-                refresh_token_expiration: 604800,
-            },
-            cors: CorsConfig {
-                allowed_origins: vec!["https://example.com".to_string()],
-                ..Default::default()
-            },
-            encryption_key: "YWJiY2NkZGVmZmdnaGhpaWpra2xsbW1ubm9vcHFyc3R1dnd4eXoxMjM0NTY="
-                .to_string(),
-            ..Default::default()
-        };
-
+        let config = prod_base();
         let result = config.validate();
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_validate_production_wildcard_cors() {
-        let config = Config {
-            environment: Environment::Production,
-            jwt: JwtConfig {
-                secret: "aGg3N2RmZ2hqOEBrc2RqZmhosdKJF8sdfkjhsdkjfh".to_string(),
-                access_token_expiration: 3600,
-                refresh_token_expiration: 604800,
-            },
-            cors: CorsConfig {
-                allowed_origins: vec!["*".to_string()],
-                ..Default::default()
-            },
-            encryption_key: "YWJiY2NkZGVmZmdnaGhpaWpra2xsbW1ubm9vcHFyc3R1dnd4eXoxMjM0NTY="
-                .to_string(),
-            ..Default::default()
-        };
+        let mut config = prod_base();
+        config.cors.allowed_origins = vec!["*".to_string()];
 
         let result = config.validate();
         assert!(result.is_err());
