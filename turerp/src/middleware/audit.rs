@@ -33,6 +33,31 @@ pub struct AuditEvent {
 /// Maximum number of audit events buffered in the channel before backpressure.
 pub const AUDIT_CHANNEL_CAPACITY: usize = 10_000;
 
+/// Decide whether an audit event must be persisted even at the cost
+/// of blocking the request. These are events whose loss would be a
+/// security incident in its own right (failed logins, MFA challenges,
+/// privilege changes, server errors).
+pub fn is_sensitive_audit_event(event: &AuditEvent) -> bool {
+    if event.status_code >= 500 {
+        return true;
+    }
+    let action = event.action.to_ascii_lowercase();
+    let path = event.path.to_ascii_lowercase();
+    const SENSITIVE_KEYWORDS: &[&str] = &[
+        "auth",
+        "login",
+        "logout",
+        "mfa",
+        "totp",
+        "role",
+        "permission",
+        "privilege",
+    ];
+    SENSITIVE_KEYWORDS
+        .iter()
+        .any(|kw| action.contains(kw) || path.contains(kw))
+}
+
 /// Audit logging middleware factory
 pub struct AuditLoggingMiddleware {
     sender: Option<Arc<mpsc::Sender<AuditEvent>>>,
@@ -163,9 +188,20 @@ where
                     );
                 }
 
-                // Send event to channel for persistence (drop if backpressure exceeded)
+                // Tiered backpressure: sensitive events (auth, mfa, role,
+                // permission, or any 5xx) use a blocking send so they
+                // cannot be silently dropped under load. Routine events
+                // use try_send to keep the request path latency-bounded.
                 if let Some(sender) = sender {
-                    if let Err(e) = sender.try_send(event) {
+                    let is_sensitive = is_sensitive_audit_event(&event);
+                    if is_sensitive {
+                        if let Err(e) = sender.send(event).await {
+                            tracing::error!(
+                                "Audit channel closed (sensitive event dropped): {}",
+                                e
+                            );
+                        }
+                    } else if let Err(e) = sender.try_send(event) {
                         tracing::warn!("Audit log channel full, dropping event: {}", e);
                     }
                 }

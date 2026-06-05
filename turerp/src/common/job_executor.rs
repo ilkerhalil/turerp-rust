@@ -3,9 +3,11 @@
 /// System user ID for background job operations (no authenticated user context).
 const SYSTEM_USER_ID: i64 = 0;
 
+use std::panic::AssertUnwindSafe;
 use std::time::Duration;
 
 use actix_web::web;
+use futures::FutureExt;
 
 use crate::common::file_storage::FileStorage;
 use crate::common::import::model::{EntityType, ImportFormat};
@@ -53,11 +55,41 @@ impl JobExecutor {
             // Skip the immediate first tick.
             interval.tick().await;
 
+            // Exponential backoff for panics so a bad tick does not
+            // take down the entire process, but consecutive panics
+            // do not tight-loop the runtime either. Capped at 30s.
+            let mut panic_backoff_secs: u64 = 0;
+
             loop {
                 tokio::select! {
                     _ = interval.tick() => {
-                        if let Err(e) = Self::poll_and_execute(&scheduler, &import_service, &file_storage).await {
-                            tracing::warn!("Job executor poll failed: {}", e);
+                        // catch_unwind + AssertUnwindSafe: panics inside
+                        // poll_and_execute are converted to Result and
+                        // the loop survives.
+                        let poll = AssertUnwindSafe(Self::poll_and_execute(
+                            &scheduler,
+                            &import_service,
+                            &file_storage,
+                        ))
+                        .catch_unwind()
+                        .await;
+                        match poll {
+                            Ok(Ok(())) => {
+                                if panic_backoff_secs > 0 {
+                                    tracing::info!("Job executor recovered from panic");
+                                    panic_backoff_secs = 0;
+                                }
+                            }
+                            Ok(Err(e)) => tracing::warn!("Job executor poll failed: {}", e),
+                            Err(panic_payload) => {
+                                tracing::error!(
+                                    "Job executor panicked: {:?}; backing off {}s",
+                                    panic_payload,
+                                    panic_backoff_secs
+                                );
+                                panic_backoff_secs = (panic_backoff_secs * 2 + 1).min(30);
+                                tokio::time::sleep(Duration::from_secs(panic_backoff_secs)).await;
+                            }
                         }
                     }
                     _ = rx.recv() => {

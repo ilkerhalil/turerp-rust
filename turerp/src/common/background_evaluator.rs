@@ -14,7 +14,9 @@ use crate::common::NotificationService;
 use crate::domain::observability::model::SloStatus;
 use crate::domain::observability::service::ObservabilityService;
 use crate::error::ApiError;
+use futures::FutureExt;
 use std::collections::HashMap;
+use std::panic::AssertUnwindSafe;
 use std::sync::Arc;
 use tokio::time::{interval, Duration};
 
@@ -53,14 +55,35 @@ impl BackgroundEvaluator {
         tokio::spawn(async move {
             let mut ticker = interval(Duration::from_secs(interval_secs));
 
+            // Exponential backoff on panic: doubles up to 30s.
+            let mut panic_backoff_secs: u64 = 0;
+
             loop {
                 tokio::select! {
                     _ = ticker.tick() => {
-                        if let Err(e) = Self::evaluate_tick(
+                        let tick = AssertUnwindSafe(Self::evaluate_tick(
                             &service,
                             &*notifier,
-                        ).await {
-                            tracing::error!("Background evaluator tick failed: {}", e);
+                        ))
+                        .catch_unwind()
+                        .await;
+                        match tick {
+                            Ok(Ok(())) => {
+                                if panic_backoff_secs > 0 {
+                                    tracing::info!("Background evaluator recovered from panic");
+                                    panic_backoff_secs = 0;
+                                }
+                            }
+                            Ok(Err(e)) => tracing::error!("Background evaluator tick failed: {}", e),
+                            Err(panic_payload) => {
+                                tracing::error!(
+                                    "Background evaluator panicked: {:?}; backing off {}s",
+                                    panic_payload,
+                                    panic_backoff_secs
+                                );
+                                panic_backoff_secs = (panic_backoff_secs * 2 + 1).min(30);
+                                tokio::time::sleep(Duration::from_secs(panic_backoff_secs)).await;
+                            }
                         }
                     }
                     _ = shutdown_rx.recv() => {
