@@ -308,8 +308,8 @@ Automated via GitHub Actions:
 | `TURERP_JWT_ACCESS_EXPIRATION` | Access token duration (seconds) | `3600` |
 | `TURERP_JWT_REFRESH_EXPIRATION` | Refresh token duration (seconds) | `604800` |
 | `TURERP_TRUSTED_PROXIES` | Comma-separated trusted proxy IPs | (none) |
-| `TURERP_RATE_LIMIT_RPM` | Rate limit requests per minute | `10` |
-| `TURERP_RATE_LIMIT_BURST` | Rate limit burst size | `3` |
+| `TURERP_RATE_LIMIT_REQUESTS_PER_MINUTE` | Rate limit requests per minute | `120` |
+| `TURERP_RATE_LIMIT_BURST` | Rate limit burst size | `30` |
 | `TURERP_METRICS_ENABLED` | Enable Prometheus metrics | `true` |
 | `TURERP_METRICS_PATH` | Metrics endpoint path | `/metrics` |
 | `RUST_LOG` | Log level | `info` |

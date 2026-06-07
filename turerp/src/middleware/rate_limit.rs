@@ -243,10 +243,21 @@ mod tests {
 
     #[test]
     fn test_rate_limit_config_from_env() {
+        // This test asserts the safe defaults (120 rpm / 30 burst) returned
+        // by `from_env` when env vars are unset. The previous version of
+        // this test pinned the buggy 10/3 values; it was updated as part
+        // of the same fix so the regression test now matches production
+        // behavior. If the env happens to be set in the test runner, this
+        // assertion will only catch the env-unset path, so it is best
+        // paired with `tests/rate_limit_env_loading_test.rs` which fully
+        // scrubs the env.
+        std::env::remove_var("TURERP_RATE_LIMIT_REQUESTS_PER_MINUTE");
+        std::env::remove_var("TURERP_RATE_LIMIT_BURST");
+        std::env::remove_var("TURERP_TRUSTED_PROXIES");
         let config = RateLimitConfig::from_env();
         assert!(!config.has_trusted_proxies());
-        assert_eq!(config.requests_per_minute, 10);
-        assert_eq!(config.burst_size, 3);
+        assert_eq!(config.requests_per_minute, 120);
+        assert_eq!(config.burst_size, 30);
     }
 
     #[test]

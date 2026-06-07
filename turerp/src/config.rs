@@ -320,22 +320,30 @@ impl Default for RateLimitConfig {
 
 impl RateLimitConfig {
     pub fn from_env() -> Self {
-        let trusted_proxies = std::env::var("TURERP_TRUSTED_PROXIES")
-            .ok()
-            .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
-            .unwrap_or_default();
+        // Start from the safe defaults (see `Default` impl) so that an env-unset
+        // path returns the SAME values as the explicit default — a previous
+        // version of this function returned 10/3 here, which throttled every
+        // active user and was not what the README documented.
+        let mut cfg = Self::default();
 
-        Self {
-            trusted_proxies,
-            requests_per_minute: std::env::var("TURERP_RATE_LIMIT_REQUESTS_PER_MINUTE")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(10),
-            burst_size: std::env::var("TURERP_RATE_LIMIT_BURST")
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(3),
+        if let Ok(v) = std::env::var("TURERP_TRUSTED_PROXIES") {
+            cfg.trusted_proxies = v
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
         }
+        if let Ok(v) = std::env::var("TURERP_RATE_LIMIT_REQUESTS_PER_MINUTE") {
+            if let Ok(parsed) = v.parse() {
+                cfg.requests_per_minute = parsed;
+            }
+        }
+        if let Ok(v) = std::env::var("TURERP_RATE_LIMIT_BURST") {
+            if let Ok(parsed) = v.parse() {
+                cfg.burst_size = parsed;
+            }
+        }
+        cfg
     }
 
     /// Check if trusted proxies are configured
