@@ -10,6 +10,7 @@ use actix_web::{
     Error,
 };
 use futures::future::{ok, LocalBoxFuture, Ready};
+use futures::FutureExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -222,24 +223,81 @@ where
 /// Maximum retry attempts for audit log flush failures.
 const MAX_FLUSH_RETRIES: u32 = 3;
 
-/// Spawn a background task that drains audit events and batch-writes them
-pub fn spawn_audit_writer(
-    receiver: mpsc::Receiver<AuditEvent>,
-    service: crate::domain::audit::service::AuditService,
-) {
-    tokio::spawn(async move {
-        audit_writer_task(receiver, service).await;
-    });
-}
+/// Maximum panic backoff in seconds (caps the exponential growth).
+const MAX_PANIC_BACKOFF_SECS: u64 = 30;
 
-async fn audit_writer_task(
+/// Spawn a background task that drains audit events and batch-writes them.
+///
+/// Returns a `JoinHandle<()>` so the caller can await a clean drain on
+/// shutdown. The writer is supervised by a panic-recovery loop: if a panic
+/// occurs inside the writer (e.g. a transient DB error in
+/// `service.create_batch`), the supervisor catches it, sleeps with
+/// exponential backoff, and resumes the writer with the receiver and
+/// service still in scope (no ownership transfer into the panicked task).
+///
+/// Note: the panic backoff sleep here is not preemptible by a shutdown
+/// signal; that fix is layered on top in commit 9 (which generalizes the
+/// backoff to take a shutdown channel).
+pub fn spawn_audit_writer(
     mut receiver: mpsc::Receiver<AuditEvent>,
     service: crate::domain::audit::service::AuditService,
-) {
-    let mut buffer: Vec<CreateAuditLog> = Vec::new();
-    let mut dead_letter_queue: Vec<CreateAuditLog> = Vec::new();
-    let mut flush_interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut buffer: Vec<CreateAuditLog> = Vec::new();
+        let mut dead_letter_queue: Vec<CreateAuditLog> = Vec::new();
+        let mut flush_interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+        let mut panic_backoff_secs: u64 = 0;
 
+        loop {
+            // Only the per-iteration body is wrapped in catch_unwind.
+            // Receiver + buffer + service stay owned by the outer
+            // supervisor, so a panic inside `service.create_batch` does
+            // not consume them. AssertUnwindSafe: any !UnwindSafe state
+            // (none here — the receiver, buffer, and service are all
+            // safe to read after a panic) is documented as safe.
+            let tick = std::panic::AssertUnwindSafe(audit_writer_tick(
+                &mut receiver,
+                &service,
+                &mut buffer,
+                &mut dead_letter_queue,
+                &mut flush_interval,
+            ))
+            .catch_unwind()
+            .await;
+            match tick {
+                Ok(()) => {
+                    // Receiver dropped, writer exited normally.
+                    break;
+                }
+                Err(panic) => {
+                    tracing::error!("Audit writer panicked: {:?}", panic);
+                    panic_backoff_secs = (panic_backoff_secs * 2 + 1).min(MAX_PANIC_BACKOFF_SECS);
+                    tracing::warn!(
+                        "Audit writer sleeping {}s before restart",
+                        panic_backoff_secs
+                    );
+                    // Pre-commit 9: this sleep blocks shutdown. Commit 9
+                    // moves it inside a select! against the shutdown
+                    // channel. Sequential here to keep the panic-
+                    // recovery logic reviewable on its own.
+                    tokio::time::sleep(std::time::Duration::from_secs(panic_backoff_secs)).await;
+                    // Continue: receiver + buffer + service are still
+                    // valid. Drain any backlog the panic missed on the
+                    // next iteration.
+                }
+            }
+        }
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn audit_writer_tick(
+    receiver: &mut mpsc::Receiver<AuditEvent>,
+    service: &crate::domain::audit::service::AuditService,
+    buffer: &mut Vec<CreateAuditLog>,
+    dead_letter_queue: &mut Vec<CreateAuditLog>,
+    flush_interval: &mut tokio::time::Interval,
+) {
     loop {
         tokio::select! {
             event = receiver.recv() => {
@@ -260,7 +318,7 @@ async fn audit_writer_task(
                         buffer.push(log);
 
                         if buffer.len() >= 100 {
-                            if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
+                            if let Err(failed) = flush_buffer_with_retry(service, buffer, MAX_FLUSH_RETRIES).await {
                                 dead_letter_queue.extend(failed);
                                 if dead_letter_queue.len() > 1_000 {
                                     tracing::error!("Audit DLQ exceeded 1000 items, dropping oldest {} logs", dead_letter_queue.len() - 500);
@@ -272,7 +330,7 @@ async fn audit_writer_task(
                     None => {
                         // Channel closed — flush any remaining events and exit
                         if !buffer.is_empty() {
-                            if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
+                            if let Err(failed) = flush_buffer_with_retry(service, buffer, MAX_FLUSH_RETRIES).await {
                                 dead_letter_queue.extend(failed);
                             }
                         }
@@ -282,13 +340,13 @@ async fn audit_writer_task(
             }
             _ = flush_interval.tick() => {
                 if !buffer.is_empty() {
-                    if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
+                    if let Err(failed) = flush_buffer_with_retry(service, buffer, MAX_FLUSH_RETRIES).await {
                         dead_letter_queue.extend(failed);
                     }
                 }
                 if !dead_letter_queue.is_empty() {
-                    let mut dlq_buffer = std::mem::take(&mut dead_letter_queue);
-                    if let Err(failed) = flush_buffer_with_retry(&service, &mut dlq_buffer, MAX_FLUSH_RETRIES).await {
+                    let mut dlq_buffer = std::mem::take(dead_letter_queue);
+                    if let Err(failed) = flush_buffer_with_retry(service, &mut dlq_buffer, MAX_FLUSH_RETRIES).await {
                         dead_letter_queue.extend(failed);
                         if dead_letter_queue.len() > 1_000 {
                             tracing::error!("Audit DLQ exceeded 1000 items after retry, dropping oldest {} logs", dead_letter_queue.len() - 500);

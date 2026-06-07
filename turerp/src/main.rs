@@ -365,7 +365,7 @@ async fn main() -> std::io::Result<()> {
     let (audit_tx, audit_rx) = mpsc::channel::<AuditEvent>(AUDIT_CHANNEL_CAPACITY);
     let audit_sender: std::sync::Arc<mpsc::Sender<AuditEvent>> = std::sync::Arc::new(audit_tx);
     let audit_svc = app_state.analytics.audit_service.get_ref().clone();
-    spawn_audit_writer(audit_rx, audit_svc);
+    let audit_handle = spawn_audit_writer(audit_rx, audit_svc);
 
     let is_production = config.is_production();
     let security_headers_config = config.security_headers.clone();
@@ -529,11 +529,17 @@ async fn main() -> std::io::Result<()> {
     // Drain background workers within a hard 5s budget. The channels are
     // bounded at capacity 1 so the sends cannot block; the joins are
     // bounded by tokio::time::timeout so a stuck worker cannot hang us.
+    // The audit writer drains naturally: the server future above has been
+    // awaited/cancelled, so the audit_sender Arc clones inside the
+    // middleware have been dropped, the mpsc channel closes, and the
+    // writer's recv() returns None — which then flushes its buffer and
+    // exits.
     let drain = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         let _ = job_shutdown_tx.send(()).await;
         let _ = obs_shutdown_tx.send(()).await;
         let _ = job_handle.await;
         let _ = obs_handle.await;
+        let _ = audit_handle.await;
     })
     .await;
 
