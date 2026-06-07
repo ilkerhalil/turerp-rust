@@ -53,6 +53,12 @@ impl ObservabilityService {
 
     // ── Health Checks ───────────────────────────────────────────────
 
+    /// Per-probe timeout for the observability health path. The actix
+    /// worker default is 30s, but a single slow probe must not consume
+    /// a whole worker for that window. 2s is consistent with
+    /// main.rs::health_ready and Kubernetes' default readiness timeout.
+    const HEALTH_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
     /// Run a system health check
     #[tracing::instrument(skip(self))]
     pub async fn run_health_check(
@@ -71,13 +77,18 @@ impl ObservabilityService {
             checked_at: now,
         });
 
-        // Database check
+        // Database check — bounded by HEALTH_PROBE_TIMEOUT so a wedged
+        // DB cannot block the response.
         if let Some(pool) = db_check {
             let start = std::time::Instant::now();
-            let db_result = sqlx::query("SELECT 1").execute(pool).await;
+            let db_result = tokio::time::timeout(
+                Self::HEALTH_PROBE_TIMEOUT,
+                sqlx::query("SELECT 1").execute(pool),
+            )
+            .await;
             let latency_ms = start.elapsed().as_millis() as u64;
             match db_result {
-                Ok(_) => {
+                Ok(Ok(_)) => {
                     checks.push(HealthCheckResult {
                         component: "database".to_string(),
                         status: HealthStatus::Healthy,
@@ -86,7 +97,7 @@ impl ObservabilityService {
                         checked_at: now,
                     });
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     checks.push(HealthCheckResult {
                         component: "database".to_string(),
                         status: HealthStatus::Unhealthy,
@@ -95,17 +106,33 @@ impl ObservabilityService {
                         checked_at: now,
                     });
                 }
+                Err(_) => {
+                    checks.push(HealthCheckResult {
+                        component: "database".to_string(),
+                        status: HealthStatus::Unhealthy,
+                        latency_ms,
+                        message: Some(format!(
+                            "Database probe timed out after {}s",
+                            Self::HEALTH_PROBE_TIMEOUT.as_secs()
+                        )),
+                        checked_at: now,
+                    });
+                }
             }
         }
 
-        // Cache check
+        // Cache check — bounded by HEALTH_PROBE_TIMEOUT as well.
         {
             let start = std::time::Instant::now();
             let cache_key_str = cache_key(0, "health", "ping");
-            let cache_result = cache_set(&*self.cache, &cache_key_str, &"pong", Some(5)).await;
+            let cache_result = tokio::time::timeout(
+                Self::HEALTH_PROBE_TIMEOUT,
+                cache_set(&*self.cache, &cache_key_str, &"pong", Some(5)),
+            )
+            .await;
             let latency_ms = start.elapsed().as_millis() as u64;
             match cache_result {
-                Ok(_) => {
+                Ok(Ok(_)) => {
                     checks.push(HealthCheckResult {
                         component: "cache".to_string(),
                         status: HealthStatus::Healthy,
@@ -114,12 +141,24 @@ impl ObservabilityService {
                         checked_at: now,
                     });
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     checks.push(HealthCheckResult {
                         component: "cache".to_string(),
                         status: HealthStatus::Degraded,
                         latency_ms,
                         message: Some(format!("Cache error: {}", e)),
+                        checked_at: now,
+                    });
+                }
+                Err(_) => {
+                    checks.push(HealthCheckResult {
+                        component: "cache".to_string(),
+                        status: HealthStatus::Degraded,
+                        latency_ms,
+                        message: Some(format!(
+                            "Cache probe timed out after {}s",
+                            Self::HEALTH_PROBE_TIMEOUT.as_secs()
+                        )),
                         checked_at: now,
                     });
                 }

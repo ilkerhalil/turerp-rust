@@ -52,6 +52,19 @@ async fn health_live() -> actix_web::Result<actix_web::HttpResponse> {
 /// Readiness probe - checks database and cache connectivity
 /// with a per-probe timeout. A hung dependency would otherwise
 /// exhaust the actix worker pool while we wait for it.
+/// Redact an error string into a stable, non-leaking classification.
+/// Returns a short hash of the error so operators can correlate with
+/// server-side logs without exposing the raw sqlx error to anonymous
+/// kubelets.
+fn redact_error(err: impl std::fmt::Display) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let s = err.to_string();
+    let mut h = DefaultHasher::new();
+    s.hash(&mut h);
+    format!("error:{:x}", h.finish() & 0xFFFF_FFFF)
+}
+
 async fn health_ready(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
@@ -76,7 +89,11 @@ async fn health_ready(
             deps.insert("cache".into(), serde_json::json!("ok"));
         }
         Ok(Err(e)) => {
-            deps.insert("cache".into(), serde_json::json!(format!("error: {}", e)));
+            // Redact the error so the raw sqlx string is not leaked
+            // to anonymous kubelets. Operators correlate via the
+            // server-side log and the redacted hash.
+            tracing::error!("Cache health check error: {}", e);
+            deps.insert("cache".into(), serde_json::json!(redact_error(e)));
             healthy = false;
         }
         Err(_) => {
@@ -98,7 +115,8 @@ async fn health_ready(
                 deps.insert("db".into(), serde_json::json!("ok"));
             }
             Ok(Err(e)) => {
-                deps.insert("db".into(), serde_json::json!(format!("error: {}", e)));
+                tracing::error!("DB health check error: {}", e);
+                deps.insert("db".into(), serde_json::json!(redact_error(e)));
                 healthy = false;
             }
             Err(_) => {
@@ -114,6 +132,37 @@ async fn health_ready(
         deps.insert(
             "db".into(),
             serde_json::json!("not configured (in-memory mode)"),
+        );
+    }
+
+    // Scheduler probe: the previous code never invoked this, so
+    // /health/ready could claim "ok" even when the JobScheduler
+    // (PostgresJobScheduler in production) was wedged. The probe
+    // must be cheap and bounded by probe_timeout; the in-memory
+    // scheduler's default impl returns Ok(()) immediately, and
+    // PostgresJobScheduler::health_check runs a SELECT 1.
+    {
+        let scheduler = app_state.infra.job_scheduler.get_ref();
+        let scheduler_start = std::time::Instant::now();
+        let scheduler_result = tokio::time::timeout(probe_timeout, scheduler.health_check()).await;
+        let scheduler_latency_ms = scheduler_start.elapsed().as_millis();
+        match scheduler_result {
+            Ok(Ok(())) => {
+                deps.insert("scheduler".into(), serde_json::json!("ok"));
+            }
+            Ok(Err(e)) => {
+                tracing::error!("JobScheduler health check error: {}", e);
+                deps.insert("scheduler".into(), serde_json::json!(redact_error(e)));
+                healthy = false;
+            }
+            Err(_) => {
+                deps.insert("scheduler".into(), serde_json::json!("timeout"));
+                healthy = false;
+            }
+        }
+        deps.insert(
+            "scheduler_latency_ms".into(),
+            serde_json::json!(scheduler_latency_ms as u64),
         );
     }
 

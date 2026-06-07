@@ -31,6 +31,10 @@ pub const PUBLIC_PATHS: &[&str] = &[
     "/health",
     "/health/live",
     "/health/ready",
+    // Observability health paths (kubelet probes)
+    "/api/v1/observability/health",
+    "/api/v1/observability/health/live",
+    "/api/v1/observability/health/ready",
 ];
 
 /// JWT authentication middleware
