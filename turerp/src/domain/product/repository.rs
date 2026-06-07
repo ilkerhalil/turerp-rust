@@ -98,27 +98,56 @@ pub trait UnitRepository: Send + Sync {
 }
 
 /// Repository trait for ProductVariant operations.
-/// Note: ProductVariant does not have a tenant_id field; it is a child entity of Product.
-/// Tenant isolation should be enforced by looking up the parent Product first.
+///
+/// `product_variants` is a child table of `products`; it has no `tenant_id` column
+/// of its own. Tenant isolation MUST be enforced by filtering on the parent
+/// product's `tenant_id` (the variant belongs to whichever tenant owns its
+/// product). Every read/mutate method that operates on a single variant takes
+/// `tenant_id` and rejects the operation if the parent product does not match.
+///
+/// For `find_by_product` and `find_deleted`, callers must pass the tenant of
+/// the parent product; the repo returns only variants whose parent product
+/// belongs to that tenant.
 #[async_trait]
 pub trait ProductVariantRepository: Send + Sync {
+    /// Create a new variant. Caller is responsible for ensuring the parent
+    /// product belongs to the tenant — typically verified by the service layer
+    /// via `product_repo.find_by_id(product_id, tenant_id)` before calling.
     async fn create(&self, variant: CreateProductVariant) -> Result<ProductVariant, ApiError>;
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<ProductVariant>, ApiError>;
+    /// List non-deleted variants for a product, scoped to a tenant.
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<ProductVariant>, ApiError>;
+    /// Find a single variant by id, scoped to a tenant. Returns `None` if the
+    /// variant does not exist, is soft-deleted, or its parent product belongs
+    /// to a different tenant.
+    async fn find_by_id(&self, id: i64, tenant_id: i64)
+        -> Result<Option<ProductVariant>, ApiError>;
+    /// Update a variant, scoped to a tenant. Returns `NotFound` if the
+    /// variant does not exist or its parent product belongs to a different
+    /// tenant.
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         variant: UpdateProductVariant,
     ) -> Result<ProductVariant, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
-    /// Soft delete a product variant
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
-    /// Restore a soft-deleted product variant
-    async fn restore(&self, id: i64) -> Result<ProductVariant, ApiError>;
-    /// Find soft-deleted product variants
-    async fn find_deleted(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError>;
-    /// Hard delete a product variant (permanent destruction)
-    async fn destroy(&self, id: i64) -> Result<(), ApiError>;
+    /// Hard delete (one-shot) a variant, scoped to a tenant.
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
+    /// Soft delete a product variant, scoped to a tenant.
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Restore a soft-deleted product variant, scoped to a tenant.
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<ProductVariant, ApiError>;
+    /// Find soft-deleted product variants for a product, scoped to a tenant.
+    async fn find_deleted(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<ProductVariant>, ApiError>;
+    /// Hard delete (permanent destruction) a variant, scoped to a tenant.
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type aliases
@@ -804,23 +833,35 @@ struct InMemoryProductVariantInner {
 /// In-memory product variant repository
 pub struct InMemoryProductVariantRepository {
     inner: Mutex<InMemoryProductVariantInner>,
+    /// Parent product repository used to look up the tenant of a variant's
+    /// parent product for tenant-isolation checks. `product_variants` has no
+    /// `tenant_id` column, so the variant repo must consult the parent.
+    product_repo: BoxProductRepository,
 }
 
 impl InMemoryProductVariantRepository {
-    pub fn new() -> Self {
+    pub fn new(product_repo: BoxProductRepository) -> Self {
         Self {
             inner: Mutex::new(InMemoryProductVariantInner {
                 variants: std::collections::HashMap::new(),
                 next_id: 1,
                 product_variants: std::collections::HashMap::new(),
             }),
+            product_repo,
         }
     }
-}
 
-impl Default for InMemoryProductVariantRepository {
-    fn default() -> Self {
-        Self::new()
+    /// Inherent helper: returns `true` if the parent product of
+    /// `variant_product_id` exists (non-deleted) and belongs to `tenant_id`.
+    /// Caller must NOT hold the inner mutex when calling — `product_repo`
+    /// is async.
+    async fn parent_belongs_to_tenant(&self, variant_product_id: i64, tenant_id: i64) -> bool {
+        matches!(
+            self.product_repo
+                .find_by_id(variant_product_id, tenant_id)
+                .await,
+            Ok(Some(_))
+        )
     }
 }
 
@@ -854,7 +895,14 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
         Ok(variant)
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError> {
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<ProductVariant>, ApiError> {
+        if !self.parent_belongs_to_tenant(product_id, tenant_id).await {
+            return Ok(Vec::new());
+        }
         let inner = self.inner.lock();
         let ids = inner
             .product_variants
@@ -868,18 +916,51 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
             .collect())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<ProductVariant>, ApiError> {
+    async fn find_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<ProductVariant>, ApiError> {
+        let product_id = {
+            let inner = self.inner.lock();
+            match inner.variants.get(&id) {
+                Some(v) if !v.is_deleted() => v.product_id,
+                _ => return Ok(None),
+            }
+        };
+        if !self.parent_belongs_to_tenant(product_id, tenant_id).await {
+            return Ok(None);
+        }
         let inner = self.inner.lock();
-        Ok(inner.variants.get(&id).filter(|v| !v.is_deleted()).cloned())
+        Ok(inner.variants.get(&id).cloned())
     }
 
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         update: UpdateProductVariant,
     ) -> Result<ProductVariant, ApiError> {
-        let mut inner = self.inner.lock();
+        let product_id = {
+            let inner = self.inner.lock();
+            match inner.variants.get(&id) {
+                Some(v) if !v.is_deleted() => v.product_id,
+                _ => {
+                    return Err(ApiError::NotFound(format!(
+                        "Product variant {} not found",
+                        id
+                    )))
+                }
+            }
+        };
+        if !self.parent_belongs_to_tenant(product_id, tenant_id).await {
+            return Err(ApiError::NotFound(format!(
+                "Product variant {} not found",
+                id
+            )));
+        }
 
+        let mut inner = self.inner.lock();
         let variant = inner
             .variants
             .get_mut(&id)
@@ -904,53 +985,100 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
         Ok(variant.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
-        let mut inner = self.inner.lock();
-
-        if !inner.variants.contains_key(&id) {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let product_id = {
+            let inner = self.inner.lock();
+            match inner.variants.get(&id) {
+                Some(v) => v.product_id,
+                None => {
+                    return Err(ApiError::NotFound(format!(
+                        "Product variant {} not found",
+                        id
+                    )))
+                }
+            }
+        };
+        if !self.parent_belongs_to_tenant(product_id, tenant_id).await {
             return Err(ApiError::NotFound(format!(
                 "Product variant {} not found",
                 id
             )));
         }
 
-        let product_id = inner.variants.get(&id).map(|v| v.product_id);
+        let mut inner = self.inner.lock();
         inner.variants.remove(&id);
-
-        if let Some(pid) = product_id {
-            if let Some(ids) = inner.product_variants.get_mut(&pid) {
-                ids.retain(|x| *x != id);
-            }
+        if let Some(ids) = inner.product_variants.get_mut(&product_id) {
+            ids.retain(|x| *x != id);
         }
-
         Ok(())
     }
 
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
-        let mut inner = self.inner.lock();
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+        let product_id = {
+            let inner = self.inner.lock();
+            match inner.variants.get(&id) {
+                Some(v) if !v.is_deleted() => v.product_id,
+                _ => {
+                    return Err(ApiError::NotFound(format!(
+                        "Product variant {} not found",
+                        id
+                    )))
+                }
+            }
+        };
+        if !self.parent_belongs_to_tenant(product_id, tenant_id).await {
+            return Err(ApiError::NotFound(format!(
+                "Product variant {} not found",
+                id
+            )));
+        }
 
+        let mut inner = self.inner.lock();
         let variant = inner
             .variants
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Product variant {} not found", id)))?;
-
         variant.mark_deleted(deleted_by);
         Ok(())
     }
 
-    async fn restore(&self, id: i64) -> Result<ProductVariant, ApiError> {
-        let mut inner = self.inner.lock();
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<ProductVariant, ApiError> {
+        let product_id = {
+            let inner = self.inner.lock();
+            match inner.variants.get(&id) {
+                Some(v) if v.is_deleted() => v.product_id,
+                _ => {
+                    return Err(ApiError::NotFound(format!(
+                        "Product variant {} not found or not deleted",
+                        id
+                    )))
+                }
+            }
+        };
+        if !self.parent_belongs_to_tenant(product_id, tenant_id).await {
+            return Err(ApiError::NotFound(format!(
+                "Product variant {} not found or not deleted",
+                id
+            )));
+        }
 
+        let mut inner = self.inner.lock();
         let variant = inner
             .variants
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Product variant {} not found", id)))?;
-
         variant.restore();
         Ok(variant.clone())
     }
 
-    async fn find_deleted(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError> {
+    async fn find_deleted(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<ProductVariant>, ApiError> {
+        if !self.parent_belongs_to_tenant(product_id, tenant_id).await {
+            return Ok(Vec::new());
+        }
         let inner = self.inner.lock();
         let ids = inner
             .product_variants
@@ -964,21 +1092,31 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
             .collect())
     }
 
-    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let product_id = {
+            let inner = self.inner.lock();
+            match inner.variants.get(&id) {
+                Some(v) => v.product_id,
+                None => {
+                    return Err(ApiError::NotFound(format!(
+                        "Product variant {} not found",
+                        id
+                    )))
+                }
+            }
+        };
+        if !self.parent_belongs_to_tenant(product_id, tenant_id).await {
+            return Err(ApiError::NotFound(format!(
+                "Product variant {} not found",
+                id
+            )));
+        }
+
         let mut inner = self.inner.lock();
-
-        let variant = inner
-            .variants
-            .get(&id)
-            .ok_or_else(|| ApiError::NotFound(format!("Product variant {} not found", id)))?;
-
-        let product_id = variant.product_id;
         inner.variants.remove(&id);
-
         if let Some(ids) = inner.product_variants.get_mut(&product_id) {
             ids.retain(|x| *x != id);
         }
-
         Ok(())
     }
 }

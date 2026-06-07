@@ -610,19 +610,23 @@ impl ProductService {
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Product {} not found", product_id)))?;
 
-        let variants = variant_repo.find_by_product(product_id).await?;
+        let variants = variant_repo.find_by_product(product_id, tenant_id).await?;
         Ok(variants.into_iter().map(|v| v.into()).collect())
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn get_variant(&self, id: i64) -> Result<ProductVariantResponse, ApiError> {
+    pub async fn get_variant(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<ProductVariantResponse, ApiError> {
         let variant_repo = self
             .variant_repo
             .as_ref()
             .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
 
         let variant = variant_repo
-            .find_by_id(id)
+            .find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Product variant {} not found", id)))?;
         Ok(variant.into())
@@ -632,6 +636,7 @@ impl ProductService {
     pub async fn update_variant(
         &self,
         id: i64,
+        tenant_id: i64,
         update: UpdateProductVariant,
     ) -> Result<ProductVariantResponse, ApiError> {
         let variant_repo = self
@@ -639,40 +644,49 @@ impl ProductService {
             .as_ref()
             .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
 
-        let variant = variant_repo.update(id, update).await?;
+        let variant = variant_repo.update(id, tenant_id, update).await?;
         Ok(variant.into())
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn delete_variant(&self, id: i64) -> Result<(), ApiError> {
+    pub async fn delete_variant(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let variant_repo = self
             .variant_repo
             .as_ref()
             .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
 
-        variant_repo.delete(id).await
+        variant_repo.delete(id, tenant_id).await
     }
 
     /// Soft delete a product variant (sets deleted_at)
     #[tracing::instrument(skip(self))]
-    pub async fn soft_delete_variant(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    pub async fn soft_delete_variant(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
         let variant_repo = self
             .variant_repo
             .as_ref()
             .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
 
-        variant_repo.soft_delete(id, deleted_by).await
+        variant_repo.soft_delete(id, tenant_id, deleted_by).await
     }
 
     /// Restore a soft-deleted product variant
     #[tracing::instrument(skip(self))]
-    pub async fn restore_variant(&self, id: i64) -> Result<ProductVariantResponse, ApiError> {
+    pub async fn restore_variant(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<ProductVariantResponse, ApiError> {
         let variant_repo = self
             .variant_repo
             .as_ref()
             .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
 
-        let variant = variant_repo.restore(id).await?;
+        let variant = variant_repo.restore(id, tenant_id).await?;
         Ok(variant.into())
     }
 
@@ -681,25 +695,26 @@ impl ProductService {
     pub async fn list_deleted_variants(
         &self,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<ProductVariantResponse>, ApiError> {
         let variant_repo = self
             .variant_repo
             .as_ref()
             .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
 
-        let variants = variant_repo.find_deleted(product_id).await?;
+        let variants = variant_repo.find_deleted(product_id, tenant_id).await?;
         Ok(variants.into_iter().map(|v| v.into()).collect())
     }
 
     /// Permanently delete a product variant (hard delete)
     #[tracing::instrument(skip(self))]
-    pub async fn destroy_variant(&self, id: i64) -> Result<(), ApiError> {
+    pub async fn destroy_variant(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let variant_repo = self
             .variant_repo
             .as_ref()
             .ok_or_else(|| ApiError::Internal("Variant repository not configured".to_string()))?;
 
-        variant_repo.destroy(id).await
+        variant_repo.destroy(id, tenant_id).await
     }
 }
 
@@ -733,8 +748,8 @@ mod tests {
         let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
         let category_repo = Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
         let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
-        let variant_repo =
-            Arc::new(InMemoryProductVariantRepository::new()) as BoxProductVariantRepository;
+        let variant_repo = Arc::new(InMemoryProductVariantRepository::new(product_repo.clone()))
+            as BoxProductVariantRepository;
         ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo)
     }
 
@@ -965,7 +980,7 @@ mod tests {
             is_active: None,
         };
 
-        let updated = service.update_variant(variant.id, update).await.unwrap();
+        let updated = service.update_variant(variant.id, 1, update).await.unwrap();
         assert_eq!(updated.name, "Updated Name");
         assert_eq!(updated.sku, Some("NEW-SKU".to_string()));
         assert_eq!(updated.price_modifier, dec!(15.0));
@@ -1002,10 +1017,10 @@ mod tests {
         let variant = service.create_variant(variant_create, 1).await.unwrap();
 
         // Delete variant
-        service.delete_variant(variant.id).await.unwrap();
+        service.delete_variant(variant.id, 1).await.unwrap();
 
         // Verify deletion
-        let result = service.get_variant(variant.id).await;
+        let result = service.get_variant(variant.id, 1).await;
         assert!(result.is_err());
     }
 
@@ -1125,5 +1140,99 @@ mod tests {
 
         let paginated = service.get_products_paginated(1, 1, 10).await.unwrap();
         assert!(!paginated.items.is_empty());
+    }
+
+    /// Regression test for commit `fix(security): tenant_id for product_variants`.
+    /// `product_variants` has no `tenant_id` column of its own; tenant isolation
+    /// must be enforced via the parent product. A variant created under
+    /// tenant-1's product must not be readable / mutable / deletable by tenant-2.
+    #[tokio::test]
+    async fn test_variant_tenant_isolation() {
+        let service = create_service_with_variants();
+
+        // Product owned by tenant 1
+        let p1 = service
+            .create_product(CreateProduct {
+                tenant_id: 1,
+                company_id: 1,
+                code: "P-ISO-1".to_string(),
+                name: "Tenant1 Product".to_string(),
+                description: None,
+                category_id: None,
+                unit_id: None,
+                barcode: None,
+                purchase_price: dec!(10.0),
+                sale_price: dec!(20.0),
+                tax_rate: dec!(18.0),
+            })
+            .await
+            .unwrap();
+
+        // Variant under tenant 1's product
+        let v = service
+            .create_variant(
+                CreateProductVariant {
+                    product_id: p1.id,
+                    name: "Tenant1 Variant".to_string(),
+                    sku: Some("T1-V".to_string()),
+                    barcode: None,
+                    price_modifier: dec!(0.0),
+                },
+                1,
+            )
+            .await
+            .unwrap();
+
+        // Tenant 2 cannot read it
+        let from_tenant_2 = service.get_variant(v.id, 2).await;
+        assert!(
+            matches!(from_tenant_2, Err(ApiError::NotFound(_))),
+            "tenant-2 should NOT be able to read tenant-1's variant, got {:?}",
+            from_tenant_2
+        );
+
+        // Tenant 2 cannot list it via the parent product lookup
+        let list_result = service.get_variants_by_product(p1.id, 2).await;
+        assert!(
+            matches!(list_result, Err(ApiError::NotFound(_))),
+            "tenant-2 must NOT see tenant-1's parent product, got {:?}",
+            list_result
+        );
+
+        // Tenant 2 cannot update it
+        let upd = UpdateProductVariant {
+            name: Some("Hacked".to_string()),
+            sku: None,
+            barcode: None,
+            price_modifier: None,
+            is_active: None,
+        };
+        let update_result = service.update_variant(v.id, 2, upd).await;
+        assert!(
+            matches!(update_result, Err(ApiError::NotFound(_))),
+            "tenant-2 should NOT be able to update tenant-1's variant, got {:?}",
+            update_result
+        );
+
+        // Tenant 2 cannot soft-delete it
+        let del_result = service.soft_delete_variant(v.id, 2, 999).await;
+        assert!(
+            matches!(del_result, Err(ApiError::NotFound(_))),
+            "tenant-2 should NOT be able to soft-delete tenant-1's variant, got {:?}",
+            del_result
+        );
+
+        // Tenant 2 cannot hard-delete it
+        let destroy_result = service.destroy_variant(v.id, 2).await;
+        assert!(
+            matches!(destroy_result, Err(ApiError::NotFound(_))),
+            "tenant-2 should NOT be able to destroy tenant-1's variant, got {:?}",
+            destroy_result
+        );
+
+        // Tenant 1 CAN still read it (sanity check — we didn't break tenant-1)
+        let from_tenant_1 = service.get_variant(v.id, 1).await.unwrap();
+        assert_eq!(from_tenant_1.id, v.id);
+        assert_eq!(from_tenant_1.name, "Tenant1 Variant");
     }
 }

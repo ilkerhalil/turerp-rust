@@ -724,8 +724,10 @@ pub mod app {
         let product_repo_import = product_repo.clone();
         let category_repo = Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
         let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
-        let variant_repo =
-            Arc::new(InMemoryProductVariantRepository::new()) as BoxProductVariantRepository;
+        // The in-memory variant repo depends on the product repo for tenant
+        // lookups (product_variants has no tenant_id column of its own).
+        let variant_repo = Arc::new(InMemoryProductVariantRepository::new(product_repo.clone()))
+            as BoxProductVariantRepository;
         let product_service =
             ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo)
                 .with_cache(cache_service.clone());

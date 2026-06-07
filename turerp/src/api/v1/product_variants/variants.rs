@@ -102,7 +102,7 @@ pub async fn get_variants_by_product(
     )
 )]
 pub async fn get_variant(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     service: web::Data<ProductService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -110,7 +110,7 @@ pub async fn get_variant(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        service.get_variant(*path),
+        service.get_variant(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -138,7 +138,7 @@ pub async fn get_variant(
     )
 )]
 pub async fn update_variant(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     service: web::Data<ProductService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateProductVariant>,
@@ -147,7 +147,7 @@ pub async fn update_variant(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        service.update_variant(*path, payload.into_inner()),
+        service.update_variant(*path, admin_user.0.tenant_id, payload.into_inner()),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -173,15 +173,16 @@ pub async fn update_variant(
     )
 )]
 pub async fn delete_variant(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     service: web::Data<ProductService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    let user_id = admin_user.0.user_id()?;
     match service
-        .soft_delete_variant(*path, _admin_user.0.user_id()?)
+        .soft_delete_variant(*path, admin_user.0.tenant_id, user_id)
         .await
     {
         Ok(()) => {
@@ -205,11 +206,13 @@ pub async fn delete_variant(
     security(("bearer_auth" = []))
 )]
 pub async fn restore_variant(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     service: web::Data<ProductService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let variant = service.restore_variant(*path).await?;
+    let variant = service
+        .restore_variant(*path, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(variant))
 }
 
@@ -225,11 +228,13 @@ pub async fn restore_variant(
     security(("bearer_auth" = []))
 )]
 pub async fn list_deleted_variants(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     service: web::Data<ProductService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let variants = service.list_deleted_variants(*path).await?;
+    let variants = service
+        .list_deleted_variants(*path, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(variants))
 }
 
@@ -246,10 +251,12 @@ pub async fn list_deleted_variants(
     security(("bearer_auth" = []))
 )]
 pub async fn destroy_variant(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     service: web::Data<ProductService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    service.destroy_variant(*path).await?;
+    service
+        .destroy_variant(*path, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
