@@ -29,14 +29,27 @@ impl JobService {
         }
     }
 
-    /// Start background tasks: cron evaluation and stalled job recovery
+    /// Start background tasks: cron evaluation and stalled job recovery.
+    ///
+    /// Returns `(JoinHandle, shutdown_tx)` so the caller can:
+    /// - Await the JoinHandle in its drain sequence
+    /// - Signal a clean shutdown via shutdown_tx.send(())
+    ///
+    /// The previous implementation spawned the task and stored the
+    /// shutdown sender in `self.shutdown`, but main.rs never called
+    /// `start_background_tasks` — so the 60s cron evaluator and 300s
+    /// stalled-job resetter silently never ran, and scheduled jobs in
+    /// the database never fired. This commit wires the call from main.rs
+    /// and returns the handle so the drain sequence can await it.
     #[tracing::instrument(skip(self))]
-    pub async fn start_background_tasks(&self) {
+    pub fn start_background_tasks(
+        &self,
+    ) -> (tokio::task::JoinHandle<()>, tokio::sync::mpsc::Sender<()>) {
         let repo = self.repo.clone();
         let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
-        *self.shutdown.lock() = Some(tx);
+        *self.shutdown.lock() = Some(tx.clone());
 
-        tokio::spawn(async move {
+        let handle = tokio::spawn(async move {
             let mut cron_interval = tokio::time::interval(Duration::from_secs(60));
             let mut heartbeat_interval = tokio::time::interval(Duration::from_secs(300));
             // First tick fires immediately; skip it for cron to avoid startup storm
@@ -61,6 +74,7 @@ impl JobService {
                 }
             }
         });
+        (handle, tx)
     }
 
     /// Shut down background tasks
@@ -693,7 +707,7 @@ mod tests {
             .await
             .unwrap();
 
-        svc.start_background_tasks().await;
+        let (_handle, _tx) = svc.start_background_tasks();
 
         // Background cron interval is 60s; we just verify start/shutdown don't panic
         svc.shutdown().await;

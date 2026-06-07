@@ -88,7 +88,18 @@ impl JobExecutor {
                                     panic_backoff_secs
                                 );
                                 panic_backoff_secs = (panic_backoff_secs * 2 + 1).min(30);
-                                tokio::time::sleep(Duration::from_secs(panic_backoff_secs)).await;
+                                // Backoff is INSIDE the outer select! so
+                                // shutdown can preempt it. If we slept
+                                // here unconditionally, a SIGTERM during
+                                // a long backoff would block until the
+                                // timer expired.
+                                tokio::select! {
+                                    _ = tokio::time::sleep(Duration::from_secs(panic_backoff_secs)) => {}
+                                    _ = rx.recv() => {
+                                        tracing::info!("Job executor shutting down during panic backoff");
+                                        return;
+                                    }
+                                }
                             }
                         }
                     }

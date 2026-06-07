@@ -404,6 +404,30 @@ async fn main() -> std::io::Result<()> {
     };
     tracing::info!("Background observability evaluator started");
 
+    // Start job service background tasks: 60s cron evaluator + 300s
+    // stalled-job resetter. This was previously never invoked from
+    // main, so scheduled jobs in the database silently never fired —
+    // the JobExecutor polls next_pending() but the cron schedule
+    // never enqueued anything. We construct a JobService with the
+    // appropriate repository (Postgres in production, in-memory in
+    // dev) and capture the JoinHandle for the drain sequence.
+    let (job_cron_handle, job_cron_shutdown_tx) = {
+        use turerp::domain::job::repository::JobRepository;
+        let job_repo: std::sync::Arc<dyn JobRepository> =
+            if let Some(pool) = app_state.infra.db_pool.as_ref() {
+                std::sync::Arc::new(
+                    turerp::domain::job::postgres_repository::PostgresJobRepository::new(
+                        pool.get_ref().as_ref().clone(),
+                    ),
+                )
+            } else {
+                std::sync::Arc::new(turerp::domain::job::repository::InMemoryJobRepository::new())
+            };
+        let svc = turerp::domain::job::service::JobService::new(job_repo);
+        svc.start_background_tasks()
+    };
+    tracing::info!("Job service background tasks started (60s cron + 300s heartbeat)");
+
     // Build rate-limit middleware with shared stats store so the dashboard can read them
     let rate_limit_middleware = {
         let stats_store = app_state.infra.rate_limit_stats.get_ref().clone();
@@ -586,8 +610,10 @@ async fn main() -> std::io::Result<()> {
     let drain = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         let _ = job_shutdown_tx.send(()).await;
         let _ = obs_shutdown_tx.send(()).await;
+        let _ = job_cron_shutdown_tx.send(()).await;
         let _ = job_handle.await;
         let _ = obs_handle.await;
+        let _ = job_cron_handle.await;
         let _ = audit_handle.await;
     })
     .await;

@@ -260,9 +260,11 @@ const MAX_PANIC_BACKOFF_SECS: u64 = 30;
 /// exponential backoff, and resumes the writer with the receiver and
 /// service still in scope (no ownership transfer into the panicked task).
 ///
-/// Note: the panic backoff sleep here is not preemptible by a shutdown
-/// signal; that fix is layered on top in commit 9 (which generalizes the
-/// backoff to take a shutdown channel).
+/// The backoff sleep is preemptible by a shutdown signal: when the audit
+/// channel closes (send-side clones dropped on server shutdown), the
+/// receiver's `recv()` returns `None` and the writer exits even if it
+/// is mid-backoff. Without this, a 30s backoff would block the drain
+/// sequence in main.rs past its 5s budget.
 pub fn spawn_audit_writer(
     mut receiver: mpsc::Receiver<AuditEvent>,
     service: crate::domain::audit::service::AuditService,
@@ -301,11 +303,19 @@ pub fn spawn_audit_writer(
                         "Audit writer sleeping {}s before restart",
                         panic_backoff_secs
                     );
-                    // Pre-commit 9: this sleep blocks shutdown. Commit 9
-                    // moves it inside a select! against the shutdown
-                    // channel. Sequential here to keep the panic-
-                    // recovery logic reviewable on its own.
-                    tokio::time::sleep(std::time::Duration::from_secs(panic_backoff_secs)).await;
+                    // Backoff INSIDE a select! so a shutdown signal
+                    // (server drop → middleware Arc clones drop →
+                    // channel closes → receiver.recv() returns None)
+                    // can preempt the backoff. The drain sequence in
+                    // main.rs bounds shutdown to 5s, so a 30s backoff
+                    // would otherwise always block it.
+                    tokio::select! {
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(panic_backoff_secs)) => {}
+                        _ = receiver.recv() => {
+                            tracing::info!("Audit writer shutting down during panic backoff");
+                            break;
+                        }
+                    }
                     // Continue: receiver + buffer + service are still
                     // valid. Drain any backlog the panic missed on the
                     // next iteration.
