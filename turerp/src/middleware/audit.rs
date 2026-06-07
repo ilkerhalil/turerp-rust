@@ -152,67 +152,92 @@ where
             // through the response chain.
             let auth_info = get_auth_claims(response.request()).ok();
 
-            if let Some(claims) = auth_info {
-                let user_id = claims.sub.parse().unwrap_or_else(|_| {
-                    tracing::warn!("Failed to parse user_id from JWT sub claim: {}", claims.sub);
-                    0
-                });
-                let event = AuditEvent {
-                    tenant_id: claims.tenant_id,
-                    user_id,
-                    username: claims.username.clone(),
-                    action: method,
-                    path,
-                    status_code: status.as_u16() as i16,
-                    request_id,
-                    ip_address,
-                    user_agent,
-                };
-
-                if status.is_client_error() || status.is_server_error() {
-                    tracing::warn!(
-                        tenant_id = %event.tenant_id,
-                        user_id = %event.user_id,
-                        action = %event.action,
-                        path = %event.path,
-                        status = %event.status_code,
-                        "Request completed with error"
-                    );
-                } else {
-                    tracing::info!(
-                        tenant_id = %event.tenant_id,
-                        user_id = %event.user_id,
-                        action = %event.action,
-                        path = %event.path,
-                        status = %event.status_code,
-                        "Request completed"
-                    );
+            // Build the audit event even when the request is
+            // unauthenticated, as long as the path is sensitive or the
+            // response was a 5xx. Brute-force attempts on /auth/login,
+            // MFA failures, and any 5xx must reach audit_logs — silent
+            // loss of these events is a security incident. Unauth
+            // requests on non-sensitive paths are still skipped (they
+            // would be 404s on unknown routes or noise on /health).
+            let (tenant_id, user_id, username) = match &auth_info {
+                Some(claims) => {
+                    let uid = claims.sub.parse().unwrap_or_else(|_| {
+                        tracing::warn!(
+                            "Failed to parse user_id from JWT sub claim: {}",
+                            claims.sub
+                        );
+                        0
+                    });
+                    (claims.tenant_id, uid, claims.username.clone())
                 }
+                None => (0_i64, 0_i64, "anonymous".to_string()),
+            };
 
-                // Tiered backpressure: sensitive events (auth, mfa, role,
-                // permission, or any 5xx) use a blocking send so they
-                // cannot be silently dropped under load. Routine events
-                // use try_send to keep the request path latency-bounded.
-                if let Some(sender) = sender {
-                    let is_sensitive = is_sensitive_audit_event(&event);
-                    if is_sensitive {
-                        if let Err(e) = sender.send(event).await {
-                            tracing::error!(
-                                "Audit channel closed (sensitive event dropped): {}",
-                                e
-                            );
-                        }
-                    } else if let Err(e) = sender.try_send(event) {
-                        tracing::warn!("Audit log channel full, dropping event: {}", e);
-                    }
-                }
-            } else {
+            let event = AuditEvent {
+                tenant_id,
+                user_id,
+                username,
+                action: method,
+                path,
+                status_code: status.as_u16() as i16,
+                request_id,
+                ip_address,
+                user_agent,
+            };
+
+            let is_sensitive = is_sensitive_audit_event(&event);
+            let is_unauth = auth_info.is_none();
+            // Persist if: (a) the event is sensitive (auth/mfa/role/perm
+            // path, or any 5xx), or (b) we have auth context. Unauth
+            // requests on non-sensitive, non-5xx paths (e.g. 404s on
+            // /favicon.ico) are still dropped to keep the audit log
+            // signal-to-noise ratio high.
+            let should_persist = is_sensitive || !is_unauth;
+
+            if !should_persist {
                 tracing::debug!(
-                    method = %method,
-                    path = %path,
-                    status = %status.as_u16(),
-                    "Unauthenticated request completed"
+                    method = %event.action,
+                    path = %event.path,
+                    status = %event.status_code,
+                    "Unauthenticated non-sensitive request completed (not audited)"
                 );
+                return Ok(response);
+            }
+
+            // The event is held by value in the persist block below;
+            // log from the same struct so trace and DB row agree.
+            if status.is_client_error() || status.is_server_error() {
+                tracing::warn!(
+                    tenant_id = %event.tenant_id,
+                    user_id = %event.user_id,
+                    action = %event.action,
+                    path = %event.path,
+                    status = %event.status_code,
+                    "Request completed with error"
+                );
+            } else {
+                tracing::info!(
+                    tenant_id = %event.tenant_id,
+                    user_id = %event.user_id,
+                    action = %event.action,
+                    path = %event.path,
+                    status = %event.status_code,
+                    "Request completed"
+                );
+            }
+
+            // Tiered backpressure: sensitive events (auth, mfa, role,
+            // permission, or any 5xx) use a blocking send so they
+            // cannot be silently dropped under load. Routine events
+            // use try_send to keep the request path latency-bounded.
+            if let Some(sender) = sender {
+                if is_sensitive {
+                    if let Err(e) = sender.send(event).await {
+                        tracing::error!("Audit channel closed (sensitive event dropped): {}", e);
+                    }
+                } else if let Err(e) = sender.try_send(event) {
+                    tracing::warn!("Audit log channel full, dropping event: {}", e);
+                }
             }
 
             Ok(response)
