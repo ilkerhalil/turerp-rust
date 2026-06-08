@@ -52,6 +52,19 @@ async fn health_live() -> actix_web::Result<actix_web::HttpResponse> {
 /// Readiness probe - checks database and cache connectivity
 /// with a per-probe timeout. A hung dependency would otherwise
 /// exhaust the actix worker pool while we wait for it.
+/// Redact an error string into a stable, non-leaking classification.
+/// Returns a short hash of the error so operators can correlate with
+/// server-side logs without exposing the raw sqlx error to anonymous
+/// kubelets.
+fn redact_error(err: impl std::fmt::Display) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let s = err.to_string();
+    let mut h = DefaultHasher::new();
+    s.hash(&mut h);
+    format!("error:{:x}", h.finish() & 0xFFFF_FFFF)
+}
+
 async fn health_ready(
     app_state: web::Data<AppState>,
 ) -> actix_web::Result<actix_web::HttpResponse> {
@@ -76,7 +89,11 @@ async fn health_ready(
             deps.insert("cache".into(), serde_json::json!("ok"));
         }
         Ok(Err(e)) => {
-            deps.insert("cache".into(), serde_json::json!(format!("error: {}", e)));
+            // Redact the error so the raw sqlx string is not leaked
+            // to anonymous kubelets. Operators correlate via the
+            // server-side log and the redacted hash.
+            tracing::error!("Cache health check error: {}", e);
+            deps.insert("cache".into(), serde_json::json!(redact_error(e)));
             healthy = false;
         }
         Err(_) => {
@@ -98,7 +115,8 @@ async fn health_ready(
                 deps.insert("db".into(), serde_json::json!("ok"));
             }
             Ok(Err(e)) => {
-                deps.insert("db".into(), serde_json::json!(format!("error: {}", e)));
+                tracing::error!("DB health check error: {}", e);
+                deps.insert("db".into(), serde_json::json!(redact_error(e)));
                 healthy = false;
             }
             Err(_) => {
@@ -114,6 +132,37 @@ async fn health_ready(
         deps.insert(
             "db".into(),
             serde_json::json!("not configured (in-memory mode)"),
+        );
+    }
+
+    // Scheduler probe: the previous code never invoked this, so
+    // /health/ready could claim "ok" even when the JobScheduler
+    // (PostgresJobScheduler in production) was wedged. The probe
+    // must be cheap and bounded by probe_timeout; the in-memory
+    // scheduler's default impl returns Ok(()) immediately, and
+    // PostgresJobScheduler::health_check runs a SELECT 1.
+    {
+        let scheduler = app_state.infra.job_scheduler.get_ref();
+        let scheduler_start = std::time::Instant::now();
+        let scheduler_result = tokio::time::timeout(probe_timeout, scheduler.health_check()).await;
+        let scheduler_latency_ms = scheduler_start.elapsed().as_millis();
+        match scheduler_result {
+            Ok(Ok(())) => {
+                deps.insert("scheduler".into(), serde_json::json!("ok"));
+            }
+            Ok(Err(e)) => {
+                tracing::error!("JobScheduler health check error: {}", e);
+                deps.insert("scheduler".into(), serde_json::json!(redact_error(e)));
+                healthy = false;
+            }
+            Err(_) => {
+                deps.insert("scheduler".into(), serde_json::json!("timeout"));
+                healthy = false;
+            }
+        }
+        deps.insert(
+            "scheduler_latency_ms".into(),
+            serde_json::json!(scheduler_latency_ms as u64),
         );
     }
 
@@ -355,6 +404,30 @@ async fn main() -> std::io::Result<()> {
     };
     tracing::info!("Background observability evaluator started");
 
+    // Start job service background tasks: 60s cron evaluator + 300s
+    // stalled-job resetter. This was previously never invoked from
+    // main, so scheduled jobs in the database silently never fired —
+    // the JobExecutor polls next_pending() but the cron schedule
+    // never enqueued anything. We construct a JobService with the
+    // appropriate repository (Postgres in production, in-memory in
+    // dev) and capture the JoinHandle for the drain sequence.
+    let (job_cron_handle, job_cron_shutdown_tx) = {
+        use turerp::domain::job::repository::JobRepository;
+        let job_repo: std::sync::Arc<dyn JobRepository> =
+            if let Some(pool) = app_state.infra.db_pool.as_ref() {
+                std::sync::Arc::new(
+                    turerp::domain::job::postgres_repository::PostgresJobRepository::new(
+                        pool.get_ref().as_ref().clone(),
+                    ),
+                )
+            } else {
+                std::sync::Arc::new(turerp::domain::job::repository::InMemoryJobRepository::new())
+            };
+        let svc = turerp::domain::job::service::JobService::new(job_repo);
+        svc.start_background_tasks()
+    };
+    tracing::info!("Job service background tasks started (60s cron + 300s heartbeat)");
+
     // Build rate-limit middleware with shared stats store so the dashboard can read them
     let rate_limit_middleware = {
         let stats_store = app_state.infra.rate_limit_stats.get_ref().clone();
@@ -365,7 +438,7 @@ async fn main() -> std::io::Result<()> {
     let (audit_tx, audit_rx) = mpsc::channel::<AuditEvent>(AUDIT_CHANNEL_CAPACITY);
     let audit_sender: std::sync::Arc<mpsc::Sender<AuditEvent>> = std::sync::Arc::new(audit_tx);
     let audit_svc = app_state.analytics.audit_service.get_ref().clone();
-    spawn_audit_writer(audit_rx, audit_svc);
+    let audit_handle = spawn_audit_writer(audit_rx, audit_svc);
 
     let is_production = config.is_production();
     let security_headers_config = config.security_headers.clone();
@@ -529,11 +602,19 @@ async fn main() -> std::io::Result<()> {
     // Drain background workers within a hard 5s budget. The channels are
     // bounded at capacity 1 so the sends cannot block; the joins are
     // bounded by tokio::time::timeout so a stuck worker cannot hang us.
+    // The audit writer drains naturally: the server future above has been
+    // awaited/cancelled, so the audit_sender Arc clones inside the
+    // middleware have been dropped, the mpsc channel closes, and the
+    // writer's recv() returns None — which then flushes its buffer and
+    // exits.
     let drain = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         let _ = job_shutdown_tx.send(()).await;
         let _ = obs_shutdown_tx.send(()).await;
+        let _ = job_cron_shutdown_tx.send(()).await;
         let _ = job_handle.await;
         let _ = obs_handle.await;
+        let _ = job_cron_handle.await;
+        let _ = audit_handle.await;
     })
     .await;
 

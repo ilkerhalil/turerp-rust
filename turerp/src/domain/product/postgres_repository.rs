@@ -1047,17 +1047,25 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
         Ok(row.into())
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError> {
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<ProductVariant>, ApiError> {
         let rows: Vec<ProductVariantRow> = sqlx::query_as(
             r#"
-            SELECT id, product_id, name, sku, barcode, price_modifier, is_active, created_at,
-                   deleted_at, deleted_by
-            FROM product_variants
-            WHERE product_id = $1 AND deleted_at IS NULL
-            ORDER BY created_at DESC
+            SELECT v.id, v.product_id, v.name, v.sku, v.barcode, v.price_modifier,
+                   v.is_active, v.created_at, v.deleted_at, v.deleted_by
+            FROM product_variants v
+            INNER JOIN products p ON p.id = v.product_id AND p.deleted_at IS NULL
+            WHERE v.product_id = $1
+              AND p.tenant_id = $2
+              AND v.deleted_at IS NULL
+            ORDER BY v.created_at DESC
             "#,
         )
         .bind(product_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -1067,16 +1075,24 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<ProductVariant>, ApiError> {
+    async fn find_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<ProductVariant>, ApiError> {
         let result: Option<ProductVariantRow> = sqlx::query_as(
             r#"
-            SELECT id, product_id, name, sku, barcode, price_modifier, is_active, created_at,
-                   deleted_at, deleted_by
-            FROM product_variants
-            WHERE id = $1 AND deleted_at IS NULL
+            SELECT v.id, v.product_id, v.name, v.sku, v.barcode, v.price_modifier,
+                   v.is_active, v.created_at, v.deleted_at, v.deleted_by
+            FROM product_variants v
+            INNER JOIN products p ON p.id = v.product_id AND p.deleted_at IS NULL
+            WHERE v.id = $1
+              AND p.tenant_id = $2
+              AND v.deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find product variant by id: {}", e)))?;
@@ -1087,20 +1103,26 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         update: UpdateProductVariant,
     ) -> Result<ProductVariant, ApiError> {
         let row: ProductVariantRow = sqlx::query_as(
             r#"
-            UPDATE product_variants
+            UPDATE product_variants v
             SET
-                name = COALESCE($1, name),
-                sku = COALESCE($2, sku),
-                barcode = COALESCE($3, barcode),
-                price_modifier = COALESCE($4, price_modifier),
-                is_active = COALESCE($5, is_active)
-            WHERE id = $6 AND deleted_at IS NULL
-            RETURNING id, product_id, name, sku, barcode, price_modifier, is_active, created_at,
-                      deleted_at, deleted_by
+                name = COALESCE($1, v.name),
+                sku = COALESCE($2, v.sku),
+                barcode = COALESCE($3, v.barcode),
+                price_modifier = COALESCE($4, v.price_modifier),
+                is_active = COALESCE($5, v.is_active)
+            FROM products p
+            WHERE v.id = $6
+              AND p.id = v.product_id
+              AND p.tenant_id = $7
+              AND p.deleted_at IS NULL
+              AND v.deleted_at IS NULL
+            RETURNING v.id, v.product_id, v.name, v.sku, v.barcode, v.price_modifier,
+                      v.is_active, v.created_at, v.deleted_at, v.deleted_by
             "#,
         )
         .bind(&update.name)
@@ -1109,6 +1131,7 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
         .bind(update.price_modifier)
         .bind(update.is_active)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "ProductVariant"))?;
@@ -1116,14 +1139,19 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM product_variants
-            WHERE id = $1
+            DELETE FROM product_variants v
+            USING products p
+            WHERE v.id = $1
+              AND p.id = v.product_id
+              AND p.tenant_id = $2
+              AND p.deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete product variant: {}", e)))?;
@@ -1135,16 +1163,22 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
         Ok(())
     }
 
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            UPDATE product_variants
+            UPDATE product_variants v
             SET deleted_at = NOW(), deleted_by = $2
-            WHERE id = $1 AND deleted_at IS NULL
+            FROM products p
+            WHERE v.id = $1
+              AND p.id = v.product_id
+              AND p.tenant_id = $3
+              AND p.deleted_at IS NULL
+              AND v.deleted_at IS NULL
             "#,
         )
         .bind(id)
         .bind(deleted_by)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to soft delete product variant: {}", e)))?;
@@ -1156,15 +1190,21 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
         Ok(())
     }
 
-    async fn restore(&self, id: i64) -> Result<ProductVariant, ApiError> {
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<ProductVariant, ApiError> {
         let result = sqlx::query(
             r#"
-            UPDATE product_variants
+            UPDATE product_variants v
             SET deleted_at = NULL, deleted_by = NULL
-            WHERE id = $1 AND deleted_at IS NOT NULL
+            FROM products p
+            WHERE v.id = $1
+              AND p.id = v.product_id
+              AND p.tenant_id = $2
+              AND p.deleted_at IS NULL
+              AND v.deleted_at IS NOT NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to restore product variant: {}", e)))?;
@@ -1175,22 +1215,30 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
             ));
         }
 
-        self.find_by_id(id)
+        self.find_by_id(id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Product variant not found".to_string()))
     }
 
-    async fn find_deleted(&self, product_id: i64) -> Result<Vec<ProductVariant>, ApiError> {
+    async fn find_deleted(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<ProductVariant>, ApiError> {
         let rows: Vec<ProductVariantRow> = sqlx::query_as(
             r#"
-            SELECT id, product_id, name, sku, barcode, price_modifier, is_active, created_at,
-                   deleted_at, deleted_by
-            FROM product_variants
-            WHERE product_id = $1 AND deleted_at IS NOT NULL
-            ORDER BY deleted_at DESC
+            SELECT v.id, v.product_id, v.name, v.sku, v.barcode, v.price_modifier,
+                   v.is_active, v.created_at, v.deleted_at, v.deleted_by
+            FROM product_variants v
+            INNER JOIN products p ON p.id = v.product_id AND p.deleted_at IS NULL
+            WHERE v.product_id = $1
+              AND p.tenant_id = $2
+              AND v.deleted_at IS NOT NULL
+            ORDER BY v.deleted_at DESC
             "#,
         )
         .bind(product_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -1200,14 +1248,19 @@ impl ProductVariantRepository for PostgresProductVariantRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
-            DELETE FROM product_variants
-            WHERE id = $1
+            DELETE FROM product_variants v
+            USING products p
+            WHERE v.id = $1
+              AND p.id = v.product_id
+              AND p.tenant_id = $2
+              AND p.deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to destroy product variant: {}", e)))?;

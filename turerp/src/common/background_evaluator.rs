@@ -82,7 +82,18 @@ impl BackgroundEvaluator {
                                     panic_backoff_secs
                                 );
                                 panic_backoff_secs = (panic_backoff_secs * 2 + 1).min(30);
-                                tokio::time::sleep(Duration::from_secs(panic_backoff_secs)).await;
+                                // Backoff INSIDE the select! so shutdown
+                                // can preempt it. Without this, a long
+                                // backoff would block the drain
+                                // sequence in main.rs from completing
+                                // within the 5s budget.
+                                tokio::select! {
+                                    _ = tokio::time::sleep(Duration::from_secs(panic_backoff_secs)) => {}
+                                    _ = shutdown_rx.recv() => {
+                                        tracing::info!("Background evaluator shutting down during panic backoff");
+                                        return;
+                                    }
+                                }
                             }
                         }
                     }

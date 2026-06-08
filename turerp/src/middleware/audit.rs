@@ -10,6 +10,7 @@ use actix_web::{
     Error,
 };
 use futures::future::{ok, LocalBoxFuture, Ready};
+use futures::FutureExt;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -151,67 +152,92 @@ where
             // through the response chain.
             let auth_info = get_auth_claims(response.request()).ok();
 
-            if let Some(claims) = auth_info {
-                let user_id = claims.sub.parse().unwrap_or_else(|_| {
-                    tracing::warn!("Failed to parse user_id from JWT sub claim: {}", claims.sub);
-                    0
-                });
-                let event = AuditEvent {
-                    tenant_id: claims.tenant_id,
-                    user_id,
-                    username: claims.username.clone(),
-                    action: method,
-                    path,
-                    status_code: status.as_u16() as i16,
-                    request_id,
-                    ip_address,
-                    user_agent,
-                };
-
-                if status.is_client_error() || status.is_server_error() {
-                    tracing::warn!(
-                        tenant_id = %event.tenant_id,
-                        user_id = %event.user_id,
-                        action = %event.action,
-                        path = %event.path,
-                        status = %event.status_code,
-                        "Request completed with error"
-                    );
-                } else {
-                    tracing::info!(
-                        tenant_id = %event.tenant_id,
-                        user_id = %event.user_id,
-                        action = %event.action,
-                        path = %event.path,
-                        status = %event.status_code,
-                        "Request completed"
-                    );
+            // Build the audit event even when the request is
+            // unauthenticated, as long as the path is sensitive or the
+            // response was a 5xx. Brute-force attempts on /auth/login,
+            // MFA failures, and any 5xx must reach audit_logs — silent
+            // loss of these events is a security incident. Unauth
+            // requests on non-sensitive paths are still skipped (they
+            // would be 404s on unknown routes or noise on /health).
+            let (tenant_id, user_id, username) = match &auth_info {
+                Some(claims) => {
+                    let uid = claims.sub.parse().unwrap_or_else(|_| {
+                        tracing::warn!(
+                            "Failed to parse user_id from JWT sub claim: {}",
+                            claims.sub
+                        );
+                        0
+                    });
+                    (claims.tenant_id, uid, claims.username.clone())
                 }
+                None => (0_i64, 0_i64, "anonymous".to_string()),
+            };
 
-                // Tiered backpressure: sensitive events (auth, mfa, role,
-                // permission, or any 5xx) use a blocking send so they
-                // cannot be silently dropped under load. Routine events
-                // use try_send to keep the request path latency-bounded.
-                if let Some(sender) = sender {
-                    let is_sensitive = is_sensitive_audit_event(&event);
-                    if is_sensitive {
-                        if let Err(e) = sender.send(event).await {
-                            tracing::error!(
-                                "Audit channel closed (sensitive event dropped): {}",
-                                e
-                            );
-                        }
-                    } else if let Err(e) = sender.try_send(event) {
-                        tracing::warn!("Audit log channel full, dropping event: {}", e);
-                    }
-                }
-            } else {
+            let event = AuditEvent {
+                tenant_id,
+                user_id,
+                username,
+                action: method,
+                path,
+                status_code: status.as_u16() as i16,
+                request_id,
+                ip_address,
+                user_agent,
+            };
+
+            let is_sensitive = is_sensitive_audit_event(&event);
+            let is_unauth = auth_info.is_none();
+            // Persist if: (a) the event is sensitive (auth/mfa/role/perm
+            // path, or any 5xx), or (b) we have auth context. Unauth
+            // requests on non-sensitive, non-5xx paths (e.g. 404s on
+            // /favicon.ico) are still dropped to keep the audit log
+            // signal-to-noise ratio high.
+            let should_persist = is_sensitive || !is_unauth;
+
+            if !should_persist {
                 tracing::debug!(
-                    method = %method,
-                    path = %path,
-                    status = %status.as_u16(),
-                    "Unauthenticated request completed"
+                    method = %event.action,
+                    path = %event.path,
+                    status = %event.status_code,
+                    "Unauthenticated non-sensitive request completed (not audited)"
                 );
+                return Ok(response);
+            }
+
+            // The event is held by value in the persist block below;
+            // log from the same struct so trace and DB row agree.
+            if status.is_client_error() || status.is_server_error() {
+                tracing::warn!(
+                    tenant_id = %event.tenant_id,
+                    user_id = %event.user_id,
+                    action = %event.action,
+                    path = %event.path,
+                    status = %event.status_code,
+                    "Request completed with error"
+                );
+            } else {
+                tracing::info!(
+                    tenant_id = %event.tenant_id,
+                    user_id = %event.user_id,
+                    action = %event.action,
+                    path = %event.path,
+                    status = %event.status_code,
+                    "Request completed"
+                );
+            }
+
+            // Tiered backpressure: sensitive events (auth, mfa, role,
+            // permission, or any 5xx) use a blocking send so they
+            // cannot be silently dropped under load. Routine events
+            // use try_send to keep the request path latency-bounded.
+            if let Some(sender) = sender {
+                if is_sensitive {
+                    if let Err(e) = sender.send(event).await {
+                        tracing::error!("Audit channel closed (sensitive event dropped): {}", e);
+                    }
+                } else if let Err(e) = sender.try_send(event) {
+                    tracing::warn!("Audit log channel full, dropping event: {}", e);
+                }
             }
 
             Ok(response)
@@ -222,24 +248,91 @@ where
 /// Maximum retry attempts for audit log flush failures.
 const MAX_FLUSH_RETRIES: u32 = 3;
 
-/// Spawn a background task that drains audit events and batch-writes them
-pub fn spawn_audit_writer(
-    receiver: mpsc::Receiver<AuditEvent>,
-    service: crate::domain::audit::service::AuditService,
-) {
-    tokio::spawn(async move {
-        audit_writer_task(receiver, service).await;
-    });
-}
+/// Maximum panic backoff in seconds (caps the exponential growth).
+const MAX_PANIC_BACKOFF_SECS: u64 = 30;
 
-async fn audit_writer_task(
+/// Spawn a background task that drains audit events and batch-writes them.
+///
+/// Returns a `JoinHandle<()>` so the caller can await a clean drain on
+/// shutdown. The writer is supervised by a panic-recovery loop: if a panic
+/// occurs inside the writer (e.g. a transient DB error in
+/// `service.create_batch`), the supervisor catches it, sleeps with
+/// exponential backoff, and resumes the writer with the receiver and
+/// service still in scope (no ownership transfer into the panicked task).
+///
+/// The backoff sleep is preemptible by a shutdown signal: when the audit
+/// channel closes (send-side clones dropped on server shutdown), the
+/// receiver's `recv()` returns `None` and the writer exits even if it
+/// is mid-backoff. Without this, a 30s backoff would block the drain
+/// sequence in main.rs past its 5s budget.
+pub fn spawn_audit_writer(
     mut receiver: mpsc::Receiver<AuditEvent>,
     service: crate::domain::audit::service::AuditService,
-) {
-    let mut buffer: Vec<CreateAuditLog> = Vec::new();
-    let mut dead_letter_queue: Vec<CreateAuditLog> = Vec::new();
-    let mut flush_interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut buffer: Vec<CreateAuditLog> = Vec::new();
+        let mut dead_letter_queue: Vec<CreateAuditLog> = Vec::new();
+        let mut flush_interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+        let mut panic_backoff_secs: u64 = 0;
 
+        loop {
+            // Only the per-iteration body is wrapped in catch_unwind.
+            // Receiver + buffer + service stay owned by the outer
+            // supervisor, so a panic inside `service.create_batch` does
+            // not consume them. AssertUnwindSafe: any !UnwindSafe state
+            // (none here — the receiver, buffer, and service are all
+            // safe to read after a panic) is documented as safe.
+            let tick = std::panic::AssertUnwindSafe(audit_writer_tick(
+                &mut receiver,
+                &service,
+                &mut buffer,
+                &mut dead_letter_queue,
+                &mut flush_interval,
+            ))
+            .catch_unwind()
+            .await;
+            match tick {
+                Ok(()) => {
+                    // Receiver dropped, writer exited normally.
+                    break;
+                }
+                Err(panic) => {
+                    tracing::error!("Audit writer panicked: {:?}", panic);
+                    panic_backoff_secs = (panic_backoff_secs * 2 + 1).min(MAX_PANIC_BACKOFF_SECS);
+                    tracing::warn!(
+                        "Audit writer sleeping {}s before restart",
+                        panic_backoff_secs
+                    );
+                    // Backoff INSIDE a select! so a shutdown signal
+                    // (server drop → middleware Arc clones drop →
+                    // channel closes → receiver.recv() returns None)
+                    // can preempt the backoff. The drain sequence in
+                    // main.rs bounds shutdown to 5s, so a 30s backoff
+                    // would otherwise always block it.
+                    tokio::select! {
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(panic_backoff_secs)) => {}
+                        _ = receiver.recv() => {
+                            tracing::info!("Audit writer shutting down during panic backoff");
+                            break;
+                        }
+                    }
+                    // Continue: receiver + buffer + service are still
+                    // valid. Drain any backlog the panic missed on the
+                    // next iteration.
+                }
+            }
+        }
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn audit_writer_tick(
+    receiver: &mut mpsc::Receiver<AuditEvent>,
+    service: &crate::domain::audit::service::AuditService,
+    buffer: &mut Vec<CreateAuditLog>,
+    dead_letter_queue: &mut Vec<CreateAuditLog>,
+    flush_interval: &mut tokio::time::Interval,
+) {
     loop {
         tokio::select! {
             event = receiver.recv() => {
@@ -260,7 +353,7 @@ async fn audit_writer_task(
                         buffer.push(log);
 
                         if buffer.len() >= 100 {
-                            if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
+                            if let Err(failed) = flush_buffer_with_retry(service, buffer, MAX_FLUSH_RETRIES).await {
                                 dead_letter_queue.extend(failed);
                                 if dead_letter_queue.len() > 1_000 {
                                     tracing::error!("Audit DLQ exceeded 1000 items, dropping oldest {} logs", dead_letter_queue.len() - 500);
@@ -272,7 +365,7 @@ async fn audit_writer_task(
                     None => {
                         // Channel closed — flush any remaining events and exit
                         if !buffer.is_empty() {
-                            if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
+                            if let Err(failed) = flush_buffer_with_retry(service, buffer, MAX_FLUSH_RETRIES).await {
                                 dead_letter_queue.extend(failed);
                             }
                         }
@@ -282,13 +375,13 @@ async fn audit_writer_task(
             }
             _ = flush_interval.tick() => {
                 if !buffer.is_empty() {
-                    if let Err(failed) = flush_buffer_with_retry(&service, &mut buffer, MAX_FLUSH_RETRIES).await {
+                    if let Err(failed) = flush_buffer_with_retry(service, buffer, MAX_FLUSH_RETRIES).await {
                         dead_letter_queue.extend(failed);
                     }
                 }
                 if !dead_letter_queue.is_empty() {
-                    let mut dlq_buffer = std::mem::take(&mut dead_letter_queue);
-                    if let Err(failed) = flush_buffer_with_retry(&service, &mut dlq_buffer, MAX_FLUSH_RETRIES).await {
+                    let mut dlq_buffer = std::mem::take(dead_letter_queue);
+                    if let Err(failed) = flush_buffer_with_retry(service, &mut dlq_buffer, MAX_FLUSH_RETRIES).await {
                         dead_letter_queue.extend(failed);
                         if dead_letter_queue.len() > 1_000 {
                             tracing::error!("Audit DLQ exceeded 1000 items after retry, dropping oldest {} logs", dead_letter_queue.len() - 500);
