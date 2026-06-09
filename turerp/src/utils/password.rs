@@ -1,5 +1,6 @@
 //! Password utilities
 
+use crate::ApiError;
 use bcrypt::{hash, verify, DEFAULT_COST};
 use regex::Regex;
 use std::sync::LazyLock;
@@ -110,10 +111,35 @@ pub fn hash_password(password: &str) -> Result<String, bcrypt::BcryptError> {
     hash(password, DEFAULT_COST)
 }
 
-/// Verify a password against a hash
+/// Verify a password against a hash.
+///
+/// Returns `Ok(true)` if the password matches the hash, `Ok(false)` if it
+/// does not. Use [`check_password`] for authentication code paths — it
+/// converts the `Ok(false)` case into an `ApiError::InvalidCredentials`
+/// so callers cannot accidentally drop the result on the floor.
 #[must_use = "The verification result should be checked for authentication"]
 pub fn verify_password(password: &str, hash: &str) -> Result<bool, bcrypt::BcryptError> {
     verify(password, hash)
+}
+
+/// Verify a password and return `Ok(())` only if it matches.
+///
+/// Unlike [`verify_password`], this function never returns `Ok(false)` —
+/// a mismatch is reported as `Err(ApiError::InvalidCredentials)`. Callers
+/// can use `?` without losing the result. Use this in any code path where
+/// the result of password verification is the basis for an authentication
+/// decision. Returning the bare `bool` and dropping it is a security
+/// regression waiting to happen (see PR #147 for the previous incident).
+pub fn check_password(password: &str, hash: &str) -> Result<(), ApiError> {
+    verify_password(password, hash)
+        .map_err(|_| ApiError::InvalidCredentials)
+        .and_then(|valid| {
+            if valid {
+                Ok(())
+            } else {
+                Err(ApiError::InvalidCredentials)
+            }
+        })
 }
 
 #[cfg(test)]
@@ -189,5 +215,63 @@ mod tests {
         assert!(result.is_err());
         let error = result.unwrap_err();
         assert!(error.message.contains("12 characters") || error.message.contains("uppercase"));
+    }
+
+    // ---- check_password (PR #147 regression suite) ---------------------
+    //
+    // These tests assert that check_password converts a bcrypt mismatch
+    // (Ok(false)) into Err(ApiError::InvalidCredentials). If anyone ever
+    // reverts check_password to return Ok(false) on mismatch, every test
+    // below must fail.
+
+    use crate::ApiError;
+
+    #[test]
+    fn test_check_password_correct() {
+        let hash = hash_password("CorrectHorseBattery9!").unwrap();
+        let result = check_password("CorrectHorseBattery9!", &hash);
+        assert!(result.is_ok(), "correct password must be Ok(())");
+    }
+
+    #[test]
+    fn test_check_password_incorrect_returns_invalid_credentials() {
+        let hash = hash_password("CorrectHorseBattery9!").unwrap();
+        let result = check_password("totally-wrong-password", &hash);
+        // The whole point: a mismatch must be Err, not silently Ok.
+        // This is the exact assertion that would have caught the bug
+        // fixed in PR #147 before it shipped.
+        assert!(
+            matches!(result, Err(ApiError::InvalidCredentials)),
+            "wrong password must be Err(InvalidCredentials), got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_check_password_empty_against_real_hash_is_invalid() {
+        let hash = hash_password("CorrectHorseBattery9!").unwrap();
+        let result = check_password("", &hash);
+        assert!(matches!(result, Err(ApiError::InvalidCredentials)));
+    }
+
+    #[test]
+    fn test_check_password_case_sensitive() {
+        let hash = hash_password("CorrectHorseBattery9!").unwrap();
+        // bcrypt hashes are case-sensitive: changing case must fail.
+        let result = check_password("correcthorsebattery9!", &hash);
+        assert!(matches!(result, Err(ApiError::InvalidCredentials)));
+    }
+
+    #[test]
+    fn test_check_password_garbage_hash_returns_invalid_credentials() {
+        // A malformed (non-bcrypt) hash causes bcrypt to return Err.
+        // check_password must still surface this as InvalidCredentials,
+        // not propagate the bcrypt error or return Ok.
+        let result = check_password("anything", "not-a-real-bcrypt-hash");
+        assert!(
+            matches!(result, Err(ApiError::InvalidCredentials)),
+            "garbage hash must be Err(InvalidCredentials), got {:?}",
+            result
+        );
     }
 }
