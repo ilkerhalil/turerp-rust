@@ -46,9 +46,20 @@ CREATE INDEX IF NOT EXISTS idx_payments_tenant_created ON payments(tenant_id, cr
 
 CREATE INDEX IF NOT EXISTS idx_employees_tenant_created ON employees(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_employees_tenant_status_created ON employees(tenant_id, status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_attendance_tenant_created ON attendance(tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_leave_requests_tenant_created ON leave_requests(tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_leave_requests_tenant_status_created ON leave_requests(tenant_id, status, created_at DESC);
+
+-- Drop orphaned indexes from previous versions of this migration. These
+-- referenced columns (tenant_id, created_at) that attendance/leave_requests
+-- did not have at the time. Safe to run on fresh DBs (IF EXISTS makes it a
+-- no-op) and on already-migrated DBs where the originals were created.
+DROP INDEX IF EXISTS idx_attendance_tenant_created;
+DROP INDEX IF EXISTS idx_leave_requests_tenant_created;
+DROP INDEX IF EXISTS idx_leave_requests_tenant_status_created;
+
+-- Note: attendance and leave_requests tables (003) do not carry tenant_id or
+-- created_at columns. Tenant isolation for these is enforced indirectly via
+-- employees.tenant_id. Composite (tenant_id, created_at) indexes on these
+-- tables are added in 033_stock_movements_tenant_id.sql / 035_core_tables.sql
+-- once the columns land.
 
 -- ============================================================================
 -- ACCOUNTING
