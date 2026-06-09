@@ -996,10 +996,30 @@ Before opening a PR that touches the listed file types, run the corresponding ve
 | `turerp/src/**/*.rs` | `cargo clippy -- -D warnings`, `cargo fmt --check`, full `cargo test` suite, OpenAPI spec regenerated and diff reviewed. |
 | `turerp/Dockerfile`, `docker-compose.yml` | `docker compose config` parses without error; required env vars documented in AGENTS.md; HEALTHCHECK command exits 0 against a running container. |
 | `turerp/migrations/*.sql` + Rust | Migration order verified — no cross-file reference that depends on a later file. |
+| `turerp/src/**/auth/**`, `turerp/src/**/user/**`, MFA, JWT, password, RBAC | **Live auth smoke test** — see the rule below. In addition to unit tests, the PR must include a live curl-based verification of both the happy path and at least one negative path (e.g. wrong password, expired token, missing role, MFA required but not provided). |
 
 ### Endpoint-existence rule
 
 Before referencing any HTTP path in code, config, or docs (e.g. a Docker HEALTHCHECK, a readiness probe, a CORS example), **verify the path actually exists in the current source**. Don't trust memory, comments from a prior PR, or another agent's claim — grep the route registration site and the public-path list in `turerp/src/middleware/auth.rs`.
+
+### Live auth / permission smoke test (mandatory for auth-touching PRs)
+
+PRs that touch authentication, authorization, MFA, JWT, password handling, RBAC, or any other access-control code path must include a **live smoke test of the full request/response cycle** — not just unit tests. The PR #147 incident (login authenticated users with any password) would have been caught by such a test, but was invisible to both code review and the unit-test suite.
+
+Concretely, every such PR must demonstrate, in the PR body or in a captured transcript:
+
+1. **Happy path** — register/login → receive valid JWT → call a protected endpoint → 200.
+2. **At least one negative path per security boundary** — for login, the canonical negative is "wrong password returns 401, not 200"; for JWT, "expired/invalid token returns 401, not 200"; for RBAC, "user without the required role returns 403, not 200"; for MFA, "valid password but no MFA code returns 403 with a temporary token, not a full session".
+3. **Brute-force / rate-limit / lockout path** — when applicable, demonstrate the protective control firing (e.g. 5 wrong attempts → "temporarily locked" 401).
+4. **Regression check on adjacent endpoints** — `/health/*`, `/metrics`, an unrelated authenticated endpoint — to confirm the change did not break neighbouring flows.
+
+The test must run against a real container (`docker compose up -d ...`), not against mocks. Unit tests are necessary but not sufficient for auth code: they cannot catch the class of bug where the function chain compiles cleanly but the security boundary is dropped on the floor at the integration seam (e.g. `verify_password(...)?` returning `Ok(())` on a mismatch — the unit test passes, the live test fails).
+
+If a PR touching auth cannot run a live smoke test (e.g. CI-only environment without a DB), it must say so explicitly and propose when the test will be run.
+
+### Shared password verification API
+
+Use `crate::utils::password::check_password` (not `verify_password`) anywhere the result is the basis for an authentication decision. `check_password` collapses bcrypt's `Ok(false)` into `Err(ApiError::InvalidCredentials)` so the `?` operator cannot silently drop the negative case. The earlier `verify_credentials` bug in PR #147 is exactly what `check_password` is designed to prevent.
 
 ---
 
