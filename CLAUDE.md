@@ -12,6 +12,8 @@
 - Validate input at system boundaries
 - NEVER push directly to `main` — always use a feature branch and open a pull request
 - **ALWAYS read `AGENTS.md` before starting a task** — it contains the canonical project structure, domain modules, middleware stack, migrations, tests, and Rust best practices
+- **ALWAYS run adversarial code review before committing changes that touch 3+ files** — spawn at least 2 parallel reviewer agents with distinct lenses (e.g. correctness + security, or schema + performance) and synthesize findings into a verdict table before merging. Self-review is not a substitute — the agent that wrote the code is biased toward "it works"
+- **ALWAYS reason about production failure modes, not just the happy path** — for every change ask "what happens if this fails silently?", "what happens if the env var is unset?", "what happens if the input is unexpected?". Surface silent-swallow patterns, default-value escape hatches, panic paths, and unhandled error branches before merging
 
 ## Agent Comms (SendMessage-First Coordination)
 

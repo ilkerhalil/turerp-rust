@@ -28,6 +28,21 @@ CREATE TABLE IF NOT EXISTS exchange_rates (
     CONSTRAINT exchange_rates_tenant_from_to_date_unique UNIQUE (tenant_id, from_currency, to_currency, effective_date)
 );
 
+-- Ensure positive exchange rates. Inline (for fresh DBs) + ALTER (for already-
+-- migrated DBs that predate this constraint). The DO block makes the operation
+-- idempotent: fresh DBs already have it from CREATE TABLE, already-migrated DBs
+-- pick it up via ALTER. NOT VALID avoids scanning existing rows; the constraint
+-- will be validated later.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'exchange_rates_rate_positive'
+    ) THEN
+        ALTER TABLE exchange_rates
+            ADD CONSTRAINT exchange_rates_rate_positive CHECK (rate > 0) NOT VALID;
+    END IF;
+END$$;
+
 -- Add currency fields to existing financial tables
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC(20, 10) NOT NULL DEFAULT 1.0;
 ALTER TABLE payments ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'TRY';
@@ -35,7 +50,7 @@ ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL D
 ALTER TABLE sales_orders ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC(20, 10) NOT NULL DEFAULT 1.0;
 ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'TRY';
 ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC(20, 10) NOT NULL DEFAULT 1.0;
-ALTER TABLE cari_accounts ADD COLUMN IF NOT EXISTS default_currency VARCHAR(3) NOT NULL DEFAULT 'TRY';
+ALTER TABLE cari ADD COLUMN IF NOT EXISTS default_currency VARCHAR(3) NOT NULL DEFAULT 'TRY';
 
 -- Add currency fields to tenants
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS base_currency VARCHAR(3) NOT NULL DEFAULT 'TRY';
@@ -43,7 +58,9 @@ ALTER TABLE tenants ADD COLUMN IF NOT EXISTS supported_currencies TEXT[] NOT NUL
 
 -- Composite indexes for tenant-isolated lookups
 CREATE INDEX IF NOT EXISTS idx_currencies_tenant_active ON currencies (tenant_id, is_active);
-CREATE INDEX IF NOT EXISTS idx_currencies_tenant_base ON currencies (tenant_id, is_base) WHERE is_base = TRUE;
+-- Promote partial index to UNIQUE: at most one base currency per tenant.
+DROP INDEX IF EXISTS idx_currencies_tenant_base;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_currencies_tenant_base ON currencies(tenant_id) WHERE is_base = TRUE;
 CREATE INDEX IF NOT EXISTS idx_exchange_rates_tenant_from_to ON exchange_rates (tenant_id, from_currency, to_currency);
 CREATE INDEX IF NOT EXISTS idx_exchange_rates_tenant_date ON exchange_rates (tenant_id, effective_date);
 CREATE INDEX IF NOT EXISTS idx_exchange_rates_effective ON exchange_rates (tenant_id, from_currency, to_currency, effective_date DESC);

@@ -13,10 +13,14 @@ CREATE EXTENSION IF NOT EXISTS unaccent;
 ALTER TABLE cari ADD COLUMN IF NOT EXISTS search_vector tsvector;
 
 -- GIN index on name for fast trigram (fuzzy) search
-CREATE INDEX IF NOT EXISTS idx_cari_name_trgm ON cari USING gin (unaccent(name) gin_trgm_ops);
+-- Note: unaccent() is STABLE (not IMMUTABLE), so it cannot be used directly in
+-- an index expression. The trigram index on the raw column is sufficient for
+-- fuzzy name search; the tsvector trigger below handles diacritic-insensitive
+-- FTS via the unaccent call there.
+CREATE INDEX IF NOT EXISTS idx_cari_name_trgm ON cari USING gin (name gin_trgm_ops);
 
 -- GIN index on code for fast trigram search
-CREATE INDEX IF NOT EXISTS idx_cari_code_trgm ON cari USING gin (unaccent(code) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_cari_code_trgm ON cari USING gin (code gin_trgm_ops);
 
 -- GIN index on search_vector for tsquery full-text search
 CREATE INDEX IF NOT EXISTS idx_cari_search_vector ON cari USING gin (search_vector);
@@ -57,8 +61,8 @@ WHERE search_vector IS NULL;
 
 ALTER TABLE products ADD COLUMN IF NOT EXISTS search_vector tsvector;
 
-CREATE INDEX IF NOT EXISTS idx_products_name_trgm ON products USING gin (unaccent(name) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_products_code_trgm ON products USING gin (unaccent(code) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_products_name_trgm ON products USING gin (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_products_code_trgm ON products USING gin (code gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_products_search_vector ON products USING gin (search_vector);
 
 CREATE OR REPLACE FUNCTION products_search_vector_update()
@@ -92,8 +96,8 @@ WHERE search_vector IS NULL;
 
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS search_vector tsvector;
 
-CREATE INDEX IF NOT EXISTS idx_invoices_notes_trgm ON invoices USING gin (unaccent(notes) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_invoices_number_trgm ON invoices USING gin (unaccent(invoice_number) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_invoices_notes_trgm ON invoices USING gin (notes gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_invoices_number_trgm ON invoices USING gin (invoice_number gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_invoices_search_vector ON invoices USING gin (search_vector);
 
 CREATE OR REPLACE FUNCTION invoices_search_vector_update()

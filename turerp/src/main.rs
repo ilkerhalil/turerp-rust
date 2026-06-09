@@ -209,8 +209,16 @@ fn configure_cors(cors_config: &turerp::config::CorsConfig) -> Cors {
 
     let mut cors = Cors::default();
 
-    for origin in &cors_config.allowed_origins {
-        cors = cors.allowed_origin(origin);
+    // actix-cors forbids mixing wildcard with explicit origins or credentials.
+    // The new API uses `send_wildcard()` to allow any origin (no credentials),
+    // or iterate explicit origins.
+    let has_wildcard = cors_config.allowed_origins.iter().any(|o| o == "*");
+    if has_wildcard {
+        cors = cors.send_wildcard();
+    } else {
+        for origin in &cors_config.allowed_origins {
+            cors = cors.allowed_origin(origin);
+        }
     }
 
     // Convert method strings to Method
@@ -229,8 +237,13 @@ fn configure_cors(cors_config: &turerp::config::CorsConfig) -> Cors {
         .collect();
     cors = cors.allowed_headers(headers);
 
-    if cors_config.allow_credentials {
+    if cors_config.allow_credentials && !has_wildcard {
         cors = cors.supports_credentials();
+    } else if cors_config.allow_credentials && has_wildcard {
+        tracing::warn!(
+            "CORS allow_credentials is ignored when wildcard origin is configured; \
+             credentials cannot be combined with wildcard origins."
+        );
     }
 
     if let Some(max_age) = cors_config.max_age {

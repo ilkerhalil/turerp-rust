@@ -761,7 +761,14 @@ HttpServer::new(move || {
 
 ## Health Check
 
-**In-memory mode:**
+Two endpoints are exposed. Use them according to the table below.
+
+| Endpoint | Purpose | Use for |
+|---|---|---|
+| `GET /health/live` | Liveness — process is up and accepting requests. No dependency checks. | Docker `HEALTHCHECK`, Kubernetes `livenessProbe` |
+| `GET /health/ready` | Readiness — DB / cache / scheduler are reachable. | Kubernetes `readinessProbe`, compose `condition: service_healthy` |
+
+**Response — `/health/live` (in-memory mode):**
 ```json
 {
   "status": "ok",
@@ -771,7 +778,7 @@ HttpServer::new(move || {
 }
 ```
 
-**PostgreSQL mode:**
+**Response — `/health/ready` (PostgreSQL mode):**
 ```json
 {
   "status": "ok",
@@ -782,6 +789,22 @@ HttpServer::new(move || {
   "latency_ms": 2
 }
 ```
+
+### Docker HEALTHCHECK
+
+The `turerp` Dockerfile uses `wget` (not in `debian:bookworm-slim` by default, so the Dockerfile installs it via `apt-get install -y --no-install-recommends wget` — see the runtime stage in `turerp/Dockerfile`):
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8080/health/live >/dev/null 2>&1 || exit 1
+```
+
+- `--interval=30s`: a healthy container is checked every 30s.
+- `--timeout=5s`: a single probe must complete within 5s; longer than this and the container is marked unhealthy.
+- `--start-period=10s`: gives the process 10s to bind the port before the first probe runs.
+- `--retries=3`: three consecutive failures before marking unhealthy (avoids flapping on transient blips).
+
+Use `127.0.0.1` (not `localhost`) to skip DNS resolution — saves ~1-2ms and avoids resolver-related flakiness.
 
 ---
 
@@ -932,6 +955,51 @@ let user = repo.find_by_id(id).await.unwrap();
 6. **Don't block async runtime**: Use `tokio::fs` instead of `std::fs`
 7. **Don't forget OpenAPI annotations**: Add `#[utoipa::path(...)]` to every new handler
 8. **Don't forget to register handlers**: Add new handlers to `api/mod.rs` paths list
+
+---
+
+## Code Review & Production Readiness
+
+This section captures the lessons from the round-3 production hardening pass. Apply these on every non-trivial change.
+
+### Adversarial review for 3+ file changes
+
+A single agent reviewing its own work tends to find "it works" rather than "it breaks." For any change touching 3 or more files, run **at least 2 parallel reviewer agents with distinct lenses** before merging. Example lens combinations:
+
+| Change shape | Lens 1 | Lens 2 |
+|---|---|---|
+| API/feature | correctness | security |
+| Database/schema | schema/index design | performance + tenant isolation |
+| Deployment/config | deploy correctness | security defaults |
+| Refactor | idiom/style | regression risk |
+
+Each reviewer must end with a verdict (`SAFE` / `NEEDS REVIEW` / `RISKY`) and the lead synthesizes a verdict table before any commit.
+
+### Production failure-mode checklist
+
+For every change, reason about each of the following before merging. If the answer is "I don't know" or "we'll find out in prod", the change is not ready.
+
+1. **Silent error swallowing.** Does any `Err` arm `warn!()` and continue? If yes, the schema/state can diverge from the recorded history. Either propagate the error, or make the recovery state observable (e.g. record the failure in a separate table).
+2. **Default-value escape hatches.** Does any env var, config, or secret have a default that "works"? If yes, the operator can deploy with a publicly known value. Use `env:?` (compose) or `required-env` (Rust) for secrets. Never default a key, password, or encryption material.
+3. **Panic paths in startup.** Does any code path `panic!`/`unwrap`/`expect` during construction or config parsing? Container orchestrators will restart-loop the container instead of surfacing the error. Validate config at startup and return errors.
+4. **Untested happy-path assumptions.** Does the code assume an input format, header, or env var that we haven't verified? Read the source, grep for the function, confirm it exists and does what you think.
+5. **Inconsistent fix application.** If you fixed a bug pattern in one place (e.g. a function used `std::sync::Mutex` instead of `parking_lot::Mutex`), grep the whole codebase for the same pattern. Don't ship a half-applied fix.
+6. **Backward-compat on already-migrated DBs.** Any new constraint, index, or column needs a plan for databases that already have the prior schema. `IF NOT EXISTS`, `IF EXISTS`, `DROP IF EXISTS`, and `NOT VALID` are the standard tools.
+
+### Pre-merge verification matrix
+
+Before opening a PR that touches the listed file types, run the corresponding verifications:
+
+| File type | Required checks |
+|---|---|
+| `migrations/*.sql` | Migration set re-runs cleanly on a fresh DB AND on a snapshot of the current production schema. New CHECK/UNIQUE constraints are tested on both. |
+| `turerp/src/**/*.rs` | `cargo clippy -- -D warnings`, `cargo fmt --check`, full `cargo test` suite, OpenAPI spec regenerated and diff reviewed. |
+| `turerp/Dockerfile`, `docker-compose.yml` | `docker compose config` parses without error; required env vars documented in AGENTS.md; HEALTHCHECK command exits 0 against a running container. |
+| `turerp/migrations/*.sql` + Rust | Migration order verified — no cross-file reference that depends on a later file. |
+
+### Endpoint-existence rule
+
+Before referencing any HTTP path in code, config, or docs (e.g. a Docker HEALTHCHECK, a readiness probe, a CORS example), **verify the path actually exists in the current source**. Don't trust memory, comments from a prior PR, or another agent's claim — grep the route registration site and the public-path list in `turerp/src/middleware/auth.rs`.
 
 ---
 
