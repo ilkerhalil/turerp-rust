@@ -761,7 +761,14 @@ HttpServer::new(move || {
 
 ## Health Check
 
-**In-memory mode:**
+Two endpoints are exposed. Use them according to the table below.
+
+| Endpoint | Purpose | Use for |
+|---|---|---|
+| `GET /health/live` | Liveness — process is up and accepting requests. No dependency checks. | Docker `HEALTHCHECK`, Kubernetes `livenessProbe` |
+| `GET /health/ready` | Readiness — DB / cache / scheduler are reachable. | Kubernetes `readinessProbe`, compose `condition: service_healthy` |
+
+**Response — `/health/live` (in-memory mode):**
 ```json
 {
   "status": "ok",
@@ -771,7 +778,7 @@ HttpServer::new(move || {
 }
 ```
 
-**PostgreSQL mode:**
+**Response — `/health/ready` (PostgreSQL mode):**
 ```json
 {
   "status": "ok",
@@ -782,6 +789,22 @@ HttpServer::new(move || {
   "latency_ms": 2
 }
 ```
+
+### Docker HEALTHCHECK
+
+The `turerp` Dockerfile uses `wget` (not in `debian:bookworm-slim` by default, so the Dockerfile installs it via `apt-get install -y --no-install-recommends wget` — see the runtime stage in `turerp/Dockerfile`):
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -qO- http://127.0.0.1:8080/health/live >/dev/null 2>&1 || exit 1
+```
+
+- `--interval=30s`: a healthy container is checked every 30s.
+- `--timeout=5s`: a single probe must complete within 5s; longer than this and the container is marked unhealthy.
+- `--start-period=10s`: gives the process 10s to bind the port before the first probe runs.
+- `--retries=3`: three consecutive failures before marking unhealthy (avoids flapping on transient blips).
+
+Use `127.0.0.1` (not `localhost`) to skip DNS resolution — saves ~1-2ms and avoids resolver-related flakiness.
 
 ---
 
