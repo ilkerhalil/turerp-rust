@@ -459,7 +459,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     notes TEXT
 );
 
-CREATE UNIQUE INDEX idx_attendance_employee_date ON attendance(employee_id, date::date);
+CREATE UNIQUE INDEX idx_attendance_employee_date ON attendance(employee_id, date);
 CREATE INDEX idx_attendance_date ON attendance(date);
 
 -- Leave Types
