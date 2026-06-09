@@ -305,7 +305,14 @@ impl UserService {
         }
 
         crate::utils::password::verify_password(password, &user.hashed_password)
-            .map_err(|_| ApiError::InvalidCredentials)?;
+            .map_err(|_| ApiError::InvalidCredentials)
+            .and_then(|valid| {
+                if valid {
+                    Ok(())
+                } else {
+                    Err(ApiError::InvalidCredentials)
+                }
+            })?;
 
         Ok(user)
     }
