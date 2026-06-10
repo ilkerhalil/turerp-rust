@@ -304,15 +304,11 @@ impl UserService {
             return Err(ApiError::InvalidCredentials);
         }
 
-        crate::utils::password::verify_password(password, &user.hashed_password)
-            .map_err(|_| ApiError::InvalidCredentials)
-            .and_then(|valid| {
-                if valid {
-                    Ok(())
-                } else {
-                    Err(ApiError::InvalidCredentials)
-                }
-            })?;
+        // Use `check_password` (not `verify_password`) so that a mismatch
+        // returns InvalidCredentials rather than Ok(false). The previous
+        // implementation dropped Ok(false) on the floor and authenticated
+        // users with any password (PR #147).
+        crate::utils::password::check_password(password, &user.hashed_password)?;
 
         Ok(user)
     }
