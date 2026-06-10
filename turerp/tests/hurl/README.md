@@ -133,12 +133,12 @@ simplest workaround until the upstream feature lands.
 
 | File | Endpoint | Status | Tracking |
 |------|----------|--------|----------|
-| `04_categories.hurl` | `GET /api/v1/categories` | `500` | follow-up to #150 |
-| `05_units.hurl` | `GET /api/v1/units` | `500` | follow-up to #150 |
-| `06_currencies.hurl` | `GET /api/v1/currencies` | `404` | follow-up to #150 |
-| `11_hr_employees.hurl` | `GET /api/v1/hr/leave-types` | `500` | follow-up to #150 |
-| `14_stock_items.hurl` | `GET /api/v1/stock/warehouses` | `500` | follow-up to #150 |
-| `16_settings.hurl` | `GET /api/v1/settings` | `404` | follow-up to #150 |
+| `04_categories.hurl` | `GET /api/v1/categories` | `500` | follow-up to #152 |
+| `05_units.hurl` | `GET /api/v1/units` | `500` | follow-up to #152 |
+| `06_currencies.hurl` | `GET /api/v1/currencies` | `404` | follow-up to #152 |
+| `11_hr_employees.hurl` | `GET /api/v1/hr/leave-types` | `500` | follow-up to #152 |
+| `14_stock_items.hurl` | `GET /api/v1/stock/warehouses` | `500` | follow-up to #152 |
+| `16_settings.hurl` | `GET /api/v1/settings` | `404` | follow-up to #152 |
 
 These scenarios exist **on purpose**: they assert the broken status, so
 that when the underlying route is fixed, the scenario fails loudly and

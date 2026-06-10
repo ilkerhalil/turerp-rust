@@ -1,4 +1,4 @@
-# Tier 1 — Settings. Currently 404 (route not registered), see issue #150.
+# Tier 1 — Settings. Currently 404 (route not registered), see issue #152.
 
 # --- 1. Settings list — currently 404 (P1) ---
 GET {{base_url}}/api/v1/settings

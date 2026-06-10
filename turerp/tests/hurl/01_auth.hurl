@@ -1,6 +1,6 @@
 # Tier 1 — Auth surface: login, /me, refresh, logout.
 # This is the baseline — if these fail, every other scenario will fail.
-# Also documents the PR #145 follow-up (issue #150): a wrong password
+# Also documents the PR #145 follow-up (issue #152): a wrong password
 # must return 401, not 200.
 
 # --- 1. Re-fetch /me with the captured token (proves JWT works) ---
@@ -33,7 +33,7 @@ Content-Type: application/json
 }
 HTTP 200
 
-# --- 4. Issue #150 regression: wrong password MUST be 401 (not 200, not 200+token) ---
+# --- 4. Issue #152 regression: wrong password MUST be 401 (not 200, not 200+token) ---
 POST {{base_url}}/api/v1/auth/login?tenant_id=1
 Content-Type: application/json
 {

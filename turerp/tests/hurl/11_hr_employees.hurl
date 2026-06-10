@@ -11,7 +11,7 @@ HTTP 200
 jsonpath "$.items" isCollection
 jsonpath "$.total" isNumber
 
-# --- 2. Leave types — currently 500 (P1, see issue #150) ---
+# --- 2. Leave types — currently 500 (P1, see issue #152) ---
 GET {{base_url}}/api/v1/hr/leave-types
 Authorization: Bearer {{access_token}}
 HTTP 500
