@@ -197,7 +197,21 @@ impl CorsConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
         let allowed_origins: Vec<String> = std::env::var("TURERP_CORS_ORIGINS")
             .ok()
-            .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+            .map(|s| {
+                s.split(',')
+                    .map(|s| s.trim().to_string())
+                    // Drop empty tokens that arise from real-world
+                    // misconfigurations like "a, ,b" or a trailing
+                    // comma. The fallback below treats a fully-empty
+                    // list as "env not set" and substitutes the dev
+                    // default; without this filter, an empty string
+                    // would survive the split as [""] and bypass
+                    // the fallback, leaving the operator with a
+                    // CORS config that matches no origin and
+                    // silently breaks every cross-origin request.
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            })
             .unwrap_or_default();
 
         let allowed_origins = if allowed_origins.is_empty() {
