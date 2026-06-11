@@ -247,9 +247,15 @@ where
 
         Box::pin(async move {
             // Find longest matching prefix.
+            // Segment-aware: a path matches a prefix only if it equals
+            // the prefix exactly OR the prefix is followed by a `/`
+            // segment boundary. This prevents `/api/v1/settings` from
+            // matching a hypothetical `/api/v1/settings-bulk` route.
             let matched_flag = rules
                 .iter()
-                .filter(|(prefix, _)| path.starts_with(prefix.as_str()))
+                .filter(|(prefix, _)| {
+                    path == prefix.as_str() || path.starts_with(&format!("{}/", prefix))
+                })
                 .max_by_key(|(prefix, _)| prefix.len())
                 .map(|(_, flag)| flag.clone());
 

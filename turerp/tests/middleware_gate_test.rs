@@ -376,3 +376,75 @@ async fn global_gate_full_rule_list_routes_each_prefix_to_correct_flag() {
         "core.currencies enabled → /v1/currencies must reach handler"
     );
 }
+
+/// Verifies segment-aware prefix matching: a rule for `/v1/settings`
+/// must NOT match `/v1/settings-bulk` (the `bulk` is a sibling segment,
+/// not a child of `settings`).
+#[actix_web::test]
+async fn global_gate_segment_boundary_does_not_match_sibling() {
+    let gate = build_global_gate(
+        vec![("/v1/settings".to_string(), "core.settings".to_string())],
+        vec![("core.settings", FeatureFlagStatus::Disabled)],
+    )
+    .await;
+
+    let app = test::init_service(
+        App::new().wrap(gate).service(
+            // Register the sibling route that should NOT be gated.
+            web::resource("/v1/settings-bulk")
+                .route(web::get().to(|| async { HttpResponse::Ok().json(json!({"ok": true})) })),
+        ),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/v1/settings-bulk")
+        .to_request();
+    req.extensions_mut().insert(build_claims(1));
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        200,
+        "/v1/settings-bulk is a sibling of /v1/settings and must NOT match the rule"
+    );
+}
+
+/// Verifies the hr/leave-types rule does not accidentally catch the
+/// hr/employees hurl scenario. The prefix is more specific
+/// (`/v1/hr/leave-types`) so it must not match `/v1/hr/employees`.
+/// This test exists because the global rule list (main.rs) has both
+/// this rule and the segment-aware match in GlobalGate::call() — the
+/// two must compose correctly to avoid regressing 11_hr_employees.
+#[actix_web::test]
+async fn global_gate_hr_leave_types_does_not_match_hr_employees() {
+    let gate = build_global_gate(
+        vec![(
+            "/v1/hr/leave-types".to_string(),
+            "core.hr.leave_types".to_string(),
+        )],
+        vec![("core.hr.leave_types", FeatureFlagStatus::Disabled)],
+    )
+    .await;
+
+    let app = test::init_service(
+        App::new().wrap(gate).service(
+            // Register the employees route that must NOT be gated.
+            web::resource("/v1/hr/employees")
+                .route(web::get().to(|| async { HttpResponse::Ok().json(json!({"ok": true})) })),
+        ),
+    )
+    .await;
+
+    let req = test::TestRequest::get()
+        .uri("/v1/hr/employees")
+        .to_request();
+    req.extensions_mut().insert(build_claims(1));
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        200,
+        "/v1/hr/employees must not match the /v1/hr/leave-types rule (segment-boundary check)"
+    );
+}

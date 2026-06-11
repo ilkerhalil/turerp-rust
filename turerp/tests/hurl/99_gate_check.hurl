@@ -48,3 +48,11 @@ HTTP 404
 GET {{base_url}}/api/v1/hr/leave-types
 Authorization: Bearer {{access_token}}
 HTTP 404
+
+# Negative: /api/v1/hr/employees must NOT be caught by the
+# more-specific /api/v1/hr/leave-types rule. Segment-aware
+# prefix matching is what makes this work — see
+# GlobalGate::call() in middleware/gate.rs.
+GET {{base_url}}/api/v1/hr/employees
+Authorization: Bearer {{access_token}}
+HTTP 200
