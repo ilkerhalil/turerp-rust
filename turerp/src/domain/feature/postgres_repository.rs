@@ -379,7 +379,8 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         if let Some(tid) = tenant_id {
             let row: Option<FeatureFlagRow> = sqlx::query_as(
                 r#"
-                SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
+                SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by,
+                       NULL::bigint as total_count
                 FROM feature_flags
                 WHERE name = $1 AND tenant_id = $2 AND deleted_at IS NULL
                 "#,
@@ -400,7 +401,8 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         // Fall back to global flag
         let row: Option<FeatureFlagRow> = sqlx::query_as(
             r#"
-            SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
+            SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by,
+                   NULL::bigint as total_count
             FROM feature_flags
             WHERE name = $1 AND tenant_id IS NULL AND deleted_at IS NULL
             "#,

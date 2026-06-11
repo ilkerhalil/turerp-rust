@@ -181,6 +181,10 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "035_core_tables",
             sql: include_str!("../../migrations/035_core_tables.sql"),
         },
+        Migration {
+            version: "036_flag_seed_defaults",
+            sql: include_str!("../../migrations/036_flag_seed_defaults.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).
