@@ -44,3 +44,7 @@ HTTP 404
 GET {{base_url}}/api/v1/stock/warehouses
 Authorization: Bearer {{access_token}}
 HTTP 404
+
+GET {{base_url}}/api/v1/hr/leave-types
+Authorization: Bearer {{access_token}}
+HTTP 404

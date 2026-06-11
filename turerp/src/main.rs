@@ -515,15 +515,24 @@ async fn main() -> std::io::Result<()> {
                         ("/api/v1/graphql".to_string(),       "tier2.graphql".to_string()),
                         ("/api/v1/projects".to_string(),      "tier2.projects".to_string()),
                         ("/api/v1/manufacturing".to_string(), "tier2.manufacturing".to_string()),
-                        // core.* — 6 broken-endpoint gates (issue #152).
-                        // These routes are currently 500/404-broken. The gate
-                        // is in place today so PR 2's handler fix is the only
-                        // thing needed to make the route operator-enable-able.
+                        // core.* — 7 broken-endpoint gates (issue #152 +
+                        // /api/v1/hr/leave-types). These routes are
+                        // currently 500/404-broken. The gate is in place
+                        // today so PR 2's handler fix is the only thing
+                        // needed to make the route operator-enable-able.
                         ("/api/v1/categories".to_string(),    "core.categories".to_string()),
                         ("/api/v1/units".to_string(),         "core.units".to_string()),
                         ("/api/v1/currencies".to_string(),    "core.currencies".to_string()),
                         ("/api/v1/settings".to_string(),      "core.settings".to_string()),
                         ("/api/v1/stock/warehouses".to_string(), "core.stock.warehouses".to_string()),
+                        // /api/v1/hr/leave-types is more specific than
+                        // /api/v1/hr/employees (the 11_hr_employees hurl
+                        // target), and the gate uses segment-aware prefix
+                        // matching, so this rule does NOT match
+                        // /api/v1/hr/employees. HR coarse-gate
+                        // (tier2.payroll) is intentionally deferred — see
+                        // PR body "Concerns / NOT in this PR".
+                        ("/api/v1/hr/leave-types".to_string(), "core.hr.leave_types".to_string()),
                     ],
                     app_state.feature_service.clone(),
                 )) // Feature-flag gate (off by default — see migrations/036_flag_seed_defaults.sql)
