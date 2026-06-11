@@ -20,12 +20,12 @@ use std::rc::Rc;
 
 use actix_web::body::EitherBody;
 use actix_web::dev::{Service, ServiceRequest, ServiceResponse, Transform};
-use actix_web::{Error, HttpMessage, HttpResponse};
+use actix_web::{Error, HttpResponse};
 use futures::future::LocalBoxFuture;
 use serde_json::json;
 
 use crate::domain::feature::FeatureFlagService;
-use crate::utils::jwt::AuthClaims;
+use crate::middleware::auth::get_auth_claims;
 
 /// Configuration for the gate middleware.
 #[derive(Clone, Debug)]
@@ -94,8 +94,10 @@ where
         let cfg = self.config.clone();
 
         Box::pin(async move {
-            // Extract tenant_id from AuthClaims (set by AuthUser middleware).
-            let tenant_id = req.extensions().get::<AuthClaims>().map(|c| c.tenant_id);
+            // Extract tenant_id from AuthClaims via the canonical helper
+            // (the same one the audit middleware uses — ensures consistent
+            // claim resolution semantics).
+            let tenant_id = get_auth_claims(req.request()).ok().map(|c| c.tenant_id);
 
             let tenant_id = match tenant_id {
                 Some(t) => t,
@@ -257,10 +259,12 @@ where
                 return Ok(res.map_into_left_body());
             };
 
-            // Extract tenant_id from AuthClaims (set by AuthUser middleware).
+            // Extract tenant_id from AuthClaims via the canonical helper
+            // (the same one the audit middleware uses — ensures consistent
+            // claim resolution semantics).
             // The gate must run AFTER JwtAuthMiddleware, which is registered
             // as a wrap above this one in main.rs.
-            let tenant_id = req.extensions().get::<AuthClaims>().map(|c| c.tenant_id);
+            let tenant_id = get_auth_claims(req.request()).ok().map(|c| c.tenant_id);
 
             let tenant_id = match tenant_id {
                 Some(t) => t,
