@@ -25,6 +25,18 @@ services:
         condition: service_started
     volumes:
       - ./logs:/app/logs
+    # Healthcheck mirrors the Dockerfile HEALTHCHECK. wget is already
+    # installed in the runtime image (see Dockerfile line 31-35), so we
+    # use the same tool here to avoid pulling in curl just for
+    # compose-level health probes. /health/live returns 200 if the
+    # process is up and accepting requests — the right signal for an
+    # orchestrator deciding whether to restart the container.
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
     networks:
       - turerp-network
