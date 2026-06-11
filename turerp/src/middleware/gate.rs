@@ -10,10 +10,10 @@
 //! - Calls `FeatureFlagService::is_enabled(flag_name, Some(tenant_id))`.
 //! - On `true`: forward. On `false`: short-circuit 404.
 //! - On missing AuthClaims (route is public): 404 (fail-closed).
-//! - On service error: log WARN, **fail-open** (forward). Rationale:
-//!   the gate must never break a route that's working; flag infra
-//!   outages should be visible but not user-facing. This is a deliberate
-//!   trade-off documented in RUNBOOK.md.
+//! - On service error: log ERROR (alerting-eligible), **fail-open** (forward).
+//!   Rationale: the gate must never break a route that's working; flag
+//!   infra outages should be loud (ERROR-level) but not user-facing.
+//!   This is a deliberate trade-off documented in RUNBOOK.md.
 
 use std::future::{ready, Ready};
 use std::rc::Rc;
@@ -127,11 +127,15 @@ where
             let enabled = match service.is_enabled(&cfg.flag, Some(tenant_id)).await {
                 Ok(b) => b,
                 Err(e) => {
-                    tracing::warn!(
+                    // Elevated from warn! to error! so existing alerting
+                    // catches the event. Fail-open remains: a flag-service
+                    // hiccup must never break a working route. Trade-off
+                    // is documented in the gate module-level docstring.
+                    tracing::error!(
                         flag = %cfg.flag,
                         tenant_id = tenant_id,
                         error = %e,
-                        "gate: is_enabled() failed, failing open"
+                        "gate: is_enabled() failed, failing open (treats gated route as enabled)"
                     );
                     true
                 }
@@ -278,12 +282,16 @@ where
             let enabled = match feature_service.is_enabled(&flag, Some(tenant_id)).await {
                 Ok(b) => b,
                 Err(e) => {
-                    tracing::warn!(
+                    // Elevated from warn! to error! so existing alerting
+                    // catches the event. Fail-open remains: a flag-service
+                    // hiccup must never break a working route. Trade-off
+                    // is documented in the gate module-level docstring.
+                    tracing::error!(
                         flag = %flag,
                         path = %path,
                         tenant_id = tenant_id,
                         error = %e,
-                        "global_gate: is_enabled() failed, failing open"
+                        "global_gate: is_enabled() failed, failing open (treats gated route as enabled)"
                     );
                     true
                 }
