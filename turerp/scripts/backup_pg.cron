@@ -1,0 +1,24 @@
+# /etc/cron.d/turerp-backup
+# Installed by the operator on the host.
+#
+# Daily at 02:17 UTC (off the :00 spike; see design spec § 5.1 day 4
+# for the rationale — picking :00 would land on the fleet-wide
+# pg_dump / cron-rotate / logrotate collision window).
+#
+# Logs go to /var/log/turerp-backup.log; rotate via the system
+# logrotate (a 14-day retention is recommended; the script's own
+# retention is 7 days for the dumps themselves).
+#
+# To install:
+#   sudo install -m 0644 backup_pg.cron /etc/cron.d/turerp-backup
+#   sudo install -m 0755 backup_pg.sh /opt/turerp/scripts/backup_pg.sh
+#   sudo systemctl reload cron
+#
+# Environment overrides (in /etc/cron.d/turerp-backup env block, or
+# set in the operator's shell before running manually):
+#   BACKUP_DIR          default /var/backups/turerp
+#   RETENTION_DAYS      default 7
+#   DB_CONTAINER        default turerp_db_1
+#   COMPRESS_LEVEL      default 9 (gzip -9)
+
+17 2 * * * root BACKUP_DIR=/var/backups/turerp /opt/turerp/scripts/backup_pg.sh >> /var/log/turerp-backup.log 2>&1
