@@ -17,22 +17,23 @@ use turerp::middleware::{
 use tokio::sync::mpsc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use turerp::api::{
-    v1_accounting_configure, v1_api_keys_configure, v1_archive_configure, v1_assets_configure,
-    v1_audit_configure, v1_auth_configure, v1_bank_configure, v1_barcode_configure,
-    v1_cari_configure, v1_chart_of_accounts_configure, v1_companies_configure,
-    v1_cost_centers_configure, v1_crm_configure, v1_currency_configure, v1_custom_fields_configure,
-    v1_customer_portal_configure, v1_dashboard_configure, v1_documents_configure,
-    v1_earchive_configure, v1_edefter_blockchain_configure, v1_edefter_configure,
-    v1_efatura_configure, v1_events_configure, v1_feature_flags_configure, v1_files_configure,
-    v1_forecasting_configure, v1_goods_receipts_configure, v1_graphql_configure, v1_hr_configure,
-    v1_import_configure, v1_invoice_configure, v1_ip_whitelist_configure, v1_jobs_configure,
-    v1_ldap_configure, v1_manufacturing_configure, v1_mfa_configure, v1_notifications_configure,
-    v1_observability_configure, v1_product_variants_configure, v1_project_configure,
-    v1_purchase_orders_configure, v1_purchase_requests_configure, v1_push_notifications_configure,
-    v1_rate_limits_configure, v1_reports_configure, v1_resilience_configure, v1_sales_configure,
-    v1_search_configure, v1_settings_configure, v1_shifts_configure, v1_stock_configure,
-    v1_subscriptions_configure, v1_tax_configure, v1_tenant_configure, v1_users_configure,
-    v1_vendor_portal_configure, v1_webhooks_configure, v1_workflows_configure, ApiDoc,
+    gate_v1, v1_accounting_configure, v1_api_keys_configure, v1_archive_configure,
+    v1_assets_configure, v1_audit_configure, v1_auth_configure, v1_bank_configure,
+    v1_barcode_configure, v1_cari_configure, v1_chart_of_accounts_configure,
+    v1_companies_configure, v1_cost_centers_configure, v1_crm_configure, v1_currency_configure,
+    v1_custom_fields_configure, v1_customer_portal_configure, v1_dashboard_configure,
+    v1_documents_configure, v1_earchive_configure, v1_edefter_blockchain_configure,
+    v1_edefter_configure, v1_efatura_configure, v1_events_configure, v1_feature_flags_configure,
+    v1_files_configure, v1_forecasting_configure, v1_goods_receipts_configure,
+    v1_graphql_configure, v1_hr_configure, v1_import_configure, v1_invoice_configure,
+    v1_ip_whitelist_configure, v1_jobs_configure, v1_ldap_configure, v1_manufacturing_configure,
+    v1_mfa_configure, v1_notifications_configure, v1_observability_configure,
+    v1_product_variants_configure, v1_project_configure, v1_purchase_orders_configure,
+    v1_purchase_requests_configure, v1_push_notifications_configure, v1_rate_limits_configure,
+    v1_reports_configure, v1_resilience_configure, v1_sales_configure, v1_search_configure,
+    v1_settings_configure, v1_shifts_configure, v1_stock_configure, v1_subscriptions_configure,
+    v1_tax_configure, v1_tenant_configure, v1_users_configure, v1_vendor_portal_configure,
+    v1_webhooks_configure, v1_workflows_configure, ApiDoc, GateConfig,
 };
 use turerp::middleware::audit::{AuditEvent, AUDIT_CHANNEL_CAPACITY};
 use utoipa::OpenApi;
@@ -540,7 +541,12 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_dashboard_configure)
                     .configure(v1_documents_configure)
                     .configure(v1_feature_flags_configure)
-                    .configure(v1_files_configure)
+                    .configure(gate_v1(
+                        GateConfig {
+                            flag: "tier2.file_upload".into(),
+                        },
+                        v1_files_configure,
+                    ))
                     .configure(v1_import_configure)
                     .configure(v1_ip_whitelist_configure)
                     .configure(v1_mfa_configure)
@@ -549,12 +555,22 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_rate_limits_configure)
                     .configure(v1_purchase_orders_configure)
                     .configure(v1_resilience_configure)
-                    .configure(v1_shifts_configure)
+                    .configure(gate_v1(
+                        GateConfig {
+                            flag: "tier2.shifts".into(),
+                        },
+                        v1_shifts_configure,
+                    ))
                     .configure(v1_subscriptions_configure)
                     .configure(v1_forecasting_configure)
                     .configure(v1_workflows_configure)
                     .configure(v1_goods_receipts_configure)
-                    .configure(v1_graphql_configure)
+                    .configure(gate_v1(
+                        GateConfig {
+                            flag: "tier2.graphql".into(),
+                        },
+                        v1_graphql_configure,
+                    ))
                     .configure(v1_cari_configure)
                     .configure(v1_companies_configure)
                     .configure(v1_stock_configure)
@@ -562,8 +578,18 @@ async fn main() -> std::io::Result<()> {
                     .configure(v1_sales_configure)
                     .configure(v1_hr_configure)
                     .configure(v1_accounting_configure)
-                    .configure(v1_project_configure)
-                    .configure(v1_manufacturing_configure)
+                    .configure(gate_v1(
+                        GateConfig {
+                            flag: "tier2.projects".into(),
+                        },
+                        v1_project_configure,
+                    ))
+                    .configure(gate_v1(
+                        GateConfig {
+                            flag: "tier2.manufacturing".into(),
+                        },
+                        v1_manufacturing_configure,
+                    ))
                     .configure(v1_crm_configure)
                     .configure(v1_chart_of_accounts_configure)
                     .configure(v1_custom_fields_configure)
