@@ -279,3 +279,100 @@ async fn global_gate_longest_prefix_wins() {
         "longest prefix should match the enabled tier2.file_upload rule"
     );
 }
+
+/// Verifies that a `core.*` rule (one of the 6 broken-endpoint gates
+/// added in PR 1's full-gate pass) behaves identically to a `tier2.*`
+/// rule. The shape is the same — only the flag name differs.
+#[actix_web::test]
+async fn global_gate_core_prefix_blocks_when_disabled() {
+    let gate = build_global_gate(
+        vec![("/v1/categories".to_string(), "core.categories".to_string())],
+        vec![("core.categories", FeatureFlagStatus::Disabled)],
+    )
+    .await;
+
+    let app = test::init_service(
+        App::new().wrap(gate).service(
+            web::resource("/v1/categories")
+                .route(web::get().to(|| async { HttpResponse::Ok().json(json!({"ok": true})) })),
+        ),
+    )
+    .await;
+
+    let req = test::TestRequest::get().uri("/v1/categories").to_request();
+    req.extensions_mut().insert(build_claims(1));
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        404,
+        "core.categories disabled → /v1/categories must 404"
+    );
+}
+
+/// Verifies the production rule list shape: a single GlobalGate with
+/// multiple (prefix, flag) rules covering both `tier2.*` and `core.*`
+/// namespaces. Each prefix routes to the correct flag.
+#[actix_web::test]
+async fn global_gate_full_rule_list_routes_each_prefix_to_correct_flag() {
+    let gate = build_global_gate(
+        vec![
+            ("/v1/files".to_string(), "tier2.file_upload".to_string()),
+            ("/v1/categories".to_string(), "core.categories".to_string()),
+            ("/v1/currencies".to_string(), "core.currencies".to_string()),
+        ],
+        vec![
+            // tier2.file_upload DISABLED, core.* ENABLED
+            ("tier2.file_upload", FeatureFlagStatus::Disabled),
+            ("core.categories", FeatureFlagStatus::Enabled),
+            ("core.currencies", FeatureFlagStatus::Enabled),
+        ],
+    )
+    .await;
+
+    let app =
+        test::init_service(
+            App::new()
+                .wrap(gate)
+                .service(web::resource("/v1/files").route(
+                    web::get().to(|| async { HttpResponse::Ok().json(json!({"ok": true})) }),
+                ))
+                .service(web::resource("/v1/categories").route(
+                    web::get().to(|| async { HttpResponse::Ok().json(json!({"ok": true})) }),
+                ))
+                .service(web::resource("/v1/currencies").route(
+                    web::get().to(|| async { HttpResponse::Ok().json(json!({"ok": true})) }),
+                )),
+        )
+        .await;
+
+    // tier2.file_upload disabled → 404
+    let req = test::TestRequest::get().uri("/v1/files").to_request();
+    req.extensions_mut().insert(build_claims(1));
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        404,
+        "tier2.file_upload disabled → /v1/files must 404"
+    );
+
+    // core.categories enabled → 200
+    let req = test::TestRequest::get().uri("/v1/categories").to_request();
+    req.extensions_mut().insert(build_claims(1));
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        200,
+        "core.categories enabled → /v1/categories must reach handler"
+    );
+
+    // core.currencies enabled → 200
+    let req = test::TestRequest::get().uri("/v1/currencies").to_request();
+    req.extensions_mut().insert(build_claims(1));
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        200,
+        "core.currencies enabled → /v1/currencies must reach handler"
+    );
+}

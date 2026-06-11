@@ -500,12 +500,30 @@ async fn main() -> std::io::Result<()> {
                     // NOTE: prefixes must include the /api scope that the App
                     // registers (actix-web 4 returns the full request path,
                     // not the post-scope path).
+                    //
+                    // Order groups:
+                    //   - tier2.*  : well-known gated modules (off by default)
+                    //   - core.*   : PR-2 broken-endpoint gates — routes are
+                    //                currently 500/404-broken, gate is in place
+                    //                so when PR 2 fixes the handler the gate
+                    //                is already there and operators can flip
+                    //                the flag on consistently.
                     vec![
+                        // tier2.* — well-known gated modules
                         ("/api/v1/files".to_string(),         "tier2.file_upload".to_string()),
                         ("/api/v1/shifts".to_string(),        "tier2.shifts".to_string()),
                         ("/api/v1/graphql".to_string(),       "tier2.graphql".to_string()),
                         ("/api/v1/projects".to_string(),      "tier2.projects".to_string()),
                         ("/api/v1/manufacturing".to_string(), "tier2.manufacturing".to_string()),
+                        // core.* — 6 broken-endpoint gates (issue #152).
+                        // These routes are currently 500/404-broken. The gate
+                        // is in place today so PR 2's handler fix is the only
+                        // thing needed to make the route operator-enable-able.
+                        ("/api/v1/categories".to_string(),    "core.categories".to_string()),
+                        ("/api/v1/units".to_string(),         "core.units".to_string()),
+                        ("/api/v1/currencies".to_string(),    "core.currencies".to_string()),
+                        ("/api/v1/settings".to_string(),      "core.settings".to_string()),
+                        ("/api/v1/stock/warehouses".to_string(), "core.stock.warehouses".to_string()),
                     ],
                     app_state.feature_service.clone(),
                 )) // Feature-flag gate (off by default — see migrations/036_flag_seed_defaults.sql)
