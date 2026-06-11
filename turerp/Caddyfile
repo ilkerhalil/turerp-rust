@@ -1,0 +1,30 @@
+# Caddy reverse proxy for turerp-rust.
+#
+# Run with:  docker compose -f docker-compose.yml -f docker-compose.https.yml up -d
+# (a separate https overlay keeps the dev workflow working without TLS)
+#
+# This file is read by the `caddy` service defined in docker-compose.https.yml.
+# Caddy's HTTP-01 ACME flow requires:
+#   - DNS A/AAAA record for TURERP_DOMAIN pointing at this host
+#   - Outbound 80/443 (the LE challenge is served on 80, cert is issued on 443)
+#
+# Subdomains: `api.${TURERP_DOMAIN}` is the API itself. If you front a
+# SPA or admin UI later, add it here and Caddy will serve it on the
+# same cert (SAN).
+#
+# Why Caddy and not nginx/traefik? Caddy has automatic HTTPS baked in
+# (zero config for LE) and a tiny Caddyfile. The trade-off is that
+# Caddy's auto-renewal is process-internal, so a Caddy restart = a
+# brief 80→443 redirect window if renewal is mid-flight. We run
+# `restart: unless-stopped` so that's <1s.
+
+{$TURERP_DOMAIN:api.turerp.local}
+
+# Health probe endpoint, used by the Caddy healthcheck AND by any
+# external uptime monitor. Returns 200 if the upstream is reachable.
+reverse_proxy /health/* turerp:8080
+
+# The rest of the traffic — auth, REST, GraphQL — goes to the same
+# upstream. We do not split routes between services; the app is a
+# single binary.
+reverse_proxy turerp:8080
