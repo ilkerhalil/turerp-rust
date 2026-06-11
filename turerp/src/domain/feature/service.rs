@@ -161,6 +161,23 @@ impl FeatureFlagService {
         self.repository.is_enabled(name, tenant_id).await
     }
 
+    /// Returns true if **any** of the named flags is enabled for the
+    /// given tenant. Used by the gate middleware to OR multiple flags
+    /// (e.g. a route that's gated by 2 alternate flags).
+    #[tracing::instrument(skip(self))]
+    pub async fn is_any_enabled(
+        &self,
+        names: &[&str],
+        tenant_id: Option<i64>,
+    ) -> Result<bool, ApiError> {
+        for name in names {
+            if self.repository.is_enabled(name, tenant_id).await? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     /// Enable a feature flag
     #[tracing::instrument(skip(self))]
     pub async fn enable(&self, id: i64) -> Result<Option<FeatureFlagResponse>, ApiError> {
@@ -368,5 +385,67 @@ mod tests {
 
         let disabled = service.disable(created.id).await.unwrap().unwrap();
         assert_eq!(disabled.status, FeatureFlagStatus::Disabled);
+    }
+
+    #[actix_web::test]
+    async fn test_is_any_enabled_returns_true_if_any_match() {
+        use crate::domain::feature::repository::FeatureFlagRepository;
+
+        let repo = Arc::new(InMemoryFeatureFlagRepository::new());
+        // tier2.manufacturing off, tier2.projects off → none enabled
+        repo.create(CreateFeatureFlag {
+            name: "tier2.manufacturing".to_string(),
+            description: None,
+            status: Some(FeatureFlagStatus::Disabled),
+            tenant_id: Some(1),
+        })
+        .await
+        .unwrap();
+        repo.create(CreateFeatureFlag {
+            name: "tier2.projects".to_string(),
+            description: None,
+            status: Some(FeatureFlagStatus::Disabled),
+            tenant_id: Some(1),
+        })
+        .await
+        .unwrap();
+        let service = FeatureFlagService::new(repo);
+
+        let enabled = service
+            .is_any_enabled(&["tier2.manufacturing", "tier2.projects"], Some(1))
+            .await
+            .unwrap();
+        assert!(!enabled, "all flags off → is_any_enabled must return false");
+    }
+
+    #[actix_web::test]
+    async fn test_is_any_enabled_returns_true_if_one_matches() {
+        use crate::domain::feature::repository::FeatureFlagRepository;
+
+        let repo = Arc::new(InMemoryFeatureFlagRepository::new());
+        // tier2.manufacturing ENABLED, tier2.projects off → one matches
+        repo.create(CreateFeatureFlag {
+            name: "tier2.manufacturing".to_string(),
+            description: None,
+            status: Some(FeatureFlagStatus::Enabled),
+            tenant_id: Some(1),
+        })
+        .await
+        .unwrap();
+        repo.create(CreateFeatureFlag {
+            name: "tier2.projects".to_string(),
+            description: None,
+            status: Some(FeatureFlagStatus::Disabled),
+            tenant_id: Some(1),
+        })
+        .await
+        .unwrap();
+        let service = FeatureFlagService::new(repo);
+
+        let enabled = service
+            .is_any_enabled(&["tier2.manufacturing", "tier2.projects"], Some(1))
+            .await
+            .unwrap();
+        assert!(enabled, "one flag on → is_any_enabled must return true");
     }
 }
