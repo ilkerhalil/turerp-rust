@@ -113,6 +113,12 @@ tests/hurl/
     03_users.hurl
     ...
     16_settings.hurl
+    17_manufacturing.hurl
+    18_projects.hurl
+    19_shifts.hurl
+    20_payroll.hurl
+    21_graphql.hurl
+    22_file_upload.hurl
 ```
 
 ### Why not hurl's native multi-file?
@@ -128,6 +134,13 @@ simplest workaround until the upstream feature lands.
 |------|-------|-------|
 | 1 — root resources | 01–10 | auth, health, users, basic CRUD, RBAC, negative paths |
 | 1.5 — domain | 11–16 | HR, accounting, CRM, stock, invoices, settings |
+| 2 — gated modules | 17–22 | manufacturing, projects, shifts, payroll, graphql, file upload |
+
+Tier 2 scenarios all assert the **default-OFF** state of the
+`tier2.*` feature flags. When the operator enables a flag via
+`/api/v1/feature-flags/{id}/enable`, the same routes return 200
+(positive assertions are run by enabling the flag and re-running
+the suite — see RUNBOOK § 5 for the flip procedure).
 
 ### Known-broken scenarios (assert the bug)
 
