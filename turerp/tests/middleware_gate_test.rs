@@ -137,3 +137,145 @@ async fn gated_route_returns_404_when_claims_missing() {
         "gated route with no AuthClaims must 404 (fail-closed)"
     );
 }
+
+// ---------------------------------------------------------------------
+// GlobalGate tests: app-level middleware that consults a (prefix, flag)
+// map. Path matching is prefix-based; non-matching paths pass through.
+// ---------------------------------------------------------------------
+
+use turerp::middleware::gate::GlobalGate;
+
+/// Build a GlobalGate bound to an in-memory feature service seeded with
+/// one or more flags at known states.
+async fn build_global_gate(
+    rules: Vec<(String, String)>,
+    seeds: Vec<(&str, FeatureFlagStatus)>,
+) -> GlobalGate {
+    let repo = Arc::new(InMemoryFeatureFlagRepository::new());
+    for (name, status) in seeds {
+        repo.create(CreateFeatureFlag {
+            name: name.to_string(),
+            description: None,
+            status: Some(status),
+            tenant_id: Some(1),
+        })
+        .await
+        .unwrap();
+    }
+    GlobalGate::new(rules, web::Data::new(FeatureFlagService::new(repo)))
+}
+
+#[actix_web::test]
+async fn global_gate_blocks_matching_path_when_flag_disabled() {
+    let gate = build_global_gate(
+        vec![("/v1/files".to_string(), "tier2.file_upload".to_string())],
+        vec![("tier2.file_upload", FeatureFlagStatus::Disabled)],
+    )
+    .await;
+
+    let app = test::init_service(
+        App::new().wrap(gate).service(
+            web::resource("/v1/files")
+                .route(web::get().to(|| async { HttpResponse::Ok().json(json!({"ok": true})) })),
+        ),
+    )
+    .await;
+
+    let req = test::TestRequest::get().uri("/v1/files").to_request();
+    req.extensions_mut().insert(build_claims(1));
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        404,
+        "matching path with disabled flag must 404"
+    );
+}
+
+#[actix_web::test]
+async fn global_gate_passes_matching_path_when_flag_enabled() {
+    let gate = build_global_gate(
+        vec![("/v1/files".to_string(), "tier2.file_upload".to_string())],
+        vec![("tier2.file_upload", FeatureFlagStatus::Enabled)],
+    )
+    .await;
+
+    let app = test::init_service(
+        App::new().wrap(gate).service(
+            web::resource("/v1/files")
+                .route(web::get().to(|| async { HttpResponse::Ok().json(json!({"ok": true})) })),
+        ),
+    )
+    .await;
+
+    let req = test::TestRequest::get().uri("/v1/files").to_request();
+    req.extensions_mut().insert(build_claims(1));
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        200,
+        "matching path with enabled flag must reach handler"
+    );
+}
+
+#[actix_web::test]
+async fn global_gate_passes_non_matching_path() {
+    let gate = build_global_gate(
+        vec![("/v1/files".to_string(), "tier2.file_upload".to_string())],
+        vec![("tier2.file_upload", FeatureFlagStatus::Disabled)],
+    )
+    .await;
+
+    let app = test::init_service(
+        App::new().wrap(gate).service(
+            web::resource("/v1/categories")
+                .route(web::get().to(|| async { HttpResponse::Ok().json(json!({"ok": true})) })),
+        ),
+    )
+    .await;
+
+    let req = test::TestRequest::get().uri("/v1/categories").to_request();
+    req.extensions_mut().insert(build_claims(1));
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        200,
+        "non-gated path must pass through unchanged"
+    );
+}
+
+#[actix_web::test]
+async fn global_gate_longest_prefix_wins() {
+    // Two rules overlap. The longer prefix should win.
+    let gate = build_global_gate(
+        vec![
+            ("/v1".to_string(), "core.v1".to_string()),
+            ("/v1/files".to_string(), "tier2.file_upload".to_string()),
+        ],
+        vec![
+            ("core.v1", FeatureFlagStatus::Disabled),
+            ("tier2.file_upload", FeatureFlagStatus::Enabled),
+        ],
+    )
+    .await;
+
+    let app = test::init_service(
+        App::new().wrap(gate).service(
+            web::resource("/v1/files")
+                .route(web::get().to(|| async { HttpResponse::Ok().json(json!({"ok": true})) })),
+        ),
+    )
+    .await;
+
+    let req = test::TestRequest::get().uri("/v1/files").to_request();
+    req.extensions_mut().insert(build_claims(1));
+
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(
+        resp.status(),
+        200,
+        "longest prefix should match the enabled tier2.file_upload rule"
+    );
+}

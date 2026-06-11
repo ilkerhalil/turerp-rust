@@ -59,7 +59,7 @@ use crate::domain::feature::{
     CreateFeatureFlag, FeatureFlagResponse, FeatureFlagStatus, UpdateFeatureFlag,
 };
 use crate::domain::user::{CreateUser, UpdateUser, UserResponse};
-pub use crate::middleware::gate::{gate_v1, GateConfig};
+pub use crate::middleware::gate::{GateConfig, GlobalGate};
 use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
 use utoipa::Modify;
 use utoipa::OpenApi;
