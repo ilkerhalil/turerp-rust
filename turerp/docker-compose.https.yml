@@ -1,0 +1,57 @@
+# docker-compose.https.yml — TLS overlay for production deploys.
+#
+# Brings up a Caddy reverse proxy in front of the existing turerp
+# service, terminating HTTPS with an automatically-issued Let's
+# Encrypt certificate. The base `docker-compose.yml` is unchanged
+# (the dev workflow still works as before).
+#
+# Usage:
+#   export TURERP_DOMAIN=api.turerp.example.com
+#   export TURERP_ACME_EMAIL=ops@turerp.example.com
+#   docker compose -f docker-compose.yml -f docker-compose.https.yml up -d
+#
+# What changes vs. the base compose:
+#   - `turerp` no longer publishes port 8080 to the host. All client
+#     traffic goes through Caddy on 80/443. SSH/docker exec still
+#     works for operators (the container port stays 8080).
+#   - `caddy` publishes 80/443. 80 is required for the Let's Encrypt
+#     HTTP-01 challenge; 443 is the actual API endpoint.
+#   - A named volume `caddy_data` persists the issued cert + ACME
+#     account key across container restarts. Without it, every
+#     restart would trigger a new issuance (LE rate limit: 5/week).
+#
+# What does NOT change:
+#   - db, cache, vault, aspire-dashboard, dev — unchanged.
+#   - The internal docker network still routes `caddy -> turerp:8080`
+#     without any TLS, so the app's own health/log/audit surface
+#     keeps working identically.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - TURERP_DOMAIN=${TURERP_DOMAIN:?TURERP_DOMAIN must be set (e.g. api.turerp.example.com)}
+      - TURERP_ACME_EMAIL=${TURERP_ACME_EMAIL:?TURERP_ACME_EMAIL must be set (Let's Encrypt account)}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      turerp:
+        condition: service_healthy
+    networks:
+      - turerp-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  caddy_data:
+  caddy_config:
