@@ -385,6 +385,36 @@ async fn main() -> std::io::Result<()> {
     tracing::info!("Server will bind to: {}", bind_addr);
     tracing::info!("Environment: {}", config.environment);
 
+    // MIGRATIONS_DOWN=1: replay down.sql in reverse and exit. This
+    // is the GA-cut rollback path (see RUNBOOK.md § 4.3 and the
+    // design spec § 4.3). The check is BEFORE `create_app_state`
+    // because the typical use case is "the previous boot applied
+    // 037_pg_audit_dlq and we want to undo that without losing
+    // earlier migrations". We exit after the down-replay so the
+    // app does not start writing with a partial schema.
+    //
+    // Operator command:
+    //   docker compose run --rm -e MIGRATIONS_DOWN=1 turerp
+    if std::env::var("MIGRATIONS_DOWN").as_deref() == Ok("1") {
+        tracing::warn!("MIGRATIONS_DOWN=1 — running down-replay then exiting");
+        let down_pool = turerp::db::create_pool(&config.database)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("Failed to create pool for down-replay: {}", e);
+                std::process::exit(1);
+            });
+        match turerp::db::run_migrations_down(&down_pool).await {
+            Ok(n) => {
+                tracing::warn!("MIGRATIONS_DOWN=1 — replayed {} migrations, exiting", n);
+                std::process::exit(0);
+            }
+            Err(e) => {
+                tracing::error!("MIGRATIONS_DOWN=1 — down-replay failed: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
     // Create application state with config
     let app_state = turerp::app::create_app_state_unified(&config)
         .await
@@ -451,7 +481,16 @@ async fn main() -> std::io::Result<()> {
     let (audit_tx, audit_rx) = mpsc::channel::<AuditEvent>(AUDIT_CHANNEL_CAPACITY);
     let audit_sender: std::sync::Arc<mpsc::Sender<AuditEvent>> = std::sync::Arc::new(audit_tx);
     let audit_svc = app_state.analytics.audit_service.get_ref().clone();
-    let audit_handle = spawn_audit_writer(audit_rx, audit_svc);
+    // The audit writer also spools failed batches to the persistent
+    // `pg_audit_dlq` table (see `domain::audit::dlq`). The pool is
+    // optional because the in-memory audit service is testable
+    // without a DB; in production it is always set.
+    let dlq_pool: Option<std::sync::Arc<sqlx::PgPool>> = app_state
+        .infra
+        .db_pool
+        .as_ref()
+        .map(|p| p.get_ref().clone());
+    let audit_handle = spawn_audit_writer(audit_rx, audit_svc, dlq_pool);
 
     let is_production = config.is_production();
     let security_headers_config = config.security_headers.clone();

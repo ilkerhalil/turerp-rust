@@ -1,5 +1,6 @@
 //! Audit log domain module
 
+pub mod dlq;
 pub mod model;
 pub mod repository;
 pub mod service;

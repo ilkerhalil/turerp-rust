@@ -265,9 +265,18 @@ const MAX_PANIC_BACKOFF_SECS: u64 = 30;
 /// receiver's `recv()` returns `None` and the writer exits even if it
 /// is mid-backoff. Without this, a 30s backoff would block the drain
 /// sequence in main.rs past its 5s budget.
+///
+/// **Persistent DLQ spool:** when a batch fails after the retry budget,
+/// the failed entries are spooled to `pg_audit_dlq` (see
+/// `domain::audit::dlq`) *in addition to* the in-memory DLQ. The
+/// in-memory DLQ is the fast retry path (the next tick re-attempts);
+/// the persistent DLQ is the disaster-recovery path (survives
+/// restart). On restart, the on-call runs `replay-audit-dlq` to drain
+/// the persistent queue.
 pub fn spawn_audit_writer(
     mut receiver: mpsc::Receiver<AuditEvent>,
     service: crate::domain::audit::service::AuditService,
+    pool: Option<std::sync::Arc<sqlx::PgPool>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut buffer: Vec<CreateAuditLog> = Vec::new();
@@ -285,6 +294,7 @@ pub fn spawn_audit_writer(
             let tick = std::panic::AssertUnwindSafe(audit_writer_tick(
                 &mut receiver,
                 &service,
+                pool.as_deref(),
                 &mut buffer,
                 &mut dead_letter_queue,
                 &mut flush_interval,
@@ -329,6 +339,7 @@ pub fn spawn_audit_writer(
 async fn audit_writer_tick(
     receiver: &mut mpsc::Receiver<AuditEvent>,
     service: &crate::domain::audit::service::AuditService,
+    pool: Option<&sqlx::PgPool>,
     buffer: &mut Vec<CreateAuditLog>,
     dead_letter_queue: &mut Vec<CreateAuditLog>,
     flush_interval: &mut tokio::time::Interval,
@@ -354,6 +365,7 @@ async fn audit_writer_tick(
 
                         if buffer.len() >= 100 {
                             if let Err(failed) = flush_buffer_with_retry(service, buffer, MAX_FLUSH_RETRIES).await {
+                                spool_to_persistent_dlq(pool, &failed, "buffer flush exhausted retries").await;
                                 dead_letter_queue.extend(failed);
                                 if dead_letter_queue.len() > 1_000 {
                                     tracing::error!("Audit DLQ exceeded 1000 items, dropping oldest {} logs", dead_letter_queue.len() - 500);
@@ -366,6 +378,7 @@ async fn audit_writer_tick(
                         // Channel closed — flush any remaining events and exit
                         if !buffer.is_empty() {
                             if let Err(failed) = flush_buffer_with_retry(service, buffer, MAX_FLUSH_RETRIES).await {
+                                spool_to_persistent_dlq(pool, &failed, "shutdown flush exhausted retries").await;
                                 dead_letter_queue.extend(failed);
                             }
                         }
@@ -376,12 +389,14 @@ async fn audit_writer_tick(
             _ = flush_interval.tick() => {
                 if !buffer.is_empty() {
                     if let Err(failed) = flush_buffer_with_retry(service, buffer, MAX_FLUSH_RETRIES).await {
+                        spool_to_persistent_dlq(pool, &failed, "interval flush exhausted retries").await;
                         dead_letter_queue.extend(failed);
                     }
                 }
                 if !dead_letter_queue.is_empty() {
                     let mut dlq_buffer = std::mem::take(dead_letter_queue);
                     if let Err(failed) = flush_buffer_with_retry(service, &mut dlq_buffer, MAX_FLUSH_RETRIES).await {
+                        spool_to_persistent_dlq(pool, &failed, "in-memory DLQ retry exhausted").await;
                         dead_letter_queue.extend(failed);
                         if dead_letter_queue.len() > 1_000 {
                             tracing::error!("Audit DLQ exceeded 1000 items after retry, dropping oldest {} logs", dead_letter_queue.len() - 500);
@@ -391,6 +406,34 @@ async fn audit_writer_tick(
                 }
             }
         }
+    }
+}
+
+/// Persist a failed batch to `pg_audit_dlq`. Failures are logged but
+/// not propagated — the in-memory DLQ is still the primary safety
+/// net, and a DLQ-spool failure is itself a sign of a serious outage
+/// the on-call will see in other signals. If the pool is `None`
+/// (test/dev environments), the spool is skipped with a warning —
+/// the in-memory DLQ still holds the failed events.
+async fn spool_to_persistent_dlq(
+    pool: Option<&sqlx::PgPool>,
+    failed: &[CreateAuditLog],
+    error_label: &str,
+) {
+    let Some(pool) = pool else {
+        tracing::warn!(
+            "Audit DLQ spool skipped (no DB pool configured); {} events held in in-memory DLQ only",
+            failed.len()
+        );
+        return;
+    };
+    if let Err(e) = crate::domain::audit::dlq::spool_batch(pool, failed.to_vec(), error_label).await
+    {
+        tracing::error!(
+            "Persistent DLQ spool failed: {} (lost {} audit events; in-memory DLQ still has them)",
+            e,
+            failed.len()
+        );
     }
 }
 
