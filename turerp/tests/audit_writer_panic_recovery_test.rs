@@ -100,7 +100,7 @@ async fn audit_writer_recovers_from_panic_and_flushes_next_batch() {
     let service = AuditService::new(repo);
 
     let (tx, rx) = tokio::sync::mpsc::channel::<AuditEvent>(1024);
-    let handle = spawn_audit_writer(rx, service);
+    let handle = spawn_audit_writer(rx, service, None);
 
     // Send 100 events — the writer's flush trigger is buffer.len() >= 100.
     // This forces a call to create_batch, which panics on the first call.
