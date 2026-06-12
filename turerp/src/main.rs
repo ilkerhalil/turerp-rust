@@ -521,18 +521,30 @@ async fn main() -> std::io::Result<()> {
             $app
                 .configure(|cfg| app_state.register_services(cfg))
                 // Security middlewares (ORDER MATTERS!)
-                // First wrap = outermost (touches request first, response last).
-                // Last wrap = innermost (touches request last, response first).
-                .wrap(middleware::Compress::default()) // Outermost: response compression
+                // In actix-web 4 the LAST `.wrap()` call is the OUTERMOST
+                // middleware (runs first on request, last on response). See
+                // https://actix.rs/docs/middleware/ — "if you use `wrap()` or
+                // `wrap_fn()` multiple times, the last occurrence will be
+                // executed first".
+                //
+                // Therefore:
+                //   - `JwtAuthMiddleware` is registered LAST so it is the
+                //     outermost and runs first. It validates the token and
+                //     injects `AuthClaims` into the request extensions.
+                //   - `GlobalGate` is registered just before JwtAuth so it
+                //     is INSIDE JwtAuth. By the time a request reaches the
+                //     gate, `AuthClaims` is already set, so the gate can
+                //     resolve `tenant_id` and look up the per-tenant feature
+                //     flag. If the gate ran first it would fail-closed
+                //     (404) on every request because no claims would be
+                //     present yet.
+                .wrap(middleware::Compress::default()) // Response compression
                 .wrap(SecurityHeadersMiddleware::new(
                     &security_headers_config,
                     is_production,
                 )) // Security headers
                 .wrap(rate_limit_middleware.clone()) // Rate limiting: outer layer so unauthenticated requests count
                 .wrap(configure_cors(&config.cors)) // CORS handling
-                .wrap(JwtAuthMiddleware::new(
-                    app_state.auth.jwt_service.get_ref().clone(),
-                )) // JWT validation
                 .wrap(GlobalGate::new(
                     // Per-request gate rules. Each rule is (path_prefix, flag_name).
                     // Longest prefix wins. Add new gated routes here.
@@ -575,6 +587,9 @@ async fn main() -> std::io::Result<()> {
                     ],
                     app_state.feature_service.clone(),
                 )) // Feature-flag gate (off by default — see migrations/036_flag_seed_defaults.sql)
+                .wrap(JwtAuthMiddleware::new(
+                    app_state.auth.jwt_service.get_ref().clone(),
+                )) // JWT validation (outermost — must run before gate so AuthClaims is set)
                 .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
                 .wrap(idempotency_middleware.clone()) // Idempotency key caching
                 .wrap(MetricsMiddleware::new()) // Metrics collection
