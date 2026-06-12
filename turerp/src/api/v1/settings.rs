@@ -35,7 +35,7 @@ pub struct ListSettingsQuery {
     ),
     tag = "settings"
 )]
-#[post("/settings")]
+#[post("/v1/settings")]
 pub async fn create_setting(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -63,7 +63,7 @@ pub async fn create_setting(
     ),
     tag = "settings"
 )]
-#[get("/settings")]
+#[get("/v1/settings")]
 pub async fn list_settings(
     state: web::Data<AppState>,
     query: web::Query<ListSettingsQuery>,
@@ -104,7 +104,7 @@ pub async fn list_settings(
     ),
     tag = "settings"
 )]
-#[get("/settings/{key}")]
+#[get("/v1/settings/{key}")]
 pub async fn get_setting_by_key(
     state: web::Data<AppState>,
     path: web::Path<String>,
@@ -136,7 +136,7 @@ pub async fn get_setting_by_key(
     ),
     tag = "settings"
 )]
-#[put("/settings/{id}")]
+#[put("/v1/settings/{id}")]
 pub async fn update_setting(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -167,7 +167,7 @@ pub async fn update_setting(
     ),
     tag = "settings"
 )]
-#[post("/settings/bulk")]
+#[post("/v1/settings/bulk")]
 pub async fn bulk_update_settings(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -203,7 +203,7 @@ pub async fn bulk_update_settings(
     ),
     tag = "settings"
 )]
-#[delete("/settings/{id}")]
+#[delete("/v1/settings/{id}")]
 pub async fn delete_setting(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -230,7 +230,7 @@ pub async fn delete_setting(
     ),
     tag = "settings"
 )]
-#[delete("/settings/{id}/soft")]
+#[delete("/v1/settings/{id}/soft")]
 pub async fn soft_delete_setting(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -261,7 +261,7 @@ pub async fn soft_delete_setting(
     ),
     tag = "settings"
 )]
-#[post("/settings/{id}/restore")]
+#[post("/v1/settings/{id}/restore")]
 pub async fn restore_setting(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -289,7 +289,7 @@ pub async fn restore_setting(
     ),
     tag = "settings"
 )]
-#[get("/settings/deleted")]
+#[get("/v1/settings/deleted")]
 pub async fn list_deleted_settings(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -317,7 +317,7 @@ pub async fn list_deleted_settings(
     ),
     tag = "settings"
 )]
-#[delete("/settings/{id}/destroy")]
+#[delete("/v1/settings/{id}/destroy")]
 pub async fn destroy_setting(
     _admin: AdminUser,
     state: web::Data<AppState>,
@@ -345,7 +345,7 @@ pub async fn destroy_setting(
     ),
     tag = "settings"
 )]
-#[post("/settings/seed")]
+#[post("/v1/settings/seed")]
 pub async fn seed_settings(
     _admin: AdminUser,
     state: web::Data<AppState>,
