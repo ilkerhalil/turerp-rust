@@ -634,7 +634,6 @@ impl AttendanceRepository for PostgresAttendanceRepository {
 struct LeaveTypeRow {
     id: i64,
     tenant_id: i64,
-    company_id: i64,
     name: String,
     description: Option<String>,
     max_days_per_year: Decimal,
@@ -680,9 +679,9 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
     async fn create(&self, leave_type: LeaveType) -> Result<LeaveType, ApiError> {
         let row: LeaveTypeRow = sqlx::query_as(
             r#"
-            INSERT INTO leave_types (tenant_id, company_id, name, description, max_days_per_year, requires_approval)
+            INSERT INTO leave_types (tenant_id, name, description, max_days_per_year, requires_approval)
             VALUES ($1, $2, $3, $4, $5)
-            RETURNING id, tenant_id, company_id, name, description, max_days_per_year, requires_approval,
+            RETURNING id, tenant_id, name, description, max_days_per_year, requires_approval,
                       deleted_at, deleted_by
             "#,
         )
@@ -701,7 +700,7 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<LeaveType>, ApiError> {
         let result: Option<LeaveTypeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, name, description, max_days_per_year, requires_approval,
+            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval,
                    deleted_at, deleted_by
             FROM leave_types
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -719,7 +718,7 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<LeaveType>, ApiError> {
         let rows: Vec<LeaveTypeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, name, description, max_days_per_year, requires_approval,
+            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval,
                    deleted_at, deleted_by
             FROM leave_types
             WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -803,7 +802,7 @@ impl LeaveTypeRepository for PostgresLeaveTypeRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<LeaveType>, ApiError> {
         let rows: Vec<LeaveTypeRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, name, description, max_days_per_year, requires_approval,
+            SELECT id, tenant_id, name, description, max_days_per_year, requires_approval,
                    deleted_at, deleted_by
             FROM leave_types
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
