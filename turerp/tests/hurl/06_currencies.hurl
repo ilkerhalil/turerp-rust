@@ -1,20 +1,30 @@
-# Tier 1 — Currencies. Documents a known PR #145 regression:
-#   GET /currencies and GET /exchange-rates return 404 in the current build.
-#   This file asserts the 404 and is expected to flip to 200 once the
-#   route registration is fixed. Filed as issue #152 follow-up.
+# Tier 1 — Currencies. PR #145 broke the route registration; the
+# configure() used web::scope("/currencies") mounted under /api,
+# exposing GET /api/currencies (not /api/v1/currencies). Issue #152
+# flipped the prefix to /v1/... to align with the utoipa paths and
+# the GlobalGate rule, so the route is now reachable at the v1 path.
 
-# --- 1. Currencies list — currently 404, see issue #152 ---
+# --- 1. Currencies list — fixed by #152 ---
 GET {{base_url}}/api/v1/currencies
 Authorization: Bearer {{access_token}}
-HTTP 404
+HTTP 200
+[Asserts]
+jsonpath "$.items" isCollection
+jsonpath "$.total" isNumber
 
-# --- 2. Exchange rates list — currently 404, see issue #152 ---
+# --- 2. Exchange rates list — fixed by #152 ---
 GET {{base_url}}/api/v1/exchange-rates
 Authorization: Bearer {{access_token}}
-HTTP 404
+HTTP 200
+[Asserts]
+jsonpath "$.items" isCollection
+jsonpath "$.total" isNumber
 
-# --- 3. Direct table probe via the seed endpoint (workaround) ---
-#    Confirms the DB row exists, isolating the failure to the route layer.
+# --- 3. Specific currency (404 if not seeded) — fixed by #152 ---
+# USD is not seeded by default; the route is now reachable (no
+# 404 from missing route) but returns 404 from the handler
+# because the row doesn't exist. Seed a row separately if you
+# want to assert 200.
 GET {{base_url}}/api/v1/currencies/USD
 Authorization: Bearer {{access_token}}
 HTTP 404
