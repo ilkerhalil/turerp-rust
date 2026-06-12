@@ -708,7 +708,6 @@ impl CategoryRepository for PostgresCategoryRepository {
 struct UnitRow {
     id: i64,
     tenant_id: i64,
-    company_id: i64,
     code: String,
     name: String,
     is_integer: bool,
@@ -723,7 +722,7 @@ impl From<UnitRow> for Unit {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
-            company_id: row.company_id,
+            company_id: 0,
             code: row.code,
             name: row.name,
             is_integer: row.is_integer,
@@ -756,13 +755,12 @@ impl UnitRepository for PostgresUnitRepository {
     async fn create(&self, create: CreateUnit) -> Result<Unit, ApiError> {
         let row: UnitRow = sqlx::query_as(
             r#"
-            INSERT INTO units (tenant_id, company_id, code, name, is_integer, created_at)
+            INSERT INTO units (tenant_id, code, name, is_integer, created_at)
             VALUES ($1, $2, $3, $4, NOW())
-            RETURNING id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
-        .bind(create.company_id)
         .bind(&create.code)
         .bind(&create.name)
         .bind(create.is_integer)
@@ -776,7 +774,7 @@ impl UnitRepository for PostgresUnitRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Unit>, ApiError> {
         let result: Option<UnitRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
             FROM units
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
@@ -793,7 +791,7 @@ impl UnitRepository for PostgresUnitRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
         let rows: Vec<UnitRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
             FROM units
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
@@ -816,7 +814,7 @@ impl UnitRepository for PostgresUnitRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<UnitRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
+            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
             FROM units
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
@@ -848,7 +846,7 @@ impl UnitRepository for PostgresUnitRepository {
                 name = COALESCE($2, name),
                 is_integer = COALESCE($3, is_integer)
             WHERE id = $4 AND tenant_id = $5 AND deleted_at IS NULL
-            RETURNING id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.code)
@@ -933,7 +931,7 @@ impl UnitRepository for PostgresUnitRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Unit>, ApiError> {
         let rows: Vec<UnitRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, code, name, is_integer, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, code, name, is_integer, created_at, deleted_at, deleted_by
             FROM units
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC

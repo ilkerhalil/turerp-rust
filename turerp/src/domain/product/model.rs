@@ -53,6 +53,7 @@ impl_soft_deletable!(Category);
 pub struct Unit {
     pub id: i64,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
     pub company_id: i64,
     pub code: String,
     pub name: String,

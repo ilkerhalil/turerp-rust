@@ -1,11 +1,16 @@
 # Tier 1 — Units. Same P1 as categories: GET /units is gated
-# (core.units, default-disabled). With the gate in place, the
-# request 404s BEFORE the underlying handler runs. PR 2 will fix
-# the underlying handler AND the operator will flip the flag on
-# (these are tracked together).
+# (core.units, default-disabled). PR 2 fixed the underlying handler
+# (postgres_repository had a phantom `company_id` column drift that caused
+# FromRow decode to fail and the handler to return 404/500). The flag is
+# off by default; operator flips it on after deploy.
 
 
-# --- 1. Units list — currently 404 (gated; PR 2 fixes handler) ---
+# --- 1. Units list (gated; returns 200 + empty paginated body) ---
 GET {{base_url}}/api/v1/units
 Authorization: Bearer {{access_token}}
-HTTP 404
+HTTP 200
+[Asserts]
+jsonpath "$.items" isCollection
+jsonpath "$.total" isNumber
+jsonpath "$.page" isNumber
+jsonpath "$.per_page" isNumber
