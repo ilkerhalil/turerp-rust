@@ -37,6 +37,7 @@ impl_soft_deletable!(Product);
 pub struct Category {
     pub id: i64,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
     pub company_id: i64,
     pub name: String,
     pub parent_id: Option<i64>,

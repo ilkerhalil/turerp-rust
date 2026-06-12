@@ -446,7 +446,6 @@ impl ProductRepository for PostgresProductRepository {
 struct CategoryRow {
     id: i64,
     tenant_id: i64,
-    company_id: i64,
     name: String,
     parent_id: Option<i64>,
     created_at: chrono::DateTime<chrono::Utc>,
@@ -460,7 +459,7 @@ impl From<CategoryRow> for Category {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
-            company_id: row.company_id,
+            company_id: 0,
             name: row.name,
             parent_id: row.parent_id,
             created_at: row.created_at,
@@ -492,13 +491,12 @@ impl CategoryRepository for PostgresCategoryRepository {
     async fn create(&self, create: CreateCategory) -> Result<Category, ApiError> {
         let row: CategoryRow = sqlx::query_as(
             r#"
-            INSERT INTO categories (tenant_id, company_id, name, parent_id, created_at)
+            INSERT INTO categories (tenant_id, name, parent_id, created_at)
             VALUES ($1, $2, $3, NOW())
-            RETURNING id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)
-        .bind(create.company_id)
         .bind(&create.name)
         .bind(create.parent_id)
         .fetch_one(&*self.pool)
@@ -511,7 +509,7 @@ impl CategoryRepository for PostgresCategoryRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Category>, ApiError> {
         let result: Option<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
             FROM categories
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
@@ -528,7 +526,7 @@ impl CategoryRepository for PostgresCategoryRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
         let rows: Vec<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
             FROM categories
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
@@ -551,7 +549,7 @@ impl CategoryRepository for PostgresCategoryRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
+            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
             FROM categories
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
@@ -582,7 +580,7 @@ impl CategoryRepository for PostgresCategoryRepository {
             SET name = COALESCE($1, name),
                 parent_id = COALESCE($2, parent_id)
             WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL
-            RETURNING id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(&update.name)
@@ -666,7 +664,7 @@ impl CategoryRepository for PostgresCategoryRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Category>, ApiError> {
         let rows: Vec<CategoryRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, name, parent_id, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, name, parent_id, created_at, deleted_at, deleted_by
             FROM categories
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
