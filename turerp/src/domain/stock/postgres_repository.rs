@@ -26,7 +26,6 @@ use crate::error::ApiError;
 struct WarehouseRow {
     id: i64,
     tenant_id: i64,
-    company_id: i64,
     code: String,
     name: String,
     address: Option<String>,
@@ -42,7 +41,7 @@ impl From<WarehouseRow> for Warehouse {
         Self {
             id: row.id,
             tenant_id: row.tenant_id,
-            company_id: row.company_id,
+            company_id: 0,
             code: row.code,
             name: row.name,
             address: row.address,
@@ -76,9 +75,9 @@ impl WarehouseRepository for PostgresWarehouseRepository {
     async fn create(&self, warehouse: CreateWarehouse) -> Result<Warehouse, ApiError> {
         let row: WarehouseRow = sqlx::query_as(
             r#"
-            INSERT INTO warehouses (tenant_id, company_id, code, name, address, is_active, created_at)
+            INSERT INTO warehouses (tenant_id, code, name, address, is_active, created_at)
             VALUES ($1, $2, $3, $4, true, NOW())
-            RETURNING id, tenant_id, company_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(warehouse.tenant_id)
@@ -95,7 +94,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Warehouse>, ApiError> {
         let result: Option<WarehouseRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
             FROM warehouses
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
@@ -112,7 +111,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError> {
         let rows: Vec<WarehouseRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
             FROM warehouses
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
@@ -135,7 +134,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
         let offset = (page.saturating_sub(1)) * per_page;
         let rows: Vec<WarehouseRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, code, name, address, is_active, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by, COUNT(*) OVER() as total_count
             FROM warehouses
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
@@ -172,7 +171,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
                 address = COALESCE($3, address),
                 is_active = COALESCE($4, is_active)
             WHERE id = $5 AND tenant_id = $6 AND deleted_at IS NULL
-            RETURNING id, tenant_id, company_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(&code)
@@ -258,7 +257,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError> {
         let rows: Vec<WarehouseRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, company_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
             FROM warehouses
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC

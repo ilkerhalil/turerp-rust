@@ -1120,3 +1120,49 @@ impl ProductVariantRepository for InMemoryProductVariantRepository {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression test for issue #152-1: GET /api/v1/categories must return
+    /// an empty paginated result (not 404) when a tenant has no rows.
+    #[tokio::test]
+    async fn test_categories_paginated_empty_tenant() {
+        let repo = InMemoryCategoryRepository::new();
+        let result = repo
+            .find_by_tenant_paginated(1, 1, 20)
+            .await
+            .expect("paginated list should not error for empty tenant");
+        assert_eq!(result.items.len(), 0);
+        assert_eq!(result.total, 0);
+        assert_eq!(result.page, 1);
+        assert_eq!(result.per_page, 20);
+    }
+
+    /// Categories for other tenants must not leak into the response.
+    #[tokio::test]
+    async fn test_categories_paginated_tenant_isolation() {
+        let repo = InMemoryCategoryRepository::new();
+        // Seed a category for tenant 2
+        repo.create(CreateCategory {
+            tenant_id: 2,
+            company_id: 0,
+            name: "Other tenant".to_string(),
+            parent_id: None,
+        })
+        .await
+        .unwrap();
+
+        let result = repo
+            .find_by_tenant_paginated(1, 1, 20)
+            .await
+            .expect("paginated list should not error");
+        assert_eq!(
+            result.items.len(),
+            0,
+            "tenant 1 must not see tenant 2 categories"
+        );
+        assert_eq!(result.total, 0);
+    }
+}

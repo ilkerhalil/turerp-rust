@@ -563,7 +563,7 @@ pub async fn destroy_exchange_rate(
 /// Configure currency routes
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
-        web::scope("/currencies")
+        web::scope("/v1/currencies")
             .route("", web::get().to(list_currencies))
             .route("", web::post().to(create_currency))
             .route("/deleted", web::get().to(list_deleted_currencies))
@@ -574,7 +574,7 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route("/{code}/destroy", web::delete().to(destroy_currency)),
     )
     .service(
-        web::scope("/exchange-rates")
+        web::scope("/v1/exchange-rates")
             .route("", web::get().to(list_exchange_rates))
             .route("", web::post().to(create_exchange_rate))
             .route("/convert", web::get().to(convert_amount))

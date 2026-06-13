@@ -16,7 +16,7 @@ async fn test_create_currency_success() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let req = auth_request(actix_web::http::Method::POST, "/api/currencies", &token)
+    let req = auth_request(actix_web::http::Method::POST, "/api/v1/currencies", &token)
         .set_json(json!({
             "code": "USD",
             "name": "US Dollar",
@@ -45,7 +45,7 @@ async fn test_list_currencies_paginated() {
     let (token, _user_id) = register_admin(&state, 1).await;
 
     for code in [&"USD", &"EUR", &"GBP"] {
-        let req = auth_request(actix_web::http::Method::POST, "/api/currencies", &token)
+        let req = auth_request(actix_web::http::Method::POST, "/api/v1/currencies", &token)
             .set_json(json!({
                 "code": code,
                 "name": format!("{} Currency", code),
@@ -61,7 +61,7 @@ async fn test_list_currencies_paginated() {
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/currencies?page=1&per_page=2",
+        "/api/v1/currencies?page=1&per_page=2",
         &token,
     )
     .to_request();
@@ -80,7 +80,7 @@ async fn test_list_currencies_active_only() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let req = auth_request(actix_web::http::Method::POST, "/api/currencies", &token)
+    let req = auth_request(actix_web::http::Method::POST, "/api/v1/currencies", &token)
         .set_json(json!({
             "code": "USD",
             "name": "US Dollar",
@@ -91,7 +91,7 @@ async fn test_list_currencies_active_only() {
         .to_request();
     test::call_service(&app, req).await;
 
-    let req = auth_request(actix_web::http::Method::POST, "/api/currencies", &token)
+    let req = auth_request(actix_web::http::Method::POST, "/api/v1/currencies", &token)
         .set_json(json!({
             "code": "EUR",
             "name": "Euro",
@@ -104,7 +104,7 @@ async fn test_list_currencies_active_only() {
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/currencies?active_only=true",
+        "/api/v1/currencies?active_only=true",
         &token,
     )
     .to_request();
@@ -125,7 +125,7 @@ async fn test_get_currency_success() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/currencies", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/currencies", &token)
         .set_json(json!({
             "code": "TRY",
             "name": "Turkish Lira",
@@ -137,8 +137,12 @@ async fn test_get_currency_success() {
         .to_request();
     test::call_service(&app, create_req).await;
 
-    let get_req =
-        auth_request(actix_web::http::Method::GET, "/api/currencies/TRY", &token).to_request();
+    let get_req = auth_request(
+        actix_web::http::Method::GET,
+        "/api/v1/currencies/TRY",
+        &token,
+    )
+    .to_request();
     let get_resp = test::call_service(&app, get_req).await;
     assert_eq!(get_resp.status(), StatusCode::OK);
 
@@ -154,8 +158,12 @@ async fn test_get_currency_not_found() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let req =
-        auth_request(actix_web::http::Method::GET, "/api/currencies/ZZZ", &token).to_request();
+    let req = auth_request(
+        actix_web::http::Method::GET,
+        "/api/v1/currencies/ZZZ",
+        &token,
+    )
+    .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
@@ -166,7 +174,7 @@ async fn test_update_currency_success() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/currencies", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/currencies", &token)
         .set_json(json!({
             "code": "JPY",
             "name": "Japanese Yen",
@@ -178,12 +186,16 @@ async fn test_update_currency_success() {
         .to_request();
     test::call_service(&app, create_req).await;
 
-    let update_req = auth_request(actix_web::http::Method::PUT, "/api/currencies/JPY", &token)
-        .set_json(json!({
-            "name": "Updated Yen",
-            "is_active": false
-        }))
-        .to_request();
+    let update_req = auth_request(
+        actix_web::http::Method::PUT,
+        "/api/v1/currencies/JPY",
+        &token,
+    )
+    .set_json(json!({
+        "name": "Updated Yen",
+        "is_active": false
+    }))
+    .to_request();
     let update_resp = test::call_service(&app, update_req).await;
     assert_eq!(update_resp.status(), StatusCode::OK);
 
@@ -204,7 +216,7 @@ async fn test_soft_delete_and_restore_currency() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/currencies", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/currencies", &token)
         .set_json(json!({
             "code": "CAD",
             "name": "Canadian Dollar",
@@ -218,29 +230,37 @@ async fn test_soft_delete_and_restore_currency() {
 
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        "/api/currencies/CAD/soft",
+        "/api/v1/currencies/CAD/soft",
         &token,
     )
     .to_request();
     let del_resp = test::call_service(&app, del_req).await;
     assert_eq!(del_resp.status(), StatusCode::NO_CONTENT);
 
-    let get_req =
-        auth_request(actix_web::http::Method::GET, "/api/currencies/CAD", &token).to_request();
+    let get_req = auth_request(
+        actix_web::http::Method::GET,
+        "/api/v1/currencies/CAD",
+        &token,
+    )
+    .to_request();
     let get_resp = test::call_service(&app, get_req).await;
     assert_eq!(get_resp.status(), StatusCode::NOT_FOUND);
 
     let restore_req = auth_request(
         actix_web::http::Method::POST,
-        "/api/currencies/CAD/restore",
+        "/api/v1/currencies/CAD/restore",
         &token,
     )
     .to_request();
     let restore_resp = test::call_service(&app, restore_req).await;
     assert_eq!(restore_resp.status(), StatusCode::NO_CONTENT);
 
-    let get_req =
-        auth_request(actix_web::http::Method::GET, "/api/currencies/CAD", &token).to_request();
+    let get_req = auth_request(
+        actix_web::http::Method::GET,
+        "/api/v1/currencies/CAD",
+        &token,
+    )
+    .to_request();
     let get_resp = test::call_service(&app, get_req).await;
     assert_eq!(get_resp.status(), StatusCode::OK);
 }
@@ -251,7 +271,7 @@ async fn test_list_deleted_currencies() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/currencies", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/currencies", &token)
         .set_json(json!({
             "code": "AUD",
             "name": "Australian Dollar",
@@ -265,7 +285,7 @@ async fn test_list_deleted_currencies() {
 
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        "/api/currencies/AUD/soft",
+        "/api/v1/currencies/AUD/soft",
         &token,
     )
     .to_request();
@@ -273,7 +293,7 @@ async fn test_list_deleted_currencies() {
 
     let list_req = auth_request(
         actix_web::http::Method::GET,
-        "/api/currencies/deleted",
+        "/api/v1/currencies/deleted",
         &token,
     )
     .to_request();
@@ -293,7 +313,7 @@ async fn test_destroy_currency_permanently() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/currencies", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/currencies", &token)
         .set_json(json!({
             "code": "CHF",
             "name": "Swiss Franc",
@@ -307,7 +327,7 @@ async fn test_destroy_currency_permanently() {
 
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        "/api/currencies/CHF/soft",
+        "/api/v1/currencies/CHF/soft",
         &token,
     )
     .to_request();
@@ -315,7 +335,7 @@ async fn test_destroy_currency_permanently() {
 
     let destroy_req = auth_request(
         actix_web::http::Method::DELETE,
-        "/api/currencies/CHF/destroy",
+        "/api/v1/currencies/CHF/destroy",
         &token,
     )
     .to_request();
@@ -324,7 +344,7 @@ async fn test_destroy_currency_permanently() {
 
     let restore_req = auth_request(
         actix_web::http::Method::POST,
-        "/api/currencies/CHF/restore",
+        "/api/v1/currencies/CHF/restore",
         &token,
     )
     .to_request();
@@ -334,7 +354,7 @@ async fn test_destroy_currency_permanently() {
 
 macro_rules! ensure_currency_exists {
     ($app:expr, $token:expr, $code:expr, $name:expr, $symbol:expr) => {{
-        let req = auth_request(actix_web::http::Method::POST, "/api/currencies", $token)
+        let req = auth_request(actix_web::http::Method::POST, "/api/v1/currencies", $token)
             .set_json(json!({
                 "code": $code,
                 "name": $name,
@@ -364,14 +384,18 @@ async fn test_create_exchange_rate_success() {
     ensure_currency_exists!(&app, &token, "USD", "US Dollar", "$");
     ensure_currency_exists!(&app, &token, "EUR", "Euro", "€");
 
-    let req = auth_request(actix_web::http::Method::POST, "/api/exchange-rates", &token)
-        .set_json(json!({
-            "from_currency": "USD",
-            "to_currency": "EUR",
-            "rate": "0.85",
-            "effective_date": "2024-01-01"
-        }))
-        .to_request();
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/exchange-rates",
+        &token,
+    )
+    .set_json(json!({
+        "from_currency": "USD",
+        "to_currency": "EUR",
+        "rate": "0.85",
+        "effective_date": "2024-01-01"
+    }))
+    .to_request();
 
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
@@ -394,21 +418,25 @@ async fn test_list_exchange_rates_paginated() {
 
     for code in ["XAA", "XAB", "XAC"] {
         ensure_currency_exists!(&app, &token, code, &format!("Currency {}", code), "C");
-        let req = auth_request(actix_web::http::Method::POST, "/api/exchange-rates", &token)
-            .set_json(json!({
-                "from_currency": "USD",
-                "to_currency": code,
-                "rate": "1.10",
-                "effective_date": "2024-01-01"
-            }))
-            .to_request();
+        let req = auth_request(
+            actix_web::http::Method::POST,
+            "/api/v1/exchange-rates",
+            &token,
+        )
+        .set_json(json!({
+            "from_currency": "USD",
+            "to_currency": code,
+            "rate": "1.10",
+            "effective_date": "2024-01-01"
+        }))
+        .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::CREATED);
     }
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/exchange-rates?page=1&per_page=2",
+        "/api/v1/exchange-rates?page=1&per_page=2",
         &token,
     )
     .to_request();
@@ -430,14 +458,18 @@ async fn test_soft_delete_and_restore_exchange_rate() {
     ensure_currency_exists!(&app, &token, "GBP", "British Pound", "£");
     ensure_currency_exists!(&app, &token, "USD", "US Dollar", "$");
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/exchange-rates", &token)
-        .set_json(json!({
-            "from_currency": "GBP",
-            "to_currency": "USD",
-            "rate": "1.25",
-            "effective_date": "2024-01-01"
-        }))
-        .to_request();
+    let create_req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/exchange-rates",
+        &token,
+    )
+    .set_json(json!({
+        "from_currency": "GBP",
+        "to_currency": "USD",
+        "rate": "1.25",
+        "effective_date": "2024-01-01"
+    }))
+    .to_request();
     let create_resp = test::call_service(&app, create_req).await;
     let body = to_bytes(create_resp.into_body()).await.unwrap();
     let create_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -445,7 +477,7 @@ async fn test_soft_delete_and_restore_exchange_rate() {
 
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        &format!("/api/exchange-rates/{}/soft", id),
+        &format!("/api/v1/exchange-rates/{}/soft", id),
         &token,
     )
     .to_request();
@@ -454,7 +486,7 @@ async fn test_soft_delete_and_restore_exchange_rate() {
 
     let restore_req = auth_request(
         actix_web::http::Method::POST,
-        &format!("/api/exchange-rates/{}/restore", id),
+        &format!("/api/v1/exchange-rates/{}/restore", id),
         &token,
     )
     .to_request();
@@ -471,14 +503,18 @@ async fn test_list_deleted_exchange_rates() {
     ensure_currency_exists!(&app, &token, "EUR", "Euro", "€");
     ensure_currency_exists!(&app, &token, "USD", "US Dollar", "$");
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/exchange-rates", &token)
-        .set_json(json!({
-            "from_currency": "EUR",
-            "to_currency": "USD",
-            "rate": "1.10",
-            "effective_date": "2024-01-01"
-        }))
-        .to_request();
+    let create_req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/exchange-rates",
+        &token,
+    )
+    .set_json(json!({
+        "from_currency": "EUR",
+        "to_currency": "USD",
+        "rate": "1.10",
+        "effective_date": "2024-01-01"
+    }))
+    .to_request();
     let create_resp = test::call_service(&app, create_req).await;
     let body = to_bytes(create_resp.into_body()).await.unwrap();
     let create_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -486,7 +522,7 @@ async fn test_list_deleted_exchange_rates() {
 
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        &format!("/api/exchange-rates/{}/soft", id),
+        &format!("/api/v1/exchange-rates/{}/soft", id),
         &token,
     )
     .to_request();
@@ -494,7 +530,7 @@ async fn test_list_deleted_exchange_rates() {
 
     let list_req = auth_request(
         actix_web::http::Method::GET,
-        "/api/exchange-rates/deleted",
+        "/api/v1/exchange-rates/deleted",
         &token,
     )
     .to_request();
@@ -517,19 +553,23 @@ async fn test_convert_amount() {
     ensure_currency_exists!(&app, &token, "USD", "US Dollar", "$");
     ensure_currency_exists!(&app, &token, "TRY", "Turkish Lira", "₺");
 
-    let req = auth_request(actix_web::http::Method::POST, "/api/exchange-rates", &token)
-        .set_json(json!({
-            "from_currency": "USD",
-            "to_currency": "TRY",
-            "rate": "30.00",
-            "effective_date": "2024-01-01"
-        }))
-        .to_request();
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/exchange-rates",
+        &token,
+    )
+    .set_json(json!({
+        "from_currency": "USD",
+        "to_currency": "TRY",
+        "rate": "30.00",
+        "effective_date": "2024-01-01"
+    }))
+    .to_request();
     test::call_service(&app, req).await;
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/exchange-rates/convert?amount=100&from=USD&to=TRY&date=2024-01-01",
+        "/api/v1/exchange-rates/convert?amount=100&from=USD&to=TRY&date=2024-01-01",
         &token,
     )
     .to_request();
@@ -552,19 +592,23 @@ async fn test_get_effective_exchange_rate() {
     ensure_currency_exists!(&app, &token, "EUR", "Euro", "€");
     ensure_currency_exists!(&app, &token, "TRY", "Turkish Lira", "₺");
 
-    let req = auth_request(actix_web::http::Method::POST, "/api/exchange-rates", &token)
-        .set_json(json!({
-            "from_currency": "EUR",
-            "to_currency": "TRY",
-            "rate": "35.00",
-            "effective_date": "2024-01-01"
-        }))
-        .to_request();
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/exchange-rates",
+        &token,
+    )
+    .set_json(json!({
+        "from_currency": "EUR",
+        "to_currency": "TRY",
+        "rate": "35.00",
+        "effective_date": "2024-01-01"
+    }))
+    .to_request();
     test::call_service(&app, req).await;
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/exchange-rates/effective?from=EUR&to=TRY&date=2024-01-01",
+        "/api/v1/exchange-rates/effective?from=EUR&to=TRY&date=2024-01-01",
         &token,
     )
     .to_request();
@@ -588,7 +632,7 @@ async fn test_currency_unauthorized_without_token() {
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
-        .uri("/api/currencies")
+        .uri("/api/v1/currencies")
         .set_json(json!({
             "code": "XYZ",
             "name": "No Auth",
@@ -607,8 +651,12 @@ async fn test_currency_not_found() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let req =
-        auth_request(actix_web::http::Method::GET, "/api/currencies/ZZZ", &token).to_request();
+    let req = auth_request(
+        actix_web::http::Method::GET,
+        "/api/v1/currencies/ZZZ",
+        &token,
+    )
+    .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }

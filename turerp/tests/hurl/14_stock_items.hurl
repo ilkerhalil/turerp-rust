@@ -1,16 +1,18 @@
-# Tier 1.5 — Stock. Warehouses endpoint is now gated (core.stock.warehouses,
-# default-disabled). The gate fires BEFORE the underlying handler runs,
-# so both /stock/warehouses and /stock/warehouses/{id} return 404 with
-# the flag off. PR 2 will fix the underlying handler AND the operator
-# will flip the flag on (these are tracked together).
+# Tier 1.5 — Stock. Warehouses endpoint is gated by core.stock.warehouses
+# (default-disabled). Issue #152 fixed the underlying WarehouseRow
+# decode (phantom company_id column) so warehouses now returns 200
+# when the flag is enabled.
 
 
-# --- 1. Warehouses list — currently 404 (gated; PR 2 fixes handler) ---
+# --- 1. Warehouses list — fixed by #152 (handler SQL bug) ---
 GET {{base_url}}/api/v1/stock/warehouses
 Authorization: Bearer {{access_token}}
-HTTP 404
+HTTP 200
+[Asserts]
+jsonpath "$.items" isCollection
+jsonpath "$.total" isNumber
 
-# --- 2. Non-existent warehouse — also 404 (gate fires before handler) ---
+# --- 2. Non-existent warehouse — still 404 (no row) ---
 GET {{base_url}}/api/v1/stock/warehouses/999999
 Authorization: Bearer {{access_token}}
 HTTP 404

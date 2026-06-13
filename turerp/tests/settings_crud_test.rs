@@ -16,7 +16,7 @@ async fn test_create_setting_success() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let req = auth_request(actix_web::http::Method::POST, "/api/settings", &token)
+    let req = auth_request(actix_web::http::Method::POST, "/api/v1/settings", &token)
         .set_json(json!({
             "key": "app.name",
             "value": "Turerp",
@@ -48,7 +48,7 @@ async fn test_list_settings_paginated() {
     let (token, _user_id) = register_admin(&state, 1).await;
 
     for i in 1..=3 {
-        let req = auth_request(actix_web::http::Method::POST, "/api/settings", &token)
+        let req = auth_request(actix_web::http::Method::POST, "/api/v1/settings", &token)
             .set_json(json!({
                 "key": format!("setting_{}", i),
                 "value": format!("value{}", i),
@@ -66,7 +66,7 @@ async fn test_list_settings_paginated() {
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/settings?page=1&per_page=2",
+        "/api/v1/settings?page=1&per_page=2",
         &token,
     )
     .to_request();
@@ -87,7 +87,7 @@ async fn test_list_settings_by_group() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let req = auth_request(actix_web::http::Method::POST, "/api/settings", &token)
+    let req = auth_request(actix_web::http::Method::POST, "/api/v1/settings", &token)
         .set_json(json!({
             "key": "invoice.prefix",
             "value": "INV",
@@ -103,7 +103,7 @@ async fn test_list_settings_by_group() {
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/settings?group=invoice",
+        "/api/v1/settings?group=invoice",
         &token,
     )
     .to_request();
@@ -123,7 +123,7 @@ async fn test_get_setting_by_key_success() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/settings", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/settings", &token)
         .set_json(json!({
             "key": "company.name",
             "value": "Acme Corp",
@@ -139,7 +139,7 @@ async fn test_get_setting_by_key_success() {
 
     let get_req = auth_request(
         actix_web::http::Method::GET,
-        "/api/settings/company.name",
+        "/api/v1/settings/company.name",
         &token,
     )
     .to_request();
@@ -160,7 +160,7 @@ async fn test_get_setting_not_found() {
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/settings/nonexistent.key",
+        "/api/v1/settings/nonexistent.key",
         &token,
     )
     .to_request();
@@ -174,7 +174,7 @@ async fn test_update_setting_success() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/settings", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/settings", &token)
         .set_json(json!({
             "key": "update.test",
             "value": "original",
@@ -193,7 +193,7 @@ async fn test_update_setting_success() {
 
     let update_req = auth_request(
         actix_web::http::Method::PUT,
-        &format!("/api/settings/{}", id),
+        &format!("/api/v1/settings/{}", id),
         &token,
     )
     .set_json(json!({
@@ -221,7 +221,7 @@ async fn test_soft_delete_and_restore_setting() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/settings", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/settings", &token)
         .set_json(json!({
             "key": "delete.test",
             "value": "delete me",
@@ -240,7 +240,7 @@ async fn test_soft_delete_and_restore_setting() {
 
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        &format!("/api/settings/{}/soft", id),
+        &format!("/api/v1/settings/{}/soft", id),
         &token,
     )
     .to_request();
@@ -249,7 +249,7 @@ async fn test_soft_delete_and_restore_setting() {
 
     let get_req = auth_request(
         actix_web::http::Method::GET,
-        &format!("/api/settings/{}", id),
+        &format!("/api/v1/settings/{}", id),
         &token,
     )
     .to_request();
@@ -258,7 +258,7 @@ async fn test_soft_delete_and_restore_setting() {
 
     let restore_req = auth_request(
         actix_web::http::Method::POST,
-        &format!("/api/settings/{}/restore", id),
+        &format!("/api/v1/settings/{}/restore", id),
         &token,
     )
     .to_request();
@@ -267,7 +267,7 @@ async fn test_soft_delete_and_restore_setting() {
 
     let get_req = auth_request(
         actix_web::http::Method::GET,
-        "/api/settings/delete.test",
+        "/api/v1/settings/delete.test",
         &token,
     )
     .to_request();
@@ -281,7 +281,7 @@ async fn test_list_deleted_settings() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/settings", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/settings", &token)
         .set_json(json!({
             "key": "list.deleted",
             "value": "value",
@@ -300,7 +300,7 @@ async fn test_list_deleted_settings() {
 
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        &format!("/api/settings/{}/soft", id),
+        &format!("/api/v1/settings/{}/soft", id),
         &token,
     )
     .to_request();
@@ -308,7 +308,7 @@ async fn test_list_deleted_settings() {
 
     let list_req = auth_request(
         actix_web::http::Method::GET,
-        "/api/settings/deleted",
+        "/api/v1/settings/deleted",
         &token,
     )
     .to_request();
@@ -328,7 +328,7 @@ async fn test_destroy_setting_permanently() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let create_req = auth_request(actix_web::http::Method::POST, "/api/settings", &token)
+    let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/settings", &token)
         .set_json(json!({
             "key": "destroy.test",
             "value": "destroy me",
@@ -347,7 +347,7 @@ async fn test_destroy_setting_permanently() {
 
     let del_req = auth_request(
         actix_web::http::Method::DELETE,
-        &format!("/api/settings/{}/soft", id),
+        &format!("/api/v1/settings/{}/soft", id),
         &token,
     )
     .to_request();
@@ -355,7 +355,7 @@ async fn test_destroy_setting_permanently() {
 
     let destroy_req = auth_request(
         actix_web::http::Method::DELETE,
-        &format!("/api/settings/{}/destroy", id),
+        &format!("/api/v1/settings/{}/destroy", id),
         &token,
     )
     .to_request();
@@ -364,7 +364,7 @@ async fn test_destroy_setting_permanently() {
 
     let restore_req = auth_request(
         actix_web::http::Method::POST,
-        &format!("/api/settings/{}/restore", id),
+        &format!("/api/v1/settings/{}/restore", id),
         &token,
     )
     .to_request();
@@ -383,7 +383,7 @@ async fn test_bulk_update_settings() {
     let (token, _user_id) = register_admin(&state, 1).await;
 
     for key in ["bulk.a", "bulk.b"] {
-        let req = auth_request(actix_web::http::Method::POST, "/api/settings", &token)
+        let req = auth_request(actix_web::http::Method::POST, "/api/v1/settings", &token)
             .set_json(json!({
                 "key": key,
                 "value": "original",
@@ -398,14 +398,18 @@ async fn test_bulk_update_settings() {
         test::call_service(&app, req).await;
     }
 
-    let req = auth_request(actix_web::http::Method::POST, "/api/settings/bulk", &token)
-        .set_json(json!({
-            "updates": [
-                { "key": "bulk.a", "value": "updated_a" },
-                { "key": "bulk.b", "value": "updated_b" }
-            ]
-        }))
-        .to_request();
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/settings/bulk",
+        &token,
+    )
+    .set_json(json!({
+        "updates": [
+            { "key": "bulk.a", "value": "updated_a" },
+            { "key": "bulk.b", "value": "updated_b" }
+        ]
+    }))
+    .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::OK);
 
@@ -420,8 +424,12 @@ async fn test_seed_settings() {
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
-    let req =
-        auth_request(actix_web::http::Method::POST, "/api/settings/seed", &token).to_request();
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/settings/seed",
+        &token,
+    )
+    .to_request();
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::CREATED);
 
@@ -440,7 +448,7 @@ async fn test_settings_unauthorized_without_token() {
     let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
-        .uri("/api/settings")
+        .uri("/api/v1/settings")
         .set_json(json!({
             "key": "no.auth",
             "value": "test",
@@ -462,7 +470,7 @@ async fn test_setting_not_found() {
 
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/settings/nonexistent_key",
+        "/api/v1/settings/nonexistent_key",
         &token,
     )
     .to_request();

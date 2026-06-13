@@ -7,11 +7,16 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+fn default_company_id() -> i64 {
+    1
+}
+
 /// Warehouse entity
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Warehouse {
     pub id: i64,
     pub tenant_id: i64,
+    #[serde(default = "default_company_id")]
     pub company_id: i64,
     pub code: String,
     pub name: String,
