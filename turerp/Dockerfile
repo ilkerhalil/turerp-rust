@@ -39,12 +39,13 @@ RUN useradd -m -u 1000 appuser
 
 WORKDIR /app
 
-# Copy binary from builder
+# Copy binary from builder. The binary is self-contained: SQL migrations are
+# embedded at compile time via include_str! in src/db/pool.rs, so the runtime
+# image needs neither src/ nor migrations/ on disk. (An earlier revision also
+# copied src/domain, src/api, src/config and migrations/ here — but src/config
+# is a file (config.rs), not a directory, which broke this COPY step, and the
+# others had no runtime consumer.)
 COPY --from=builder /build/target/release/turerp /app/
-COPY --from=builder /build/src/domain /app/src/domain/
-COPY --from=builder /build/src/api /app/src/api/
-COPY --from=builder /build/src/config /app/src/config/
-COPY --from=builder /build/migrations /app/migrations/
 
 # Create directories for runtime
 RUN mkdir -p /app/logs /app/data && chown -R appuser:appuser /app

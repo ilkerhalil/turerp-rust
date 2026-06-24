@@ -284,11 +284,11 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             INSERT INTO invoices (tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                                   issue_date, due_date, subtotal, tax_amount, discount_amount,
-                                  total_amount, paid_amount, currency, notes, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
+                                  total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW(), NOW())
             RETURNING id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
-                      total_amount, paid_amount, currency, notes, created_at, updated_at,
+                      total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                       deleted_at, deleted_by
             "#,
         )
@@ -306,6 +306,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
         .bind(total_amount)
         .bind(Decimal::ZERO)
         .bind(&create.currency)
+        .bind(create.exchange_rate)
         .bind(&create.notes)
         .fetch_one(&*self.pool)
         .await
@@ -319,7 +320,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by
             FROM invoices
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
@@ -344,7 +345,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by
             FROM invoices
             WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -371,7 +372,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by
             FROM invoices
             WHERE tenant_id = $1 AND invoice_number = $2 AND deleted_at IS NULL
@@ -391,7 +392,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by
             FROM invoices
             WHERE tenant_id = $1 AND cari_id = $2 AND deleted_at IS NULL
@@ -427,7 +428,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by
             FROM invoices
             WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
@@ -464,7 +465,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM invoices
@@ -503,7 +504,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM invoices
@@ -544,7 +545,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
-                      total_amount, paid_amount, currency, notes, created_at, updated_at,
+                      total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                       deleted_at, deleted_by
             "#,
         )
@@ -571,7 +572,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
-                      total_amount, paid_amount, currency, notes, created_at, updated_at,
+                      total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                       deleted_at, deleted_by
             "#,
         )
@@ -664,7 +665,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by
             FROM invoices
             WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -705,7 +706,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by,
                    COUNT(*) OVER() as total_count
             FROM invoices
@@ -745,7 +746,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by
             FROM invoices
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
@@ -795,7 +796,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by
             FROM invoices
             WHERE tenant_id = $1 AND deleted_at IS NULL
@@ -833,7 +834,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             SELECT id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                    issue_date, due_date, subtotal, tax_amount, discount_amount,
-                   total_amount, paid_amount, currency, notes, created_at, updated_at,
+                   total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
                    deleted_at, deleted_by
             FROM invoices
             WHERE tenant_id = $1 AND deleted_at IS NULL
