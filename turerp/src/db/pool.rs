@@ -197,6 +197,10 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "039_cari_financial_columns_numeric",
             sql: include_str!("../../migrations/039_cari_financial_columns_numeric.sql"),
         },
+        Migration {
+            version: "040_tax_periods_soft_delete",
+            sql: include_str!("../../migrations/040_tax_periods_soft_delete.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).
@@ -325,6 +329,10 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
 /// down-replay so there is no concurrent writer.
 pub async fn run_migrations_down(pool: &PgPool) -> Result<usize, ApiError> {
     const DOWN_MIGRATIONS: &[Migration] = &[
+        Migration {
+            version: "040_tax_periods_soft_delete",
+            sql: include_str!("../../migrations/down/040_tax_periods_soft_delete.down.sql"),
+        },
         Migration {
             version: "039_cari_financial_columns_numeric",
             sql: include_str!("../../migrations/down/039_cari_financial_columns_numeric.down.sql"),

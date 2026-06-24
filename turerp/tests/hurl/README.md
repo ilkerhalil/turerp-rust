@@ -160,7 +160,6 @@ start gating merges on it.
 | `11_hr_employees.hurl` | `GET /api/v1/hr/leave-types` | `500` | follow-up to #152 |
 | `14_stock_items.hurl` | `GET /api/v1/stock/warehouses` | `500` | follow-up to #152 |
 | `16_settings.hurl` | `GET /api/v1/settings` | `404` | follow-up to #152 |
-| `28_tax.hurl` | `GET /api/v1/tax/periods` | `500` | follow-up to #152 |
 | `29_sales.hurl` | `GET /api/v1/sales/quotations` | `500` | follow-up to #152 |
 | `30_purchase.hurl` | `GET /api/v1/purchase-requests` | `500` | follow-up to #152 |
 | `31_goods_receipts.hurl` | `GET /api/v1/goods-receipts/{id}` (+ `/order/{id}`) | `500` | follow-up to #152 |
