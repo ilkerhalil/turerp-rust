@@ -99,9 +99,10 @@ for scenario in [0-9][0-9]*.hurl; do
         echo "  >>> FAILED: $scenario" >&2
     fi
     # Brief pause to keep total request rate under the per-IP rate limit
-    # (default: 60 req/min, burst 60). Suite makes ~50 requests; sleeping
-    # 2s between scenarios spreads them across the window.
-    sleep 2
+    # (default: 60 req/min, burst 60). The suite makes ~250 requests across
+    # 56 scenarios (~4-5 per file, fired in a burst); sleeping 5s between
+    # scenarios keeps the average under 60/min so no scenario hits a 429.
+    sleep 5
 done
 
 echo

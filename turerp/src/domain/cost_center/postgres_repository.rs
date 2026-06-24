@@ -119,10 +119,12 @@ impl PostgresCostCenterRepository {
     }
 }
 
-/// Common column list for cost_centers SELECT queries
+/// Common column list for cost_centers SELECT queries.
+/// The DB column is `type` (migration 023); alias it to `center_type` so
+/// `CostCenterRow.center_type` decodes via sqlx FromRow (column-name match).
 macro_rules! COST_CENTER_COLUMNS {
     () => {
-        r#"id, tenant_id, code, name, description, center_type, parent_id,
+        r#"id, tenant_id, code, name, description, type AS center_type, parent_id,
     is_active, created_at, updated_at, deleted_at, deleted_by"#
     };
 }
@@ -139,7 +141,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
         let row: CostCenterRow = sqlx::query_as(
             concat!(
                 r#"
-                INSERT INTO cost_centers (tenant_id, code, name, description, center_type, parent_id, is_active)
+                INSERT INTO cost_centers (tenant_id, code, name, description, type, parent_id, is_active)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING "#,
                 COST_CENTER_COLUMNS!(),
@@ -199,7 +201,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
                     r#",
                                COUNT(*) OVER() as total_count
                         FROM cost_centers
-                        WHERE tenant_id = $1 AND center_type = $2 AND deleted_at IS NULL
+                        WHERE tenant_id = $1 AND type = $2 AND deleted_at IS NULL
                         ORDER BY code ASC
                         LIMIT $3 OFFSET $4
                         "#
@@ -265,7 +267,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
             COST_CENTER_COLUMNS!(),
             r#", 0 as total_count
                 FROM cost_centers
-                WHERE tenant_id = $1 AND center_type = $2 AND deleted_at IS NULL
+                WHERE tenant_id = $1 AND type = $2 AND deleted_at IS NULL
                 ORDER BY code ASC
                 "#
         ))
@@ -291,7 +293,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
                     code = COALESCE($1, code),
                     name = COALESCE($2, name),
                     description = COALESCE($3, description),
-                    center_type = COALESCE($4, center_type),
+                    type = COALESCE($4, type),
                     parent_id = COALESCE($5, parent_id),
                     is_active = COALESCE($6, is_active),
                     updated_at = NOW()
