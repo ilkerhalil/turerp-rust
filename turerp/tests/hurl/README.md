@@ -79,7 +79,7 @@ The password is a smoke-test fixture, not a real credential.
 
 The wrapper logs in once via `curl` and writes `access_token`,
 `refresh_token`, `user_id`, and `tenant_id` to a temp variables file,
-then invokes every `NN_*.hurl` with `--variables-file` and a 2-second
+then invokes every `NN_*.hurl` with `--variables-file` and a 5-second
 pause between scenarios to keep the request rate under the per-IP
 governor limit (default 60 req/min). Prints a pass/fail summary and
 exits non-zero on any failure.
@@ -108,17 +108,19 @@ tests/hurl/
 ├── README.md            # this file
 ├── run-all.sh           # one-shot login + invokes every NN_*.hurl
 ├── .env.example         # documented test_password value
-└── 01_auth.hurl
-    02_health.hurl
-    03_users.hurl
-    ...
-    16_settings.hurl
-    17_manufacturing.hurl
-    18_projects.hurl
-    19_shifts.hurl
-    20_payroll.hurl
-    21_graphql.hurl
-    22_file_upload.hurl
+└── 01_auth.hurl … 56_portals.hurl   # 56 numbered scenarios
+    23_products          34_barcodes          45_notifications
+    24_chart_of_accounts 36_dashboard         46_observability
+    25_cost_centers      37_documents          47_reports
+    26_companies         38_events             48_search
+    27_exchange_rates    39_feature_flags      49_subscriptions
+    28_tax               40_forecasting        50_tenant_configs
+    29_sales             41_import_export      51_workflows
+    30_purchase          42_ip_whitelist       52_api_keys
+    31_goods_receipts    43_jobs               53_archive
+    32_assets            44_ldap               54_edefter
+    33_bank                                    55_efatura_earchive
+                                              56_portals
 ```
 
 ### Why not hurl's native multi-file?
@@ -133,14 +135,20 @@ simplest workaround until the upstream feature lands.
 | Tier | Files | Style |
 |------|-------|-------|
 | 1 — root resources | 01–10 | auth, health, users, basic CRUD, RBAC, negative paths |
-| 1.5 — domain | 11–16 | HR, accounting, CRM, stock, invoices, settings |
-| 2 — gated modules | 17–22 | manufacturing, projects, shifts, payroll, graphql, file upload |
+| 1.5 — seeded domain | 11–28 | HR, accounting, CRM/cari, stock, invoices, settings, products, chart-of-accounts, cost-centers, companies, exchange-rates, tax |
+| 2 — remaining modules | 29–56 | sales, purchase, goods-receipts, assets, bank, barcodes, custom-fields, dashboard, documents, events, feature-flags, forecasting, import/export, ip-whitelist, jobs, ldap, notifications, observability, reports, search, subscriptions, tenant-configs, workflows, api-keys, archive, edefter, efatura/earchive, portals |
 
-Tier 2 scenarios all assert the **default-OFF** state of the
-`tier2.*` feature flags. When the operator enables a flag via
-`/api/v1/feature-flags/{id}/enable`, the same routes return 200
-(positive assertions are run by enabling the flag and re-running
-the suite — see RUNBOOK § 5 for the flip procedure).
+Tier 1.5 modules 23–28 are backed by `scripts/seed_sample_data.sql`, so
+their list scenarios assert **non-empty** envelopes (`$.total > 0`) —
+the only assertion class that flushes out latent `FromRow` decode bugs
+(see the project memory note on list suites hiding decode bugs).
+
+The original Tier 2 gated modules (17–22) still assert the **default-OFF**
+state of the `tier2.*` feature flags. The new Tier 2 modules (29–56) are
+not flag-gated; they assert each route's observed status (200 / 403 / 404 /
+405 / 500), including deliberate 500 fences for known-broken routes (see
+the table below). When a route is fixed, flip its assertion to 200 and
+start gating merges on it.
 
 ### Known-broken scenarios (assert the bug)
 
@@ -152,6 +160,14 @@ the suite — see RUNBOOK § 5 for the flip procedure).
 | `11_hr_employees.hurl` | `GET /api/v1/hr/leave-types` | `500` | follow-up to #152 |
 | `14_stock_items.hurl` | `GET /api/v1/stock/warehouses` | `500` | follow-up to #152 |
 | `16_settings.hurl` | `GET /api/v1/settings` | `404` | follow-up to #152 |
+| `28_tax.hurl` | `GET /api/v1/tax/periods` | `500` | follow-up to #152 |
+| `29_sales.hurl` | `GET /api/v1/sales/quotations` | `500` | follow-up to #152 |
+| `30_purchase.hurl` | `GET /api/v1/purchase-requests` | `500` | follow-up to #152 |
+| `31_goods_receipts.hurl` | `GET /api/v1/goods-receipts/{id}` (+ `/order/{id}`) | `500` | follow-up to #152 |
+| `33_bank.hurl` | `GET /api/v1/bank/rules` | `500` | follow-up to #152 |
+| `36_dashboard.hurl` | `GET /api/v1/dashboard/kpis` | `500` | follow-up to #152 |
+| `49_subscriptions.hurl` | `GET /api/v1/subscription-plans`, `/subscriptions` | `500` | follow-up to #152 |
+| `51_workflows.hurl` | `GET /api/v1/workflows/templates` | `500` | follow-up to #152 |
 
 These scenarios exist **on purpose**: they assert the broken status, so
 that when the underlying route is fixed, the scenario fails loudly and
@@ -179,7 +195,8 @@ slip past code review.
 
 ## Out of scope
 
-- Manufacturing, projects, shifts, payroll (Tier 2 — by-design deferred)
+- Write/ mutation paths (create/update/delete) — the suite is read-only
+  smoke + RBAC/negative fences; mutation coverage lives in `cargo test`.
 - Performance / load testing (use k6, wrk)
 - Contract / OpenAPI drift testing (use spectral)
 - Frontend E2E (use Playwright)
