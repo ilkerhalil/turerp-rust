@@ -15,10 +15,11 @@ HTTP 200
 jsonpath "$.data" isCollection
 jsonpath "$.total" isNumber
 
-# --- 2. Specific setting — fixed by #152 ---
-# The /v1/settings/{key} route is now reachable. Returns 200
-# if the key is seeded, 404 otherwise (default_locale is not
-# seeded by the test fixture; use any seeded key for 200).
+# --- 2. Specific setting — fixed by #152, seeded by scripts/seed_sample_data.sql ---
+# The /v1/settings/{key} route is reachable. default_locale is seeded for
+# tenant 1, so the handler returns 200 with the setting row.
 GET {{base_url}}/api/v1/settings/default_locale
 Authorization: Bearer {{access_token}}
-HTTP 404
+HTTP 200
+[Asserts]
+jsonpath "$.key" == "default_locale"

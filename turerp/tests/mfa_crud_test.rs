@@ -7,7 +7,6 @@ mod common;
 use common::*;
 
 use turerp::middleware::JwtAuthMiddleware;
-use turerp::utils::jwt::JwtService;
 
 /// Build test app with MFA service wired in
 fn build_test_app_with_mfa(

@@ -20,11 +20,13 @@ HTTP 200
 jsonpath "$.items" isCollection
 jsonpath "$.total" isNumber
 
-# --- 3. Specific currency (404 if not seeded) — fixed by #152 ---
-# USD is not seeded by default; the route is now reachable (no
-# 404 from missing route) but returns 404 from the handler
-# because the row doesn't exist. Seed a row separately if you
-# want to assert 200.
+# --- 3. Specific currency — fixed by #152, seeded by scripts/seed_sample_data.sql ---
+# USD is seeded for tenant 1 (base currency), so the handler now returns
+# the row. The route itself was unreachable before #152 (missing-route
+# 404); after the fix + seed it returns 200 with the currency object.
 GET {{base_url}}/api/v1/currencies/USD
 Authorization: Bearer {{access_token}}
-HTTP 404
+HTTP 200
+[Asserts]
+jsonpath "$.code" == "USD"
+jsonpath "$.is_base" isBoolean
