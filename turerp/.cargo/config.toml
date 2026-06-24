@@ -12,12 +12,3 @@
 #   alias cargot='cargo clean && cargo test'
 #   alias cargor='cargo clean && cargo run'
 cb = "build"
-
-[profile.dev]
-# Reduce debug binary bloat: split debug info to .dwp files,
-# which are easier to clean and don't bloat every rlib.
-split-debuginfo = "unpacked"
-
-[profile.dev.build-override]
-# Build scripts / proc-macros: no debuginfo at all to save space.
-debug = false
