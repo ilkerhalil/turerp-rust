@@ -189,6 +189,14 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "037_pg_audit_dlq",
             sql: include_str!("../../migrations/037_pg_audit_dlq.sql"),
         },
+        Migration {
+            version: "038_employees_updated_at_not_null",
+            sql: include_str!("../../migrations/038_employees_updated_at_not_null.sql"),
+        },
+        Migration {
+            version: "039_cari_financial_columns_numeric",
+            sql: include_str!("../../migrations/039_cari_financial_columns_numeric.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).
@@ -202,16 +210,18 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
     .await
     .map_err(|e| ApiError::Database(format!("Failed to create migrations table: {}", e)))?;
 
-    let mut tx = pool
-        .begin()
-        .await
-        .map_err(|e| ApiError::Database(format!("Failed to start migration transaction: {}", e)))?;
-
     for mig in MIGRATIONS {
+        // Each migration runs in its OWN transaction. A failure rolls back only
+        // that migration's partial DDL — prior migrations stay committed. The
+        // previous single-transaction design held every migration's DDL and
+        // __migrations record in one tx, so when a later migration failed the
+        // rollback wiped ALL already-applied migrations (a single bad file took
+        // the whole schema down). Per-migration txs make the apply atomic per
+        // file and isolate failures.
         let already_applied: bool =
             sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM __migrations WHERE version = $1)")
                 .bind(mig.version)
-                .fetch_one(&mut *tx)
+                .fetch_one(pool)
                 .await
                 .map_err(|e| {
                     ApiError::Database(format!("Failed to check migration {}: {}", mig.version, e))
@@ -222,20 +232,39 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             continue;
         }
 
-        // Use sqlx::raw_sql (simple-query protocol) instead of sqlx::query
-        // (extended/prepared protocol). Migration files contain multiple
-        // DDL statements separated by semicolons, which Postgres rejects
-        // when sent as a single prepared statement.
+        let mut tx = pool.begin().await.map_err(|e| {
+            ApiError::Database(format!(
+                "Failed to start migration transaction for {}: {}",
+                mig.version, e
+            ))
+        })?;
+
+        // raw_sql (simple-query protocol) because migration files contain
+        // multiple DDL statements separated by semicolons, which Postgres
+        // rejects as a single prepared statement.
         //
         // Tolerance policy: the migration set is a snapshot of partial work in
-        // progress and some files reference tables that are created in later
-        // migrations (e.g. soft-delete references tables from later business
-        // modules). When a single statement fails because a referenced object
-        // is missing or a name does not match, log the failure and continue so
-        // the application can boot. Hard failures (e.g. permission denied)
-        // are still surfaced.
+        // progress and some files reference tables created in later migrations.
+        // When a statement fails because a referenced object is missing, log
+        // and continue so the application can boot. The failed migration is NOT
+        // recorded in __migrations, so it retries on the next boot.
         match sqlx::raw_sql(mig.sql).execute(&mut *tx).await {
             Ok(_) => {
+                // Record in the SAME tx as the DDL so the record and the schema
+                // change commit atomically: either the migration is fully
+                // applied + recorded, or neither.
+                sqlx::query(
+                    "INSERT INTO __migrations (version) VALUES ($1) ON CONFLICT DO NOTHING",
+                )
+                .bind(mig.version)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| {
+                    ApiError::Database(format!("Failed to record migration {}: {}", mig.version, e))
+                })?;
+                tx.commit().await.map_err(|e| {
+                    ApiError::Database(format!("Failed to commit migration {}: {}", mig.version, e))
+                })?;
                 tracing::info!("Migration {} applied successfully", mig.version);
             }
             Err(e) => {
@@ -255,34 +284,14 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
                     snippet,
                     more
                 );
-                // Roll back the partial transaction so subsequent migrations
-                // start from a clean state. Skip recording this version in
-                // __migrations so the failed migration will be retried on
-                // the next boot.
+                // Roll back ONLY this migration's partial work; prior
+                // migrations are already committed in their own txs. Skip
+                // recording so the failed migration retries on the next boot.
                 let _ = tx.rollback().await;
-                tx = pool.begin().await.map_err(|e| {
-                    ApiError::Database(format!(
-                        "Failed to restart migration transaction after partial failure: {}",
-                        e
-                    ))
-                })?;
                 continue;
             }
         }
-
-        // Record the migration as applied (or attempted) so we don't retry.
-        sqlx::query("INSERT INTO __migrations (version) VALUES ($1) ON CONFLICT DO NOTHING")
-            .bind(mig.version)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| {
-                ApiError::Database(format!("Failed to record migration {}: {}", mig.version, e))
-            })?;
     }
-
-    tx.commit()
-        .await
-        .map_err(|e| ApiError::Database(format!("Failed to commit migrations: {}", e)))?;
 
     Ok(())
 }
@@ -316,6 +325,14 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
 /// down-replay so there is no concurrent writer.
 pub async fn run_migrations_down(pool: &PgPool) -> Result<usize, ApiError> {
     const DOWN_MIGRATIONS: &[Migration] = &[
+        Migration {
+            version: "039_cari_financial_columns_numeric",
+            sql: include_str!("../../migrations/down/039_cari_financial_columns_numeric.down.sql"),
+        },
+        Migration {
+            version: "038_employees_updated_at_not_null",
+            sql: include_str!("../../migrations/down/038_employees_updated_at_not_null.down.sql"),
+        },
         Migration {
             version: "037_pg_audit_dlq",
             sql: include_str!("../../migrations/down/037_pg_audit_dlq.down.sql"),

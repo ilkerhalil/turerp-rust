@@ -14,7 +14,6 @@ path = "src/lib.rs"
 [dependencies]
 # Web framework - use latest version
 actix-web = "4"
-actix-rt = "2"
 actix-cors = "0.7"
 
 # Database - use sqlx directly
@@ -51,11 +50,9 @@ validator = { version = "0.20", features = ["derive"] }
 
 # Configuration
 config = "0.14"
-dotenvy = "0.15"
 
 # Error handling
 thiserror = "1.0"
-anyhow = "1.0"
 
 # Async
 async-trait = "0.1"
@@ -123,7 +120,6 @@ rust-s3 = { version = "0.35", features = ["tokio"] }
 
 # Multipart form data (file uploads)
 actix-multipart = "0.7"
-mime = "0.3"
 
 # Report generation
 rust_xlsxwriter = "0.94"
@@ -144,9 +140,6 @@ barcodes = { version = "0.1", features = ["image"] }
 qrcode = "0.14"
 image = "0.25"
 
-# Mocking for tests
-mockall = "0.12"
-
 # GraphQL
 async-graphql = { version = "7", features = ["chrono", "decimal"] }
 async-graphql-actix-web = "7"
@@ -161,6 +154,11 @@ ldap3 = "0.11"
 utoipa = "4"
 utoipa-swagger-ui = { version = "6", features = ["actix-web"] }
 
+# cargo-machete false-positive: rust-s3 is imported as `s3` (use s3::{...} in
+# src/common/s3_storage.rs), so machete's textual scan can't see the usage.
+[package.metadata.cargo-machete]
+ignored = ["rust-s3"]
+
 [dev-dependencies]
 # Production-readiness tests use std::fs to walk the repo tree; no extra deps needed.
 
@@ -172,3 +170,15 @@ path = "src/bin/gen_openapi.rs"
 lto = true
 codegen-units = 1
 strip = true
+
+[profile.dev]
+# Keep line-level backtraces for panic locations, but drop full variable
+# debug info. Much smaller test binaries and rlibs than the default
+# (full debug), and avoids the split-debuginfo=unpacked .dwo explosion that
+# accumulated 46k+ orphan files / ~7 GB under target/ in the past.
+debug = "line-tables-only"
+incremental = true
+
+[profile.dev.build-override]
+# Build scripts and proc-macros never need debug info; skip it entirely.
+debug = false

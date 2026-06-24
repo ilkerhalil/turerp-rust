@@ -15,10 +15,17 @@ CREATE TABLE IF NOT EXISTS custom_field_definitions (
     deleted_at TIMESTAMPTZ,
     deleted_by BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    UNIQUE (tenant_id, module, field_name) WHERE deleted_at IS NULL
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- A table-level UNIQUE constraint cannot carry a WHERE clause in PostgreSQL
+-- (only partial indexes can). Enforce uniqueness of (tenant_id, module,
+-- field_name) among non-deleted rows with a partial UNIQUE index instead —
+-- equivalent enforcement, and a duplicate still raises the duplicate-key
+-- error the repository layer maps to ApiError::Conflict.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_custom_field_definitions_tenant_module_field
+    ON custom_field_definitions (tenant_id, module, field_name)
+    WHERE deleted_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_custom_fields_tenant_module
     ON custom_field_definitions (tenant_id, module)

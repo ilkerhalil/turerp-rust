@@ -22,6 +22,22 @@ pre-commit:
       fail_text: |
         OpenAPI spec generation failed. Check for schema compilation errors.
 
+# Post-commit hooks run AFTER a commit is created. A non-zero exit does NOT
+# revert the commit, so this is the right place for best-effort cleanup that
+# must never block development.
+#
+# cargo-sweep prunes Rust build artifacts older than one day from target/,
+# keeping today's incremental cache intact so the next build stays fast while
+# target/ stays bounded. The `command -v` guard makes the hook a silent no-op
+# for contributors who haven't installed cargo-sweep (`cargo install
+# cargo-sweep`), and the trailing `|| true` ensures a sweep error never
+# surfaces as a failed hook.
+post-commit:
+  commands:
+    sweep-target:
+      run: command -v cargo-sweep >/dev/null 2>&1 && cargo sweep --time 1 || true
+      root: turerp/
+
 # Pre-push hooks run before pushing to remote
 pre-push:
   parallel: false

@@ -202,8 +202,15 @@ impl AuditLogRepository for PostgresAuditLogRepository {
                 query_builder.push_str(", ");
             }
             let base = i * 10;
+            // Each value must be its own `$N` parameter placeholder. The prior
+            // form `"(${},{},…)"` only prefixed the FIRST placeholder with `$`,
+            // emitting `($1,2,3,…,10)` — where `2..10` are bare integer LITERALS,
+            // not parameters. PostgreSQL then tried to insert the literal `10`
+            // into created_at (timestamptz) and rejected every flush with
+            // "column created_at is of type timestamp with time zone but
+            // expression is of type integer", sending all audit logs to the DLQ.
             query_builder.push_str(&format!(
-                "(${},{},{},{},{},{},{},{},{},{})",
+                "(${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${}, ${})",
                 base + 1,
                 base + 2,
                 base + 3,
