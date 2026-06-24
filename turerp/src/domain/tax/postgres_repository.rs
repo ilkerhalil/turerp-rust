@@ -204,7 +204,7 @@ impl TaxRateRepository for PostgresTaxRateRepository {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING "#,
             TAX_RATE_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(tenant_id)
@@ -227,7 +227,7 @@ impl TaxRateRepository for PostgresTaxRateRepository {
             r#"
             SELECT "#,
             TAX_RATE_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             FROM tax_rates
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#
@@ -326,7 +326,7 @@ impl TaxRateRepository for PostgresTaxRateRepository {
             r#"
             SELECT "#,
             TAX_RATE_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             FROM tax_rates
             WHERE tenant_id = $1
               AND tax_type = $2
@@ -365,7 +365,7 @@ impl TaxRateRepository for PostgresTaxRateRepository {
             WHERE id = $6 AND tenant_id = $7 AND deleted_at IS NULL
             RETURNING "#,
             TAX_RATE_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(update.rate)
@@ -433,7 +433,7 @@ impl TaxRateRepository for PostgresTaxRateRepository {
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             RETURNING "#,
             TAX_RATE_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(id)
@@ -450,7 +450,7 @@ impl TaxRateRepository for PostgresTaxRateRepository {
             r#"
             SELECT "#,
             TAX_RATE_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             FROM tax_rates
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
@@ -532,7 +532,7 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
             VALUES ($1, $2, $3, $4)
             RETURNING "#,
             TAX_PERIOD_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(tenant_id)
@@ -551,7 +551,7 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
             r#"
             SELECT "#,
             TAX_PERIOD_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             FROM tax_periods
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#
@@ -662,7 +662,7 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
             WHERE id = $10 AND tenant_id = $11 AND deleted_at IS NULL
             RETURNING "#,
             TAX_PERIOD_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(&tax_type_str)
@@ -756,7 +756,7 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             RETURNING "#,
             TAX_PERIOD_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(id)
@@ -773,7 +773,7 @@ impl TaxPeriodRepository for PostgresTaxPeriodRepository {
             r#"
             SELECT "#,
             TAX_PERIOD_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             FROM tax_periods
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
