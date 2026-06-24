@@ -1,6 +1,8 @@
-# Tier 2 — Sales (orders + quotations). orders list works (empty until
-# seeded), quotations list is currently 500 (broken — follow-up to #152).
-# All /deleted lists are admin-only (403 for a regular user).
+# Tier 2 — Sales (orders + quotations). orders + quotations lists work
+# (empty until seeded). quotations list was 500 (broken — the quotations
+# table was missing company_id, which migration 023 added to 10 sibling
+# tables but skipped quotations; fixed by migration 041). All /deleted
+# lists are admin-only (403 for a regular user).
 
 # --- 1. Sales orders list — 200 (paginated envelope, may be empty) ---
 GET {{base_url}}/api/v1/sales/orders
@@ -10,10 +12,15 @@ HTTP 200
 jsonpath "$.items" isCollection
 jsonpath "$.total" isNumber
 
-# --- 2. Sales quotations list — BROKEN (500), assert until fixed ---
+# --- 2. Sales quotations list — 200 (was 500: quotations table missing
+#     company_id, which 023 added to 10 sibling tables but skipped; fixed
+#     by migration 041). Unseeded → empty is fine; 200 proves the query runs. ---
 GET {{base_url}}/api/v1/sales/quotations
 Authorization: Bearer {{access_token}}
-HTTP 500
+HTTP 200
+[Asserts]
+jsonpath "$.items" isCollection
+jsonpath "$.total" isNumber
 
 # --- 3. Non-existent sales order — 404 ---
 GET {{base_url}}/api/v1/sales/orders/999999
