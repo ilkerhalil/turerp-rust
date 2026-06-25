@@ -94,7 +94,7 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING "#,
             archive_policy_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(tenant_id)
@@ -115,7 +115,7 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
             r#"
             SELECT "#,
             archive_policy_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             FROM archive_policies
             WHERE id = $1 AND tenant_id = $2
             "#
@@ -171,7 +171,7 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
             r#"
             SELECT "#,
             archive_policy_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             FROM archive_policies
             WHERE tenant_id = $1 AND is_active = true
             ORDER BY created_at DESC
@@ -206,7 +206,7 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
             WHERE id = $6 AND tenant_id = $7
             RETURNING "#,
             archive_policy_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(&update.name)
@@ -332,7 +332,7 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
             VALUES ($1, $2, 'Pending', 0, 0)
             RETURNING "#,
             archive_job_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(tenant_id)
@@ -349,7 +349,7 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
             r#"
             SELECT "#,
             archive_job_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             FROM archive_jobs
             WHERE id = $1 AND tenant_id = $2
             "#
@@ -461,7 +461,7 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
             WHERE id = $5 AND tenant_id = $6
             RETURNING "#,
             archive_job_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(&status_str)
@@ -485,7 +485,7 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
             WHERE id = $1 AND tenant_id = $2 AND status = 'Pending'
             RETURNING "#,
             archive_job_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(id)
@@ -596,7 +596,7 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
             VALUES ($1, $2, $3, $4, $5)
             RETURNING "#,
             archive_record_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(tenant_id)
@@ -616,7 +616,7 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
             r#"
             SELECT "#,
             archive_record_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             FROM archive_records
             WHERE id = $1 AND tenant_id = $2
             "#
@@ -772,7 +772,7 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
             WHERE id = $1 AND tenant_id = $2 AND restored_at IS NULL
             RETURNING "#,
             archive_record_columns!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
             "#
         ))
         .bind(id)

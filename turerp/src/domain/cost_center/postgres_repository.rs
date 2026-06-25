@@ -145,7 +145,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING "#,
                 COST_CENTER_COLUMNS!(),
-                r#", 0 as total_count
+                r#", 0::bigint as total_count
                 "#
             ),
         )
@@ -168,7 +168,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
             r#"
                 SELECT "#,
             COST_CENTER_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 FROM cost_centers
                 WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
                 "#
@@ -265,7 +265,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
             r#"
                 SELECT "#,
             COST_CENTER_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 FROM cost_centers
                 WHERE tenant_id = $1 AND type = $2 AND deleted_at IS NULL
                 ORDER BY code ASC
@@ -300,7 +300,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
                 WHERE id = $7 AND tenant_id = $8 AND deleted_at IS NULL
                 RETURNING "#,
             COST_CENTER_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 "#
         ))
         .bind(&update.code)
@@ -348,7 +348,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
                 WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
                 RETURNING "#,
             COST_CENTER_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 "#
         ))
         .bind(id)
@@ -365,7 +365,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
             r#"
                 SELECT "#,
             COST_CENTER_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 FROM cost_centers
                 WHERE tenant_id = $1 AND deleted_at IS NOT NULL
                 ORDER BY deleted_at DESC
@@ -464,7 +464,7 @@ impl CostCenterRepository for PostgresCostCenterRepository {
             r#"
                 SELECT "#,
             COST_CENTER_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 FROM cost_centers
                 WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
                 "#

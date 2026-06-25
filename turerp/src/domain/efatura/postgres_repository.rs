@@ -222,7 +222,7 @@ impl EFaturaRepository for PostgresEFaturaRepository {
                         $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37)
                 RETURNING "#,
                 EFATURA_COLUMNS!(),
-                r#", 0 as total_count
+                r#", 0::bigint as total_count
                 "#
             )
         )
@@ -279,7 +279,7 @@ impl EFaturaRepository for PostgresEFaturaRepository {
             r#"
                 SELECT "#,
             EFATURA_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 FROM efatura
                 WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
                 "#
@@ -298,7 +298,7 @@ impl EFaturaRepository for PostgresEFaturaRepository {
             r#"
                 SELECT "#,
             EFATURA_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 FROM efatura
                 WHERE uuid = $1 AND tenant_id = $2 AND deleted_at IS NULL
                 "#
@@ -321,7 +321,7 @@ impl EFaturaRepository for PostgresEFaturaRepository {
             r#"
                 SELECT "#,
             EFATURA_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 FROM efatura
                 WHERE invoice_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
                 "#
@@ -428,7 +428,7 @@ impl EFaturaRepository for PostgresEFaturaRepository {
                 WHERE id = $4 AND tenant_id = $5 AND deleted_at IS NULL
                 RETURNING "#,
             EFATURA_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 "#
         ))
         .bind(&status_str)
@@ -457,7 +457,7 @@ impl EFaturaRepository for PostgresEFaturaRepository {
                 WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
                 RETURNING "#,
             EFATURA_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 "#
         ))
         .bind(&xml_content)

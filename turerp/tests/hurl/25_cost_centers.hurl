@@ -19,13 +19,26 @@ HTTP 200
 jsonpath "$.items" isCollection
 jsonpath "$.items[*].center_type" contains "Profit"
 
-# --- 3. Non-existent cost center — 404 ---
+# --- 3. Existent cost center by id — 200 (was 500: find_by_id SELECT
+#        added `0 as total_count` — literal 0 is int4, but CostCenterRow
+#        decodes total_count into Option<i64> (int8), so sqlx failed to
+#        decode an existent row. The /999999 → 404 case returned no row to
+#        decode, hiding the bug. Fixed by casting to 0::bigint. id=1 is
+#        seeded (CC01 Genel Yonetim).) ---
+GET {{base_url}}/api/v1/cost-centers/1
+Authorization: Bearer {{access_token}}
+HTTP 200
+[Asserts]
+jsonpath "$.id" == 1
+jsonpath "$.code" == "CC01"
+
+# --- 4. Non-existent cost center — 404 ---
 GET {{base_url}}/api/v1/cost-centers/999999
 Authorization: Bearer {{access_token}}
 HTTP 404
 [Asserts]
 jsonpath "$.error" exists
 
-# --- 4. No auth — 401 ---
+# --- 5. No auth — 401 ---
 GET {{base_url}}/api/v1/cost-centers
 HTTP 401
