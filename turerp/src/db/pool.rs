@@ -205,6 +205,10 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "041_quotations_company_id",
             sql: include_str!("../../migrations/041_quotations_company_id.sql"),
         },
+        Migration {
+            version: "042_purchase_goods_company_id",
+            sql: include_str!("../../migrations/042_purchase_goods_company_id.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).
@@ -333,6 +337,10 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
 /// down-replay so there is no concurrent writer.
 pub async fn run_migrations_down(pool: &PgPool) -> Result<usize, ApiError> {
     const DOWN_MIGRATIONS: &[Migration] = &[
+        Migration {
+            version: "042_purchase_goods_company_id",
+            sql: include_str!("../../migrations/down/042_purchase_goods_company_id.down.sql"),
+        },
         Migration {
             version: "041_quotations_company_id",
             sql: include_str!("../../migrations/down/041_quotations_company_id.down.sql"),

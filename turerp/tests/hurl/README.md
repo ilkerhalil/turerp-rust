@@ -154,14 +154,9 @@ start gating merges on it.
 
 | File | Endpoint | Status | Tracking |
 |------|----------|--------|----------|
-| `04_categories.hurl` | `GET /api/v1/categories` | `500` | follow-up to #152 |
-| `05_units.hurl` | `GET /api/v1/units` | `500` | follow-up to #152 |
 | `06_currencies.hurl` | `GET /api/v1/currencies` | `404` | follow-up to #152 |
-| `11_hr_employees.hurl` | `GET /api/v1/hr/leave-types` | `500` | follow-up to #152 |
 | `14_stock_items.hurl` | `GET /api/v1/stock/warehouses` | `500` | follow-up to #152 |
 | `16_settings.hurl` | `GET /api/v1/settings` | `404` | follow-up to #152 |
-| `30_purchase.hurl` | `GET /api/v1/purchase-requests` | `500` | follow-up to #152 |
-| `31_goods_receipts.hurl` | `GET /api/v1/goods-receipts/{id}` (+ `/order/{id}`) | `500` | follow-up to #152 |
 | `33_bank.hurl` | `GET /api/v1/bank/rules` | `500` | follow-up to #152 |
 | `36_dashboard.hurl` | `GET /api/v1/dashboard/kpis` | `500` | follow-up to #152 |
 | `49_subscriptions.hurl` | `GET /api/v1/subscription-plans`, `/subscriptions` | `500` | follow-up to #152 |
