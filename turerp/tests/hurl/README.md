@@ -152,14 +152,14 @@ start gating merges on it.
 
 ### Known-broken scenarios (assert the bug)
 
-| File | Endpoint | Status | Tracking |
-|------|----------|--------|----------|
-| `51_workflows.hurl` | `GET /api/v1/workflows/templates` | `500` | follow-up to #152 |
-
-These scenarios exist **on purpose**: they assert the broken status, so
-that when the underlying route is fixed, the scenario fails loudly and
-forces an update. This is cheaper than letting a "this works" assertion
-slip past code review.
+All previously-fenced broken routes have been fixed and their scenarios
+flipped to `200` (the last was `51_workflows.hurl` — workflow templates,
+fixed by migration 046). No `500` fences remain. The pattern is retained
+here for reference: a scenario may temporarily assert a route's observed
+broken status (`500` / `404` / `405`) so the bug stays visible until fixed;
+when the route is fixed, the scenario fails loudly and forces an update
+(flipping its assertion to `200` and gating merges on it). This is cheaper
+than letting a "this works" assertion slip past code review.
 
 ## Adding a new scenario
 
