@@ -22,3 +22,20 @@ Authorization: Bearer {{access_token}}
 HTTP 200
 [Asserts]
 jsonpath "$" isCollection
+
+# --- 3. Payroll by employee — 200 (was 500: payrolls table missing
+#     company_id, which migration 023 added to 10 tables but skipped;
+#     fixed by migration 043). find_by_employee returns a plain JSON
+#     array; non-existent employee → empty array. 200 proves the query
+#     runs (the list-empty path still hits the missing-column bug, so
+#     this fences the decode fix). ---
+GET {{base_url}}/api/v1/hr/payroll/employee/999999
+Authorization: Bearer {{access_token}}
+HTTP 200
+[Asserts]
+jsonpath "$" isCollection
+
+# --- 4. Deleted payroll — RBAC: regular user gets 403 ---
+GET {{base_url}}/api/v1/hr/payroll/deleted
+Authorization: Bearer {{access_token}}
+HTTP 403
