@@ -154,9 +154,6 @@ start gating merges on it.
 
 | File | Endpoint | Status | Tracking |
 |------|----------|--------|----------|
-| `06_currencies.hurl` | `GET /api/v1/currencies` | `404` | follow-up to #152 |
-| `14_stock_items.hurl` | `GET /api/v1/stock/warehouses` | `500` | follow-up to #152 |
-| `16_settings.hurl` | `GET /api/v1/settings` | `404` | follow-up to #152 |
 | `33_bank.hurl` | `GET /api/v1/bank/rules` | `500` | follow-up to #152 |
 | `36_dashboard.hurl` | `GET /api/v1/dashboard/kpis` | `500` | follow-up to #152 |
 | `49_subscriptions.hurl` | `GET /api/v1/subscription-plans`, `/subscriptions` | `500` | follow-up to #152 |
