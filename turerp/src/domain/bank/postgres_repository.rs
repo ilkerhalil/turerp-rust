@@ -733,7 +733,7 @@ impl BankRepository for PostgresBankRepository {
             r#"
             INSERT INTO reconciliation_rules (tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, NOW())
-            RETURNING id, tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at, updated_at
+            RETURNING id, tenant_id, rule_name, match_field, match_pattern, auto_match, is_active, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(create.tenant_id)

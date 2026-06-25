@@ -1,0 +1,31 @@
+-- 044_reconciliation_rules_soft_delete.sql
+--
+-- reconciliation_rules (migration 025_bank_integration.sql:67) was created
+-- AFTER migration 020 (soft_delete_complete) but WITHOUT the soft-delete
+-- columns, even though ReconciliationRule implements SoftDeletable
+-- (src/domain/bank/model.rs) and ReconciliationRuleRow declares
+--   deleted_at: Option<DateTime<Utc>>
+--   deleted_by: Option<i64>
+-- and every read query SELECTs them and filters `WHERE deleted_at IS NULL`
+-- (find_rules, find_active_rules, find_rule_by_id, update_rule RETURNING,
+-- delete_rule SET deleted_at = NOW()). So every query against
+-- reconciliation_rules fails with `column "deleted_at" does not exist` ->
+-- HTTP 500 on GET /api/v1/bank/rules (and find_rule_by_id / update_rule /
+-- soft-delete).
+--
+-- Same soft-delete-missing-column class as tax_periods, fixed by migration
+-- 040 (020 soft_delete_complete missed it). Mirrors the 020/040 declaration
+-- exactly:
+--   deleted_at TIMESTAMPTZ (nullable)
+--   deleted_by BIGINT REFERENCES users(id) ON DELETE SET NULL
+-- plus the partial index convention from 020.
+--
+-- NOTE (follow-up, not addressed here): PostgresBankRepository::delete_rule
+-- SETs only deleted_at = NOW() and takes no deleted_by argument, so the new
+-- deleted_by column is never populated on soft-delete (it stays NULL). That is
+-- a pre-existing audit-attribution gap surfaced by adding the column; the
+-- column itself is required because ReconciliationRuleRow SELECTs it. Wiring
+-- deleted_by through the rule soft-delete path is tracked as a separate fix.
+ALTER TABLE reconciliation_rules ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE reconciliation_rules ADD COLUMN IF NOT EXISTS deleted_by BIGINT REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_reconciliation_rules_deleted_at ON reconciliation_rules(deleted_at) WHERE deleted_at IS NULL;
