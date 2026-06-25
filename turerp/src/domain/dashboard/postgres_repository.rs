@@ -167,8 +167,8 @@ impl DashboardRepository for PostgresDashboardRepository {
                   AND ($4::timestamptz IS NULL OR p.payment_date >= $4)
                   AND ($5::timestamptz IS NULL OR p.payment_date <= $5)
             )
-            SELECT c.inflow - c.outflow
-            FROM cash_in c, cash_out
+            SELECT ci.inflow - co.outflow
+            FROM cash_in ci, cash_out co
             "#,
         )
         .bind(tenant_id)
@@ -191,9 +191,9 @@ impl DashboardRepository for PostgresDashboardRepository {
             r#"
             SELECT
                 CASE
-                    WHEN CURRENT_DATE - i.due_date <= 30 THEN '0-30'
-                    WHEN CURRENT_DATE - i.due_date <= 60 THEN '31-60'
-                    WHEN CURRENT_DATE - i.due_date <= 90 THEN '61-90'
+                    WHEN CURRENT_DATE - i.due_date::date <= 30 THEN '0-30'
+                    WHEN CURRENT_DATE - i.due_date::date <= 60 THEN '31-60'
+                    WHEN CURRENT_DATE - i.due_date::date <= 90 THEN '61-90'
                     ELSE '90+'
                 END as bucket,
                 COALESCE(SUM(i.total_amount - i.paid_amount), 0.0) as amount,
@@ -224,9 +224,9 @@ impl DashboardRepository for PostgresDashboardRepository {
             r#"
             SELECT
                 CASE
-                    WHEN CURRENT_DATE - i.due_date <= 30 THEN '0-30'
-                    WHEN CURRENT_DATE - i.due_date <= 60 THEN '31-60'
-                    WHEN CURRENT_DATE - i.due_date <= 90 THEN '61-90'
+                    WHEN CURRENT_DATE - i.due_date::date <= 30 THEN '0-30'
+                    WHEN CURRENT_DATE - i.due_date::date <= 60 THEN '31-60'
+                    WHEN CURRENT_DATE - i.due_date::date <= 90 THEN '61-90'
                     ELSE '90+'
                 END as bucket,
                 COALESCE(SUM(i.total_amount - i.paid_amount), 0.0) as amount,
