@@ -7,16 +7,17 @@ GET {{base_url}}/api/v1/goods-receipts
 Authorization: Bearer {{access_token}}
 HTTP 405
 
-# --- 2. Get-by-id — BROKEN (500): GoodsReceiptRow decode bug hits the
-#        single-row path too. Assert 500 until fixed (follow-up to #152). ---
+# --- 2. Get-by-id — 404 (was 500: goods_receipts missing company_id, fixed
+#        by migration 042; find_by_id now runs and returns NotFound). ---
 GET {{base_url}}/api/v1/goods-receipts/999999
 Authorization: Bearer {{access_token}}
-HTTP 500
+HTTP 404
 
-# --- 3. Receipts for a non-existent order — also 500 (same decode bug) ---
+# --- 3. Receipts for a non-existent order — 200 with empty array (was 500:
+#        same missing-company_id bug on find_by_order). ---
 GET {{base_url}}/api/v1/goods-receipts/order/999999
 Authorization: Bearer {{access_token}}
-HTTP 500
+HTTP 200
 
 # --- 4. Deleted receipts — RBAC: regular user 403 ---
 GET {{base_url}}/api/v1/goods-receipts/deleted
