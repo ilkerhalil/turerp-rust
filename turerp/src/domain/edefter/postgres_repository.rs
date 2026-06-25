@@ -179,7 +179,7 @@ impl EDefterRepository for PostgresEDefterRepository {
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING "#,
             LEDGER_PERIOD_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 "#
         ))
         .bind(period.tenant_id)
@@ -205,7 +205,7 @@ impl EDefterRepository for PostgresEDefterRepository {
             r#"
                 SELECT "#,
             LEDGER_PERIOD_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 FROM ledger_periods
                 WHERE id = $1 AND tenant_id = $2
                 "#
@@ -373,7 +373,7 @@ impl EDefterRepository for PostgresEDefterRepository {
                 WHERE id = $2 AND tenant_id = $3
                 RETURNING "#,
             LEDGER_PERIOD_COLUMNS!(),
-            r#", 0 as total_count
+            r#", 0::bigint as total_count
                 "#
         ))
         .bind(&status_str)
