@@ -217,6 +217,10 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "044_reconciliation_rules_soft_delete",
             sql: include_str!("../../migrations/044_reconciliation_rules_soft_delete.sql"),
         },
+        Migration {
+            version: "045_subscriptions_soft_delete",
+            sql: include_str!("../../migrations/045_subscriptions_soft_delete.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).
@@ -345,6 +349,10 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
 /// down-replay so there is no concurrent writer.
 pub async fn run_migrations_down(pool: &PgPool) -> Result<usize, ApiError> {
     const DOWN_MIGRATIONS: &[Migration] = &[
+        Migration {
+            version: "045_subscriptions_soft_delete",
+            sql: include_str!("../../migrations/down/045_subscriptions_soft_delete.down.sql"),
+        },
         Migration {
             version: "044_reconciliation_rules_soft_delete",
             sql: include_str!(

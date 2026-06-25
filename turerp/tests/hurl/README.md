@@ -154,7 +154,6 @@ start gating merges on it.
 
 | File | Endpoint | Status | Tracking |
 |------|----------|--------|----------|
-| `49_subscriptions.hurl` | `GET /api/v1/subscription-plans`, `/subscriptions` | `500` | follow-up to #152 |
 | `51_workflows.hurl` | `GET /api/v1/workflows/templates` | `500` | follow-up to #152 |
 
 These scenarios exist **on purpose**: they assert the broken status, so
