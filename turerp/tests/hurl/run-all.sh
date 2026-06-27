@@ -62,11 +62,42 @@ REFRESH=$(echo "$LOGIN_JSON" | jq -r '.tokens.refresh_token')
 USER_ID=$(echo "$LOGIN_JSON" | jq -r '.user.id')
 TENANT_ID=$(echo "$LOGIN_JSON" | jq -r '.user.tenant_id')
 
+# --- 1b. Ensure the admin test user exists, then log in (write-fence scenarios) ---
+# Self-registration forces role=user even when Admin is requested
+# (src/domain/auth/service.rs), so an admin can only be provisioned at the DB
+# level. seed_test_admin.sql clones testuser's password hash into an admin
+# account that shares the SAME password. Best-effort: try via docker compose
+# (the stack already runs under docker compose); if unavailable, the admin
+# login below simply fails and write-fence scenarios will 401/403 — the
+# standard read-only scenarios still run. Fix by running seed_test_admin.sql
+# against the DB manually.
+SEED_SCRIPT="${SCRIPT_DIR}/../../scripts/seed_test_admin.sql"
+if [ -f "$SEED_SCRIPT" ] && docker compose version >/dev/null 2>&1; then
+    # Run from the turerp dir so `docker compose` finds docker-compose.yml.
+    ( cd "$SCRIPT_DIR/.." && docker compose exec -T db psql -U turerp -d turerp ) \
+        < "$SEED_SCRIPT" >/dev/null 2>&1 || true
+fi
+
+ADMIN_ACCESS=""
+ADMIN_LOGIN_JSON=$(curl -sf -X POST "${BASE_URL}/api/v1/auth/login?tenant_id=1" \
+    -H 'Content-Type: application/json' \
+    -d "{\"username\":\"testadmin\",\"password\":\"${TEST_PASSWORD}\"}" 2>&1) || true
+if [ -n "$ADMIN_LOGIN_JSON" ]; then
+    ADMIN_ACCESS=$(echo "$ADMIN_LOGIN_JSON" | jq -r '.tokens.access_token // empty')
+fi
+if [ -n "$ADMIN_ACCESS" ]; then
+    echo "  admin_token: ${ADMIN_ACCESS:0:30}... (write-fence scenarios enabled)"
+else
+    echo "  admin_token: UNAVAILABLE — write-fence scenarios will 401/403." >&2
+    echo "    Seed the admin: docker compose exec -T db psql -U turerp -d turerp -f scripts/seed_test_admin.sql" >&2
+fi
+
 # Hurl --variables-file uses simple key=value env-style format.
 cat > "$VARS_FILE" <<EOF
 base_url=${BASE_URL}
 test_password=${TEST_PASSWORD}
 access_token=${ACCESS}
+admin_token=${ADMIN_ACCESS}
 refresh_token=${REFRESH}
 user_id=${USER_ID}
 tenant_id=${TENANT_ID}
@@ -88,6 +119,15 @@ TOTAL=0
 FAILED_FILES=()
 
 for scenario in [0-9][0-9]*.hurl; do
+    # Admin-gated scenarios — *_write.hurl (create/update/delete) and
+    # *_admin.hurl (admin happy-path reads) — require the admin token. Skip
+    # them when no admin could be seeded, so the read-only RBAC regression
+    # fence still runs green in admin-less environments.
+    if [[ "$scenario" == *_write.hurl || "$scenario" == *_admin.hurl ]] && [ -z "$ADMIN_ACCESS" ]; then
+        echo
+        echo "=== $scenario === SKIPPED (no admin_token; seed testadmin to enable)"
+        continue
+    fi
     TOTAL=$((TOTAL+1))
     echo
     echo "=== $scenario ==="
