@@ -3366,8 +3366,6 @@ dependencies = [
 [[package]]
 name = "lopdf"
 version = "0.39.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f560f57dfb9142a02d673e137622fd515d4231e51feb8b4af28d92647d83f35b"
 dependencies = [
  "aes",
  "bitflags 2.11.1",
