@@ -476,14 +476,19 @@ HTTP 200
 [Asserts]
 jsonpath "$.id" == {{inv_id}}
 
-# --- 37. (omitted) invoice hard /destroy — FK RESTRICT ---
+# --- 37. Invoice hard /destroy → 409 (fixed: FK RESTRICT surfaced as Conflict) ---
 # payments.invoice_id (003:404) REFERENCES invoices(id) with NO ON DELETE →
-# RESTRICT. The invoice created here has invoice_lines (003:387, CASCADE, so
-# they don't block) but any seeded payments against it would 500 a hard
-# /destroy. The soft-delete + restore lifecycle above is already exercised;
-# the hard /destroy path is intentionally NOT fenced. The invoice is left
-# soft-deleted; invoices have NO unique constraint (invoice_number is
-# app-generated), so re-runs do not collide.
+# RESTRICT. The invoice has a payment (step 25), so a hard /destroy is now
+# caught by the child-existence guard in invoice destroy → ApiError::Conflict
+# (409) instead of letting the DELETE hit a FK violation → 500. (invoice_lines
+# are ON DELETE CASCADE, so they do not block.) The invoice is left intact;
+# invoices have NO unique constraint (invoice_number is app-generated), so
+# re-runs do not collide.
+DELETE {{base_url}}/api/v1/invoices/{{inv_id}}/destroy
+Authorization: Bearer {{admin_token}}
+HTTP 409
+[Asserts]
+jsonpath "$.error" exists
 
 # --- 39. RBAC: no-auth GET by-id → 401 ---
 GET {{base_url}}/api/v1/invoices/999999
