@@ -1202,7 +1202,7 @@ impl PayrollRepository for PostgresPayrollRepository {
 
         let row: PayrollRow = sqlx::query_as(
             r#"
-            INSERT INTO payrolls (tenant_id, company_id, employee_id, period_start, period_end,
+            INSERT INTO payrolls (tenant_id, employee_id, period_start, period_end,
                                   basic_salary, overtime_hours, overtime_pay, bonuses,
                                   deductions, net_salary, status, paid_at, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
