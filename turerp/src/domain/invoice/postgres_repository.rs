@@ -767,6 +767,30 @@ impl InvoiceRepository for PostgresInvoiceRepository {
     }
 
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        // Guard against FK RESTRICT: payments.invoice_id REFERENCES invoices(id)
+        // with no ON DELETE clause, so a hard DELETE 500s on a foreign-key
+        // violation when payment rows exist. (invoice_lines.invoice_id is ON
+        // DELETE CASCADE, so lines do not block.) Surface 409 Conflict instead
+        // so callers can resolve payments before destroying the invoice.
+        let has_payments: Option<(i64,)> = sqlx::query_as(
+            r#"
+            SELECT 1::bigint
+            WHERE EXISTS (SELECT 1 FROM payments
+                          WHERE invoice_id = $1 AND tenant_id = $2)
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| ApiError::Database(format!("Failed to check invoice dependencies: {}", e)))?;
+
+        if has_payments.is_some() {
+            return Err(ApiError::Conflict(
+                "Invoice has payments; remove them before destroying".to_string(),
+            ));
+        }
+
         let result = sqlx::query(
             r#"
             DELETE FROM invoices

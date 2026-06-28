@@ -19,10 +19,10 @@
 #   /documents/bulk-restore    — POST (authed) → 200 BulkRestoreResponse.
 #
 # Why: the read-only 37_documents.hurl only hits the (empty) list, /deleted,
-# /categories (observed 404 — see ASSUMPTION), and by-id 404. The create/
-# version/category/link/bulk-restore/destroy decode paths stay hidden until
-# seeded. This fence self-seeds a document, a category, a version, and a
-# link, then exercises every mutation transition.
+# /categories, and by-id 404. The create/version/category/link/bulk-restore/
+# destroy decode paths stay hidden until seeded. This fence self-seeds a
+# document, a category, a version, and a link, then exercises every mutation
+# transition.
 #
 # RBAC: most document mutations use AuthUser (any authed 200/201). Only
 # /documents/{id}/destroy uses AdminUser → testuser gets 403, admin 204.
@@ -36,12 +36,11 @@
 # entity_id (free-form; we use static sentinel 8881, "invoice"). No FK
 # validation is performed by the document service on entity_id.
 #
-# ASSUMPTION: the 37_documents.hurl read fence observed GET /documents/
-# categories returning 404 against an empty tenant — that appears to be a
-# stale observation (the in-memory + postgres list_categories both return
-# Ok(Vec), empty allowed → 200 with `[]`). This write fence asserts 200
-# after seeding; if the route still 404s in this env the category-list step
-# will fail — flagged for review. ASSUMPTION: document `hash` /
+# ASSUMPTION: GET /documents/categories returns 200 with a bare Vec (possibly
+# `[]` for an empty tenant). It previously 404'd because /v1/documents/{id}
+# was registered before /v1/documents/categories (actix-web 4 matches in
+# registration order → {id} shadowed the literal "categories" segment); fixed
+# by reordering the categories resource before {id}. ASSUMPTION: document `hash` /
 # `storage_path` / `filename` are free-form strings (no FS check on
 # create); we send static sentinels. ASSUMPTION: category name is unique
 # per tenant; a second run against the same DB may 409 at step 1 — re-run
@@ -72,15 +71,17 @@ jsonpath "$.description" exists
 jsonpath "$.color" exists
 jsonpath "$.created_at" exists
 
-# --- 2. GET categories list (authed) → 404 (KNOWN BUG: route shadowing) ---
-# documents.rs registers /v1/documents/{id} (line 765) BEFORE /v1/documents/
-# categories (line 779), so GET /categories matches /{id} with id="categories"
-# → Path<i64> parse fails → actix 404 (plain-text). The category_id captured
-# above (POST /categories is NOT shadowed — {id} has no POST route) is still
-# valid for steps 3-4. Fix = register /categories before /{id}; residual.
+# --- 2. GET categories list (authed) → 200 (fixed: route shadowing resolved) ---
+# documents.rs now registers /v1/documents/categories BEFORE /v1/documents/{id},
+# so GET /categories reaches list_categories (bare Vec<DocumentCategoryResponse>)
+# instead of being shadowed by the dynamic {id} (Path<i64> parse → 404). The
+# category created in step 1 is present.
 GET {{base_url}}/api/v1/documents/categories
 Authorization: Bearer {{access_token}}
-HTTP 404
+HTTP 200
+[Asserts]
+jsonpath "$" isCollection
+jsonpath "$[?(@.id=={{category_id}})].name" contains "Hurl Write-Fence Category"
 
 # --- 3. GET category by-id (authed) — DECODE FENCE: single-row ---
 GET {{base_url}}/api/v1/documents/categories/{{category_id}}

@@ -1,43 +1,36 @@
-# 93_hr_payroll_sgk_write — MINIMAL RBAC + 500-FENCE for Payroll + SGK calculate.
+# 93_hr_payroll_sgk_write — RBAC + CALCULATE-SUCCESS FENCE for Payroll + SGK.
 #
-# Scope (reduced from a full lifecycle fence): self-seed an employee, then
-# fence the RBAC layer (403 regular / 401 no-auth) and the KNOWN 500 on the
-# admin calculate path for BOTH /hr/payroll/calculate and /hr/sgk/calculate.
+# Scope: self-seed an employee, fence the RBAC layer (403 regular / 401
+# no-auth) and the admin calculate path (200 + payroll row) for BOTH
+# /hr/payroll/calculate and /hr/sgk/calculate, then clean up the created
+# payrolls + the seeded employee.
 #
-# Why minimal: the admin calculate path 500s on a parse-time SQL error, so it
-# creates NO row — there is nothing to GET/PAY/SOFT-DELETE/RESTORE/DESTROY.
-# Fencing the full payroll/sgk lifecycle (paid, deleted, soft-delete, restore,
-# destroy, register, bonus, summary, ebildirge) is deferred until the INSERT
-# bug is fixed; those steps would all be unreachable (no payroll_id captured).
+# FIXED (source-side, this PR): PostgresPayrollRepository::create
+# (src/domain/hr/postgres_repository.rs:1205) previously issued an INSERT with
+# 14 target columns but 13 value expressions (company_id listed but not
+# bound) → PostgreSQL parse error "INSERT has more target columns than
+# expressions" → sqlx::Error → map_sqlx_error → ApiError::Database → 500 on
+# BOTH calculate_payroll (hr/service.rs) and calculate_sgk_payroll
+# (hr/sgk/service.rs:211, calls hr_provider.create_payroll). Fix = drop
+# company_id from the INSERT column list (it defaults to 1 via migration 043;
+# the 12 binds then align 1:1 with $1..$12 + NOW()). With the fix the admin
+# calculate path returns 200 with a Payroll row ($.id) instead of 500.
 #
-# KNOWN BUG (residual, source-side): PostgresPayrollRepository::create
-# (src/domain/hr/postgres_repository.rs:1200) issues
-#   INSERT INTO payrolls (tenant_id, company_id, employee_id, period_start,
-#     period_end, basic_salary, overtime_hours, overtime_pay, bonuses,
-#     deductions, net_salary, status, paid_at, created_at)            -- 14 cols
-#   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())   -- 13 exprs
-# 14 target columns vs 13 value expressions → PostgreSQL parse error
-# ("INSERT has more target columns than expressions"), which fails at PARSE
-# time before any bind. The bind list is ALSO misaligned (12 .bind() calls
-# for $1..$12 map tenant_id→$1, employee_id→$2, period_start→$3, … so the
-# company_id column slot would receive employee_id's value), but the parse
-# error fires first, so the misalignment is moot. Either way → HTTP 500.
-# sqlx::Error → map_sqlx_error → ApiError::Database → 500.
-# calculate_payroll (hr/service.rs) and calculate_sgk_payroll
-# (hr/sgk/service.rs:211, calls hr_provider.create_payroll) both hit this.
-# Fix = drop the company_id column from the INSERT (or add a $-placeholder +
-# bind for it). Trivial source fix, deferred to a dedicated bug-fix PR
-# (one-bug-per-PR convention; #170-#173 precedent). This file documents the
-# 500 so the bug is visible in CI instead of silently uncovered.
+# The full payroll/sgk lifecycle (paid, deleted, soft-delete, restore, bonus,
+# summary, ebildirge) is still NOT fenced here — those transitions are out of
+# scope for this bug-fix PR. The two created payrolls are hard-destroyed in
+# cleanup (step 8) because payrolls.employee_id FK-RESTRICTs the employee
+# destroy (step 9).
 #
 # RBAC: payroll/sgk calculate use the AdminUser extractor → testuser
 # ({{access_token}}) gets 403, no-auth gets 401 (JwtAuth runs first), admin
-# ({{admin_token}}) reaches the handler and 500s. run-all.sh SKIPS this file
-# when admin_token is empty.
+# ({{admin_token}}) reaches the handler and gets 200. run-all.sh SKIPS this
+# file when admin_token is empty.
 #
 # FK STRATEGY: payroll.employee_id + sgk.employee_id → self-seed an employee
-# (POST /hr/employees, admin) and capture emp_id. The employee is cleaned up
-# (soft-delete + destroy) at the end; employees(employee_number, email,
+# (POST /hr/employees, admin) and capture emp_id. The payrolls created by the
+# two calculate calls are destroyed at step 8; the employee is then cleaned up
+# (soft-delete + destroy) at step 9; employees(employee_number, email,
 # tenant_id) are NON-partial unique (003:439-440), so the hard destroy frees
 # the "WF-PAY-EMP-001" / "wf-pay-emp-001@example.com" slots for re-runs.
 
@@ -97,11 +90,12 @@ HTTP 401
 [Asserts]
 jsonpath "$.error" exists
 
-# --- 4. Admin POST /payroll/calculate → 500 (KNOWN BUG: payrolls INSERT) ---
-# Admin passes the extractor and reaches create_payroll → the buggy INSERT
-# (14 cols / 13 values) → ApiError::Database → 500. No payroll row is
-# created, so the rest of the payroll lifecycle is unfenceable until the
-# source bug is fixed. Asserting the current (broken) behavior.
+# --- 4. Admin POST /payroll/calculate → 200 (fixed: payrolls INSERT) ---
+# Admin passes the extractor and reaches create_payroll → the INSERT now has
+# 13 columns ↔ 13 values (company_id dropped; it defaults to 1 via migration
+# 043) → a Payroll row is created and returned (200, $.id). payroll_id is
+# captured for cleanup at step 8 (payrolls.employee_id FK-RESTRICTs the
+# employee destroy, so the payroll MUST be destroyed before the employee).
 POST {{base_url}}/api/v1/hr/payroll/calculate
 Authorization: Bearer {{admin_token}}
 Content-Type: application/json
@@ -112,9 +106,14 @@ Content-Type: application/json
   "period_end": "2026-06-30T23:59:59Z"
 }
 ```
-HTTP 500
+HTTP 200
+[Captures]
+payroll_id: jsonpath "$.id"
 [Asserts]
-jsonpath "$.error" exists
+jsonpath "$.id" isNumber
+jsonpath "$.employee_id" == {{emp_id}}
+jsonpath "$.tenant_id" isNumber
+jsonpath "$.status" exists
 
 # === SGK calculate: RBAC + 500 fence (same INSERT bug via create_payroll) ===
 
@@ -147,9 +146,10 @@ HTTP 401
 [Asserts]
 jsonpath "$.error" exists
 
-# --- 7. Admin POST /sgk/calculate → 500 (KNOWN BUG: same payrolls INSERT) ---
+# --- 7. Admin POST /sgk/calculate → 200 (fixed: same payrolls INSERT) ---
 # calculate_sgk_payroll (sgk/service.rs:211) calls hr_provider.create_payroll
-# → the same buggy INSERT → 500. No sgk/payroll row is created.
+# → the fixed INSERT → a Payroll row is created and returned (200, $.id).
+# sgk_payroll_id captured for cleanup at step 8.
 POST {{base_url}}/api/v1/hr/sgk/calculate
 Authorization: Bearer {{admin_token}}
 Content-Type: application/json
@@ -160,16 +160,32 @@ Content-Type: application/json
   "period_end": "2026-06-30T23:59:59Z"
 }
 ```
-HTTP 500
+HTTP 200
+[Captures]
+sgk_payroll_id: jsonpath "$.id"
 [Asserts]
-jsonpath "$.error" exists
+jsonpath "$.id" isNumber
+jsonpath "$.employee_id" == {{emp_id}}
 
-# --- 8. Cleanup: soft-delete + destroy the seeded employee (re-run safety) ---
+# --- 8. Cleanup: destroy the two calculated payrolls (FK + re-run safety) ---
+# payrolls.employee_id REFERENCES employees(id) with no ON DELETE → RESTRICT,
+# so the payrolls created in steps 4 & 7 MUST be hard-destroyed BEFORE the
+# employee destroy (step 9), or the employee /destroy would 500 on the FK.
+# payrolls has no unique constraint and no child FKs → destroy is 204 and
+# re-runs do not 409 on re-calculate.
+DELETE {{base_url}}/api/v1/hr/payroll/{{payroll_id}}/destroy
+Authorization: Bearer {{admin_token}}
+HTTP 204
+DELETE {{base_url}}/api/v1/hr/payroll/{{sgk_payroll_id}}/destroy
+Authorization: Bearer {{admin_token}}
+HTTP 204
+
+# --- 9. Cleanup: soft-delete + destroy the seeded employee (re-run safety) ---
 # DELETE /v1/hr/employees/{id} → soft_delete_employee → 204 (NoContent).
 # DELETE /v1/hr/employees/{id}/destroy → destroy_employee → 204 (hard delete,
-# frees the non-partial unique employee_number/email slots). No payroll/sgk
-# rows were created (calculate 500s), so there are no child FK rows to block
-# the employee destroy.
+# frees the non-partial unique employee_number/email slots). The payrolls
+# referencing this employee were destroyed in step 8, so no child FK rows
+# block the employee destroy.
 DELETE {{base_url}}/api/v1/hr/employees/{{emp_id}}
 Authorization: Bearer {{admin_token}}
 HTTP 204

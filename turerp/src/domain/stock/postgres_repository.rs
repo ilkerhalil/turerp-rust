@@ -77,7 +77,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
             r#"
             INSERT INTO warehouses (tenant_id, code, name, address, is_active, created_at)
             VALUES ($1, $2, $3, $4, true, NOW())
-            RETURNING id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by, NULL::bigint AS total_count
             "#,
         )
         .bind(warehouse.tenant_id)
@@ -94,7 +94,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Warehouse>, ApiError> {
         let result: Option<WarehouseRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by, NULL::bigint AS total_count
             FROM warehouses
             WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
@@ -111,7 +111,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError> {
         let rows: Vec<WarehouseRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by, NULL::bigint AS total_count
             FROM warehouses
             WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
@@ -171,7 +171,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
                 address = COALESCE($3, address),
                 is_active = COALESCE($4, is_active)
             WHERE id = $5 AND tenant_id = $6 AND deleted_at IS NULL
-            RETURNING id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by, NULL::bigint AS total_count
             "#,
         )
         .bind(&code)
@@ -257,7 +257,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Warehouse>, ApiError> {
         let rows: Vec<WarehouseRow> = sqlx::query_as(
             r#"
-            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by
+            SELECT id, tenant_id, code, name, address, is_active, created_at, deleted_at, deleted_by, NULL::bigint AS total_count
             FROM warehouses
             WHERE tenant_id = $1 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
@@ -272,6 +272,37 @@ impl WarehouseRepository for PostgresWarehouseRepository {
     }
 
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        // Guard against FK RESTRICT: stock_levels.warehouse_id and
+        // stock_movements.warehouse_id both REFERENCE warehouses(id) with no
+        // ON DELETE clause, so a hard DELETE 500s on a foreign-key violation
+        // when child rows exist. (The child tables have no tenant_id column, so
+        // the guard scopes by warehouse_id only; tenant ownership is enforced
+        // by the DELETE's `tenant_id = $2` filter below — a non-owned id yields
+        // 0 rows affected → NotFound.) Surface 409 Conflict instead so callers
+        // can resolve stock before destroying the warehouse. Same class as the
+        // bank/invoice destroy guards; matters now that migration 047 flips the
+        // core.stock.warehouses gate ON for all tenants.
+        let has_children: Option<(i64,)> = sqlx::query_as(
+            r#"
+            SELECT 1::bigint
+            WHERE EXISTS (SELECT 1 FROM stock_levels WHERE warehouse_id = $1)
+               OR EXISTS (SELECT 1 FROM stock_movements WHERE warehouse_id = $1)
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to check warehouse dependencies: {}", e))
+        })?;
+
+        if has_children.is_some() {
+            return Err(ApiError::Conflict(
+                "Warehouse has stock levels or movements; remove them before destroying"
+                    .to_string(),
+            ));
+        }
+
         let result = sqlx::query(
             r#"
             DELETE FROM warehouses

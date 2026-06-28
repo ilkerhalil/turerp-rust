@@ -123,7 +123,7 @@ impl LeadRepository for PostgresLeadRepository {
             SELECT id, tenant_id, name, company, email, phone, source,
                    status, assigned_to, converted_to_customer_id, notes, created_at, updated_at
             FROM leads
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -473,7 +473,7 @@ impl OpportunityRepository for PostgresOpportunityRepository {
             SELECT id, tenant_id, lead_id, name, customer_id, value, probability,
                    expected_close_date, status, assigned_to, notes, created_at, updated_at
             FROM opportunities
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -825,7 +825,7 @@ impl CampaignRepository for PostgresCampaignRepository {
             SELECT id, tenant_id, name, description, campaign_type, status,
                    budget, actual_cost, start_date, end_date, created_at, updated_at
             FROM campaigns
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -1169,7 +1169,7 @@ impl TicketRepository for PostgresTicketRepository {
                    customer_id, assigned_to, status, priority, category,
                    resolved_at, created_at, updated_at
             FROM tickets
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)

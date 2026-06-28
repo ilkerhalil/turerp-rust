@@ -316,14 +316,19 @@ HTTP 200
 jsonpath "$.id" == {{account_id}}
 jsonpath "$.account_name" == "Hurl Test Bank Account (renamed)"
 
-# --- 21. (omitted) account hard /destroy — FK RESTRICT ---
+# --- 21. Account hard /destroy → 409 (fixed: FK RESTRICT surfaced as Conflict) ---
 # bank_statements.account_id (025:30) and bank_transactions.account_id
-# (025:46) both REFERENCE bank_accounts(id) with NO ON DELETE clause → the
-# seeded sample data has rows against this account, so a hard /destroy would
-# 500 on FK violation (RESTRICT). The soft-delete + restore lifecycle above
-# is already exercised; the hard /destroy path is intentionally NOT fenced
-# here. The account is left soft-deleted, which is safe for re-runs
-# (bank_accounts.account_number has NO unique index → no slot collision).
+# (025:46) both REFERENCE bank_accounts(id) with NO ON DELETE clause. The
+# account restored at step 19 still has the statement imported at step 5
+# against it, so a hard /destroy is now caught by the child-existence guard in
+# destroy_account → ApiError::Conflict (409) instead of letting the DELETE
+# hit a FK violation → 500. The account is left intact (409 does not delete);
+# re-run safety is unchanged (the account was already left alive after step 20).
+DELETE {{base_url}}/api/v1/bank/accounts/{{account_id}}/destroy
+Authorization: Bearer {{admin_token}}
+HTTP 409
+[Asserts]
+jsonpath "$.error" exists
 
 # --- 23. RBAC: POST create account as regular user — 403 ---
 POST {{base_url}}/api/v1/bank/accounts

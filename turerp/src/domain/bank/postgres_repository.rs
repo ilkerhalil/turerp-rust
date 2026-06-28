@@ -364,6 +364,35 @@ impl BankRepository for PostgresBankRepository {
     }
 
     async fn destroy_account(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        // Guard against FK RESTRICT: bank_statements.account_id and
+        // bank_transactions.account_id both REFERENCE bank_accounts(id) with no
+        // ON DELETE clause, so a hard DELETE 500s on a foreign-key violation
+        // when child rows exist. Surface 409 Conflict instead so callers can
+        // resolve dependencies before destroying the account.
+        let has_children: Option<(i64,)> = sqlx::query_as(
+            r#"
+            SELECT 1::bigint
+            WHERE EXISTS (SELECT 1 FROM bank_statements
+                          WHERE account_id = $1 AND tenant_id = $2)
+               OR EXISTS (SELECT 1 FROM bank_transactions
+                          WHERE account_id = $1 AND tenant_id = $2)
+            "#,
+        )
+        .bind(id)
+        .bind(tenant_id)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to check bank account dependencies: {}", e))
+        })?;
+
+        if has_children.is_some() {
+            return Err(ApiError::Conflict(
+                "Bank account has statements or transactions; remove them before destroying"
+                    .to_string(),
+            ));
+        }
+
         let result = sqlx::query(
             r#"
             DELETE FROM bank_accounts
