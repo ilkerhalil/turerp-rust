@@ -1,5 +1,8 @@
-# Tier 2 — Document management. List and /deleted work; /categories
-# currently 404 (route registered but no GET list returns rows — fence).
+# Tier 2 — Document management. List, /deleted, and /categories all work.
+# (/categories previously 404'd because /v1/documents/{id} was registered before
+# /v1/documents/categories in actix-web 4 — registration-order matching let the
+# dynamic {id} shadow the literal "categories" segment. Fixed by reordering the
+# categories resource before {id}.)
 
 # --- 1. Documents list — 200 (paginated envelope) ---
 GET {{base_url}}/api/v1/documents
@@ -14,10 +17,12 @@ GET {{base_url}}/api/v1/documents/deleted
 Authorization: Bearer {{access_token}}
 HTTP 200
 
-# --- 3. Document categories — 404 (route exists but returns 404; fence) ---
+# --- 3. Document categories — 200 (bare Vec; fixed: no longer shadowed by {id}) ---
 GET {{base_url}}/api/v1/documents/categories
 Authorization: Bearer {{access_token}}
-HTTP 404
+HTTP 200
+[Asserts]
+jsonpath "$" isCollection
 
 # --- 4. Non-existent document — 404 ---
 GET {{base_url}}/api/v1/documents/999999

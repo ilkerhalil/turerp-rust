@@ -761,6 +761,21 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         web::resource("/v1/documents/bulk-restore").route(web::post().to(bulk_restore_documents)),
     )
     .service(web::resource("/v1/documents/deleted").route(web::get().to(list_deleted_documents)))
+    // Static `/categories` resources MUST be registered before `/v1/documents/{id}`:
+    // actix-web 4 matches resources in registration order, so a dynamic `{id}`
+    // registered first would shadow the literal `categories` segment (Path<i64>
+    // parse failure → 404) for GET/POST /v1/documents/categories.
+    .service(
+        web::resource("/v1/documents/categories")
+            .route(web::get().to(list_categories))
+            .route(web::post().to(create_category)),
+    )
+    .service(
+        web::resource("/v1/documents/categories/{id}")
+            .route(web::get().to(get_category))
+            .route(web::put().to(update_category))
+            .route(web::delete().to(delete_category)),
+    )
     .service(
         web::resource("/v1/documents/{id}")
             .route(web::get().to(get_document))
@@ -775,17 +790,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_version)),
     )
     .service(web::resource("/v1/documents/versions/{version_id}").route(web::get().to(get_version)))
-    .service(
-        web::resource("/v1/documents/categories")
-            .route(web::get().to(list_categories))
-            .route(web::post().to(create_category)),
-    )
-    .service(
-        web::resource("/v1/documents/categories/{id}")
-            .route(web::get().to(get_category))
-            .route(web::put().to(update_category))
-            .route(web::delete().to(delete_category)),
-    )
     .service(
         web::resource("/v1/documents/{id}/links")
             .route(web::get().to(list_document_links))
