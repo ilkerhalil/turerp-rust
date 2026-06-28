@@ -44,7 +44,7 @@ pub async fn calculate_payroll(
     security(("bearer_auth" = []))
 )]
 pub async fn get_payroll_by_employee(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -52,7 +52,7 @@ pub async fn get_payroll_by_employee(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        hr_service.get_payroll_by_employee(*path),
+        hr_service.get_payroll_by_employee(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -67,7 +67,7 @@ pub async fn get_payroll_by_employee(
     security(("bearer_auth" = []))
 )]
 pub async fn mark_payroll_paid(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -75,7 +75,7 @@ pub async fn mark_payroll_paid(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        hr_service.mark_payroll_paid(*path),
+        hr_service.mark_payroll_paid(*path, admin_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

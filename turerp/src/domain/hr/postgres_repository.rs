@@ -1251,7 +1251,11 @@ impl PayrollRepository for PostgresPayrollRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<Payroll>, ApiError> {
+    async fn find_by_employee(
+        &self,
+        employee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Payroll>, ApiError> {
         let rows: Vec<PayrollRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, company_id, employee_id, period_start, period_end,
@@ -1259,11 +1263,12 @@ impl PayrollRepository for PostgresPayrollRepository {
                    deductions, net_salary, status, paid_at, created_at,
                    deleted_at, deleted_by
             FROM payrolls
-            WHERE employee_id = $1 AND deleted_at IS NULL
+            WHERE employee_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY period_start DESC
             "#,
         )
         .bind(employee_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find payroll by employee: {}", e)))?;
@@ -1274,6 +1279,7 @@ impl PayrollRepository for PostgresPayrollRepository {
     async fn find_by_employee_and_period(
         &self,
         employee_id: i64,
+        tenant_id: i64,
         period_start: DateTime<Utc>,
         period_end: DateTime<Utc>,
     ) -> Result<Option<Payroll>, ApiError> {
@@ -1284,10 +1290,11 @@ impl PayrollRepository for PostgresPayrollRepository {
                    deductions, net_salary, status, paid_at, created_at,
                    deleted_at, deleted_by
             FROM payrolls
-            WHERE employee_id = $1 AND period_start = $2 AND period_end = $3 AND deleted_at IS NULL
+            WHERE employee_id = $1 AND tenant_id = $2 AND period_start = $3 AND period_end = $4 AND deleted_at IS NULL
             "#,
         )
         .bind(employee_id)
+        .bind(tenant_id)
         .bind(period_start)
         .bind(period_end)
         .fetch_optional(&*self.pool)
@@ -1330,14 +1337,19 @@ impl PayrollRepository for PostgresPayrollRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn update_status(&self, id: i64, status: PayrollStatus) -> Result<Payroll, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: PayrollStatus,
+    ) -> Result<Payroll, ApiError> {
         let status_str = status.to_string();
 
         let row: PayrollRow = sqlx::query_as(
             r#"
             UPDATE payrolls
             SET status = $1
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, company_id, employee_id, period_start, period_end,
                       basic_salary, overtime_hours, overtime_pay, bonuses,
                       deductions, net_salary, status, paid_at, created_at,
@@ -1346,6 +1358,7 @@ impl PayrollRepository for PostgresPayrollRepository {
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Payroll"))?;
@@ -1353,13 +1366,13 @@ impl PayrollRepository for PostgresPayrollRepository {
         Ok(row.into())
     }
 
-    async fn mark_paid(&self, id: i64) -> Result<Payroll, ApiError> {
+    async fn mark_paid(&self, id: i64, tenant_id: i64) -> Result<Payroll, ApiError> {
         let row: PayrollRow = sqlx::query_as(
             r#"
             UPDATE payrolls
             SET status = 'Paid',
                 paid_at = NOW()
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             RETURNING id, tenant_id, company_id, employee_id, period_start, period_end,
                       basic_salary, overtime_hours, overtime_pay, bonuses,
                       deductions, net_salary, status, paid_at, created_at,
@@ -1367,6 +1380,7 @@ impl PayrollRepository for PostgresPayrollRepository {
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Payroll"))?;
