@@ -115,17 +115,15 @@ HTTP 200
 [Asserts]
 jsonpath "$.message" exists
 
-# --- 8. GET by-id after soft-delete → 200 (KNOWN BUG) ---
-# crm::find_by_id omits `deleted_at IS NULL` (postgres_repository.rs:470) and
-# doesn't SELECT deleted_at, so a soft-deleted opportunity is STILL readable by
-# id → 200, not 404. Asserting current behavior; the hard /destroy (step 11)
-# correctly yields 404. Proper fix needs a separate find-including-deleted
-# query (restore reuses find_by_id) — tracked as a residual.
+# --- 8. GET by-id after soft-delete → 404 (fixed: find_by_id filters deleted_at) ---
+# crm::find_by_id now filters `deleted_at IS NULL` (postgres_repository.rs:476),
+# so a soft-deleted opportunity is hidden → 404. (restore SETs deleted_at = NULL
+# before reusing find_by_id, so the filter is safe there.)
 GET {{base_url}}/api/v1/crm/opportunities/{{opp_id}}
 Authorization: Bearer {{admin_token}}
-HTTP 200
+HTTP 404
 [Asserts]
-jsonpath "$.id" == {{opp_id}}
+jsonpath "$.error" exists
 
 # --- 9. GET /deleted (admin) — DECODE FENCE: bare Vec<Opportunity>, admin-only ---
 GET {{base_url}}/api/v1/crm/opportunities/deleted
