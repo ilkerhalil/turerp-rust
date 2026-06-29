@@ -29,14 +29,19 @@ use crate::middleware::{AdminUser, AuthUser};
     )
 )]
 pub async fn create_user(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     user_service: web::Data<UserService>,
     payload: web::Json<CreateUser>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let create = payload.into_inner();
+    // Force the auth-derived tenant onto the body so a tenant admin cannot
+    // provision a user attributed to another tenant via a client-supplied
+    // `tenant_id` field. This also scopes the username/email uniqueness check
+    // to the admin's own tenant.
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
     json_resp!(
         user_service.create_user(create),
         HttpResponse::Created,
