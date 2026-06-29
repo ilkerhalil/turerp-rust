@@ -323,17 +323,20 @@ impl VendorPortal for VendorPortalService {
     async fn get_payments(
         &self,
         cari_id: i64,
-        _tenant_id: i64,
+        tenant_id: i64,
         pagination: VendorPaginationParams,
     ) -> Result<VendorPaginatedResponse<VendorPaymentView>, ApiError> {
         let invoices = self
             .invoice_service
-            .get_invoices_by_cari(_tenant_id, cari_id)
+            .get_invoices_by_cari(tenant_id, cari_id)
             .await?;
         let mut views = Vec::new();
 
         for inv in invoices {
-            let payments = self.invoice_service.get_payments_by_invoice(inv.id).await?;
+            let payments = self
+                .invoice_service
+                .get_payments_by_invoice(inv.id, tenant_id)
+                .await?;
             for payment in payments {
                 views.push(VendorPaymentView {
                     id: payment.id,

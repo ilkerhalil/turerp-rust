@@ -31,6 +31,7 @@ pub trait PurchaseOrderRepository: Send + Sync {
         &self,
         id: i64,
         status: PurchaseOrderStatus,
+        tenant_id: i64,
     ) -> Result<PurchaseOrder, ApiError>;
     async fn update_line_received_quantity(
         &self,
@@ -75,11 +76,16 @@ pub trait PurchaseOrderLineRepository: Send + Sync {
 pub trait GoodsReceiptRepository: Send + Sync {
     async fn create(&self, receipt: CreateGoodsReceipt) -> Result<GoodsReceipt, ApiError>;
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<GoodsReceipt>, ApiError>;
-    async fn find_by_order(&self, order_id: i64) -> Result<Vec<GoodsReceipt>, ApiError>;
+    async fn find_by_order(
+        &self,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<GoodsReceipt>, ApiError>;
     async fn update_status(
         &self,
         id: i64,
         status: GoodsReceiptStatus,
+        tenant_id: i64,
     ) -> Result<GoodsReceipt, ApiError>;
 
     /// Soft delete a goods receipt
@@ -162,11 +168,13 @@ pub trait PurchaseRequestRepository: Send + Sync {
         &self,
         id: i64,
         update: UpdatePurchaseRequest,
+        tenant_id: i64,
     ) -> Result<PurchaseRequest, ApiError>;
     async fn update_status(
         &self,
         id: i64,
         status: PurchaseRequestStatus,
+        tenant_id: i64,
     ) -> Result<PurchaseRequest, ApiError>;
 
     /// Soft delete a purchase request
@@ -346,11 +354,13 @@ impl PurchaseOrderRepository for InMemoryPurchaseOrderRepository {
         &self,
         id: i64,
         status: PurchaseOrderStatus,
+        tenant_id: i64,
     ) -> Result<PurchaseOrder, ApiError> {
         let mut inner = self.inner.lock();
         let order = inner
             .orders
             .get_mut(&id)
+            .filter(|o| o.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Purchase order {} not found", id)))?;
         order.status = status;
         order.updated_at = chrono::Utc::now();
@@ -603,12 +613,18 @@ impl GoodsReceiptRepository for InMemoryGoodsReceiptRepository {
             .cloned())
     }
 
-    async fn find_by_order(&self, order_id: i64) -> Result<Vec<GoodsReceipt>, ApiError> {
+    async fn find_by_order(
+        &self,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<GoodsReceipt>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .receipts
             .values()
-            .filter(|r| r.purchase_order_id == order_id && !r.is_deleted())
+            .filter(|r| {
+                r.purchase_order_id == order_id && r.tenant_id == tenant_id && !r.is_deleted()
+            })
             .cloned()
             .collect())
     }
@@ -617,11 +633,13 @@ impl GoodsReceiptRepository for InMemoryGoodsReceiptRepository {
         &self,
         id: i64,
         status: GoodsReceiptStatus,
+        tenant_id: i64,
     ) -> Result<GoodsReceipt, ApiError> {
         let mut inner = self.inner.lock();
         let receipt = inner
             .receipts
             .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Goods receipt {} not found", id)))?;
         receipt.status = status;
         Ok(receipt.clone())
@@ -963,11 +981,13 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         &self,
         id: i64,
         update: UpdatePurchaseRequest,
+        tenant_id: i64,
     ) -> Result<PurchaseRequest, ApiError> {
         let mut inner = self.inner.lock();
         let request = inner
             .requests
             .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Purchase request {} not found", id)))?;
 
         if let Some(department) = update.department {
@@ -991,11 +1011,13 @@ impl PurchaseRequestRepository for InMemoryPurchaseRequestRepository {
         &self,
         id: i64,
         status: PurchaseRequestStatus,
+        tenant_id: i64,
     ) -> Result<PurchaseRequest, ApiError> {
         let mut inner = self.inner.lock();
         let request = inner
             .requests
             .get_mut(&id)
+            .filter(|r| r.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Purchase request {} not found", id)))?;
         request.status = status;
         request.updated_at = chrono::Utc::now();

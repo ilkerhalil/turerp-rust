@@ -116,7 +116,7 @@ pub async fn get_campaigns_by_status(
     security(("bearer_auth" = []))
 )]
 pub async fn update_campaign_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateCampaignStatusRequest>,
@@ -125,7 +125,7 @@ pub async fn update_campaign_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match crm_service
-        .update_campaign_status(*path, payload.into_inner().status)
+        .update_campaign_status(*path, admin_user.0.tenant_id, payload.into_inner().status)
         .await
     {
         Ok(campaign) => Ok(HttpResponse::Ok().json(campaign)),

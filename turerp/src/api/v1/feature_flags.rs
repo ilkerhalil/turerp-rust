@@ -96,14 +96,17 @@ pub async fn get_flags(
     )
 )]
 pub async fn get_flag_by_id(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match feature_service.get_by_id(*path).await {
+    match feature_service
+        .get_by_id(*path, auth_user.0.tenant_id)
+        .await
+    {
         Ok(Some(flag)) => Ok(HttpResponse::Ok().json(flag)),
         Ok(None) => {
             let msg = i18n.t_args(
@@ -138,7 +141,7 @@ pub async fn get_flag_by_id(
     )
 )]
 pub async fn update_flag(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateFeatureFlag>,
@@ -146,7 +149,10 @@ pub async fn update_flag(
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match feature_service.update(*path, payload.into_inner()).await {
+    match feature_service
+        .update(*path, payload.into_inner(), admin_user.0.tenant_id)
+        .await
+    {
         Ok(Some(flag)) => Ok(HttpResponse::Ok().json(flag)),
         Ok(None) => {
             let msg = i18n.t_args(
@@ -179,14 +185,14 @@ pub async fn update_flag(
     )
 )]
 pub async fn delete_flag(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match feature_service.delete(*path).await {
+    match feature_service.delete(*path, admin_user.0.tenant_id).await {
         Ok(_) => {
             let msg = i18n.t(locale.as_str(), "generic.deleted");
             Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
@@ -214,15 +220,18 @@ pub async fn delete_flag(
     )
 )]
 pub async fn soft_delete_flag(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    let deleted_by = _admin_user.0.sub.parse::<i64>().unwrap_or(0);
-    match feature_service.soft_delete(*path, deleted_by).await {
+    let deleted_by = admin_user.0.sub.parse::<i64>().unwrap_or(0);
+    match feature_service
+        .soft_delete(*path, deleted_by, admin_user.0.tenant_id)
+        .await
+    {
         Ok(_) => {
             let msg = i18n.t(locale.as_str(), "generic.deleted");
             Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
@@ -250,14 +259,14 @@ pub async fn soft_delete_flag(
     )
 )]
 pub async fn restore_flag(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match feature_service.restore(*path).await {
+    match feature_service.restore(*path, admin_user.0.tenant_id).await {
         Ok(_) => {
             let msg = i18n.t(locale.as_str(), "generic.restored");
             Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
@@ -281,14 +290,14 @@ pub async fn restore_flag(
     )
 )]
 pub async fn list_deleted_flags(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        feature_service.find_deleted(),
+        feature_service.find_deleted(admin_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -314,14 +323,14 @@ pub async fn list_deleted_flags(
     )
 )]
 pub async fn destroy_flag(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match feature_service.destroy(*path).await {
+    match feature_service.destroy(*path, admin_user.0.tenant_id).await {
         Ok(_) => {
             let msg = i18n.t(locale.as_str(), "generic.destroyed");
             Ok(HttpResponse::Ok().json(MessageResponse { message: msg }))
@@ -349,14 +358,14 @@ pub async fn destroy_flag(
     )
 )]
 pub async fn enable_flag(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match feature_service.enable(*path).await {
+    match feature_service.enable(*path, admin_user.0.tenant_id).await {
         Ok(Some(flag)) => Ok(HttpResponse::Ok().json(flag)),
         Ok(None) => {
             let msg = i18n.t_args(
@@ -389,14 +398,14 @@ pub async fn enable_flag(
     )
 )]
 pub async fn disable_flag(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     path: web::Path<i64>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
-    match feature_service.disable(*path).await {
+    match feature_service.disable(*path, admin_user.0.tenant_id).await {
         Ok(Some(flag)) => Ok(HttpResponse::Ok().json(flag)),
         Ok(None) => {
             let msg = i18n.t_args(

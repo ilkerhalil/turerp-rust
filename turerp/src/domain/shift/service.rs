@@ -136,30 +136,37 @@ impl ShiftService {
     #[tracing::instrument(skip(self))]
     pub async fn assign_employee(
         &self,
+        tenant_id: i64,
         assignment: CreateShiftAssignment,
     ) -> Result<ShiftAssignment, ApiError> {
-        self.assignment_repo.create(assignment).await
+        self.assignment_repo.create(tenant_id, assignment).await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn get_assignments_by_employee(
         &self,
+        tenant_id: i64,
         employee_id: i64,
     ) -> Result<Vec<ShiftAssignment>, ApiError> {
-        self.assignment_repo.find_by_employee(employee_id).await
+        self.assignment_repo
+            .find_by_employee(tenant_id, employee_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn get_assignments_by_shift(
         &self,
+        tenant_id: i64,
         shift_id: i64,
     ) -> Result<Vec<ShiftAssignment>, ApiError> {
-        self.assignment_repo.find_by_shift(shift_id).await
+        self.assignment_repo
+            .find_by_shift(tenant_id, shift_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn remove_assignment(&self, id: i64) -> Result<(), ApiError> {
-        self.assignment_repo.delete(id).await
+    pub async fn remove_assignment(&self, tenant_id: i64, id: i64) -> Result<(), ApiError> {
+        self.assignment_repo.delete(tenant_id, id).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -186,27 +193,33 @@ impl ShiftService {
     #[tracing::instrument(skip(self))]
     pub async fn clock_in(
         &self,
+        tenant_id: i64,
         req: ClockInRequest,
     ) -> Result<AttendanceRecordResponse, ApiError> {
-        let record = self.attendance_repo.clock_in(req).await?;
+        let record = self.attendance_repo.clock_in(tenant_id, req).await?;
         Ok(AttendanceRecordResponse::from(record))
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn clock_out(
         &self,
+        tenant_id: i64,
         req: ClockOutRequest,
     ) -> Result<AttendanceRecordResponse, ApiError> {
-        let record = self.attendance_repo.clock_out(req).await?;
+        let record = self.attendance_repo.clock_out(tenant_id, req).await?;
         Ok(AttendanceRecordResponse::from(record))
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn get_attendance_by_employee(
         &self,
+        tenant_id: i64,
         employee_id: i64,
     ) -> Result<Vec<AttendanceRecordResponse>, ApiError> {
-        let records = self.attendance_repo.find_by_employee(employee_id).await?;
+        let records = self
+            .attendance_repo
+            .find_by_employee(tenant_id, employee_id)
+            .await?;
         Ok(records
             .into_iter()
             .map(AttendanceRecordResponse::from)
@@ -216,13 +229,14 @@ impl ShiftService {
     #[tracing::instrument(skip(self))]
     pub async fn get_attendance_by_period(
         &self,
+        tenant_id: i64,
         employee_id: i64,
         start: chrono::DateTime<Utc>,
         end: chrono::DateTime<Utc>,
     ) -> Result<Vec<AttendanceRecordResponse>, ApiError> {
         let records = self
             .attendance_repo
-            .find_by_period(employee_id, start, end)
+            .find_by_period(tenant_id, employee_id, start, end)
             .await?;
         Ok(records
             .into_iter()
@@ -264,6 +278,7 @@ impl ShiftService {
     #[tracing::instrument(skip(self))]
     pub async fn calculate_overtime(
         &self,
+        tenant_id: i64,
         employee_id: i64,
         period_start: chrono::DateTime<Utc>,
         period_end: chrono::DateTime<Utc>,
@@ -272,7 +287,7 @@ impl ShiftService {
     ) -> Result<OvertimeCalculation, ApiError> {
         let records = self
             .attendance_repo
-            .find_by_period(employee_id, period_start, period_end)
+            .find_by_period(tenant_id, employee_id, period_start, period_end)
             .await?;
 
         let mut regular_hours = Decimal::ZERO;
@@ -306,12 +321,12 @@ impl ShiftService {
     #[tracing::instrument(skip(self))]
     pub async fn generate_shift_report(
         &self,
-        _tenant_id: i64,
+        tenant_id: i64,
         query: ShiftReportQuery,
     ) -> Result<Vec<ShiftReport>, ApiError> {
         let records = if let Some(employee_id) = query.employee_id {
             self.attendance_repo
-                .find_by_period(employee_id, query.period_start, query.period_end)
+                .find_by_period(tenant_id, employee_id, query.period_start, query.period_end)
                 .await?
         } else {
             return Err(ApiError::BadRequest(
@@ -403,7 +418,7 @@ mod tests {
             timestamp: base,
             notes: None,
         };
-        let result = service.clock_in(clock_in).await;
+        let result = service.clock_in(1, clock_in).await;
         assert!(result.is_ok());
 
         let clock_out = ClockOutRequest {
@@ -411,7 +426,7 @@ mod tests {
             timestamp: base + chrono::Duration::hours(8),
             notes: None,
         };
-        let result = service.clock_out(clock_out).await;
+        let result = service.clock_out(1, clock_out).await;
         assert!(result.is_ok(), "clock_out failed: {:?}", result);
         let record = result.unwrap();
         assert!(record.hours_worked >= dec!(7.9) && record.hours_worked <= dec!(8.1));
@@ -426,7 +441,7 @@ mod tests {
             start_date: Utc::now(),
             end_date: None,
         };
-        let result = service.assign_employee(assignment).await;
+        let result = service.assign_employee(1, assignment).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().employee_id, 1);
     }

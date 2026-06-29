@@ -24977,6 +24977,7 @@
         "description": "Attendance record with clock in/out",
         "required": [
           "id",
+          "tenant_id",
           "employee_id",
           "shift_id",
           "date",
@@ -25041,6 +25042,10 @@
           },
           "status": {
             "$ref": "#/components/schemas/AttendanceStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -26932,8 +26937,7 @@
         "type": "object",
         "description": "Create job request",
         "required": [
-          "job_type",
-          "tenant_id"
+          "job_type"
         ],
         "properties": {
           "asset_id": {
@@ -26986,10 +26990,6 @@
               }
             ],
             "nullable": true
-          },
-          "tenant_id": {
-            "type": "integer",
-            "format": "int64"
           }
         }
       },
@@ -30899,6 +30899,7 @@
         "description": "Shift assignment for an employee",
         "required": [
           "id",
+          "tenant_id",
           "shift_id",
           "employee_id",
           "start_date",
@@ -30943,6 +30944,10 @@
           },
           "start_date": {
             "$ref": "#/components/schemas/DateTime"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

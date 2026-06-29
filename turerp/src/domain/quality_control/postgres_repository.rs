@@ -209,7 +209,12 @@ impl InspectionRepository for PostgresInspectionRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn update(&self, id: i64, update: UpdateInspection) -> Result<Inspection, ApiError> {
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateInspection,
+    ) -> Result<Inspection, ApiError> {
         let row: InspectionRow = sqlx::query_as(
             r#"
             UPDATE inspections
@@ -222,7 +227,7 @@ impl InspectionRepository for PostgresInspectionRepository {
                     WHEN $2 IN ('Passed', 'Failed') THEN NOW()
                     ELSE inspected_at
                 END
-            WHERE id = $1 AND deleted_at IS NULL
+            WHERE id = $1 AND tenant_id = $7 AND deleted_at IS NULL
             RETURNING id, tenant_id, work_order_id, product_id, inspection_type,
                       quantity_inspected, quantity_passed, quantity_failed,
                       status, inspector_id, inspected_at, notes, created_at,
@@ -239,6 +244,7 @@ impl InspectionRepository for PostgresInspectionRepository {
         .bind(update.quantity_failed)
         .bind(update.inspector_id)
         .bind(&update.notes)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Inspection"))?;
@@ -548,6 +554,7 @@ impl NcrRepository for PostgresNcrRepository {
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         update: UpdateNonConformanceReport,
     ) -> Result<NonConformanceReport, ApiError> {
         let row: NcrRow = sqlx::query_as(
@@ -562,7 +569,7 @@ impl NcrRepository for PostgresNcrRepository {
                     WHEN $6 = 'Closed' THEN NOW()
                     ELSE closed_at
                 END
-            WHERE id = $1 AND deleted_at IS NULL
+            WHERE id = $1 AND tenant_id = $7 AND deleted_at IS NULL
             RETURNING id, tenant_id, inspection_id, product_id, ncr_type,
                       description, root_cause, corrective_action,
                       status, raised_by, raised_at, closed_at,
@@ -575,6 +582,7 @@ impl NcrRepository for PostgresNcrRepository {
         .bind(&update.root_cause)
         .bind(&update.corrective_action)
         .bind(update.status.map(|s| ncr_status_to_str(&s).to_string()))
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "NonConformanceReport"))?;

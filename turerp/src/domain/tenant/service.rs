@@ -337,6 +337,7 @@ impl TenantConfigService {
     pub async fn update_config(
         &self,
         id: i64,
+        tenant_id: i64,
         mut update: UpdateTenantConfig,
     ) -> Result<TenantConfigResponse, ApiError> {
         // Encrypt new value if requested
@@ -347,7 +348,7 @@ impl TenantConfigService {
             }
         }
 
-        let config = self.repo.update(id, update).await?;
+        let config = self.repo.update(id, tenant_id, update).await?;
 
         // Invalidate cached configs for this tenant
         self.invalidate_tenant_cache(config.tenant_id).await.ok();
@@ -371,13 +372,12 @@ impl TenantConfigService {
 
     /// Delete a config
     #[tracing::instrument(skip(self))]
-    pub async fn delete_config(&self, id: i64) -> Result<(), ApiError> {
-        self.repo.delete(id).await?;
+    pub async fn delete_config(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.repo.delete(id, tenant_id).await?;
 
-        // Clear all config caches since we don't know the tenant_id
-        if let Some(ref cache) = self.cache {
-            cache.delete_pattern("turerp:*:config:*").await.ok();
-        }
+        // Invalidate cached configs for this tenant (tenant-scoped, mirrors
+        // update_config: pattern = "turerp:t{tenant_id}:config:*").
+        self.invalidate_tenant_cache(tenant_id).await.ok();
 
         Ok(())
     }
@@ -621,7 +621,9 @@ mod tests {
             is_encrypted: None,
         };
 
-        let result = service.update_config(created.id, update).await;
+        let result = service
+            .update_config(created.id, created.tenant_id, update)
+            .await;
         assert!(result.is_ok());
         let config = result.unwrap();
         assert_eq!(config.value, json!("light"));
@@ -640,7 +642,7 @@ mod tests {
 
         let created = service.set_config(create).await.unwrap();
 
-        let result = service.delete_config(created.id).await;
+        let result = service.delete_config(created.id, created.tenant_id).await;
         assert!(result.is_ok());
 
         let result = service.get_config(1, "app.theme").await;
@@ -702,7 +704,10 @@ mod tests {
             value: Some(json!("new_secret_password")),
             is_encrypted: Some(true),
         };
-        let updated = service.update_config(created.id, update).await.unwrap();
+        let updated = service
+            .update_config(created.id, created.tenant_id, update)
+            .await
+            .unwrap();
         assert_eq!(updated.value, json!("new_secret_password"));
     }
 }

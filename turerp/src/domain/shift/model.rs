@@ -81,6 +81,7 @@ impl std::str::FromStr for ShiftType {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ShiftAssignment {
     pub id: i64,
+    pub tenant_id: i64,
     pub shift_id: i64,
     pub employee_id: i64,
     pub start_date: DateTime<Utc>,
@@ -114,6 +115,7 @@ impl crate::common::SoftDeletable for ShiftAssignment {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AttendanceRecord {
     pub id: i64,
+    pub tenant_id: i64,
     pub employee_id: i64,
     pub shift_id: i64,
     pub date: DateTime<Utc>,

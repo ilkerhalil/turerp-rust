@@ -81,9 +81,12 @@ impl ManufacturingService {
     pub async fn update_work_order_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: WorkOrderStatus,
     ) -> Result<WorkOrder, ApiError> {
-        self.work_order_repo.update_status(id, status).await
+        self.work_order_repo
+            .update_status(id, tenant_id, status)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
@@ -139,16 +142,20 @@ impl ManufacturingService {
     pub async fn get_boms_by_product(
         &self,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<BillOfMaterials>, ApiError> {
-        self.bom_repo.find_by_product(product_id).await
+        self.bom_repo.find_by_product(product_id, tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn get_primary_bom_by_product(
         &self,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<Option<BillOfMaterials>, ApiError> {
-        self.bom_repo.find_primary_by_product(product_id).await
+        self.bom_repo
+            .find_primary_by_product(product_id, tenant_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
@@ -179,16 +186,25 @@ impl ManufacturingService {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn get_routings_by_product(&self, product_id: i64) -> Result<Vec<Routing>, ApiError> {
-        self.routing_repo.find_by_product(product_id).await
+    pub async fn get_routings_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Routing>, ApiError> {
+        self.routing_repo
+            .find_by_product(product_id, tenant_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn get_primary_routing_by_product(
         &self,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<Option<Routing>, ApiError> {
-        self.routing_repo.find_primary_by_product(product_id).await
+        self.routing_repo
+            .find_primary_by_product(product_id, tenant_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
@@ -213,8 +229,12 @@ impl ManufacturingService {
         &self,
         product_id: i64,
         quantity: Decimal,
+        tenant_id: i64,
     ) -> Result<Vec<(i64, Decimal)>, ApiError> {
-        let bom = self.bom_repo.find_primary_by_product(product_id).await?;
+        let bom = self
+            .bom_repo
+            .find_primary_by_product(product_id, tenant_id)
+            .await?;
         match bom {
             Some(bom) => {
                 let lines = self.bom_repo.get_lines(bom.id).await?;
@@ -233,10 +253,14 @@ impl ManufacturingService {
 
     // Calculate production time from routing
     #[tracing::instrument(skip(self))]
-    pub async fn calculate_production_time(&self, product_id: i64) -> Result<Decimal, ApiError> {
+    pub async fn calculate_production_time(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Decimal, ApiError> {
         let routing = self
             .routing_repo
-            .find_primary_by_product(product_id)
+            .find_primary_by_product(product_id, tenant_id)
             .await?;
         match routing {
             Some(r) => {
@@ -470,7 +494,7 @@ mod tests {
 
         // Calculate for quantity of 10
         let requirements = service
-            .calculate_material_requirements(1, dec!(10))
+            .calculate_material_requirements(1, dec!(10), 1)
             .await
             .unwrap();
         assert_eq!(requirements.len(), 1);
@@ -521,7 +545,7 @@ mod tests {
             .await
             .unwrap();
 
-        let time = service.calculate_production_time(1).await.unwrap();
+        let time = service.calculate_production_time(1, 1).await.unwrap();
         assert_eq!(time, dec!(6)); // 1 + 5
     }
 }

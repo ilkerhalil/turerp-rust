@@ -104,15 +104,16 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         Ok(row.into())
     }
 
-    async fn get_by_id(&self, id: i64) -> Result<Option<FeatureFlag>, ApiError> {
+    async fn get_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<FeatureFlag>, ApiError> {
         let result: Option<FeatureFlagRow> = sqlx::query_as(
             r#"
             SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
             FROM feature_flags
-            WHERE id = $1 AND deleted_at IS NULL
+            WHERE id = $1 AND (tenant_id = $2 OR tenant_id IS NULL) AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to get feature flag by id: {}", e)))?;
@@ -271,6 +272,7 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         &self,
         id: i64,
         flag: UpdateFeatureFlag,
+        tenant_id: i64,
     ) -> Result<Option<FeatureFlag>, ApiError> {
         let status_str = flag.status.map(|s| s.to_string());
 
@@ -281,13 +283,14 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
                 description = COALESCE($1, description),
                 status = COALESCE($2, status),
                 updated_at = NOW()
-            WHERE id = $3 AND deleted_at IS NULL
+            WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL
             RETURNING id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&flag.description)
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Feature flag"))?;
@@ -295,14 +298,15 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn delete(&self, id: i64) -> Result<bool, ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<bool, ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM feature_flags
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete feature flag: {}", e)))?;
@@ -310,16 +314,22 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<bool, ApiError> {
+    async fn soft_delete(
+        &self,
+        id: i64,
+        deleted_by: i64,
+        tenant_id: i64,
+    ) -> Result<bool, ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE feature_flags
             SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
-            WHERE id = $1 AND deleted_at IS NULL
+            WHERE id = $1 AND tenant_id = $3 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
         .bind(deleted_by)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to soft delete feature flag: {}", e)))?;
@@ -327,15 +337,16 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn restore(&self, id: i64) -> Result<bool, ApiError> {
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<bool, ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE feature_flags
             SET deleted_at = NULL, deleted_by = NULL, updated_at = NOW()
-            WHERE id = $1 AND deleted_at IS NOT NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to restore feature flag: {}", e)))?;
@@ -343,15 +354,16 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         Ok(result.rows_affected() > 0)
     }
 
-    async fn find_deleted(&self) -> Result<Vec<FeatureFlag>, ApiError> {
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<FeatureFlag>, ApiError> {
         let rows: Vec<FeatureFlagRow> = sqlx::query_as(
             r#"
             SELECT id, name, description, status, tenant_id, created_at, updated_at, deleted_at, deleted_by
             FROM feature_flags
-            WHERE deleted_at IS NOT NULL
+            WHERE (tenant_id = $1 OR tenant_id IS NULL) AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
             "#,
         )
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to get deleted feature flags: {}", e)))?;
@@ -359,14 +371,15 @@ impl FeatureFlagRepository for PostgresFeatureFlagRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn destroy(&self, id: i64) -> Result<bool, ApiError> {
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<bool, ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM feature_flags
-            WHERE id = $1 AND deleted_at IS NOT NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to destroy feature flag: {}", e)))?;

@@ -346,7 +346,7 @@ pub async fn create_payment(
     security(("bearer_auth" = []))
 )]
 pub async fn get_payments_by_invoice(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     invoice_service: web::Data<InvoiceService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -354,7 +354,7 @@ pub async fn get_payments_by_invoice(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        invoice_service.get_payments_by_invoice(*path),
+        invoice_service.get_payments_by_invoice(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

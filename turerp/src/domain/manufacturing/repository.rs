@@ -33,7 +33,12 @@ pub trait WorkOrderRepository: Send + Sync {
         tenant_id: i64,
         status: WorkOrderStatus,
     ) -> Result<Vec<WorkOrder>, ApiError>;
-    async fn update_status(&self, id: i64, status: WorkOrderStatus) -> Result<WorkOrder, ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: WorkOrderStatus,
+    ) -> Result<WorkOrder, ApiError>;
     async fn add_operation(
         &self,
         op: CreateWorkOrderOperation,
@@ -59,10 +64,15 @@ pub trait BillOfMaterialsRepository: Send + Sync {
         id: i64,
         tenant_id: i64,
     ) -> Result<Option<BillOfMaterials>, ApiError>;
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<BillOfMaterials>, ApiError>;
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<BillOfMaterials>, ApiError>;
     async fn find_primary_by_product(
         &self,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<Option<BillOfMaterials>, ApiError>;
     async fn add_line(
         &self,
@@ -79,8 +89,16 @@ pub trait BillOfMaterialsRepository: Send + Sync {
 pub trait RoutingRepository: Send + Sync {
     async fn create(&self, routing: CreateRouting) -> Result<Routing, ApiError>;
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Routing>, ApiError>;
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<Routing>, ApiError>;
-    async fn find_primary_by_product(&self, product_id: i64) -> Result<Option<Routing>, ApiError>;
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Routing>, ApiError>;
+    async fn find_primary_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<Routing>, ApiError>;
     async fn add_operation(
         &self,
         create: CreateRoutingOperation,
@@ -233,11 +251,17 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
             .collect())
     }
 
-    async fn update_status(&self, id: i64, status: WorkOrderStatus) -> Result<WorkOrder, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: WorkOrderStatus,
+    ) -> Result<WorkOrder, ApiError> {
         let mut inner = self.inner.lock();
         let order = inner
             .work_orders
             .get_mut(&id)
+            .filter(|x| x.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))?;
         order.status = status;
         order.updated_at = Utc::now();
@@ -440,12 +464,16 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
             .cloned())
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<BillOfMaterials>, ApiError> {
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<BillOfMaterials>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .boms
             .values()
-            .filter(|x| x.product_id == product_id && !x.is_deleted())
+            .filter(|x| x.product_id == product_id && x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect())
     }
@@ -453,13 +481,18 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
     async fn find_primary_by_product(
         &self,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<Option<BillOfMaterials>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .boms
             .values()
             .filter(|x| {
-                x.product_id == product_id && x.is_primary && x.is_active && !x.is_deleted()
+                x.product_id == product_id
+                    && x.tenant_id == tenant_id
+                    && x.is_primary
+                    && x.is_active
+                    && !x.is_deleted()
             })
             .cloned()
             .collect::<Vec<_>>()
@@ -613,23 +646,35 @@ impl RoutingRepository for InMemoryRoutingRepository {
             .cloned())
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<Routing>, ApiError> {
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Routing>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .routings
             .values()
-            .filter(|x| x.product_id == product_id && !x.is_deleted())
+            .filter(|x| x.product_id == product_id && x.tenant_id == tenant_id && !x.is_deleted())
             .cloned()
             .collect())
     }
 
-    async fn find_primary_by_product(&self, product_id: i64) -> Result<Option<Routing>, ApiError> {
+    async fn find_primary_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<Routing>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .routings
             .values()
             .filter(|x| {
-                x.product_id == product_id && x.is_primary && x.is_active && !x.is_deleted()
+                x.product_id == product_id
+                    && x.tenant_id == tenant_id
+                    && x.is_primary
+                    && x.is_active
+                    && !x.is_deleted()
             })
             .cloned()
             .collect::<Vec<_>>()

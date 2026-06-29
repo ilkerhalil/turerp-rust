@@ -151,7 +151,7 @@ async fn test_update_feature_flag_success() {
         "name": "upd-test",
         "description": "Original desc",
         "status": "disabled",
-        "tenant_id": null
+        "tenant_id": 1
     }))
     .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -198,7 +198,7 @@ async fn test_soft_delete_and_restore_feature_flag() {
         "name": "del-test",
         "description": "Delete test",
         "status": "disabled",
-        "tenant_id": null
+        "tenant_id": 1
     }))
     .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -262,7 +262,7 @@ async fn test_destroy_feature_flag_permanently() {
         "name": "dest-test",
         "description": "Destroy test",
         "status": "disabled",
-        "tenant_id": null
+        "tenant_id": 1
     }))
     .to_request();
     let create_resp = test::call_service(&app, create_req).await;
@@ -319,7 +319,7 @@ async fn test_enable_disable_feature_flag() {
         "name": "toggle-test",
         "description": "Toggle test",
         "status": "disabled",
-        "tenant_id": null
+        "tenant_id": 1
     }))
     .to_request();
     let create_resp = test::call_service(&app, create_req).await;

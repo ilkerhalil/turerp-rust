@@ -90,7 +90,7 @@ pub async fn get_inspection(
     security(("bearer_auth" = []))
 )]
 pub async fn update_inspection(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateInspection>,
@@ -99,7 +99,7 @@ pub async fn update_inspection(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        qc_service.update_inspection(*path, payload.into_inner()),
+        qc_service.update_inspection(*path, admin_user.0.tenant_id, payload.into_inner()),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -263,7 +263,7 @@ pub async fn get_ncr(
     security(("bearer_auth" = []))
 )]
 pub async fn update_ncr(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     qc_service: web::Data<QualityControlService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateNonConformanceReport>,
@@ -272,7 +272,7 @@ pub async fn update_ncr(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        qc_service.update_ncr(*path, payload.into_inner()),
+        qc_service.update_ncr(*path, admin_user.0.tenant_id, payload.into_inner()),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

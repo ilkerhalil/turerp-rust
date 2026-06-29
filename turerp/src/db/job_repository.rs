@@ -323,6 +323,35 @@ impl JobScheduler for PostgresJobScheduler {
         Ok(row.map(Job::from))
     }
 
+    async fn next_pending_for_tenant(&self, tenant_id: i64) -> Result<Option<Job>, String> {
+        // Same query as `next_pending` constrained to the caller's tenant so an
+        // admin-API request cannot claim another tenant's pending job.
+        // `tenant_id` is the only bind ($1); the original query has none.
+        let row = sqlx::query_as::<_, JobRow>(
+            r#"
+            SELECT * FROM jobs
+            WHERE status = 'pending'
+            AND tenant_id = $1
+            AND (scheduled_at IS NULL OR scheduled_at <= NOW())
+            ORDER BY
+                CASE priority
+                    WHEN 'critical' THEN 4
+                    WHEN 'high' THEN 3
+                    WHEN 'normal' THEN 2
+                    WHEN 'low' THEN 1
+                END DESC,
+                created_at ASC
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| format!("Failed to get next pending job: {}", e))?;
+        Ok(row.map(Job::from))
+    }
+
     async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         sqlx::query(
             "UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1 AND tenant_id = $2"
@@ -422,6 +451,28 @@ impl JobScheduler for PostgresJobScheduler {
             "DELETE FROM jobs WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < $1"
         )
         .bind(cutoff)
+        .execute(&*self.pool)
+        .await
+        .map_err(|e| format!("Failed to cleanup jobs: {}", e))?;
+
+        Ok(result.rows_affected())
+    }
+
+    async fn cleanup_for_tenant(
+        &self,
+        tenant_id: i64,
+        older_than: Duration,
+    ) -> Result<u64, String> {
+        // Same statement as `cleanup` with an added `AND tenant_id = $2`.
+        // Bind order: $1 = cutoff (existing), $2 = tenant_id (new).
+        let chrono_dur = chrono::Duration::from_std(older_than)
+            .map_err(|_| "older_than must be non-negative".to_string())?;
+        let cutoff = Utc::now() - chrono_dur;
+        let result = sqlx::query(
+            "DELETE FROM jobs WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < $1 AND tenant_id = $2"
+        )
+        .bind(cutoff)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| format!("Failed to cleanup jobs: {}", e))?;

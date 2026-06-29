@@ -133,9 +133,10 @@ impl SalesService {
     pub async fn update_order_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: SalesOrderStatus,
     ) -> Result<SalesOrder, ApiError> {
-        self.order_repo.update_status(id, status).await
+        self.order_repo.update_status(id, tenant_id, status).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -300,9 +301,12 @@ impl SalesService {
     pub async fn update_quotation_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: QuotationStatus,
     ) -> Result<Quotation, ApiError> {
-        self.quotation_repo.update_status(id, status).await
+        self.quotation_repo
+            .update_status(id, tenant_id, status)
+            .await
     }
 
     /// Convert quotation to sales order

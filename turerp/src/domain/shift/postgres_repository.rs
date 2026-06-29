@@ -334,6 +334,7 @@ impl ShiftRepository for PostgresShiftRepository {
 #[derive(Debug, FromRow)]
 struct ShiftAssignmentRow {
     id: i64,
+    tenant_id: i64,
     shift_id: i64,
     employee_id: i64,
     start_date: DateTime<Utc>,
@@ -347,6 +348,7 @@ impl From<ShiftAssignmentRow> for ShiftAssignment {
     fn from(row: ShiftAssignmentRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             shift_id: row.shift_id,
             employee_id: row.employee_id,
             start_date: row.start_date,
@@ -374,19 +376,24 @@ impl PostgresShiftAssignmentRepository {
 
 #[async_trait]
 impl ShiftAssignmentRepository for PostgresShiftAssignmentRepository {
-    async fn create(&self, create: CreateShiftAssignment) -> Result<ShiftAssignment, ApiError> {
+    async fn create(
+        &self,
+        tenant_id: i64,
+        create: CreateShiftAssignment,
+    ) -> Result<ShiftAssignment, ApiError> {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
 
         let row: ShiftAssignmentRow = sqlx::query_as(
             r#"
-            INSERT INTO shift_assignments (shift_id, employee_id, start_date, end_date, created_at)
-            VALUES ($1, $2, $3, $4, NOW())
-            RETURNING id, shift_id, employee_id, start_date, end_date, created_at,
+            INSERT INTO shift_assignments (tenant_id, shift_id, employee_id, start_date, end_date, created_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+            RETURNING id, tenant_id, shift_id, employee_id, start_date, end_date, created_at,
                       deleted_at, deleted_by
             "#,
         )
+        .bind(tenant_id)
         .bind(create.shift_id)
         .bind(create.employee_id)
         .bind(create.start_date)
@@ -401,7 +408,7 @@ impl ShiftAssignmentRepository for PostgresShiftAssignmentRepository {
     async fn find_by_id(&self, id: i64) -> Result<Option<ShiftAssignment>, ApiError> {
         let result: Option<ShiftAssignmentRow> = sqlx::query_as(
             r#"
-            SELECT id, shift_id, employee_id, start_date, end_date, created_at,
+            SELECT id, tenant_id, shift_id, employee_id, start_date, end_date, created_at,
                    deleted_at, deleted_by
             FROM shift_assignments
             WHERE id = $1 AND deleted_at IS NULL
@@ -415,17 +422,22 @@ impl ShiftAssignmentRepository for PostgresShiftAssignmentRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<ShiftAssignment>, ApiError> {
+    async fn find_by_employee(
+        &self,
+        tenant_id: i64,
+        employee_id: i64,
+    ) -> Result<Vec<ShiftAssignment>, ApiError> {
         let rows: Vec<ShiftAssignmentRow> = sqlx::query_as(
             r#"
-            SELECT id, shift_id, employee_id, start_date, end_date, created_at,
+            SELECT id, tenant_id, shift_id, employee_id, start_date, end_date, created_at,
                    deleted_at, deleted_by
             FROM shift_assignments
-            WHERE employee_id = $1 AND deleted_at IS NULL
+            WHERE employee_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(employee_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -438,17 +450,22 @@ impl ShiftAssignmentRepository for PostgresShiftAssignmentRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn find_by_shift(&self, shift_id: i64) -> Result<Vec<ShiftAssignment>, ApiError> {
+    async fn find_by_shift(
+        &self,
+        tenant_id: i64,
+        shift_id: i64,
+    ) -> Result<Vec<ShiftAssignment>, ApiError> {
         let rows: Vec<ShiftAssignmentRow> = sqlx::query_as(
             r#"
-            SELECT id, shift_id, employee_id, start_date, end_date, created_at,
+            SELECT id, tenant_id, shift_id, employee_id, start_date, end_date, created_at,
                    deleted_at, deleted_by
             FROM shift_assignments
-            WHERE shift_id = $1 AND deleted_at IS NULL
+            WHERE shift_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(shift_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -458,14 +475,15 @@ impl ShiftAssignmentRepository for PostgresShiftAssignmentRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, tenant_id: i64, id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM shift_assignments
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete shift assignment: {}", e)))?;
@@ -525,7 +543,7 @@ impl ShiftAssignmentRepository for PostgresShiftAssignmentRepository {
     async fn find_deleted(&self) -> Result<Vec<ShiftAssignment>, ApiError> {
         let rows: Vec<ShiftAssignmentRow> = sqlx::query_as(
             r#"
-            SELECT id, shift_id, employee_id, start_date, end_date, created_at,
+            SELECT id, tenant_id, shift_id, employee_id, start_date, end_date, created_at,
                    deleted_at, deleted_by
             FROM shift_assignments
             WHERE deleted_at IS NOT NULL
@@ -567,6 +585,7 @@ impl ShiftAssignmentRepository for PostgresShiftAssignmentRepository {
 #[derive(Debug, FromRow)]
 struct AttendanceRecordRow {
     id: i64,
+    tenant_id: i64,
     employee_id: i64,
     shift_id: i64,
     date: DateTime<Utc>,
@@ -593,6 +612,7 @@ impl From<AttendanceRecordRow> for AttendanceRecord {
 
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             employee_id: row.employee_id,
             shift_id: row.shift_id,
             date: row.date,
@@ -624,7 +644,11 @@ impl PostgresAttendanceRecordRepository {
 
 #[async_trait]
 impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
-    async fn clock_in(&self, req: ClockInRequest) -> Result<AttendanceRecord, ApiError> {
+    async fn clock_in(
+        &self,
+        tenant_id: i64,
+        req: ClockInRequest,
+    ) -> Result<AttendanceRecord, ApiError> {
         let date = req
             .timestamp
             .date_naive()
@@ -637,13 +661,14 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
 
         let row: AttendanceRecordRow = sqlx::query_as(
             r#"
-            INSERT INTO attendance_records (employee_id, shift_id, date, clock_in, clock_out,
+            INSERT INTO attendance_records (tenant_id, employee_id, shift_id, date, clock_in, clock_out,
                                             hours_worked, overtime_hours, status, notes)
-            VALUES ($1, $2, $3, $4, NULL, 0, 0, $5, $6)
-            RETURNING id, employee_id, shift_id, date, clock_in, clock_out,
+            VALUES ($1, $2, $3, $4, $5, NULL, 0, 0, $6, $7)
+            RETURNING id, tenant_id, employee_id, shift_id, date, clock_in, clock_out,
                       hours_worked, overtime_hours, status, notes, deleted_at, deleted_by
             "#,
         )
+        .bind(tenant_id)
         .bind(req.employee_id)
         .bind(req.shift_id)
         .bind(date)
@@ -657,20 +682,25 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
         Ok(row.into())
     }
 
-    async fn clock_out(&self, req: ClockOutRequest) -> Result<AttendanceRecord, ApiError> {
+    async fn clock_out(
+        &self,
+        tenant_id: i64,
+        req: ClockOutRequest,
+    ) -> Result<AttendanceRecord, ApiError> {
         let record: Option<AttendanceRecordRow> = sqlx::query_as(
             r#"
-            SELECT id, employee_id, shift_id, date, clock_in, clock_out,
+            SELECT id, tenant_id, employee_id, shift_id, date, clock_in, clock_out,
                    hours_worked, overtime_hours, status, notes, deleted_at, deleted_by
             FROM attendance_records
             WHERE employee_id = $1 AND date::date = $2::date
-              AND clock_out IS NULL AND deleted_at IS NULL
+              AND clock_out IS NULL AND deleted_at IS NULL AND tenant_id = $3
             ORDER BY clock_in DESC
             LIMIT 1
             "#,
         )
         .bind(req.employee_id)
         .bind(req.timestamp)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find open attendance record: {}", e)))?;
@@ -693,8 +723,8 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
             SET clock_out = $1,
                 hours_worked = $2,
                 notes = COALESCE($3, notes)
-            WHERE id = $4
-            RETURNING id, employee_id, shift_id, date, clock_in, clock_out,
+            WHERE id = $4 AND tenant_id = $5
+            RETURNING id, tenant_id, employee_id, shift_id, date, clock_in, clock_out,
                       hours_worked, overtime_hours, status, notes, deleted_at, deleted_by
             "#,
         )
@@ -702,6 +732,7 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
         .bind(hours_worked)
         .bind(req.notes.as_ref().map(|n| format!("; {}", n)))
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "AttendanceRecord"))?;
@@ -712,7 +743,7 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
     async fn find_by_id(&self, id: i64) -> Result<Option<AttendanceRecord>, ApiError> {
         let result: Option<AttendanceRecordRow> = sqlx::query_as(
             r#"
-            SELECT id, employee_id, shift_id, date, clock_in, clock_out,
+            SELECT id, tenant_id, employee_id, shift_id, date, clock_in, clock_out,
                    hours_worked, overtime_hours, status, notes, deleted_at, deleted_by
             FROM attendance_records
             WHERE id = $1 AND deleted_at IS NULL
@@ -728,17 +759,22 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<AttendanceRecord>, ApiError> {
+    async fn find_by_employee(
+        &self,
+        tenant_id: i64,
+        employee_id: i64,
+    ) -> Result<Vec<AttendanceRecord>, ApiError> {
         let rows: Vec<AttendanceRecordRow> = sqlx::query_as(
             r#"
-            SELECT id, employee_id, shift_id, date, clock_in, clock_out,
+            SELECT id, tenant_id, employee_id, shift_id, date, clock_in, clock_out,
                    hours_worked, overtime_hours, status, notes, deleted_at, deleted_by
             FROM attendance_records
-            WHERE employee_id = $1 AND deleted_at IS NULL
+            WHERE employee_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY date DESC
             "#,
         )
         .bind(employee_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -758,7 +794,7 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
     ) -> Result<Option<AttendanceRecord>, ApiError> {
         let result: Option<AttendanceRecordRow> = sqlx::query_as(
             r#"
-            SELECT id, employee_id, shift_id, date, clock_in, clock_out,
+            SELECT id, tenant_id, employee_id, shift_id, date, clock_in, clock_out,
                    hours_worked, overtime_hours, status, notes, deleted_at, deleted_by
             FROM attendance_records
             WHERE employee_id = $1 AND date::date = $2::date AND deleted_at IS NULL
@@ -777,22 +813,25 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
 
     async fn find_by_period(
         &self,
+        tenant_id: i64,
         employee_id: i64,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
     ) -> Result<Vec<AttendanceRecord>, ApiError> {
         let rows: Vec<AttendanceRecordRow> = sqlx::query_as(
             r#"
-            SELECT id, employee_id, shift_id, date, clock_in, clock_out,
+            SELECT id, tenant_id, employee_id, shift_id, date, clock_in, clock_out,
                    hours_worked, overtime_hours, status, notes, deleted_at, deleted_by
             FROM attendance_records
             WHERE employee_id = $1 AND date >= $2 AND date <= $3 AND deleted_at IS NULL
+              AND tenant_id = $4
             ORDER BY date DESC
             "#,
         )
         .bind(employee_id)
         .bind(start)
         .bind(end)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -876,7 +915,7 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
     async fn find_deleted(&self) -> Result<Vec<AttendanceRecord>, ApiError> {
         let rows: Vec<AttendanceRecordRow> = sqlx::query_as(
             r#"
-            SELECT id, employee_id, shift_id, date, clock_in, clock_out,
+            SELECT id, tenant_id, employee_id, shift_id, date, clock_in, clock_out,
                    hours_worked, overtime_hours, status, notes, deleted_at, deleted_by
             FROM attendance_records
             WHERE deleted_at IS NOT NULL

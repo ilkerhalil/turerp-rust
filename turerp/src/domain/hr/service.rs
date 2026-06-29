@@ -116,15 +116,18 @@ impl HrService {
     pub async fn update_employee_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: EmployeeStatus,
     ) -> Result<Employee, ApiError> {
-        self.employee_repo.update_status(id, status).await
+        self.employee_repo
+            .update_status(id, tenant_id, status)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn terminate_employee(&self, id: i64) -> Result<Employee, ApiError> {
+    pub async fn terminate_employee(&self, id: i64, tenant_id: i64) -> Result<Employee, ApiError> {
         self.employee_repo
-            .update_status(id, EmployeeStatus::Terminated)
+            .update_status(id, tenant_id, EmployeeStatus::Terminated)
             .await
     }
 

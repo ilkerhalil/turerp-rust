@@ -235,8 +235,14 @@ impl InvoiceService {
         Ok(payment)
     }
 
-    pub async fn get_payments_by_invoice(&self, invoice_id: i64) -> Result<Vec<Payment>, ApiError> {
-        self.payment_repo.find_by_invoice(invoice_id).await
+    pub async fn get_payments_by_invoice(
+        &self,
+        invoice_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Payment>, ApiError> {
+        self.payment_repo
+            .find_by_invoice(invoice_id, tenant_id)
+            .await
     }
 
     /// Get all payments for a specific cari (customer)
@@ -251,7 +257,9 @@ impl InvoiceService {
         if invoice_ids.is_empty() {
             return Ok(Vec::new());
         }
-        self.payment_repo.find_by_invoices(&invoice_ids).await
+        self.payment_repo
+            .find_by_invoices(&invoice_ids, tenant_id)
+            .await
     }
 
     // Utility methods

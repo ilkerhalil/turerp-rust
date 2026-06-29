@@ -829,6 +829,7 @@ async fn test_tenant_isolation_list_by_status() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let (token_b, _user_id_b) = register_admin(&state, 2).await;
 
     // Create jobs for tenant 1
     for _ in 0..2 {
@@ -841,8 +842,10 @@ async fn test_tenant_isolation_list_by_status() {
         test::call_service(&app, req).await;
     }
 
-    // Create job for tenant 2
-    let req = auth_request(actix_web::http::Method::POST, "/api/v1/jobs", &token)
+    // Create job for tenant 2 (via tenant 2's own admin token; the request body
+    // tenant_id is no longer trusted — a job is always created under the caller's
+    // tenant, so cross-tenant seeding must use a separate token).
+    let req = auth_request(actix_web::http::Method::POST, "/api/v1/jobs", &token_b)
         .set_json(json!({
             "job_type": "send_reminders",
             "tenant_id": 2

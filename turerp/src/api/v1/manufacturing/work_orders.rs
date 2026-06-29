@@ -101,7 +101,7 @@ pub async fn get_work_order(
     security(("bearer_auth" = []))
 )]
 pub async fn update_work_order_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateWorkOrderStatusRequest>,
@@ -110,7 +110,11 @@ pub async fn update_work_order_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        mfg_service.update_work_order_status(*path, payload.into_inner().status),
+        mfg_service.update_work_order_status(
+            *path,
+            admin_user.0.tenant_id,
+            payload.into_inner().status
+        ),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

@@ -299,7 +299,7 @@ pub async fn get_tenant_config(
     security(("bearer_auth" = []))
 )]
 pub async fn update_tenant_config(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     tenant_config_service: web::Data<TenantConfigService>,
     path: web::Path<String>,
     payload: web::Json<UpdateTenantConfig>,
@@ -312,7 +312,7 @@ pub async fn update_tenant_config(
         ApiError::Validation(msg)
     })?;
     json_resp!(
-        tenant_config_service.update_config(id, payload.into_inner()),
+        tenant_config_service.update_config(id, admin_user.0.tenant_id, payload.into_inner()),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -327,7 +327,7 @@ pub async fn update_tenant_config(
     security(("bearer_auth" = []))
 )]
 pub async fn delete_tenant_config(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     tenant_config_service: web::Data<TenantConfigService>,
     path: web::Path<String>,
     locale: Locale,
@@ -341,7 +341,7 @@ pub async fn delete_tenant_config(
     json_resp!(
         async {
             tenant_config_service
-                .delete_config(id)
+                .delete_config(id, admin_user.0.tenant_id)
                 .await
                 .map(|()| -> MessageResponse {
                     MessageResponse {

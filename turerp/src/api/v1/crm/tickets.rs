@@ -119,7 +119,7 @@ pub async fn get_tickets_by_status(
     security(("bearer_auth" = []))
 )]
 pub async fn update_ticket_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateTicketStatusRequest>,
@@ -128,7 +128,11 @@ pub async fn update_ticket_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        crm_service.update_ticket_status(*path, payload.into_inner().status),
+        crm_service.update_ticket_status(
+            *path,
+            admin_user.0.tenant_id,
+            payload.into_inner().status
+        ),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -143,7 +147,7 @@ pub async fn update_ticket_status(
     security(("bearer_auth" = []))
 )]
 pub async fn resolve_ticket(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -151,7 +155,7 @@ pub async fn resolve_ticket(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        crm_service.resolve_ticket(*path),
+        crm_service.resolve_ticket(*path, admin_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

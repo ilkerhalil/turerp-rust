@@ -145,9 +145,17 @@ pub trait InvoiceLineRepository: Send + Sync {
 pub trait PaymentRepository: Send + Sync {
     async fn create(&self, payment: CreatePayment) -> Result<Payment, ApiError>;
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Payment>, ApiError>;
-    async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<Payment>, ApiError>;
+    async fn find_by_invoice(
+        &self,
+        invoice_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Payment>, ApiError>;
     /// Find payments for multiple invoices in a single query
-    async fn find_by_invoices(&self, invoice_ids: &[i64]) -> Result<Vec<Payment>, ApiError>;
+    async fn find_by_invoices(
+        &self,
+        invoice_ids: &[i64],
+        tenant_id: i64,
+    ) -> Result<Vec<Payment>, ApiError>;
     async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Soft delete a payment
@@ -850,7 +858,11 @@ impl PaymentRepository for InMemoryPaymentRepository {
             .cloned())
     }
 
-    async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<Payment>, ApiError> {
+    async fn find_by_invoice(
+        &self,
+        invoice_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Payment>, ApiError> {
         let inner = self.inner.lock();
         let ids = inner
             .invoice_payments
@@ -860,11 +872,15 @@ impl PaymentRepository for InMemoryPaymentRepository {
         Ok(ids
             .iter()
             .filter_map(|id| inner.payments.get(id).cloned())
-            .filter(|p| !p.is_deleted())
+            .filter(|p| !p.is_deleted() && p.tenant_id == tenant_id)
             .collect())
     }
 
-    async fn find_by_invoices(&self, invoice_ids: &[i64]) -> Result<Vec<Payment>, ApiError> {
+    async fn find_by_invoices(
+        &self,
+        invoice_ids: &[i64],
+        tenant_id: i64,
+    ) -> Result<Vec<Payment>, ApiError> {
         let inner = self.inner.lock();
         let ids: Vec<i64> = invoice_ids
             .iter()
@@ -874,7 +890,7 @@ impl PaymentRepository for InMemoryPaymentRepository {
         Ok(ids
             .iter()
             .filter_map(|id| inner.payments.get(id).cloned())
-            .filter(|p| !p.is_deleted())
+            .filter(|p| !p.is_deleted() && p.tenant_id == tenant_id)
             .collect())
     }
 

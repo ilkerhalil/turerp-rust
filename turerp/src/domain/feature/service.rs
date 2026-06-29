@@ -40,10 +40,14 @@ impl FeatureFlagService {
         Ok(flag.into())
     }
 
-    /// Get a feature flag by ID
+    /// Get a feature flag by ID (tenant-scoped; includes global flags)
     #[tracing::instrument(skip(self))]
-    pub async fn get_by_id(&self, id: i64) -> Result<Option<FeatureFlagResponse>, ApiError> {
-        let flag = self.repository.get_by_id(id).await?;
+    pub async fn get_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<FeatureFlagResponse>, ApiError> {
+        let flag = self.repository.get_by_id(id, tenant_id).await?;
         Ok(flag.map(|f| f.into()))
     }
 
@@ -85,21 +89,22 @@ impl FeatureFlagService {
         Ok(result.map(|f| f.into()))
     }
 
-    /// Update a feature flag
+    /// Update a feature flag (tenant-scoped; cannot mutate global flags)
     #[tracing::instrument(skip(self))]
     pub async fn update(
         &self,
         id: i64,
         flag: UpdateFeatureFlag,
+        tenant_id: i64,
     ) -> Result<Option<FeatureFlagResponse>, ApiError> {
-        let updated = self.repository.update(id, flag).await?;
+        let updated = self.repository.update(id, flag, tenant_id).await?;
         Ok(updated.map(|f| f.into()))
     }
 
-    /// Delete a feature flag
+    /// Delete a feature flag (tenant-scoped; cannot delete global flags)
     #[tracing::instrument(skip(self))]
-    pub async fn delete(&self, id: i64) -> Result<bool, ApiError> {
-        let deleted = self.repository.delete(id).await?;
+    pub async fn delete(&self, id: i64, tenant_id: i64) -> Result<bool, ApiError> {
+        let deleted = self.repository.delete(id, tenant_id).await?;
         if !deleted {
             return Err(ApiError::NotFound(format!(
                 "Feature flag with id {} not found",
@@ -109,10 +114,18 @@ impl FeatureFlagService {
         Ok(deleted)
     }
 
-    /// Soft delete a feature flag
+    /// Soft delete a feature flag (tenant-scoped; cannot soft-delete global flags)
     #[tracing::instrument(skip(self))]
-    pub async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<bool, ApiError> {
-        let deleted = self.repository.soft_delete(id, deleted_by).await?;
+    pub async fn soft_delete(
+        &self,
+        id: i64,
+        deleted_by: i64,
+        tenant_id: i64,
+    ) -> Result<bool, ApiError> {
+        let deleted = self
+            .repository
+            .soft_delete(id, deleted_by, tenant_id)
+            .await?;
         if !deleted {
             return Err(ApiError::NotFound(format!(
                 "Feature flag with id {} not found",
@@ -122,10 +135,10 @@ impl FeatureFlagService {
         Ok(deleted)
     }
 
-    /// Restore a soft-deleted feature flag
+    /// Restore a soft-deleted feature flag (tenant-scoped; cannot restore global flags)
     #[tracing::instrument(skip(self))]
-    pub async fn restore(&self, id: i64) -> Result<bool, ApiError> {
-        let restored = self.repository.restore(id).await?;
+    pub async fn restore(&self, id: i64, tenant_id: i64) -> Result<bool, ApiError> {
+        let restored = self.repository.restore(id, tenant_id).await?;
         if !restored {
             return Err(ApiError::NotFound(format!(
                 "Deleted feature flag with id {} not found",
@@ -135,17 +148,17 @@ impl FeatureFlagService {
         Ok(restored)
     }
 
-    /// List deleted feature flags
+    /// List deleted feature flags (tenant-scoped; includes global flags)
     #[tracing::instrument(skip(self))]
-    pub async fn find_deleted(&self) -> Result<Vec<FeatureFlagResponse>, ApiError> {
-        let flags = self.repository.find_deleted().await?;
+    pub async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<FeatureFlagResponse>, ApiError> {
+        let flags = self.repository.find_deleted(tenant_id).await?;
         Ok(flags.into_iter().map(|f| f.into()).collect())
     }
 
-    /// Permanently destroy a soft-deleted feature flag
+    /// Permanently destroy a soft-deleted feature flag (tenant-scoped; cannot destroy global flags)
     #[tracing::instrument(skip(self))]
-    pub async fn destroy(&self, id: i64) -> Result<bool, ApiError> {
-        let destroyed = self.repository.destroy(id).await?;
+    pub async fn destroy(&self, id: i64, tenant_id: i64) -> Result<bool, ApiError> {
+        let destroyed = self.repository.destroy(id, tenant_id).await?;
         if !destroyed {
             return Err(ApiError::NotFound(format!(
                 "Deleted feature flag with id {} not found",
@@ -178,28 +191,38 @@ impl FeatureFlagService {
         Ok(false)
     }
 
-    /// Enable a feature flag
+    /// Enable a feature flag (tenant-scoped; cannot enable global flags)
     #[tracing::instrument(skip(self))]
-    pub async fn enable(&self, id: i64) -> Result<Option<FeatureFlagResponse>, ApiError> {
+    pub async fn enable(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<FeatureFlagResponse>, ApiError> {
         self.update(
             id,
             UpdateFeatureFlag {
                 description: None,
                 status: Some(FeatureFlagStatus::Enabled),
             },
+            tenant_id,
         )
         .await
     }
 
-    /// Disable a feature flag
+    /// Disable a feature flag (tenant-scoped; cannot disable global flags)
     #[tracing::instrument(skip(self))]
-    pub async fn disable(&self, id: i64) -> Result<Option<FeatureFlagResponse>, ApiError> {
+    pub async fn disable(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<FeatureFlagResponse>, ApiError> {
         self.update(
             id,
             UpdateFeatureFlag {
                 description: None,
                 status: Some(FeatureFlagStatus::Disabled),
             },
+            tenant_id,
         )
         .await
     }
@@ -272,10 +295,10 @@ mod tests {
             .await
             .unwrap();
 
-        let found = service.get_by_id(created.id).await.unwrap();
+        let found = service.get_by_id(created.id, 1).await.unwrap();
         assert!(found.is_some());
 
-        let not_found = service.get_by_id(999).await.unwrap();
+        let not_found = service.get_by_id(999, 1).await.unwrap();
         assert!(not_found.is_none());
     }
 
@@ -289,7 +312,7 @@ mod tests {
                 name: "update_me".to_string(),
                 description: Some("Original".to_string()),
                 status: Some(FeatureFlagStatus::Disabled),
-                tenant_id: None,
+                tenant_id: Some(1),
             })
             .await
             .unwrap();
@@ -301,6 +324,7 @@ mod tests {
                     description: Some("Updated".to_string()),
                     status: Some(FeatureFlagStatus::Enabled),
                 },
+                1,
             )
             .await
             .unwrap();
@@ -321,15 +345,15 @@ mod tests {
                 name: "delete_me".to_string(),
                 description: None,
                 status: None,
-                tenant_id: None,
+                tenant_id: Some(1),
             })
             .await
             .unwrap();
 
-        let deleted = service.delete(created.id).await.unwrap();
+        let deleted = service.delete(created.id, 1).await.unwrap();
         assert!(deleted);
 
-        let not_found = service.get_by_id(created.id).await.unwrap();
+        let not_found = service.get_by_id(created.id, 1).await.unwrap();
         assert!(not_found.is_none());
     }
 
@@ -373,17 +397,17 @@ mod tests {
                 name: "toggle_me".to_string(),
                 description: None,
                 status: Some(FeatureFlagStatus::Disabled),
-                tenant_id: None,
+                tenant_id: Some(1),
             })
             .await
             .unwrap();
 
         assert_eq!(created.status, FeatureFlagStatus::Disabled);
 
-        let enabled = service.enable(created.id).await.unwrap().unwrap();
+        let enabled = service.enable(created.id, 1).await.unwrap().unwrap();
         assert_eq!(enabled.status, FeatureFlagStatus::Enabled);
 
-        let disabled = service.disable(created.id).await.unwrap().unwrap();
+        let disabled = service.disable(created.id, 1).await.unwrap().unwrap();
         assert_eq!(disabled.status, FeatureFlagStatus::Disabled);
     }
 
