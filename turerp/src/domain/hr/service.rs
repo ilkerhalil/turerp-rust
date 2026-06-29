@@ -387,13 +387,16 @@ impl HrService {
     pub async fn get_payroll_by_employee(
         &self,
         employee_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<Payroll>, ApiError> {
-        self.payroll_repo.find_by_employee(employee_id).await
+        self.payroll_repo
+            .find_by_employee(employee_id, tenant_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn mark_payroll_paid(&self, id: i64) -> Result<Payroll, ApiError> {
-        self.payroll_repo.mark_paid(id).await
+    pub async fn mark_payroll_paid(&self, id: i64, tenant_id: i64) -> Result<Payroll, ApiError> {
+        self.payroll_repo.mark_paid(id, tenant_id).await
     }
 
     // Payroll soft-delete operations

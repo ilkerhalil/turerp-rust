@@ -106,7 +106,11 @@ pub trait LeaveTypeRepository: Send + Sync {
 pub trait PayrollRepository: Send + Sync {
     async fn create(&self, payroll: Payroll) -> Result<Payroll, ApiError>;
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Payroll>, ApiError>;
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<Payroll>, ApiError>;
+    async fn find_by_employee(
+        &self,
+        employee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Payroll>, ApiError>;
     async fn find_by_period(
         &self,
         tenant_id: i64,
@@ -116,11 +120,17 @@ pub trait PayrollRepository: Send + Sync {
     async fn find_by_employee_and_period(
         &self,
         employee_id: i64,
+        tenant_id: i64,
         period_start: chrono::DateTime<Utc>,
         period_end: chrono::DateTime<Utc>,
     ) -> Result<Option<Payroll>, ApiError>;
-    async fn update_status(&self, id: i64, status: PayrollStatus) -> Result<Payroll, ApiError>;
-    async fn mark_paid(&self, id: i64) -> Result<Payroll, ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: PayrollStatus,
+    ) -> Result<Payroll, ApiError>;
+    async fn mark_paid(&self, id: i64, tenant_id: i64) -> Result<Payroll, ApiError>;
     /// Soft delete payroll
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
     /// Restore a soft-deleted payroll
@@ -811,12 +821,16 @@ impl PayrollRepository for InMemoryPayrollRepository {
             .cloned())
     }
 
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<Payroll>, ApiError> {
+    async fn find_by_employee(
+        &self,
+        employee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Payroll>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .records
             .values()
-            .filter(|p| p.employee_id == employee_id && !p.is_deleted())
+            .filter(|p| p.employee_id == employee_id && p.tenant_id == tenant_id && !p.is_deleted())
             .cloned()
             .collect())
     }
@@ -844,6 +858,7 @@ impl PayrollRepository for InMemoryPayrollRepository {
     async fn find_by_employee_and_period(
         &self,
         employee_id: i64,
+        tenant_id: i64,
         period_start: chrono::DateTime<Utc>,
         period_end: chrono::DateTime<Utc>,
     ) -> Result<Option<Payroll>, ApiError> {
@@ -853,6 +868,7 @@ impl PayrollRepository for InMemoryPayrollRepository {
             .values()
             .find(|p| {
                 p.employee_id == employee_id
+                    && p.tenant_id == tenant_id
                     && p.period_start == period_start
                     && p.period_end == period_end
                     && !p.is_deleted()
@@ -860,21 +876,28 @@ impl PayrollRepository for InMemoryPayrollRepository {
             .cloned())
     }
 
-    async fn update_status(&self, id: i64, status: PayrollStatus) -> Result<Payroll, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: PayrollStatus,
+    ) -> Result<Payroll, ApiError> {
         let mut inner = self.inner.lock();
         let payroll = inner
             .records
             .get_mut(&id)
+            .filter(|p| p.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Payroll {} not found", id)))?;
         payroll.status = status;
         Ok(payroll.clone())
     }
 
-    async fn mark_paid(&self, id: i64) -> Result<Payroll, ApiError> {
+    async fn mark_paid(&self, id: i64, tenant_id: i64) -> Result<Payroll, ApiError> {
         let mut inner = self.inner.lock();
         let payroll = inner
             .records
             .get_mut(&id)
+            .filter(|p| p.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Payroll {} not found", id)))?;
         payroll.status = PayrollStatus::Paid;
         payroll.paid_at = Some(chrono::Utc::now());
