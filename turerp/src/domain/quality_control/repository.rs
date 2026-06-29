@@ -18,7 +18,12 @@ pub trait InspectionRepository: Send + Sync {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Inspection>, ApiError>;
     async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Inspection>, ApiError>;
     async fn find_by_work_order(&self, work_order_id: i64) -> Result<Vec<Inspection>, ApiError>;
-    async fn update(&self, id: i64, update: UpdateInspection) -> Result<Inspection, ApiError>;
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateInspection,
+    ) -> Result<Inspection, ApiError>;
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<Inspection, ApiError>;
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Inspection>, ApiError>;
@@ -44,6 +49,7 @@ pub trait NcrRepository: Send + Sync {
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         update: UpdateNonConformanceReport,
     ) -> Result<NonConformanceReport, ApiError>;
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
@@ -148,11 +154,17 @@ impl InspectionRepository for InMemoryInspectionRepository {
             .collect())
     }
 
-    async fn update(&self, id: i64, update: UpdateInspection) -> Result<Inspection, ApiError> {
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateInspection,
+    ) -> Result<Inspection, ApiError> {
         let mut inner = self.inner.lock();
         let inspection = inner
             .inspections
             .get_mut(&id)
+            .filter(|x| x.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("Inspection not found".to_string()))?;
         if let Some(status) = update.status {
             inspection.status = status;
@@ -325,12 +337,14 @@ impl NcrRepository for InMemoryNcrRepository {
     async fn update(
         &self,
         id: i64,
+        tenant_id: i64,
         update: UpdateNonConformanceReport,
     ) -> Result<NonConformanceReport, ApiError> {
         let mut inner = self.inner.lock();
         let ncr = inner
             .ncrs
             .get_mut(&id)
+            .filter(|x| x.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("NCR not found".to_string()))?;
         if let Some(ncr_type) = update.ncr_type {
             ncr.ncr_type = ncr_type;

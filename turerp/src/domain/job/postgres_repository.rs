@@ -217,6 +217,63 @@ impl super::JobRepository for PostgresJobRepository {
         Ok(job)
     }
 
+    async fn find_next_pending_for_tenant(&self, tenant_id: i64) -> Result<Option<Job>, ApiError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ApiError::Database(format!("Failed to begin transaction: {}", e)))?;
+
+        // Same query as `find_next_pending` but constrained to the caller's
+        // tenant so an admin-API request cannot claim (FOR UPDATE SKIP LOCKED)
+        // another tenant's pending job. `tenant_id` is the only bind ($1);
+        // the original query has no `$N` placeholders.
+        let row = sqlx::query_as::<_, JobRow>(
+            r#"
+            SELECT * FROM jobs
+            WHERE status = 'pending'
+              AND deleted_at IS NULL
+              AND tenant_id = $1
+              AND (scheduled_at IS NULL OR scheduled_at <= NOW())
+            ORDER BY
+              CASE priority
+                WHEN 'critical' THEN 4
+                WHEN 'high' THEN 3
+                WHEN 'normal' THEN 2
+                WHEN 'low' THEN 1
+              END DESC,
+              created_at ASC
+            LIMIT 1
+            FOR UPDATE SKIP LOCKED
+            "#,
+        )
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Job"))?;
+
+        let job = match row {
+            Some(r) => {
+                let job: Job = r.try_into()?;
+                sqlx::query(
+                    "UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1",
+                )
+                .bind(job.id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| map_sqlx_error(e, "Job"))?;
+                Some(job)
+            }
+            None => None,
+        };
+
+        tx.commit()
+            .await
+            .map_err(|e| ApiError::Database(format!("Failed to commit: {}", e)))?;
+
+        Ok(job)
+    }
+
     async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             "UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
@@ -336,6 +393,26 @@ impl super::JobRepository for PostgresJobRepository {
             "DELETE FROM jobs WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < NOW() - INTERVAL '1 second' * $1",
         )
         .bind(secs)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| map_sqlx_error(e, "Job"))?;
+
+        Ok(result.rows_affected())
+    }
+
+    async fn cleanup_for_tenant(
+        &self,
+        tenant_id: i64,
+        older_than: Duration,
+    ) -> Result<u64, ApiError> {
+        // Same statement as `cleanup` with an added `AND tenant_id = $2`.
+        // Bind order: $1 = older_than seconds (existing), $2 = tenant_id (new).
+        let secs = older_than.as_secs() as i64;
+        let result = sqlx::query(
+            "DELETE FROM jobs WHERE status IN ('completed', 'failed', 'cancelled') AND completed_at < NOW() - INTERVAL '1 second' * $1 AND tenant_id = $2",
+        )
+        .bind(secs)
+        .bind(tenant_id)
         .execute(&self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Job"))?;

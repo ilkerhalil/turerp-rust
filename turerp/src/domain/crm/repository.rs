@@ -37,8 +37,18 @@ pub trait LeadRepository: Send + Sync {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<Lead>, ApiError>;
-    async fn update_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError>;
-    async fn convert_to_customer(&self, id: i64, customer_id: i64) -> Result<Lead, ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: LeadStatus,
+    ) -> Result<Lead, ApiError>;
+    async fn convert_to_customer(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        customer_id: i64,
+    ) -> Result<Lead, ApiError>;
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<Lead, ApiError>;
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Lead>, ApiError>;
@@ -72,6 +82,7 @@ pub trait OpportunityRepository: Send + Sync {
     async fn update_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: OpportunityStatus,
     ) -> Result<Opportunity, ApiError>;
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
@@ -103,7 +114,12 @@ pub trait CampaignRepository: Send + Sync {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<Campaign>, ApiError>;
-    async fn update_status(&self, id: i64, status: CampaignStatus) -> Result<Campaign, ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: CampaignStatus,
+    ) -> Result<Campaign, ApiError>;
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<Campaign, ApiError>;
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Campaign>, ApiError>;
@@ -139,8 +155,13 @@ pub trait TicketRepository: Send + Sync {
         per_page: u32,
     ) -> Result<PaginatedResult<Ticket>, ApiError>;
     async fn find_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError>;
-    async fn update_status(&self, id: i64, status: TicketStatus) -> Result<Ticket, ApiError>;
-    async fn resolve(&self, id: i64) -> Result<Ticket, ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: TicketStatus,
+    ) -> Result<Ticket, ApiError>;
+    async fn resolve(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError>;
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError>;
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Ticket>, ApiError>;
@@ -289,22 +310,34 @@ impl LeadRepository for InMemoryLeadRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn update_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: LeadStatus,
+    ) -> Result<Lead, ApiError> {
         let mut inner = self.inner.lock();
         let lead = inner
             .leads
             .get_mut(&id)
+            .filter(|t| t.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("Lead not found".to_string()))?;
         lead.status = status;
         lead.updated_at = Utc::now();
         Ok(lead.clone())
     }
 
-    async fn convert_to_customer(&self, id: i64, customer_id: i64) -> Result<Lead, ApiError> {
+    async fn convert_to_customer(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        customer_id: i64,
+    ) -> Result<Lead, ApiError> {
         let mut inner = self.inner.lock();
         let lead = inner
             .leads
             .get_mut(&id)
+            .filter(|t| t.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("Lead not found".to_string()))?;
         lead.status = LeadStatus::Converted;
         lead.converted_to_customer_id = Some(customer_id);
@@ -510,12 +543,14 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
     async fn update_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: OpportunityStatus,
     ) -> Result<Opportunity, ApiError> {
         let mut inner = self.inner.lock();
         let opp = inner
             .opportunities
             .get_mut(&id)
+            .filter(|t| t.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("Opportunity not found".to_string()))?;
         opp.status = status;
         opp.updated_at = Utc::now();
@@ -706,11 +741,17 @@ impl CampaignRepository for InMemoryCampaignRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn update_status(&self, id: i64, status: CampaignStatus) -> Result<Campaign, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: CampaignStatus,
+    ) -> Result<Campaign, ApiError> {
         let mut inner = self.inner.lock();
         let campaign = inner
             .campaigns
             .get_mut(&id)
+            .filter(|t| t.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("Campaign not found".to_string()))?;
         campaign.status = status;
         campaign.updated_at = Utc::now();
@@ -932,22 +973,29 @@ impl TicketRepository for InMemoryTicketRepository {
             .collect())
     }
 
-    async fn update_status(&self, id: i64, status: TicketStatus) -> Result<Ticket, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: TicketStatus,
+    ) -> Result<Ticket, ApiError> {
         let mut inner = self.inner.lock();
         let ticket = inner
             .tickets
             .get_mut(&id)
+            .filter(|t| t.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("Ticket not found".to_string()))?;
         ticket.status = status;
         ticket.updated_at = Utc::now();
         Ok(ticket.clone())
     }
 
-    async fn resolve(&self, id: i64) -> Result<Ticket, ApiError> {
+    async fn resolve(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError> {
         let mut inner = self.inner.lock();
         let ticket = inner
             .tickets
             .get_mut(&id)
+            .filter(|t| t.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("Ticket not found".to_string()))?;
         ticket.status = TicketStatus::Resolved;
         ticket.resolved_at = Some(Utc::now());

@@ -246,7 +246,7 @@ pub async fn get_order(
     )
 )]
 pub async fn update_order_status(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     service: web::Data<PurchaseService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateOrderStatusRequest>,
@@ -256,7 +256,7 @@ pub async fn update_order_status(
     let i18n = resolve(&i18n);
     let status = parse_status(&payload.status)?;
     json_resp!(
-        service.update_order_status(*path, status),
+        service.update_order_status(*path, status, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

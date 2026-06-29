@@ -131,8 +131,9 @@ impl PurchaseService {
         &self,
         id: i64,
         status: PurchaseOrderStatus,
+        tenant_id: i64,
     ) -> Result<crate::domain::purchase::model::PurchaseOrder, ApiError> {
-        self.order_repo.update_status(id, status).await
+        self.order_repo.update_status(id, status, tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -199,9 +200,14 @@ impl PurchaseService {
     #[tracing::instrument(skip(self))]
     pub async fn create_goods_receipt(
         &self,
-        create: CreateGoodsReceipt,
+        mut create: CreateGoodsReceipt,
         tenant_id: i64,
     ) -> Result<GoodsReceiptResponse, ApiError> {
+        // Force the auth-derived tenant onto the request body so the receipt row
+        // and the tenant-scoped internal calls below cannot be misattributed to
+        // another tenant via a client-supplied `tenant_id` field.
+        create.tenant_id = tenant_id;
+
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
@@ -243,7 +249,7 @@ impl PurchaseService {
         // Update order status based on receipt quantities
         let all_receipts = self
             .receipt_repo
-            .find_by_order(create.purchase_order_id)
+            .find_by_order(create.purchase_order_id, tenant_id)
             .await?;
         let order_lines = self
             .order_line_repo
@@ -270,7 +276,7 @@ impl PurchaseService {
         };
 
         self.order_repo
-            .update_status(create.purchase_order_id, new_status)
+            .update_status(create.purchase_order_id, new_status, tenant_id)
             .await?;
 
         Ok(GoodsReceiptResponse::from((receipt, lines)))
@@ -297,8 +303,9 @@ impl PurchaseService {
     pub async fn get_receipts_by_order(
         &self,
         order_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<crate::domain::purchase::model::GoodsReceipt>, ApiError> {
-        self.receipt_repo.find_by_order(order_id).await
+        self.receipt_repo.find_by_order(order_id, tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -306,8 +313,9 @@ impl PurchaseService {
         &self,
         id: i64,
         status: GoodsReceiptStatus,
+        tenant_id: i64,
     ) -> Result<crate::domain::purchase::model::GoodsReceipt, ApiError> {
-        self.receipt_repo.update_status(id, status).await
+        self.receipt_repo.update_status(id, status, tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -504,12 +512,13 @@ impl PurchaseService {
         &self,
         id: i64,
         update: UpdatePurchaseRequest,
+        tenant_id: i64,
     ) -> Result<crate::domain::purchase::model::PurchaseRequest, ApiError> {
         let request_repo = self.request_repo.as_ref().ok_or_else(|| {
             ApiError::Internal("Purchase request repository not configured".to_string())
         })?;
 
-        request_repo.update(id, update).await
+        request_repo.update(id, update, tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -539,7 +548,7 @@ impl PurchaseService {
             )));
         }
 
-        request_repo.update_status(id, status).await
+        request_repo.update_status(id, status, tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -751,7 +760,7 @@ mod tests {
 
         // Update order status to Approved (required before receiving goods)
         service
-            .update_order_status(order.id, PurchaseOrderStatus::Approved)
+            .update_order_status(order.id, PurchaseOrderStatus::Approved, 1)
             .await
             .unwrap();
 

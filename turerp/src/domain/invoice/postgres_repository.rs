@@ -1142,18 +1142,23 @@ impl PaymentRepository for PostgresPaymentRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<Payment>, ApiError> {
+    async fn find_by_invoice(
+        &self,
+        invoice_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Payment>, ApiError> {
         let rows: Vec<PaymentRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, company_id, invoice_id, amount, payment_date,
                    payment_method, reference_number, notes, created_at,
                    deleted_at, deleted_by
             FROM payments
-            WHERE invoice_id = $1 AND deleted_at IS NULL
+            WHERE invoice_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(invoice_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find payments by invoice: {}", e)))?;
@@ -1161,7 +1166,11 @@ impl PaymentRepository for PostgresPaymentRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn find_by_invoices(&self, invoice_ids: &[i64]) -> Result<Vec<Payment>, ApiError> {
+    async fn find_by_invoices(
+        &self,
+        invoice_ids: &[i64],
+        tenant_id: i64,
+    ) -> Result<Vec<Payment>, ApiError> {
         if invoice_ids.is_empty() {
             return Ok(Vec::new());
         }
@@ -1171,11 +1180,12 @@ impl PaymentRepository for PostgresPaymentRepository {
                    payment_method, reference_number, notes, created_at,
                    deleted_at, deleted_by
             FROM payments
-            WHERE invoice_id = ANY($1) AND deleted_at IS NULL
+            WHERE invoice_id = ANY($1) AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(invoice_ids)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find payments by invoices: {}", e)))?;

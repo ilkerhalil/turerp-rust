@@ -358,14 +358,19 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn update_status(&self, id: i64, status: WorkOrderStatus) -> Result<WorkOrder, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: WorkOrderStatus,
+    ) -> Result<WorkOrder, ApiError> {
         let status_str = work_order_status_to_str(&status);
 
         let row: WorkOrderRow = sqlx::query_as(
             r#"
             UPDATE work_orders
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, name, product_id, quantity, bom_id, routing_id,
                       status, priority, planned_start, planned_end,
                       actual_start, actual_end, created_at, updated_at
@@ -373,6 +378,7 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
         )
         .bind(status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "WorkOrder"))?;
@@ -678,17 +684,22 @@ impl BillOfMaterialsRepository for PostgresBillOfMaterialsRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<BillOfMaterials>, ApiError> {
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<BillOfMaterials>, ApiError> {
         let rows: Vec<BillOfMaterialsRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, product_id, version, is_active, is_primary,
                    valid_from, valid_to, created_at, updated_at
             FROM bills_of_materials
-            WHERE product_id = $1
+            WHERE product_id = $1 AND tenant_id = $2
             ORDER BY created_at DESC
             "#,
         )
         .bind(product_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -704,17 +715,19 @@ impl BillOfMaterialsRepository for PostgresBillOfMaterialsRepository {
     async fn find_primary_by_product(
         &self,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<Option<BillOfMaterials>, ApiError> {
         let result: Option<BillOfMaterialsRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, product_id, version, is_active, is_primary,
                    valid_from, valid_to, created_at, updated_at
             FROM bills_of_materials
-            WHERE product_id = $1 AND is_primary = true AND is_active = true
+            WHERE product_id = $1 AND is_primary = true AND is_active = true AND tenant_id = $2
             LIMIT 1
             "#,
         )
         .bind(product_id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| {
@@ -975,17 +988,22 @@ impl RoutingRepository for PostgresRoutingRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<Routing>, ApiError> {
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Routing>, ApiError> {
         let rows: Vec<RoutingRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, product_id, version, is_active, is_primary,
                    created_at, updated_at
             FROM routings
-            WHERE product_id = $1
+            WHERE product_id = $1 AND tenant_id = $2
             ORDER BY created_at DESC
             "#,
         )
         .bind(product_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find routings by product: {}", e)))?;
@@ -993,17 +1011,22 @@ impl RoutingRepository for PostgresRoutingRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn find_primary_by_product(&self, product_id: i64) -> Result<Option<Routing>, ApiError> {
+    async fn find_primary_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<Routing>, ApiError> {
         let result: Option<RoutingRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, product_id, version, is_active, is_primary,
                    created_at, updated_at
             FROM routings
-            WHERE product_id = $1 AND is_primary = true AND is_active = true
+            WHERE product_id = $1 AND is_primary = true AND is_active = true AND tenant_id = $2
             LIMIT 1
             "#,
         )
         .bind(product_id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| {

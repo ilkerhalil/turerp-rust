@@ -119,7 +119,7 @@ pub async fn get_opportunities_by_status(
     security(("bearer_auth" = []))
 )]
 pub async fn update_opportunity_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateOpportunityStatusRequest>,
@@ -128,7 +128,7 @@ pub async fn update_opportunity_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match crm_service
-        .update_opportunity_status(*path, payload.into_inner().status)
+        .update_opportunity_status(*path, admin_user.0.tenant_id, payload.into_inner().status)
         .await
     {
         Ok(opportunity) => Ok(HttpResponse::Ok().json(opportunity)),

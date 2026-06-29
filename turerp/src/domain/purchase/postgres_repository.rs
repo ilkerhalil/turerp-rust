@@ -298,6 +298,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
         &self,
         id: i64,
         status: PurchaseOrderStatus,
+        tenant_id: i64,
     ) -> Result<PurchaseOrder, ApiError> {
         let status_str = status.to_string();
 
@@ -305,7 +306,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             r#"
             UPDATE purchase_orders
             SET status = $1, updated_at = NOW()
-            WHERE id = $2 AND deleted_at IS NULL
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, order_number, cari_id, status, order_date,
                       expected_delivery_date, subtotal, tax_amount, discount_amount,
                       total_amount, notes, created_at, updated_at, deleted_at, deleted_by
@@ -313,6 +314,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "PurchaseOrder"))?;
@@ -765,17 +767,22 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_order(&self, order_id: i64) -> Result<Vec<GoodsReceipt>, ApiError> {
+    async fn find_by_order(
+        &self,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<GoodsReceipt>, ApiError> {
         let rows: Vec<GoodsReceiptRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, company_id, receipt_number, purchase_order_id, status,
                    receipt_date, notes, created_at, deleted_at, deleted_by
             FROM goods_receipts
-            WHERE purchase_order_id = $1 AND deleted_at IS NULL
+            WHERE purchase_order_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(order_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -789,6 +796,7 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
         &self,
         id: i64,
         status: GoodsReceiptStatus,
+        tenant_id: i64,
     ) -> Result<GoodsReceipt, ApiError> {
         let status_str = match status {
             GoodsReceiptStatus::Pending => "Pending",
@@ -801,13 +809,14 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
             r#"
             UPDATE goods_receipts
             SET status = $1
-            WHERE id = $2 AND deleted_at IS NULL
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, receipt_number, purchase_order_id, status,
                       receipt_date, notes, created_at, deleted_at, deleted_by
             "#,
         )
         .bind(status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "GoodsReceipt"))?;
@@ -1463,6 +1472,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         &self,
         id: i64,
         update: UpdatePurchaseRequest,
+        tenant_id: i64,
     ) -> Result<PurchaseRequest, ApiError> {
         let status_str = update.status.map(|s| s.to_string());
 
@@ -1474,7 +1484,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
                 reason = COALESCE($3, reason),
                 status = COALESCE($4, status),
                 updated_at = NOW()
-            WHERE id = $5 AND deleted_at IS NULL
+            WHERE id = $5 AND tenant_id = $6 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, request_number, status, requested_by,
                       department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             "#,
@@ -1484,6 +1494,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         .bind(&update.reason)
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "PurchaseRequest"))?;
@@ -1495,6 +1506,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
         &self,
         id: i64,
         status: PurchaseRequestStatus,
+        tenant_id: i64,
     ) -> Result<PurchaseRequest, ApiError> {
         let status_str = status.to_string();
 
@@ -1502,13 +1514,14 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
             r#"
             UPDATE purchase_requests
             SET status = $1, updated_at = NOW()
-            WHERE id = $2 AND deleted_at IS NULL
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, request_number, status, requested_by,
                       department, priority, reason, created_at, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "PurchaseRequest"))?;

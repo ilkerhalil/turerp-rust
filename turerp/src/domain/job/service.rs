@@ -221,6 +221,15 @@ impl JobScheduler for JobService {
         Ok(j.map(Into::into))
     }
 
+    async fn next_pending_for_tenant(&self, tenant_id: i64) -> Result<Option<CommonJob>, String> {
+        let j = self
+            .repo
+            .find_next_pending_for_tenant(tenant_id)
+            .await
+            .map_err(Self::map_err)?;
+        Ok(j.map(Into::into))
+    }
+
     async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), String> {
         self.repo
             .mark_running(id, tenant_id)
@@ -273,6 +282,17 @@ impl JobScheduler for JobService {
 
     async fn cleanup(&self, older_than: Duration) -> Result<u64, String> {
         self.repo.cleanup(older_than).await.map_err(Self::map_err)
+    }
+
+    async fn cleanup_for_tenant(
+        &self,
+        tenant_id: i64,
+        older_than: Duration,
+    ) -> Result<u64, String> {
+        self.repo
+            .cleanup_for_tenant(tenant_id, older_than)
+            .await
+            .map_err(Self::map_err)
     }
 }
 

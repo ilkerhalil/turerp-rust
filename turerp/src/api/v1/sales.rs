@@ -137,7 +137,7 @@ pub async fn get_sales_orders_by_status(
     security(("bearer_auth" = []))
 )]
 pub async fn update_sales_order_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateOrderStatusRequest>,
@@ -146,7 +146,11 @@ pub async fn update_sales_order_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        sales_service.update_order_status(*path, payload.into_inner().status),
+        sales_service.update_order_status(
+            *path,
+            admin_user.0.tenant_id,
+            payload.into_inner().status
+        ),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -444,7 +448,7 @@ pub async fn get_quotations_by_status(
     security(("bearer_auth" = []))
 )]
 pub async fn update_quotation_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateQuotationStatusRequest>,
@@ -453,7 +457,11 @@ pub async fn update_quotation_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        sales_service.update_quotation_status(*path, payload.into_inner().status),
+        sales_service.update_quotation_status(
+            *path,
+            admin_user.0.tenant_id,
+            payload.into_inner().status
+        ),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

@@ -66,7 +66,7 @@ pub async fn get_bom(
     security(("bearer_auth" = []))
 )]
 pub async fn get_boms_by_product(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -74,7 +74,7 @@ pub async fn get_boms_by_product(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        mfg_service.get_boms_by_product(*path),
+        mfg_service.get_boms_by_product(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

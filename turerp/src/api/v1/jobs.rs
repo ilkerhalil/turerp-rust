@@ -74,7 +74,6 @@ impl JobResponse {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateJobRequest {
     pub job_type: String,
-    pub tenant_id: i64,
     pub priority: Option<String>,
     pub max_attempts: Option<u32>,
     pub scheduled_at: Option<DateTime<Utc>>,
@@ -106,34 +105,36 @@ pub struct FailJobRequest {
     security(("bearer_auth" = []))
 )]
 pub async fn schedule_job(
-    _admin: AdminUser,
+    admin: AdminUser,
     body: web::Json<CreateJobRequest>,
     scheduler: web::Data<dyn JobScheduler>,
 ) -> Result<HttpResponse, ApiError> {
+    // Tenant ID is taken from the authenticated admin, never from the request
+    // body: the previous `body.tenant_id` field was an IDOR that let a tenant
+    // admin enqueue jobs against another tenant.
+    let tenant_id = admin.0.tenant_id;
     let job_type = match body.job_type.as_str() {
         "calculate_depreciation" => JobType::CalculateDepreciation {
             asset_id: body.asset_id.unwrap_or(0),
-            tenant_id: body.tenant_id,
+            tenant_id,
         },
         "run_payroll" => JobType::RunPayroll {
-            tenant_id: body.tenant_id,
+            tenant_id,
             period: body.period.clone().unwrap_or_default(),
         },
-        "send_reminders" => JobType::SendReminders {
-            tenant_id: body.tenant_id,
-        },
+        "send_reminders" => JobType::SendReminders { tenant_id },
         "archive_logs" => JobType::ArchiveLogs {
-            tenant_id: body.tenant_id,
+            tenant_id,
             older_than_days: body.older_than_days.unwrap_or(30),
         },
         "generate_report" => JobType::GenerateReport {
-            tenant_id: body.tenant_id,
+            tenant_id,
             report_type: body.report_type.clone().unwrap_or_default(),
             params: body.params.clone().unwrap_or_default(),
         },
         "send_notification" => JobType::SendNotification {
             notification_id: body.asset_id.unwrap_or(0),
-            tenant_id: body.tenant_id,
+            tenant_id,
         },
         "custom" => JobType::Custom {
             name: body.custom_name.clone().unwrap_or_default(),
@@ -149,7 +150,7 @@ pub async fn schedule_job(
         _ => JobPriority::Normal,
     };
 
-    let mut create = CreateJob::new(job_type, body.tenant_id)
+    let mut create = CreateJob::new(job_type, tenant_id)
         .with_priority(priority)
         .with_max_attempts(body.max_attempts.unwrap_or(3));
 
@@ -177,10 +178,16 @@ pub async fn schedule_job(
     security(("bearer_auth" = []))
 )]
 pub async fn next_pending_job(
-    _admin: AdminUser,
+    admin: AdminUser,
     scheduler: web::Data<dyn JobScheduler>,
 ) -> Result<HttpResponse, ApiError> {
-    let job = scheduler.next_pending().await.map_err(ApiError::Internal)?;
+    // Tenant-scoped: the agnostic `next_pending()` is reserved for the
+    // background worker; an admin API call must only dequeue (and, in the
+    // Postgres impl, claim via FOR UPDATE SKIP LOCKED) the caller's own jobs.
+    let job = scheduler
+        .next_pending_for_tenant(admin.0.tenant_id)
+        .await
+        .map_err(ApiError::Internal)?;
 
     match job {
         Some(j) => Ok(HttpResponse::Ok().json(JobResponse::from_job(&j))),
@@ -398,13 +405,18 @@ pub async fn list_jobs_by_status(
     security(("bearer_auth" = []))
 )]
 pub async fn cleanup_jobs(
-    _admin: AdminUser,
+    admin: AdminUser,
     path: web::Path<u64>,
     scheduler: web::Data<dyn JobScheduler>,
 ) -> Result<HttpResponse, ApiError> {
     let days = path.into_inner();
+    // Tenant-scoped: the agnostic `cleanup()` is reserved for the background
+    // worker; an admin API call must only purge its own terminal jobs.
     let count = scheduler
-        .cleanup(std::time::Duration::from_secs(days * 86400))
+        .cleanup_for_tenant(
+            admin.0.tenant_id,
+            std::time::Duration::from_secs(days * 86400),
+        )
         .await
         .map_err(ApiError::Internal)?;
 

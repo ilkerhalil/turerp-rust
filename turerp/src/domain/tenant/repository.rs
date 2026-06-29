@@ -68,10 +68,15 @@ pub trait TenantConfigRepository: Send + Sync {
     async fn get_all(&self, tenant_id: i64) -> Result<Vec<TenantConfig>, ApiError>;
 
     /// Update a config entry
-    async fn update(&self, id: i64, update: UpdateTenantConfig) -> Result<TenantConfig, ApiError>;
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateTenantConfig,
+    ) -> Result<TenantConfig, ApiError>;
 
     /// Delete a config entry
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Delete all config entries for a tenant
     async fn delete_by_tenant(&self, tenant_id: i64) -> Result<(), ApiError>;
@@ -405,12 +410,18 @@ impl TenantConfigRepository for InMemoryTenantConfigRepository {
             .collect())
     }
 
-    async fn update(&self, id: i64, update: UpdateTenantConfig) -> Result<TenantConfig, ApiError> {
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateTenantConfig,
+    ) -> Result<TenantConfig, ApiError> {
         let mut inner = self.inner.lock();
 
         let config = inner
             .configs
             .get_mut(&id)
+            .filter(|c| c.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Config {} not found", id)))?;
 
         if let Some(value) = update.value {
@@ -424,20 +435,25 @@ impl TenantConfigRepository for InMemoryTenantConfigRepository {
         Ok(config.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
 
-        if !inner.configs.contains_key(&id) {
+        // Verify ownership before removing so the tenant_id index cleanup below
+        // stays consistent and foreign-tenant ids cannot be deleted.
+        let stored_tenant_id = inner
+            .configs
+            .get(&id)
+            .map(|c| c.tenant_id)
+            .ok_or_else(|| ApiError::NotFound(format!("Config {} not found", id)))?;
+
+        if stored_tenant_id != tenant_id {
             return Err(ApiError::NotFound(format!("Config {} not found", id)));
         }
 
-        let tenant_id = inner.configs.get(&id).map(|c| c.tenant_id);
         inner.configs.remove(&id);
 
-        if let Some(tid) = tenant_id {
-            if let Some(ids) = inner.tenant_configs.get_mut(&tid) {
-                ids.retain(|x| *x != id);
-            }
+        if let Some(ids) = inner.tenant_configs.get_mut(&tenant_id) {
+            ids.retain(|x| *x != id);
         }
 
         Ok(())

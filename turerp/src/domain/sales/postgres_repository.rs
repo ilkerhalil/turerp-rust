@@ -615,6 +615,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
     async fn update_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: SalesOrderStatus,
     ) -> Result<SalesOrder, ApiError> {
         let status_str = status.to_string();
@@ -623,7 +624,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
             r#"
             UPDATE sales_orders
             SET status = $1, updated_at = NOW()
-            WHERE id = $2 AND deleted_at IS NULL
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, order_number, cari_id, status, order_date,
                       delivery_date, subtotal, tax_amount, discount_amount, total_amount,
                       notes, shipping_address, billing_address, created_at, updated_at,
@@ -632,6 +633,7 @@ impl SalesOrderRepository for PostgresSalesOrderRepository {
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "SalesOrder"))?;
@@ -1177,14 +1179,19 @@ impl QuotationRepository for PostgresQuotationRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn update_status(&self, id: i64, status: QuotationStatus) -> Result<Quotation, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: QuotationStatus,
+    ) -> Result<Quotation, ApiError> {
         let status_str = status.to_string();
 
         let row: QuotationRow = sqlx::query_as(
             r#"
             UPDATE quotations
             SET status = $1, updated_at = NOW()
-            WHERE id = $2 AND deleted_at IS NULL
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, quotation_number, cari_id, status, valid_until,
                       subtotal, tax_amount, discount_amount, total_amount,
                       notes, terms, sales_order_id, created_at, updated_at,
@@ -1193,6 +1200,7 @@ impl QuotationRepository for PostgresQuotationRepository {
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Quotation"))?;

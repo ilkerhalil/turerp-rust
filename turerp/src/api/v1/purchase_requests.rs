@@ -226,7 +226,7 @@ pub async fn get_request(
     )
 )]
 pub async fn update_request(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     service: web::Data<PurchaseService>,
     path: web::Path<i64>,
     payload: web::Json<UpdatePurchaseRequest>,
@@ -235,7 +235,7 @@ pub async fn update_request(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        service.update_purchase_request(*path, payload.into_inner()),
+        service.update_purchase_request(*path, payload.into_inner(), auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

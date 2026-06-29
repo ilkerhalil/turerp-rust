@@ -207,7 +207,7 @@ pub async fn destroy_shift(
     security(("bearer_auth" = []))
 )]
 pub async fn create_assignment(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     shift_service: web::Data<ShiftService>,
     payload: web::Json<CreateShiftAssignment>,
     locale: Locale,
@@ -215,7 +215,7 @@ pub async fn create_assignment(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        shift_service.assign_employee(payload.into_inner()),
+        shift_service.assign_employee(admin_user.0.tenant_id, payload.into_inner()),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -230,11 +230,13 @@ pub async fn create_assignment(
     security(("bearer_auth" = []))
 )]
 pub async fn get_assignments_by_employee(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     shift_service: web::Data<ShiftService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let assignments = shift_service.get_assignments_by_employee(*path).await?;
+    let assignments = shift_service
+        .get_assignments_by_employee(auth_user.0.tenant_id, *path)
+        .await?;
     Ok(HttpResponse::Ok().json(assignments))
 }
 
@@ -246,11 +248,13 @@ pub async fn get_assignments_by_employee(
     security(("bearer_auth" = []))
 )]
 pub async fn get_assignments_by_shift(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     shift_service: web::Data<ShiftService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let assignments = shift_service.get_assignments_by_shift(*path).await?;
+    let assignments = shift_service
+        .get_assignments_by_shift(auth_user.0.tenant_id, *path)
+        .await?;
     Ok(HttpResponse::Ok().json(assignments))
 }
 
@@ -262,11 +266,13 @@ pub async fn get_assignments_by_shift(
     security(("bearer_auth" = []))
 )]
 pub async fn delete_assignment(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     shift_service: web::Data<ShiftService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    shift_service.remove_assignment(*path).await?;
+    shift_service
+        .remove_assignment(admin_user.0.tenant_id, *path)
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -278,7 +284,7 @@ pub async fn delete_assignment(
     security(("bearer_auth" = []))
 )]
 pub async fn clock_in(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     shift_service: web::Data<ShiftService>,
     payload: web::Json<ClockInRequest>,
     locale: Locale,
@@ -286,7 +292,7 @@ pub async fn clock_in(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        shift_service.clock_in(payload.into_inner()),
+        shift_service.clock_in(auth_user.0.tenant_id, payload.into_inner()),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -301,7 +307,7 @@ pub async fn clock_in(
     security(("bearer_auth" = []))
 )]
 pub async fn clock_out(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     shift_service: web::Data<ShiftService>,
     payload: web::Json<ClockOutRequest>,
     locale: Locale,
@@ -309,7 +315,7 @@ pub async fn clock_out(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        shift_service.clock_out(payload.into_inner()),
+        shift_service.clock_out(auth_user.0.tenant_id, payload.into_inner()),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -324,11 +330,13 @@ pub async fn clock_out(
     security(("bearer_auth" = []))
 )]
 pub async fn get_attendance_by_employee(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     shift_service: web::Data<ShiftService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let records = shift_service.get_attendance_by_employee(*path).await?;
+    let records = shift_service
+        .get_attendance_by_employee(auth_user.0.tenant_id, *path)
+        .await?;
     Ok(HttpResponse::Ok().json(records))
 }
 
@@ -363,7 +371,7 @@ pub async fn generate_report(
     security(("bearer_auth" = []))
 )]
 pub async fn calculate_overtime(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     shift_service: web::Data<ShiftService>,
     payload: web::Json<CalculateOvertimeRequest>,
     locale: Locale,
@@ -372,6 +380,7 @@ pub async fn calculate_overtime(
     let i18n = resolve(&i18n);
     json_resp!(
         shift_service.calculate_overtime(
+            auth_user.0.tenant_id,
             payload.employee_id,
             payload.period_start,
             payload.period_end,

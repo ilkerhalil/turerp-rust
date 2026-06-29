@@ -32,6 +32,13 @@ pub trait JobRepository: Send + Sync {
     /// System-level: invoked by background worker, not by tenant users.
     async fn find_next_pending(&self) -> Result<Option<Job>, ApiError>;
 
+    /// Find the next pending job, scoped to the given tenant.
+    ///
+    /// Tenant-scoped variant of [`JobRepository::find_next_pending`] used by
+    /// the admin API so a tenant admin cannot dequeue (and the Postgres impl
+    /// cannot `FOR UPDATE SKIP LOCKED`-claim) another tenant's pending job.
+    async fn find_next_pending_for_tenant(&self, tenant_id: i64) -> Result<Option<Job>, ApiError>;
+
     /// Mark a job as running and increment attempts, scoped to tenant
     async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
@@ -55,6 +62,17 @@ pub trait JobRepository: Send + Sync {
     ///
     /// System-level: invoked by background task, not by tenant users.
     async fn cleanup(&self, older_than: Duration) -> Result<u64, ApiError>;
+
+    /// Clean up old completed/failed/cancelled jobs, scoped to the given
+    /// tenant.
+    ///
+    /// Tenant-scoped variant of [`JobRepository::cleanup`] used by the admin
+    /// API so a tenant admin can only purge its own terminal jobs.
+    async fn cleanup_for_tenant(
+        &self,
+        tenant_id: i64,
+        older_than: Duration,
+    ) -> Result<u64, ApiError>;
 
     /// Soft delete a job, scoped to tenant
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
@@ -231,6 +249,24 @@ impl JobRepository for InMemoryJobRepository {
             .cloned())
     }
 
+    async fn find_next_pending_for_tenant(&self, tenant_id: i64) -> Result<Option<Job>, ApiError> {
+        let jobs = self.jobs.read();
+        Ok(jobs
+            .iter()
+            .filter(|j| {
+                j.tenant_id == tenant_id
+                    && !j.is_deleted()
+                    && j.status == JobStatus::Pending
+                    && j.scheduled_at.is_none_or(|s| s <= Utc::now())
+            })
+            .max_by(|a, b| {
+                let pa = Self::priority_value(a.priority);
+                let pb = Self::priority_value(b.priority);
+                pa.cmp(&pb).then_with(|| a.created_at.cmp(&b.created_at))
+            })
+            .cloned())
+    }
+
     async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut jobs = self.jobs.write();
         let job = jobs
@@ -335,6 +371,29 @@ impl JobRepository for InMemoryJobRepository {
         let before = jobs.len();
         jobs.retain(|j| {
             j.is_deleted()
+                || !(j.status == JobStatus::Completed
+                    || j.status == JobStatus::Failed
+                    || j.status == JobStatus::Cancelled)
+                || j.completed_at.is_none_or(|c| c > cutoff)
+        });
+        Ok((before - jobs.len()) as u64)
+    }
+
+    async fn cleanup_for_tenant(
+        &self,
+        tenant_id: i64,
+        older_than: Duration,
+    ) -> Result<u64, ApiError> {
+        let cutoff = Utc::now()
+            - chrono::Duration::from_std(older_than)
+                .unwrap_or(chrono::Duration::try_seconds(3600).unwrap_or(chrono::Duration::zero()));
+        let mut jobs = self.jobs.write();
+        let before = jobs.len();
+        // Keep every job that is NOT a terminal job of this tenant completed
+        // at/before the cutoff (deleted jobs are preserved, mirroring `cleanup`).
+        jobs.retain(|j| {
+            j.tenant_id != tenant_id
+                || j.is_deleted()
                 || !(j.status == JobStatus::Completed
                     || j.status == JobStatus::Failed
                     || j.status == JobStatus::Cancelled)
@@ -896,5 +955,81 @@ mod tests {
         // tenant 1 can still mark it failed
         let result = repo.mark_failed(job.id, 1, "legit error").await;
         assert!(result.is_ok(), "tenant 1 must be able to fail own job");
+    }
+
+    // --- tenant-scoped admin API variants (cross-tenant leak fix) ---
+
+    #[tokio::test]
+    async fn test_repo_find_next_pending_for_tenant_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        // Tenant 1 owns the only pending job.
+        repo.create(CreateJob::new(JobType::SendReminders { tenant_id: 1 }, 1))
+            .await
+            .unwrap();
+
+        // Tenant 2 must NOT be able to dequeue tenant 1's pending job.
+        let next = repo.find_next_pending_for_tenant(2).await.unwrap();
+        assert!(
+            next.is_none(),
+            "tenant 2 must not see tenant 1's pending job"
+        );
+
+        // Tenant 1 can dequeue its own job.
+        let next = repo.find_next_pending_for_tenant(1).await.unwrap();
+        assert!(next.is_some(), "tenant 1 must see its own pending job");
+        assert_eq!(next.unwrap().tenant_id, 1);
+    }
+
+    #[tokio::test]
+    async fn test_repo_cleanup_for_tenant_blocks_other_tenant() {
+        let repo = InMemoryJobRepository::new();
+        // Terminal jobs for both tenants, completed in the past.
+        for tenant in [1, 2] {
+            let job = repo
+                .create(
+                    CreateJob::new(JobType::SendReminders { tenant_id: tenant }, tenant)
+                        .with_max_attempts(1),
+                )
+                .await
+                .unwrap();
+            repo.mark_running(job.id, tenant).await.unwrap();
+            repo.mark_completed(job.id, tenant).await.unwrap();
+            // Backdate completion so it falls under any reasonable cutoff.
+            {
+                let mut jobs = repo.jobs.write();
+                for j in jobs.iter_mut() {
+                    if j.id == job.id {
+                        j.completed_at = Some(Utc::now() - chrono::Duration::try_days(30).unwrap());
+                    }
+                }
+            }
+        }
+
+        // Tenant 1 cleanup must NOT touch tenant 2's jobs.
+        let removed = repo
+            .cleanup_for_tenant(1, Duration::from_secs(60))
+            .await
+            .unwrap();
+        assert_eq!(
+            removed, 1,
+            "tenant 1 cleanup should remove only its own job"
+        );
+
+        // Tenant 2's job must still exist.
+        let guard = repo.jobs.read();
+        let remaining: Vec<_> = guard.iter().filter(|j| j.tenant_id == 2).cloned().collect();
+        drop(guard);
+        assert_eq!(
+            remaining.len(),
+            1,
+            "tenant 2's job must survive tenant 1 cleanup"
+        );
+
+        // Tenant 2 can now clean its own.
+        let removed = repo
+            .cleanup_for_tenant(2, Duration::from_secs(60))
+            .await
+            .unwrap();
+        assert_eq!(removed, 1, "tenant 2 cleanup should remove its own job");
     }
 }

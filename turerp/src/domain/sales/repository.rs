@@ -46,6 +46,7 @@ pub trait SalesOrderRepository: Send + Sync {
     async fn update_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: SalesOrderStatus,
     ) -> Result<SalesOrder, ApiError>;
 
@@ -118,7 +119,12 @@ pub trait QuotationRepository: Send + Sync {
         per_page: u32,
     ) -> Result<PaginatedResult<Quotation>, ApiError>;
 
-    async fn update_status(&self, id: i64, status: QuotationStatus) -> Result<Quotation, ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: QuotationStatus,
+    ) -> Result<Quotation, ApiError>;
     async fn link_to_order(&self, id: i64, order_id: i64) -> Result<Quotation, ApiError>;
 
     /// Soft delete a quotation
@@ -357,12 +363,14 @@ impl SalesOrderRepository for InMemorySalesOrderRepository {
     async fn update_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: SalesOrderStatus,
     ) -> Result<SalesOrder, ApiError> {
         let mut inner = self.inner.lock();
         let order = inner
             .orders
             .get_mut(&id)
+            .filter(|o| o.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", id)))?;
         order.status = status;
         order.updated_at = chrono::Utc::now();
@@ -724,11 +732,17 @@ impl QuotationRepository for InMemoryQuotationRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn update_status(&self, id: i64, status: QuotationStatus) -> Result<Quotation, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: QuotationStatus,
+    ) -> Result<Quotation, ApiError> {
         let mut inner = self.inner.lock();
         let quotation = inner
             .quotations
             .get_mut(&id)
+            .filter(|q| q.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", id)))?;
         quotation.status = status;
         quotation.updated_at = chrono::Utc::now();

@@ -27,7 +27,12 @@ pub trait EmployeeRepository: Send + Sync {
         per_page: u32,
     ) -> Result<PaginatedResult<Employee>, ApiError>;
     async fn find_by_user(&self, user_id: i64) -> Result<Option<Employee>, ApiError>;
-    async fn update_status(&self, id: i64, status: EmployeeStatus) -> Result<Employee, ApiError>;
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: EmployeeStatus,
+    ) -> Result<Employee, ApiError>;
     async fn delete(&self, id: i64) -> Result<(), ApiError>;
     /// Soft delete an employee
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
@@ -259,11 +264,17 @@ impl EmployeeRepository for InMemoryEmployeeRepository {
             .cloned())
     }
 
-    async fn update_status(&self, id: i64, status: EmployeeStatus) -> Result<Employee, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: EmployeeStatus,
+    ) -> Result<Employee, ApiError> {
         let mut inner = self.inner.lock();
         let employee = inner
             .employees
             .get_mut(&id)
+            .filter(|e| e.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Employee {} not found", id)))?;
         employee.status = status;
         employee.updated_at = chrono::Utc::now();

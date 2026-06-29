@@ -435,7 +435,12 @@ impl TenantConfigRepository for PostgresTenantConfigRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn update(&self, id: i64, update: UpdateTenantConfig) -> Result<TenantConfig, ApiError> {
+    async fn update(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        update: UpdateTenantConfig,
+    ) -> Result<TenantConfig, ApiError> {
         let row: TenantConfigRow = sqlx::query_as(
             r#"
             UPDATE tenant_configs
@@ -443,13 +448,14 @@ impl TenantConfigRepository for PostgresTenantConfigRepository {
                 value = COALESCE($1, value),
                 is_encrypted = COALESCE($2, is_encrypted),
                 updated_at = NOW()
-            WHERE id = $3
+            WHERE id = $3 AND tenant_id = $4
             RETURNING id, tenant_id, key, value, is_encrypted, created_at, updated_at
             "#,
         )
         .bind(&update.value)
         .bind(update.is_encrypted)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "TenantConfig"))?;
@@ -457,14 +463,15 @@ impl TenantConfigRepository for PostgresTenantConfigRepository {
         Ok(row.into())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM tenant_configs
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete tenant config: {}", e)))?;

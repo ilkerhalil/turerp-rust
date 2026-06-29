@@ -89,7 +89,7 @@ pub async fn get_employee(
     security(("bearer_auth" = []))
 )]
 pub async fn update_employee_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateEmployeeStatusRequest>,
@@ -98,7 +98,11 @@ pub async fn update_employee_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        hr_service.update_employee_status(*path, payload.into_inner().status),
+        hr_service.update_employee_status(
+            *path,
+            admin_user.0.tenant_id,
+            payload.into_inner().status
+        ),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -113,7 +117,7 @@ pub async fn update_employee_status(
     security(("bearer_auth" = []))
 )]
 pub async fn terminate_employee(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -121,7 +125,7 @@ pub async fn terminate_employee(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        hr_service.terminate_employee(*path),
+        hr_service.terminate_employee(*path, admin_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

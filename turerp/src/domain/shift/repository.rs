@@ -42,11 +42,23 @@ pub trait ShiftRepository: Send + Sync {
 /// Repository trait for ShiftAssignment operations
 #[async_trait]
 pub trait ShiftAssignmentRepository: Send + Sync {
-    async fn create(&self, assignment: CreateShiftAssignment) -> Result<ShiftAssignment, ApiError>;
+    async fn create(
+        &self,
+        tenant_id: i64,
+        assignment: CreateShiftAssignment,
+    ) -> Result<ShiftAssignment, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<ShiftAssignment>, ApiError>;
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<ShiftAssignment>, ApiError>;
-    async fn find_by_shift(&self, shift_id: i64) -> Result<Vec<ShiftAssignment>, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn find_by_employee(
+        &self,
+        tenant_id: i64,
+        employee_id: i64,
+    ) -> Result<Vec<ShiftAssignment>, ApiError>;
+    async fn find_by_shift(
+        &self,
+        tenant_id: i64,
+        shift_id: i64,
+    ) -> Result<Vec<ShiftAssignment>, ApiError>;
+    async fn delete(&self, tenant_id: i64, id: i64) -> Result<(), ApiError>;
     async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
     async fn restore(&self, id: i64) -> Result<ShiftAssignment, ApiError>;
     async fn find_deleted(&self) -> Result<Vec<ShiftAssignment>, ApiError>;
@@ -56,10 +68,22 @@ pub trait ShiftAssignmentRepository: Send + Sync {
 /// Repository trait for AttendanceRecord operations
 #[async_trait]
 pub trait AttendanceRecordRepository: Send + Sync {
-    async fn clock_in(&self, req: ClockInRequest) -> Result<AttendanceRecord, ApiError>;
-    async fn clock_out(&self, req: ClockOutRequest) -> Result<AttendanceRecord, ApiError>;
+    async fn clock_in(
+        &self,
+        tenant_id: i64,
+        req: ClockInRequest,
+    ) -> Result<AttendanceRecord, ApiError>;
+    async fn clock_out(
+        &self,
+        tenant_id: i64,
+        req: ClockOutRequest,
+    ) -> Result<AttendanceRecord, ApiError>;
     async fn find_by_id(&self, id: i64) -> Result<Option<AttendanceRecord>, ApiError>;
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<AttendanceRecord>, ApiError>;
+    async fn find_by_employee(
+        &self,
+        tenant_id: i64,
+        employee_id: i64,
+    ) -> Result<Vec<AttendanceRecord>, ApiError>;
     async fn find_by_employee_and_date(
         &self,
         employee_id: i64,
@@ -67,6 +91,7 @@ pub trait AttendanceRecordRepository: Send + Sync {
     ) -> Result<Option<AttendanceRecord>, ApiError>;
     async fn find_by_period(
         &self,
+        tenant_id: i64,
         employee_id: i64,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
@@ -324,7 +349,11 @@ impl Default for InMemoryShiftAssignmentRepository {
 
 #[async_trait]
 impl ShiftAssignmentRepository for InMemoryShiftAssignmentRepository {
-    async fn create(&self, create: CreateShiftAssignment) -> Result<ShiftAssignment, ApiError> {
+    async fn create(
+        &self,
+        tenant_id: i64,
+        create: CreateShiftAssignment,
+    ) -> Result<ShiftAssignment, ApiError> {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
@@ -335,6 +364,7 @@ impl ShiftAssignmentRepository for InMemoryShiftAssignmentRepository {
 
         let assignment = ShiftAssignment {
             id,
+            tenant_id,
             shift_id: create.shift_id,
             employee_id: create.employee_id,
             start_date: create.start_date,
@@ -357,28 +387,46 @@ impl ShiftAssignmentRepository for InMemoryShiftAssignmentRepository {
             .cloned())
     }
 
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<ShiftAssignment>, ApiError> {
+    async fn find_by_employee(
+        &self,
+        tenant_id: i64,
+        employee_id: i64,
+    ) -> Result<Vec<ShiftAssignment>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .assignments
             .values()
-            .filter(|a| a.employee_id == employee_id && !a.is_deleted())
+            .filter(|a| a.tenant_id == tenant_id && a.employee_id == employee_id && !a.is_deleted())
             .cloned()
             .collect())
     }
 
-    async fn find_by_shift(&self, shift_id: i64) -> Result<Vec<ShiftAssignment>, ApiError> {
+    async fn find_by_shift(
+        &self,
+        tenant_id: i64,
+        shift_id: i64,
+    ) -> Result<Vec<ShiftAssignment>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .assignments
             .values()
-            .filter(|a| a.shift_id == shift_id && !a.is_deleted())
+            .filter(|a| a.tenant_id == tenant_id && a.shift_id == shift_id && !a.is_deleted())
             .cloned()
             .collect())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, tenant_id: i64, id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        let assignment = inner
+            .assignments
+            .get(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("Shift assignment {} not found", id)))?;
+        if assignment.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Shift assignment {} not found",
+                id
+            )));
+        }
         inner.assignments.remove(&id);
         Ok(())
     }
@@ -455,13 +503,18 @@ impl Default for InMemoryAttendanceRecordRepository {
 
 #[async_trait]
 impl AttendanceRecordRepository for InMemoryAttendanceRecordRepository {
-    async fn clock_in(&self, req: ClockInRequest) -> Result<AttendanceRecord, ApiError> {
+    async fn clock_in(
+        &self,
+        tenant_id: i64,
+        req: ClockInRequest,
+    ) -> Result<AttendanceRecord, ApiError> {
         let mut inner = self.inner.lock();
         let id = inner.next_id;
         inner.next_id += 1;
 
         let record = AttendanceRecord {
             id,
+            tenant_id,
             employee_id: req.employee_id,
             shift_id: req.shift_id,
             date: req
@@ -486,11 +539,16 @@ impl AttendanceRecordRepository for InMemoryAttendanceRecordRepository {
         Ok(record)
     }
 
-    async fn clock_out(&self, req: ClockOutRequest) -> Result<AttendanceRecord, ApiError> {
+    async fn clock_out(
+        &self,
+        tenant_id: i64,
+        req: ClockOutRequest,
+    ) -> Result<AttendanceRecord, ApiError> {
         let mut inner = self.inner.lock();
         let mut found = None;
         for (id, record) in inner.records.iter_mut() {
-            if record.employee_id == req.employee_id
+            if record.tenant_id == tenant_id
+                && record.employee_id == req.employee_id
                 && record.clock_out.is_none()
                 && !record.is_deleted()
             {
@@ -527,12 +585,16 @@ impl AttendanceRecordRepository for InMemoryAttendanceRecordRepository {
         Ok(inner.records.get(&id).filter(|r| !r.is_deleted()).cloned())
     }
 
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<AttendanceRecord>, ApiError> {
+    async fn find_by_employee(
+        &self,
+        tenant_id: i64,
+        employee_id: i64,
+    ) -> Result<Vec<AttendanceRecord>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .records
             .values()
-            .filter(|r| r.employee_id == employee_id && !r.is_deleted())
+            .filter(|r| r.tenant_id == tenant_id && r.employee_id == employee_id && !r.is_deleted())
             .cloned()
             .collect())
     }
@@ -556,6 +618,7 @@ impl AttendanceRecordRepository for InMemoryAttendanceRecordRepository {
 
     async fn find_by_period(
         &self,
+        tenant_id: i64,
         employee_id: i64,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
@@ -565,7 +628,11 @@ impl AttendanceRecordRepository for InMemoryAttendanceRecordRepository {
             .records
             .values()
             .filter(|r| {
-                r.employee_id == employee_id && r.date >= start && r.date <= end && !r.is_deleted()
+                r.tenant_id == tenant_id
+                    && r.employee_id == employee_id
+                    && r.date >= start
+                    && r.date <= end
+                    && !r.is_deleted()
             })
             .cloned()
             .collect())

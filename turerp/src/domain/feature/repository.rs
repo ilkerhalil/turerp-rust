@@ -17,8 +17,12 @@ pub trait FeatureFlagRepository: Send + Sync {
         flag: super::model::CreateFeatureFlag,
     ) -> Result<FeatureFlag, crate::error::ApiError>;
 
-    /// Get a feature flag by ID
-    async fn get_by_id(&self, id: i64) -> Result<Option<FeatureFlag>, crate::error::ApiError>;
+    /// Get a feature flag by ID (scoped to tenant + global flags)
+    async fn get_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<FeatureFlag>, crate::error::ApiError>;
 
     /// Get a feature flag by name (optionally filtered by tenant)
     async fn get_by_name(
@@ -41,27 +45,36 @@ pub trait FeatureFlagRepository: Send + Sync {
         per_page: u32,
     ) -> Result<PaginatedResult<FeatureFlag>, crate::error::ApiError>;
 
-    /// Update a feature flag
+    /// Update a feature flag (tenant-scoped; cannot mutate global flags)
     async fn update(
         &self,
         id: i64,
         flag: super::model::UpdateFeatureFlag,
+        tenant_id: i64,
     ) -> Result<Option<FeatureFlag>, crate::error::ApiError>;
 
-    /// Delete a feature flag
-    async fn delete(&self, id: i64) -> Result<bool, crate::error::ApiError>;
+    /// Delete a feature flag (tenant-scoped; cannot delete global flags)
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<bool, crate::error::ApiError>;
 
-    /// Soft delete a feature flag
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<bool, crate::error::ApiError>;
+    /// Soft delete a feature flag (tenant-scoped; cannot soft-delete global flags)
+    async fn soft_delete(
+        &self,
+        id: i64,
+        deleted_by: i64,
+        tenant_id: i64,
+    ) -> Result<bool, crate::error::ApiError>;
 
-    /// Restore a soft-deleted feature flag
-    async fn restore(&self, id: i64) -> Result<bool, crate::error::ApiError>;
+    /// Restore a soft-deleted feature flag (tenant-scoped; cannot restore global flags)
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<bool, crate::error::ApiError>;
 
-    /// List deleted feature flags
-    async fn find_deleted(&self) -> Result<Vec<FeatureFlag>, crate::error::ApiError>;
+    /// List deleted feature flags (scoped to tenant + global flags)
+    async fn find_deleted(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<FeatureFlag>, crate::error::ApiError>;
 
-    /// Permanently destroy a soft-deleted feature flag
-    async fn destroy(&self, id: i64) -> Result<bool, crate::error::ApiError>;
+    /// Permanently destroy a soft-deleted feature flag (tenant-scoped; cannot destroy global flags)
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<bool, crate::error::ApiError>;
 
     /// Check if a feature flag is enabled (looks up by name, with tenant override)
     async fn is_enabled(
@@ -121,11 +134,19 @@ impl FeatureFlagRepository for InMemoryFeatureFlagRepository {
         Ok(feature_flag)
     }
 
-    async fn get_by_id(&self, id: i64) -> Result<Option<FeatureFlag>, crate::error::ApiError> {
+    async fn get_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<FeatureFlag>, crate::error::ApiError> {
         let flags = self.flags.read().await;
         Ok(flags
             .iter()
-            .find(|f| f.id == id && !f.is_deleted())
+            .find(|f| {
+                f.id == id
+                    && !f.is_deleted()
+                    && (f.tenant_id == Some(tenant_id) || f.tenant_id.is_none())
+            })
             .cloned())
     }
 
@@ -186,9 +207,13 @@ impl FeatureFlagRepository for InMemoryFeatureFlagRepository {
         &self,
         id: i64,
         flag: super::model::UpdateFeatureFlag,
+        tenant_id: i64,
     ) -> Result<Option<FeatureFlag>, crate::error::ApiError> {
         let mut flags = self.flags.write().await;
-        if let Some(existing) = flags.iter_mut().find(|f| f.id == id && !f.is_deleted()) {
+        if let Some(existing) = flags
+            .iter_mut()
+            .find(|f| f.id == id && !f.is_deleted() && f.tenant_id == Some(tenant_id))
+        {
             if let Some(description) = flag.description {
                 existing.description = Some(description);
             }
@@ -202,10 +227,10 @@ impl FeatureFlagRepository for InMemoryFeatureFlagRepository {
         }
     }
 
-    async fn delete(&self, id: i64) -> Result<bool, crate::error::ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<bool, crate::error::ApiError> {
         let mut flags = self.flags.write().await;
         let initial_len = flags.len();
-        flags.retain(|f| f.id != id);
+        flags.retain(|f| !(f.id == id && f.tenant_id == Some(tenant_id)));
         Ok(flags.len() < initial_len)
     }
 
@@ -238,9 +263,17 @@ impl FeatureFlagRepository for InMemoryFeatureFlagRepository {
         }
     }
 
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<bool, crate::error::ApiError> {
+    async fn soft_delete(
+        &self,
+        id: i64,
+        deleted_by: i64,
+        tenant_id: i64,
+    ) -> Result<bool, crate::error::ApiError> {
         let mut flags = self.flags.write().await;
-        if let Some(flag) = flags.iter_mut().find(|f| f.id == id && !f.is_deleted()) {
+        if let Some(flag) = flags
+            .iter_mut()
+            .find(|f| f.id == id && !f.is_deleted() && f.tenant_id == Some(tenant_id))
+        {
             flag.mark_deleted(deleted_by);
             Ok(true)
         } else {
@@ -248,9 +281,12 @@ impl FeatureFlagRepository for InMemoryFeatureFlagRepository {
         }
     }
 
-    async fn restore(&self, id: i64) -> Result<bool, crate::error::ApiError> {
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<bool, crate::error::ApiError> {
         let mut flags = self.flags.write().await;
-        if let Some(flag) = flags.iter_mut().find(|f| f.id == id && f.is_deleted()) {
+        if let Some(flag) = flags
+            .iter_mut()
+            .find(|f| f.id == id && f.is_deleted() && f.tenant_id == Some(tenant_id))
+        {
             flag.restore();
             Ok(true)
         } else {
@@ -258,15 +294,22 @@ impl FeatureFlagRepository for InMemoryFeatureFlagRepository {
         }
     }
 
-    async fn find_deleted(&self) -> Result<Vec<FeatureFlag>, crate::error::ApiError> {
+    async fn find_deleted(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<FeatureFlag>, crate::error::ApiError> {
         let flags = self.flags.read().await;
-        Ok(flags.iter().filter(|f| f.is_deleted()).cloned().collect())
+        Ok(flags
+            .iter()
+            .filter(|f| f.is_deleted() && (f.tenant_id == Some(tenant_id) || f.tenant_id.is_none()))
+            .cloned()
+            .collect())
     }
 
-    async fn destroy(&self, id: i64) -> Result<bool, crate::error::ApiError> {
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<bool, crate::error::ApiError> {
         let mut flags = self.flags.write().await;
         let initial_len = flags.len();
-        flags.retain(|f| !(f.id == id && f.is_deleted()));
+        flags.retain(|f| !(f.id == id && f.is_deleted() && f.tenant_id == Some(tenant_id)));
         Ok(flags.len() < initial_len)
     }
 }
@@ -308,11 +351,11 @@ mod tests {
             .await
             .unwrap();
 
-        let found = repo.get_by_id(created.id).await.unwrap();
+        let found = repo.get_by_id(created.id, 1).await.unwrap();
         assert!(found.is_some());
         assert_eq!(found.unwrap().name, "test_feature");
 
-        let not_found = repo.get_by_id(999).await.unwrap();
+        let not_found = repo.get_by_id(999, 1).await.unwrap();
         assert!(not_found.is_none());
     }
 
@@ -344,7 +387,7 @@ mod tests {
                 name: "update_me".to_string(),
                 description: Some("Original description".to_string()),
                 status: Some(FeatureFlagStatus::Disabled),
-                tenant_id: None,
+                tenant_id: Some(1),
             })
             .await
             .unwrap();
@@ -356,6 +399,7 @@ mod tests {
                     description: Some("Updated description".to_string()),
                     status: Some(FeatureFlagStatus::Enabled),
                 },
+                1,
             )
             .await
             .unwrap();
@@ -374,15 +418,15 @@ mod tests {
                 name: "delete_me".to_string(),
                 description: None,
                 status: None,
-                tenant_id: None,
+                tenant_id: Some(1),
             })
             .await
             .unwrap();
 
-        let deleted = repo.delete(created.id).await.unwrap();
+        let deleted = repo.delete(created.id, 1).await.unwrap();
         assert!(deleted);
 
-        let not_found = repo.get_by_id(created.id).await.unwrap();
+        let not_found = repo.get_by_id(created.id, 1).await.unwrap();
         assert!(not_found.is_none());
     }
 

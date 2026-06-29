@@ -101,11 +101,13 @@ pub async fn get_receipt(
     )
 )]
 pub async fn get_receipts_by_order(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     service: web::Data<PurchaseService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let receipts = service.get_receipts_by_order(*path).await?;
+    let receipts = service
+        .get_receipts_by_order(*path, auth_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(receipts))
 }
 
@@ -129,7 +131,7 @@ pub async fn get_receipts_by_order(
     )
 )]
 pub async fn update_receipt_status(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     service: web::Data<PurchaseService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateReceiptStatusRequest>,
@@ -138,7 +140,7 @@ pub async fn update_receipt_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        service.update_receipt_status(*path, payload.status.clone()),
+        service.update_receipt_status(*path, payload.status.clone(), auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

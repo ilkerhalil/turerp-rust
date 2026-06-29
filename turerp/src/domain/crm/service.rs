@@ -93,17 +93,25 @@ impl CrmService {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn update_lead_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError> {
-        self.lead_repo.update_status(id, status).await
+    pub async fn update_lead_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: LeadStatus,
+    ) -> Result<Lead, ApiError> {
+        self.lead_repo.update_status(id, tenant_id, status).await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn convert_lead_to_customer(
         &self,
         id: i64,
+        tenant_id: i64,
         customer_id: i64,
     ) -> Result<Lead, ApiError> {
-        self.lead_repo.convert_to_customer(id, customer_id).await
+        self.lead_repo
+            .convert_to_customer(id, tenant_id, customer_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
@@ -208,9 +216,12 @@ impl CrmService {
     pub async fn update_opportunity_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: OpportunityStatus,
     ) -> Result<Opportunity, ApiError> {
-        self.opportunity_repo.update_status(id, status).await
+        self.opportunity_repo
+            .update_status(id, tenant_id, status)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
@@ -308,9 +319,12 @@ impl CrmService {
     pub async fn update_campaign_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: CampaignStatus,
     ) -> Result<Campaign, ApiError> {
-        self.campaign_repo.update_status(id, status).await
+        self.campaign_repo
+            .update_status(id, tenant_id, status)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
@@ -417,14 +431,15 @@ impl CrmService {
     pub async fn update_ticket_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: TicketStatus,
     ) -> Result<Ticket, ApiError> {
-        self.ticket_repo.update_status(id, status).await
+        self.ticket_repo.update_status(id, tenant_id, status).await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn resolve_ticket(&self, id: i64) -> Result<Ticket, ApiError> {
-        self.ticket_repo.resolve(id).await
+    pub async fn resolve_ticket(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError> {
+        self.ticket_repo.resolve(id, tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -608,7 +623,7 @@ mod tests {
             .await
             .unwrap();
 
-        let resolved = service.resolve_ticket(ticket.id).await.unwrap();
+        let resolved = service.resolve_ticket(ticket.id, 1).await.unwrap();
         assert_eq!(resolved.status, TicketStatus::Resolved);
         assert!(resolved.resolved_at.is_some());
     }

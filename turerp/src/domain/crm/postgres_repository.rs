@@ -241,20 +241,26 @@ impl LeadRepository for PostgresLeadRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn update_status(&self, id: i64, status: LeadStatus) -> Result<Lead, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: LeadStatus,
+    ) -> Result<Lead, ApiError> {
         let status_str = status.to_string();
 
         let row: LeadRow = sqlx::query_as(
             r#"
             UPDATE leads
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, name, company, email, phone, source,
                       status, assigned_to, converted_to_customer_id, notes, created_at, updated_at
             "#,
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Lead"))?;
@@ -262,18 +268,24 @@ impl LeadRepository for PostgresLeadRepository {
         Ok(row.into())
     }
 
-    async fn convert_to_customer(&self, id: i64, customer_id: i64) -> Result<Lead, ApiError> {
+    async fn convert_to_customer(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        customer_id: i64,
+    ) -> Result<Lead, ApiError> {
         let row: LeadRow = sqlx::query_as(
             r#"
             UPDATE leads
             SET status = 'Converted', converted_to_customer_id = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, name, company, email, phone, source,
                       status, assigned_to, converted_to_customer_id, notes, created_at, updated_at
             "#,
         )
         .bind(customer_id)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Lead"))?;
@@ -614,6 +626,7 @@ impl OpportunityRepository for PostgresOpportunityRepository {
     async fn update_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: OpportunityStatus,
     ) -> Result<Opportunity, ApiError> {
         let status_str = status.to_string();
@@ -622,13 +635,14 @@ impl OpportunityRepository for PostgresOpportunityRepository {
             r#"
             UPDATE opportunities
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, lead_id, name, customer_id, value, probability,
                       expected_close_date, status, assigned_to, notes, created_at, updated_at
             "#,
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Opportunity"))?;
@@ -943,20 +957,26 @@ impl CampaignRepository for PostgresCampaignRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn update_status(&self, id: i64, status: CampaignStatus) -> Result<Campaign, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: CampaignStatus,
+    ) -> Result<Campaign, ApiError> {
         let status_str = status.to_string();
 
         let row: CampaignRow = sqlx::query_as(
             r#"
             UPDATE campaigns
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, name, description, campaign_type, status,
                       budget, actual_cost, start_date, end_date, created_at, updated_at
             "#,
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Campaign"))?;
@@ -1331,14 +1351,19 @@ impl TicketRepository for PostgresTicketRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn update_status(&self, id: i64, status: TicketStatus) -> Result<Ticket, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: TicketStatus,
+    ) -> Result<Ticket, ApiError> {
         let status_str = status.to_string();
 
         let row: TicketRow = sqlx::query_as(
             r#"
             UPDATE tickets
             SET status = $1, updated_at = NOW()
-            WHERE id = $2
+            WHERE id = $2 AND tenant_id = $3
             RETURNING id, tenant_id, ticket_number, subject, description,
                       customer_id, assigned_to, status, priority, category,
                       resolved_at, created_at, updated_at
@@ -1346,6 +1371,7 @@ impl TicketRepository for PostgresTicketRepository {
         )
         .bind(&status_str)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Ticket"))?;
@@ -1353,18 +1379,19 @@ impl TicketRepository for PostgresTicketRepository {
         Ok(row.into())
     }
 
-    async fn resolve(&self, id: i64) -> Result<Ticket, ApiError> {
+    async fn resolve(&self, id: i64, tenant_id: i64) -> Result<Ticket, ApiError> {
         let row: TicketRow = sqlx::query_as(
             r#"
             UPDATE tickets
             SET status = 'Resolved', resolved_at = NOW(), updated_at = NOW()
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             RETURNING id, tenant_id, ticket_number, subject, description,
                       customer_id, assigned_to, status, priority, category,
                       resolved_at, created_at, updated_at
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Ticket"))?;

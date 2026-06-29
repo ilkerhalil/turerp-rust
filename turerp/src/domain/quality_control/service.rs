@@ -58,9 +58,10 @@ impl QualityControlService {
     pub async fn update_inspection(
         &self,
         id: i64,
+        tenant_id: i64,
         update: UpdateInspection,
     ) -> Result<Inspection, ApiError> {
-        self.inspection_repo.update(id, update).await
+        self.inspection_repo.update(id, tenant_id, update).await
     }
 
     #[tracing::instrument(skip(self))]
@@ -112,9 +113,10 @@ impl QualityControlService {
     pub async fn update_ncr(
         &self,
         id: i64,
+        tenant_id: i64,
         update: UpdateNonConformanceReport,
     ) -> Result<NonConformanceReport, ApiError> {
-        self.ncr_repo.update(id, update).await
+        self.ncr_repo.update(id, tenant_id, update).await
     }
 
     #[tracing::instrument(skip(self))]

@@ -116,7 +116,7 @@ pub async fn get_leads_by_status(
     security(("bearer_auth" = []))
 )]
 pub async fn update_lead_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     payload: web::Json<UpdateLeadStatusRequest>,
@@ -125,7 +125,7 @@ pub async fn update_lead_status(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match crm_service
-        .update_lead_status(*path, payload.into_inner().status)
+        .update_lead_status(*path, admin_user.0.tenant_id, payload.into_inner().status)
         .await
     {
         Ok(lead) => Ok(HttpResponse::Ok().json(lead)),
@@ -142,7 +142,7 @@ pub async fn update_lead_status(
     security(("bearer_auth" = []))
 )]
 pub async fn convert_lead(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     crm_service: web::Data<CrmService>,
     path: web::Path<i64>,
     payload: web::Json<ConvertLeadRequest>,
@@ -151,7 +151,7 @@ pub async fn convert_lead(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     match crm_service
-        .convert_lead_to_customer(*path, payload.customer_id)
+        .convert_lead_to_customer(*path, admin_user.0.tenant_id, payload.customer_id)
         .await
     {
         Ok(lead) => Ok(HttpResponse::Ok().json(lead)),

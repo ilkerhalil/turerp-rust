@@ -231,7 +231,12 @@ impl EmployeeRepository for PostgresEmployeeRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn update_status(&self, id: i64, status: EmployeeStatus) -> Result<Employee, ApiError> {
+    async fn update_status(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        status: EmployeeStatus,
+    ) -> Result<Employee, ApiError> {
         let status_str = status.to_string();
         let termination_date: Option<DateTime<Utc>> = if status == EmployeeStatus::Terminated {
             Some(chrono::Utc::now())
@@ -245,7 +250,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
             SET status = $1,
                 termination_date = COALESCE($2, termination_date),
                 updated_at = NOW()
-            WHERE id = $3
+            WHERE id = $3 AND tenant_id = $4
             RETURNING id, tenant_id, company_id, user_id, employee_number, first_name, last_name,
                       email, phone, department, position, hire_date, termination_date,
                       status, salary, created_at, updated_at, deleted_at, deleted_by
@@ -254,6 +259,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
         .bind(&status_str)
         .bind(termination_date)
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "Employee"))?;

@@ -156,6 +156,13 @@ pub trait JobScheduler: Send + Sync {
     /// Get the next pending job (for worker processes, system-level)
     async fn next_pending(&self) -> Result<Option<Job>, String>;
 
+    /// Get the next pending job for a specific tenant (admin API; tenant-scoped)
+    ///
+    /// Tenant-scoped variant of [`JobScheduler::next_pending`] used by the
+    /// admin HTTP API so a tenant admin cannot dequeue (or, in the Postgres
+    /// impl, `FOR UPDATE SKIP LOCKED`-claim) another tenant's pending job.
+    async fn next_pending_for_tenant(&self, tenant_id: i64) -> Result<Option<Job>, String>;
+
     /// Mark a job as running, scoped to tenant
     async fn mark_running(&self, id: i64, tenant_id: i64) -> Result<(), String>;
 
@@ -176,6 +183,14 @@ pub trait JobScheduler: Send + Sync {
 
     /// Clean up old completed/failed jobs (system-level)
     async fn cleanup(&self, older_than: Duration) -> Result<u64, String>;
+
+    /// Clean up old completed/failed jobs for a specific tenant (admin API;
+    /// tenant-scoped)
+    ///
+    /// Tenant-scoped variant of [`JobScheduler::cleanup`] used by the admin
+    /// HTTP API so a tenant admin can only purge its own terminal jobs.
+    async fn cleanup_for_tenant(&self, tenant_id: i64, older_than: Duration)
+        -> Result<u64, String>;
 
     /// Liveness probe for `/health/ready`. Returns `Ok(())` if the
     /// scheduler can accept new work, `Err(msg)` otherwise. The
@@ -261,6 +276,34 @@ impl JobScheduler for InMemoryJobScheduler {
             })
             .max_by(|a, b| {
                 // Higher priority first, then earlier creation
+                let pa = match a.priority {
+                    JobPriority::Critical => 4,
+                    JobPriority::High => 3,
+                    JobPriority::Normal => 2,
+                    JobPriority::Low => 1,
+                };
+                let pb = match b.priority {
+                    JobPriority::Critical => 4,
+                    JobPriority::High => 3,
+                    JobPriority::Normal => 2,
+                    JobPriority::Low => 1,
+                };
+                pa.cmp(&pb).then_with(|| b.created_at.cmp(&a.created_at))
+            })
+            .cloned())
+    }
+
+    async fn next_pending_for_tenant(&self, tenant_id: i64) -> Result<Option<Job>, String> {
+        let jobs = self.jobs.read();
+        Ok(jobs
+            .iter()
+            .filter(|j| {
+                j.tenant_id == tenant_id
+                    && j.status == JobStatus::Pending
+                    && j.scheduled_at.is_none_or(|s| s <= Utc::now())
+            })
+            .max_by(|a, b| {
+                // Higher priority first, then earlier creation (mirrors `next_pending`)
                 let pa = match a.priority {
                     JobPriority::Critical => 4,
                     JobPriority::High => 3,
@@ -375,6 +418,29 @@ impl JobScheduler for InMemoryJobScheduler {
             !(j.status == JobStatus::Completed
                 || j.status == JobStatus::Failed
                 || j.status == JobStatus::Cancelled)
+                || j.completed_at.is_none_or(|c| c > cutoff)
+        });
+        Ok((before - jobs.len()) as u64)
+    }
+
+    async fn cleanup_for_tenant(
+        &self,
+        tenant_id: i64,
+        older_than: Duration,
+    ) -> Result<u64, String> {
+        // Tenant-scoped mirror of `cleanup`: only terminal jobs of the caller's
+        // tenant with completed_at <= cutoff are purged. Jobs of other tenants
+        // are always retained.
+        let chrono_dur = chrono::Duration::from_std(older_than)
+            .map_err(|_| "older_than must be non-negative".to_string())?;
+        let cutoff = Utc::now() - chrono_dur;
+        let mut jobs = self.jobs.write();
+        let before = jobs.len();
+        jobs.retain(|j| {
+            j.tenant_id != tenant_id
+                || !(j.status == JobStatus::Completed
+                    || j.status == JobStatus::Failed
+                    || j.status == JobStatus::Cancelled)
                 || j.completed_at.is_none_or(|c| c > cutoff)
         });
         Ok((before - jobs.len()) as u64)
