@@ -94,6 +94,7 @@ impl std::str::FromStr for EmployeeStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Attendance {
     pub id: i64,
+    pub tenant_id: i64,
     pub employee_id: i64,
     pub date: DateTime<Utc>,
     pub check_in: Option<DateTime<Utc>>,
@@ -199,6 +200,7 @@ impl crate::common::SoftDeletable for LeaveType {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct LeaveRequest {
     pub id: i64,
+    pub tenant_id: i64,
     pub employee_id: i64,
     pub leave_type_id: i64,
     pub status: LeaveRequestStatus,
@@ -410,6 +412,10 @@ pub struct CreateAttendance {
     pub check_in: Option<DateTime<Utc>>,
     pub check_out: Option<DateTime<Utc>>,
     pub notes: Option<String>,
+    /// Tenant scope. The handler forces this from the auth token before it
+    /// reaches the service, so a client-supplied value cannot be used to
+    /// create attendance attributed to another tenant.
+    pub tenant_id: i64,
 }
 
 impl CreateAttendance {
@@ -446,6 +452,10 @@ pub struct CreateLeaveRequest {
     pub start_date: DateTime<Utc>,
     pub end_date: DateTime<Utc>,
     pub reason: Option<String>,
+    /// Tenant scope. The handler forces this from the auth token before it
+    /// reaches the service, so a client-supplied value cannot be used to
+    /// create a leave request attributed to another tenant.
+    pub tenant_id: i64,
 }
 
 impl CreateLeaveRequest {
@@ -569,6 +579,7 @@ mod tests {
             check_in: Some(check_in),
             check_out: Some(check_in + chrono::Duration::hours(8)),
             notes: None,
+            tenant_id: 1,
         };
         let hours = attendance.calculate_hours();
         // 8 hours with small tolerance for test timing

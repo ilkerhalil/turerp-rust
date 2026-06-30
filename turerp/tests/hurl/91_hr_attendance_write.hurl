@@ -19,9 +19,10 @@
 # employees that guarantees a row, so we self-seed an employee first via
 # POST /hr/employees (admin) and capture its id. The employee is destroyed at
 # the end to keep the suite re-runnable without orphans.
-# ASSUMPTION: record_attendance does NOT inject tenant_id; the CreateAttendance
-# struct has no tenant_id field, so the row is created against whatever tenant
-# the employee belongs to (the service queries the employee for scoping).
+# ASSUMPTION: record_attendance forces `create.tenant_id = admin.tenant_id`
+# (migration 048 / cross-tenant leak closure); the CreateAttendance struct
+# now carries a required `tenant_id` field, so the POST body must include it
+# (it is overwritten server-side from the admin token regardless).
 # ASSUMPTION: get_attendance_by_employee returns a bare Vec<Attendance> (not
 # paginated) — assert `$ isCollection`.
 # ASSUMPTION: hours_worked is computed server-side from check_in/check_out
@@ -62,6 +63,7 @@ Content-Type: application/json
 ```
 {
   "employee_id": {{emp_id}},
+  "tenant_id": {{tenant_id}},
   "date": "2026-06-15T08:00:00Z",
   "check_in": "2026-06-15T08:00:00Z",
   "check_out": "2026-06-15T17:00:00Z",
@@ -76,6 +78,7 @@ Content-Type: application/json
 ```
 {
   "employee_id": {{emp_id}},
+  "tenant_id": {{tenant_id}},
   "date": "2026-06-15T08:00:00Z",
   "check_in": "2026-06-15T08:00:00Z",
   "check_out": "2026-06-15T17:00:00Z",
@@ -91,6 +94,7 @@ Content-Type: application/json
 ```
 {
   "employee_id": {{emp_id}},
+  "tenant_id": {{tenant_id}},
   "date": "2026-06-15T08:00:00Z",
   "check_in": "2026-06-15T08:00:00Z",
   "check_out": "2026-06-15T17:00:00Z",

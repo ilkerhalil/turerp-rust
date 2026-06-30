@@ -17,15 +17,20 @@ use crate::middleware::{AdminUser, AuthUser};
     security(("bearer_auth" = []))
 )]
 pub async fn create_leave_request(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     hr_service: web::Data<HrService>,
     payload: web::Json<CreateLeaveRequest>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    // Force the auth-derived tenant onto the body so a caller cannot create a
+    // leave request attributed to another tenant via a client-supplied
+    // `tenant_id` field.
+    let mut create = payload.into_inner();
+    create.tenant_id = auth_user.0.tenant_id;
     json_resp!(
-        hr_service.create_leave_request(payload.into_inner()),
+        hr_service.create_leave_request(create),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -40,7 +45,7 @@ pub async fn create_leave_request(
     security(("bearer_auth" = []))
 )]
 pub async fn get_leave_requests_by_employee(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -48,7 +53,7 @@ pub async fn get_leave_requests_by_employee(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        hr_service.get_leave_requests_by_employee(*path),
+        hr_service.get_leave_requests_by_employee(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -72,7 +77,7 @@ pub async fn approve_leave_request(
     let i18n = resolve(&i18n);
     let approver_id: i64 = admin_user.0.user_id()?;
     json_resp!(
-        hr_service.approve_leave_request(*path, approver_id),
+        hr_service.approve_leave_request(*path, admin_user.0.tenant_id, approver_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -96,7 +101,7 @@ pub async fn reject_leave_request(
     let i18n = resolve(&i18n);
     let approver_id: i64 = admin_user.0.user_id()?;
     json_resp!(
-        hr_service.reject_leave_request(*path, approver_id),
+        hr_service.reject_leave_request(*path, admin_user.0.tenant_id, approver_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -116,7 +121,9 @@ pub async fn soft_delete_leave_request(
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
     let user_id: i64 = admin_user.0.user_id()?;
-    hr_service.soft_delete_leave_request(*path, user_id).await?;
+    hr_service
+        .soft_delete_leave_request(*path, admin_user.0.tenant_id, user_id)
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -128,11 +135,13 @@ pub async fn soft_delete_leave_request(
     security(("bearer_auth" = []))
 )]
 pub async fn restore_leave_request(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let request = hr_service.restore_leave_request(*path).await?;
+    let request = hr_service
+        .restore_leave_request(*path, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(request))
 }
 
@@ -143,10 +152,12 @@ pub async fn restore_leave_request(
     security(("bearer_auth" = []))
 )]
 pub async fn list_deleted_leave_requests(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     hr_service: web::Data<HrService>,
 ) -> ApiResult<HttpResponse> {
-    let requests = hr_service.list_deleted_leave_requests().await?;
+    let requests = hr_service
+        .list_deleted_leave_requests(admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(requests))
 }
 
@@ -158,11 +169,13 @@ pub async fn list_deleted_leave_requests(
     security(("bearer_auth" = []))
 )]
 pub async fn destroy_leave_request(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    hr_service.destroy_leave_request(*path).await?;
+    hr_service
+        .destroy_leave_request(*path, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
