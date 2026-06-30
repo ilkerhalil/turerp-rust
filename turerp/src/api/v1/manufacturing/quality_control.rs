@@ -22,15 +22,20 @@ use crate::middleware::{AdminUser, AuthUser};
     security(("bearer_auth" = []))
 )]
 pub async fn create_inspection(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     qc_service: web::Data<QualityControlService>,
     payload: web::Json<CreateInspection>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    // Force the auth-derived tenant onto the body so a tenant admin cannot
+    // create an inspection attributed to another tenant via a client-supplied
+    // `tenant_id` field.
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
     json_resp!(
-        qc_service.create_inspection(payload.into_inner()),
+        qc_service.create_inspection(create),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -195,15 +200,20 @@ pub async fn destroy_inspection(
     security(("bearer_auth" = []))
 )]
 pub async fn create_ncr(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     qc_service: web::Data<QualityControlService>,
     payload: web::Json<CreateNonConformanceReport>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    // Force the auth-derived tenant onto the body so a tenant admin cannot
+    // create an NCR attributed to another tenant via a client-supplied
+    // `tenant_id` field.
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
     json_resp!(
-        qc_service.create_ncr(payload.into_inner()),
+        qc_service.create_ncr(create),
         HttpResponse::Created,
         i18n,
         locale.as_str()

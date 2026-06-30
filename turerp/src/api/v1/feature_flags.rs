@@ -28,15 +28,23 @@ use crate::middleware::{AdminUser, AuthUser};
     )
 )]
 pub async fn create_flag(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     feature_service: web::Data<FeatureFlagService>,
     payload: web::Json<CreateFeatureFlag>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    // `tenant_id` is nullable: `None` means a global flag (legitimate, left
+    // as-is). Any `Some(id)` is forced to the admin's own tenant so a tenant
+    // admin cannot create a flag attributed to another tenant via a
+    // client-supplied `tenant_id` field.
+    let mut create = payload.into_inner();
+    if create.tenant_id.is_some() {
+        create.tenant_id = Some(admin_user.0.tenant_id);
+    }
     json_resp!(
-        feature_service.create(payload.into_inner()),
+        feature_service.create(create),
         HttpResponse::Created,
         i18n,
         locale.as_str()

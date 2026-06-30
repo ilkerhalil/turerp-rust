@@ -21,11 +21,16 @@ use actix_web::{web, HttpResponse};
     security(("bearer_auth" = [])),
 )]
 async fn create_api_key(
-    _admin: AdminUser,
+    admin: AdminUser,
     service: web::Data<ApiKeyService>,
     body: web::Json<CreateApiKey>,
 ) -> Result<HttpResponse, ApiError> {
-    let result = service.create_api_key(body.into_inner()).await?;
+    // Force the auth-derived tenant onto the body so a tenant admin cannot
+    // create an API key attributed to another tenant via a client-supplied
+    // `tenant_id` field.
+    let mut create = body.into_inner();
+    create.tenant_id = admin.0.tenant_id;
+    let result = service.create_api_key(create).await?;
     Ok(HttpResponse::Created().json(result))
 }
 
