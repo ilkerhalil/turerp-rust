@@ -17,15 +17,20 @@ use crate::middleware::{AdminUser, AuthUser};
     security(("bearer_auth" = []))
 )]
 pub async fn record_attendance(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     payload: web::Json<CreateAttendance>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    // Force the auth-derived tenant onto the body so a tenant admin cannot
+    // record attendance attributed to another tenant via a client-supplied
+    // `tenant_id` field.
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
     json_resp!(
-        hr_service.record_attendance(payload.into_inner()),
+        hr_service.record_attendance(create),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -40,7 +45,7 @@ pub async fn record_attendance(
     security(("bearer_auth" = []))
 )]
 pub async fn get_attendance_by_employee(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -48,7 +53,7 @@ pub async fn get_attendance_by_employee(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        hr_service.get_attendance_by_employee(*path),
+        hr_service.get_attendance_by_employee(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -68,7 +73,9 @@ pub async fn soft_delete_attendance(
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
     let user_id: i64 = admin_user.0.user_id()?;
-    hr_service.soft_delete_attendance(*path, user_id).await?;
+    hr_service
+        .soft_delete_attendance(*path, admin_user.0.tenant_id, user_id)
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -80,11 +87,13 @@ pub async fn soft_delete_attendance(
     security(("bearer_auth" = []))
 )]
 pub async fn restore_attendance(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let attendance = hr_service.restore_attendance(*path).await?;
+    let attendance = hr_service
+        .restore_attendance(*path, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(attendance))
 }
 
@@ -95,10 +104,12 @@ pub async fn restore_attendance(
     security(("bearer_auth" = []))
 )]
 pub async fn list_deleted_attendance(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     hr_service: web::Data<HrService>,
 ) -> ApiResult<HttpResponse> {
-    let attendance = hr_service.list_deleted_attendance().await?;
+    let attendance = hr_service
+        .list_deleted_attendance(admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(attendance))
 }
 
@@ -110,10 +121,12 @@ pub async fn list_deleted_attendance(
     security(("bearer_auth" = []))
 )]
 pub async fn destroy_attendance(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     hr_service: web::Data<HrService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    hr_service.destroy_attendance(*path).await?;
+    hr_service
+        .destroy_attendance(*path, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }

@@ -172,37 +172,55 @@ impl HrService {
     pub async fn get_attendance_by_employee(
         &self,
         employee_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<Attendance>, ApiError> {
-        self.attendance_repo.find_by_employee(employee_id).await
+        self.attendance_repo
+            .find_by_employee(employee_id, tenant_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn get_attendance_by_date(
         &self,
         date: chrono::DateTime<Utc>,
+        tenant_id: i64,
     ) -> Result<Vec<Attendance>, ApiError> {
-        self.attendance_repo.find_by_date(date).await
+        self.attendance_repo.find_by_date(date, tenant_id).await
     }
 
     // Attendance soft-delete operations
     #[tracing::instrument(skip(self))]
-    pub async fn soft_delete_attendance(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
-        self.attendance_repo.soft_delete(id, deleted_by).await
+    pub async fn soft_delete_attendance(
+        &self,
+        id: i64,
+        tenant_id: i64,
+        deleted_by: i64,
+    ) -> Result<(), ApiError> {
+        self.attendance_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn restore_attendance(&self, id: i64) -> Result<Attendance, ApiError> {
-        self.attendance_repo.restore(id).await
+    pub async fn restore_attendance(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Attendance, ApiError> {
+        self.attendance_repo.restore(id, tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn list_deleted_attendance(&self) -> Result<Vec<Attendance>, ApiError> {
-        self.attendance_repo.find_deleted().await
+    pub async fn list_deleted_attendance(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<Attendance>, ApiError> {
+        self.attendance_repo.find_deleted(tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn destroy_attendance(&self, id: i64) -> Result<(), ApiError> {
-        self.attendance_repo.destroy(id).await
+    pub async fn destroy_attendance(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.attendance_repo.destroy(id, tenant_id).await
     }
 
     // Leave operations
@@ -218,18 +236,27 @@ impl HrService {
     pub async fn get_leave_requests_by_employee(
         &self,
         employee_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<LeaveRequest>, ApiError> {
-        self.leave_request_repo.find_by_employee(employee_id).await
+        self.leave_request_repo
+            .find_by_employee(employee_id, tenant_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn approve_leave_request(
         &self,
         id: i64,
+        tenant_id: i64,
         approver_id: i64,
     ) -> Result<LeaveRequest, ApiError> {
         self.leave_request_repo
-            .update_status(id, LeaveRequestStatus::Approved, Some(approver_id))
+            .update_status(
+                id,
+                tenant_id,
+                LeaveRequestStatus::Approved,
+                Some(approver_id),
+            )
             .await
     }
 
@@ -237,10 +264,16 @@ impl HrService {
     pub async fn reject_leave_request(
         &self,
         id: i64,
+        tenant_id: i64,
         approver_id: i64,
     ) -> Result<LeaveRequest, ApiError> {
         self.leave_request_repo
-            .update_status(id, LeaveRequestStatus::Rejected, Some(approver_id))
+            .update_status(
+                id,
+                tenant_id,
+                LeaveRequestStatus::Rejected,
+                Some(approver_id),
+            )
             .await
     }
 
@@ -249,24 +282,34 @@ impl HrService {
     pub async fn soft_delete_leave_request(
         &self,
         id: i64,
+        tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
-        self.leave_request_repo.soft_delete(id, deleted_by).await
+        self.leave_request_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn restore_leave_request(&self, id: i64) -> Result<LeaveRequest, ApiError> {
-        self.leave_request_repo.restore(id).await
+    pub async fn restore_leave_request(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<LeaveRequest, ApiError> {
+        self.leave_request_repo.restore(id, tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn list_deleted_leave_requests(&self) -> Result<Vec<LeaveRequest>, ApiError> {
-        self.leave_request_repo.find_deleted().await
+    pub async fn list_deleted_leave_requests(
+        &self,
+        tenant_id: i64,
+    ) -> Result<Vec<LeaveRequest>, ApiError> {
+        self.leave_request_repo.find_deleted(tenant_id).await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn destroy_leave_request(&self, id: i64) -> Result<(), ApiError> {
-        self.leave_request_repo.destroy(id).await
+    pub async fn destroy_leave_request(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.leave_request_repo.destroy(id, tenant_id).await
     }
 
     // Leave type operations
@@ -322,7 +365,10 @@ impl HrService {
             .ok_or_else(|| ApiError::NotFound("Employee not found".to_string()))?;
 
         // Get attendance for the period to calculate overtime
-        let attendance = self.attendance_repo.find_by_employee(employee_id).await?;
+        let attendance = self
+            .attendance_repo
+            .find_by_employee(employee_id, tenant_id)
+            .await?;
         let overtime_hours: Decimal = attendance
             .iter()
             .filter(|a| {
@@ -491,6 +537,7 @@ mod tests {
             check_in: Some(chrono::Utc::now()),
             check_out: Some(chrono::Utc::now() + chrono::Duration::hours(8)),
             notes: None,
+            tenant_id: 1,
         };
         let result = service.record_attendance(create).await;
         assert!(result.is_ok());

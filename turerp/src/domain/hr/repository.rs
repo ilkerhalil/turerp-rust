@@ -45,48 +45,67 @@ pub trait EmployeeRepository: Send + Sync {
 }
 
 /// Repository trait for Attendance operations
-/// Note: Attendance does not have tenant_id directly; it is scoped via employee_id.
-/// Parent-level tenant isolation should be enforced at the service layer.
+///
+/// `attendance` carries `tenant_id` (migration 048). Every method is
+/// tenant-scoped: callers MUST pass the auth-derived `tenant_id`, and reads
+/// filter `AND tenant_id = $N`. `create` takes the `CreateAttendance` struct,
+/// whose `tenant_id` the handler forces from the auth token (never the body).
 #[async_trait]
 pub trait AttendanceRepository: Send + Sync {
     async fn create(&self, attendance: CreateAttendance) -> Result<Attendance, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<Attendance>, ApiError>;
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<Attendance>, ApiError>;
-    async fn find_by_date(&self, date: chrono::DateTime<Utc>) -> Result<Vec<Attendance>, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Attendance>, ApiError>;
+    async fn find_by_employee(
+        &self,
+        employee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Attendance>, ApiError>;
+    async fn find_by_date(
+        &self,
+        date: chrono::DateTime<Utc>,
+        tenant_id: i64,
+    ) -> Result<Vec<Attendance>, ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
     /// Soft delete attendance
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
     /// Restore a soft-deleted attendance
-    async fn restore(&self, id: i64) -> Result<Attendance, ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Attendance, ApiError>;
     /// Find soft-deleted attendance (admin use)
-    async fn find_deleted(&self) -> Result<Vec<Attendance>, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Attendance>, ApiError>;
     /// Hard delete attendance (permanent destruction -- admin only)
-    async fn destroy(&self, id: i64) -> Result<(), ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for LeaveRequest operations
-/// Note: LeaveRequest does not have tenant_id directly; it is scoped via employee_id.
-/// Parent-level tenant isolation should be enforced at the service layer.
+///
+/// `leave_requests` carries `tenant_id` (migration 048). Every method is
+/// tenant-scoped: callers MUST pass the auth-derived `tenant_id`, and reads
+/// filter `AND tenant_id = $N`. `create` takes the `CreateLeaveRequest` struct,
+/// whose `tenant_id` the handler forces from the auth token (never the body).
 #[async_trait]
 pub trait LeaveRequestRepository: Send + Sync {
     async fn create(&self, request: CreateLeaveRequest) -> Result<LeaveRequest, ApiError>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<LeaveRequest>, ApiError>;
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<LeaveRequest>, ApiError>;
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<LeaveRequest>, ApiError>;
+    async fn find_by_employee(
+        &self,
+        employee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<LeaveRequest>, ApiError>;
     async fn update_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: LeaveRequestStatus,
         approver_id: Option<i64>,
     ) -> Result<LeaveRequest, ApiError>;
-    async fn delete(&self, id: i64) -> Result<(), ApiError>;
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
     /// Soft delete a leave request
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
     /// Restore a soft-deleted leave request
-    async fn restore(&self, id: i64) -> Result<LeaveRequest, ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<LeaveRequest, ApiError>;
     /// Find soft-deleted leave requests (admin use)
-    async fn find_deleted(&self) -> Result<Vec<LeaveRequest>, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<LeaveRequest>, ApiError>;
     /// Hard delete a leave request (permanent destruction -- admin only)
-    async fn destroy(&self, id: i64) -> Result<(), ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for LeaveType operations
@@ -397,6 +416,7 @@ impl AttendanceRepository for InMemoryAttendanceRepository {
 
         let record = Attendance {
             id,
+            tenant_id: create.tenant_id,
             employee_id: create.employee_id,
             date: create.date,
             check_in: create.check_in,
@@ -412,73 +432,105 @@ impl AttendanceRepository for InMemoryAttendanceRepository {
         Ok(record)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<Attendance>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Attendance>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.records.get(&id).filter(|r| !r.is_deleted()).cloned())
+        Ok(inner
+            .records
+            .get(&id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
+            .cloned())
     }
 
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<Attendance>, ApiError> {
+    async fn find_by_employee(
+        &self,
+        employee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Attendance>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .records
             .values()
-            .filter(|r| r.employee_id == employee_id && !r.is_deleted())
+            .filter(|r| r.tenant_id == tenant_id && r.employee_id == employee_id && !r.is_deleted())
             .cloned()
             .collect())
     }
 
-    async fn find_by_date(&self, date: chrono::DateTime<Utc>) -> Result<Vec<Attendance>, ApiError> {
+    async fn find_by_date(
+        &self,
+        date: chrono::DateTime<Utc>,
+        tenant_id: i64,
+    ) -> Result<Vec<Attendance>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .records
             .values()
-            .filter(|r| r.date.date_naive() == date.date_naive() && !r.is_deleted())
+            .filter(|r| {
+                r.tenant_id == tenant_id
+                    && r.date.date_naive() == date.date_naive()
+                    && !r.is_deleted()
+            })
             .cloned()
             .collect())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
-        inner.records.remove(&id);
-        Ok(())
+        let record = inner.records.get(&id);
+        match record {
+            Some(r) if r.tenant_id == tenant_id => {
+                inner.records.remove(&id);
+                Ok(())
+            }
+            _ => Err(ApiError::NotFound(format!("Attendance {} not found", id))),
+        }
     }
 
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         let record = inner
             .records
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Attendance {} not found", id)))?;
+        if record.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Attendance {} not found", id)));
+        }
         record.mark_deleted(deleted_by);
         Ok(())
     }
 
-    async fn restore(&self, id: i64) -> Result<Attendance, ApiError> {
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<Attendance, ApiError> {
         let mut inner = self.inner.lock();
         let record = inner
             .records
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Attendance {} not found", id)))?;
+        if record.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!("Attendance {} not found", id)));
+        }
         record.restore();
         Ok(record.clone())
     }
 
-    async fn find_deleted(&self) -> Result<Vec<Attendance>, ApiError> {
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Attendance>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .records
             .values()
-            .filter(|r| r.is_deleted())
+            .filter(|r| r.tenant_id == tenant_id && r.is_deleted())
             .cloned()
             .collect())
     }
 
-    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
-        inner
+        let present = inner
             .records
-            .remove(&id)
-            .ok_or_else(|| ApiError::NotFound(format!("Attendance {} not found", id)))?;
+            .get(&id)
+            .is_some_and(|r| r.tenant_id == tenant_id);
+        if !present {
+            return Err(ApiError::NotFound(format!("Attendance {} not found", id)));
+        }
+        inner.records.remove(&id);
         Ok(())
     }
 }
@@ -524,6 +576,7 @@ impl LeaveRequestRepository for InMemoryLeaveRequestRepository {
 
         let request = LeaveRequest {
             id,
+            tenant_id: create.tenant_id,
             employee_id: create.employee_id,
             leave_type_id: create.leave_type_id,
             status: LeaveRequestStatus::Pending,
@@ -542,17 +595,25 @@ impl LeaveRequestRepository for InMemoryLeaveRequestRepository {
         Ok(request)
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<LeaveRequest>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<LeaveRequest>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.requests.get(&id).filter(|r| !r.is_deleted()).cloned())
+        Ok(inner
+            .requests
+            .get(&id)
+            .filter(|r| r.tenant_id == tenant_id && !r.is_deleted())
+            .cloned())
     }
 
-    async fn find_by_employee(&self, employee_id: i64) -> Result<Vec<LeaveRequest>, ApiError> {
+    async fn find_by_employee(
+        &self,
+        employee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<LeaveRequest>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .requests
             .values()
-            .filter(|r| r.employee_id == employee_id && !r.is_deleted())
+            .filter(|r| r.tenant_id == tenant_id && r.employee_id == employee_id && !r.is_deleted())
             .cloned()
             .collect())
     }
@@ -560,6 +621,7 @@ impl LeaveRequestRepository for InMemoryLeaveRequestRepository {
     async fn update_status(
         &self,
         id: i64,
+        tenant_id: i64,
         status: LeaveRequestStatus,
         approver_id: Option<i64>,
     ) -> Result<LeaveRequest, ApiError> {
@@ -568,6 +630,12 @@ impl LeaveRequestRepository for InMemoryLeaveRequestRepository {
             .requests
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Leave request {} not found", id)))?;
+        if request.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Leave request {} not found",
+                id
+            )));
+        }
         request.status = status;
         if let Some(aid) = approver_id {
             request.approved_by = Some(aid);
@@ -576,48 +644,76 @@ impl LeaveRequestRepository for InMemoryLeaveRequestRepository {
         Ok(request.clone())
     }
 
-    async fn delete(&self, id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
-        inner.requests.remove(&id);
-        Ok(())
+        let request = inner.requests.get(&id);
+        match request {
+            Some(r) if r.tenant_id == tenant_id => {
+                inner.requests.remove(&id);
+                Ok(())
+            }
+            _ => Err(ApiError::NotFound(format!(
+                "Leave request {} not found",
+                id
+            ))),
+        }
     }
 
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         let request = inner
             .requests
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Leave request {} not found", id)))?;
+        if request.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Leave request {} not found",
+                id
+            )));
+        }
         request.mark_deleted(deleted_by);
         Ok(())
     }
 
-    async fn restore(&self, id: i64) -> Result<LeaveRequest, ApiError> {
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<LeaveRequest, ApiError> {
         let mut inner = self.inner.lock();
         let request = inner
             .requests
             .get_mut(&id)
             .ok_or_else(|| ApiError::NotFound(format!("Leave request {} not found", id)))?;
+        if request.tenant_id != tenant_id {
+            return Err(ApiError::NotFound(format!(
+                "Leave request {} not found",
+                id
+            )));
+        }
         request.restore();
         Ok(request.clone())
     }
 
-    async fn find_deleted(&self) -> Result<Vec<LeaveRequest>, ApiError> {
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<LeaveRequest>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .requests
             .values()
-            .filter(|r| r.is_deleted())
+            .filter(|r| r.tenant_id == tenant_id && r.is_deleted())
             .cloned()
             .collect())
     }
 
-    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
-        inner
+        let present = inner
             .requests
-            .remove(&id)
-            .ok_or_else(|| ApiError::NotFound(format!("Leave request {} not found", id)))?;
+            .get(&id)
+            .is_some_and(|r| r.tenant_id == tenant_id);
+        if !present {
+            return Err(ApiError::NotFound(format!(
+                "Leave request {} not found",
+                id
+            )));
+        }
+        inner.requests.remove(&id);
         Ok(())
     }
 }

@@ -27,8 +27,11 @@
 #   ASSUMPTION: destroying the leave-type is done AFTER the leave-request that
 #   references it is destroyed, so no FK cascade blocks the destroy. Other DB
 #   rows referencing this leave-type would still block it — flagged.
-# ASSUMPTION: CreateLeaveRequest has no tenant_id field; the service scopes
-# via the employee lookup. total_days is computed server-side.
+# ASSUMPTION: create_leave_request forces `create.tenant_id = auth.tenant_id`
+# (migration 048 / cross-tenant leak closure); the CreateLeaveRequest struct
+# now carries a required `tenant_id` field, so the POST body must include it
+# (it is overwritten server-side from the auth token regardless).
+# total_days is computed server-side.
 # ASSUMPTION: LeaveRequestStatus enum serializes as PascalCase ("Pending" /
 # "Approved" / "Rejected"). DateTime fields are RFC3339.
 # Re-run safety: relies on DB reset; the seeded employee uses a unique
@@ -72,6 +75,7 @@ Content-Type: application/json
 {
   "employee_id": {{emp_id}},
   "leave_type_id": {{lt_id}},
+  "tenant_id": {{tenant_id}},
   "start_date": "2026-07-01T09:00:00Z",
   "end_date": "2026-07-03T17:00:00Z",
   "reason": "no auth"
@@ -87,6 +91,7 @@ Content-Type: application/json
 {
   "employee_id": {{emp_id}},
   "leave_type_id": {{lt_id}},
+  "tenant_id": {{tenant_id}},
   "start_date": "2026-07-01T09:00:00Z",
   "end_date": "2026-07-03T17:00:00Z",
   "reason": "fence leave request A"
@@ -110,6 +115,7 @@ Content-Type: application/json
 {
   "employee_id": {{emp_id}},
   "leave_type_id": {{lt_id}},
+  "tenant_id": {{tenant_id}},
   "start_date": "2026-08-01T09:00:00Z",
   "end_date": "2026-08-02T17:00:00Z",
   "reason": "fence leave request B"
