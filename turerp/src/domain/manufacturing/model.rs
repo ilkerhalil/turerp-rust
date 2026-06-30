@@ -71,6 +71,7 @@ impl crate::common::SoftDeletable for WorkOrder {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WorkOrderOperation {
     pub id: i64,
+    pub tenant_id: i64,
     pub work_order_id: i64,
     pub operation_sequence: i32,
     pub operation_name: String,
@@ -86,6 +87,7 @@ pub struct WorkOrderOperation {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WorkOrderMaterial {
     pub id: i64,
+    pub tenant_id: i64,
     pub work_order_id: i64,
     pub product_id: i64,
     pub quantity_required: Decimal,
@@ -130,6 +132,7 @@ impl CreateWorkOrder {
 /// Create work order operation request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateWorkOrderOperation {
+    pub tenant_id: i64,
     pub work_order_id: i64,
     pub operation_sequence: i32,
     pub operation_name: String,
@@ -157,6 +160,7 @@ impl CreateWorkOrderOperation {
 /// Create work order material request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateWorkOrderMaterial {
+    pub tenant_id: i64,
     pub work_order_id: i64,
     pub product_id: i64,
     pub quantity_required: Decimal,
@@ -222,6 +226,7 @@ impl crate::common::SoftDeletable for BillOfMaterials {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct BillOfMaterialsLine {
     pub id: i64,
+    pub tenant_id: i64,
     pub bom_id: i64,
     pub component_product_id: i64,
     pub quantity: Decimal,
@@ -263,6 +268,7 @@ impl CreateBillOfMaterials {
 /// Create BOM line request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateBillOfMaterialsLine {
+    pub tenant_id: i64,
     pub bom_id: i64,
     pub component_product_id: i64,
     pub quantity: Decimal,
@@ -333,6 +339,7 @@ impl crate::common::SoftDeletable for Routing {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RoutingOperation {
     pub id: i64,
+    pub tenant_id: i64,
     pub routing_id: i64,
     pub sequence: i32,
     pub operation_name: String,
@@ -355,6 +362,7 @@ pub struct CreateRouting {
 /// Create routing operation request
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CreateRoutingOperation {
+    pub tenant_id: i64,
     pub routing_id: i64,
     pub sequence: i32,
     pub operation_name: String,
@@ -467,6 +475,7 @@ mod tests {
     #[test]
     fn test_create_bom_line_validation() {
         let valid = CreateBillOfMaterialsLine {
+            tenant_id: 1,
             bom_id: 1,
             component_product_id: 2,
             quantity: dec!(5),
@@ -478,6 +487,7 @@ mod tests {
         assert!(valid.validate().is_ok());
 
         let invalid = CreateBillOfMaterialsLine {
+            tenant_id: 1,
             bom_id: 1,
             component_product_id: 0,
             quantity: dec!(-1),

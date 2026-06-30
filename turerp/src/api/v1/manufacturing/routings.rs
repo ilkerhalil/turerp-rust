@@ -89,15 +89,17 @@ pub async fn get_routings_by_product(
     security(("bearer_auth" = []))
 )]
 pub async fn add_routing_operation(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateRoutingOperation>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
     json_resp!(
-        mfg_service.add_routing_operation(payload.into_inner()),
+        mfg_service.add_routing_operation(create, admin_user.0.tenant_id),
         HttpResponse::Created,
         i18n,
         locale.as_str()

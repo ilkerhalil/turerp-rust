@@ -112,6 +112,7 @@ Authorization: Bearer {{admin_token}}
 Content-Type: application/json
 ```
 {
+  "tenant_id": {{tenant_id}},
   "bom_id": {{bom_id}},
   "component_product_id": {{component_product_id}},
   "quantity": "5.00",

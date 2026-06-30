@@ -93,7 +93,16 @@ impl ManufacturingService {
     pub async fn add_work_order_operation(
         &self,
         create: CreateWorkOrderOperation,
+        tenant_id: i64,
     ) -> Result<WorkOrderOperation, ApiError> {
+        // Parent-ownership precheck: the work order must belong to the caller's
+        // tenant, else a tenant-A caller could attach an operation to tenant-B's
+        // work order (cross-tenant orphan write). Also yields a clean NotFound
+        // for a bogus work_order_id instead of an FK violation.
+        self.work_order_repo
+            .find_by_id(create.work_order_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))?;
         self.work_order_repo.add_operation(create).await
     }
 
@@ -101,15 +110,24 @@ impl ManufacturingService {
     pub async fn get_work_order_operations(
         &self,
         work_order_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<WorkOrderOperation>, ApiError> {
-        self.work_order_repo.get_operations(work_order_id).await
+        self.work_order_repo
+            .get_operations(work_order_id, tenant_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
     pub async fn add_work_order_material(
         &self,
         create: CreateWorkOrderMaterial,
+        tenant_id: i64,
     ) -> Result<WorkOrderMaterial, ApiError> {
+        // Parent-ownership precheck (see add_work_order_operation).
+        self.work_order_repo
+            .find_by_id(create.work_order_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))?;
         self.work_order_repo.add_material(create).await
     }
 
@@ -117,8 +135,11 @@ impl ManufacturingService {
     pub async fn get_work_order_materials(
         &self,
         work_order_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<WorkOrderMaterial>, ApiError> {
-        self.work_order_repo.get_materials(work_order_id).await
+        self.work_order_repo
+            .get_materials(work_order_id, tenant_id)
+            .await
     }
 
     // BOM methods
@@ -162,13 +183,24 @@ impl ManufacturingService {
     pub async fn add_bom_line(
         &self,
         create: CreateBillOfMaterialsLine,
+        tenant_id: i64,
     ) -> Result<BillOfMaterialsLine, ApiError> {
+        // Parent-ownership precheck: the BOM must belong to the caller's tenant,
+        // else a tenant-A caller could attach a line to tenant-B's BOM.
+        self.bom_repo
+            .find_by_id(create.bom_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("BOM not found".to_string()))?;
         self.bom_repo.add_line(create).await
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn get_bom_lines(&self, bom_id: i64) -> Result<Vec<BillOfMaterialsLine>, ApiError> {
-        self.bom_repo.get_lines(bom_id).await
+    pub async fn get_bom_lines(
+        &self,
+        bom_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<BillOfMaterialsLine>, ApiError> {
+        self.bom_repo.get_lines(bom_id, tenant_id).await
     }
 
     // Routing methods
@@ -211,7 +243,15 @@ impl ManufacturingService {
     pub async fn add_routing_operation(
         &self,
         create: CreateRoutingOperation,
+        tenant_id: i64,
     ) -> Result<RoutingOperation, ApiError> {
+        // Parent-ownership precheck: the routing must belong to the caller's
+        // tenant, else a tenant-A caller could attach an operation to tenant-B's
+        // routing.
+        self.routing_repo
+            .find_by_id(create.routing_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Routing not found".to_string()))?;
         self.routing_repo.add_operation(create).await
     }
 
@@ -219,8 +259,11 @@ impl ManufacturingService {
     pub async fn get_routing_operations(
         &self,
         routing_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<RoutingOperation>, ApiError> {
-        self.routing_repo.get_operations(routing_id).await
+        self.routing_repo
+            .get_operations(routing_id, tenant_id)
+            .await
     }
 
     // Calculate material requirements from BOM
@@ -237,7 +280,7 @@ impl ManufacturingService {
             .await?;
         match bom {
             Some(bom) => {
-                let lines = self.bom_repo.get_lines(bom.id).await?;
+                let lines = self.bom_repo.get_lines(bom.id, tenant_id).await?;
                 let mut requirements = Vec::with_capacity(lines.len());
                 for line in lines {
                     let scrap_factor =
@@ -264,7 +307,7 @@ impl ManufacturingService {
             .await?;
         match routing {
             Some(r) => {
-                let ops = self.routing_repo.get_operations(r.id).await?;
+                let ops = self.routing_repo.get_operations(r.id, tenant_id).await?;
                 let total_time: Decimal = ops.iter().map(|op| op.setup_hours + op.run_hours).sum();
                 Ok(total_time)
             }
@@ -431,15 +474,19 @@ mod tests {
             .unwrap();
 
         let line = service
-            .add_bom_line(CreateBillOfMaterialsLine {
-                bom_id: bom.id,
-                component_product_id: 2,
-                quantity: dec!(5),
-                unit_id: Some(1),
-                scrap_percentage: dec!(5),
-                is_optional: false,
-                notes: None,
-            })
+            .add_bom_line(
+                CreateBillOfMaterialsLine {
+                    tenant_id: 1,
+                    bom_id: bom.id,
+                    component_product_id: 2,
+                    quantity: dec!(5),
+                    unit_id: Some(1),
+                    scrap_percentage: dec!(5),
+                    is_optional: false,
+                    notes: None,
+                },
+                1,
+            )
             .await
             .unwrap();
 
@@ -480,15 +527,19 @@ mod tests {
 
         // Add BOM lines
         service
-            .add_bom_line(CreateBillOfMaterialsLine {
-                bom_id: bom.id,
-                component_product_id: 2,
-                quantity: dec!(2),
-                unit_id: Some(1),
-                scrap_percentage: dec!(10),
-                is_optional: false,
-                notes: None,
-            })
+            .add_bom_line(
+                CreateBillOfMaterialsLine {
+                    tenant_id: 1,
+                    bom_id: bom.id,
+                    component_product_id: 2,
+                    quantity: dec!(2),
+                    unit_id: Some(1),
+                    scrap_percentage: dec!(10),
+                    is_optional: false,
+                    notes: None,
+                },
+                1,
+            )
             .await
             .unwrap();
 
@@ -520,28 +571,36 @@ mod tests {
 
         // Add operations
         service
-            .add_routing_operation(CreateRoutingOperation {
-                routing_id: routing.id,
-                sequence: 1,
-                operation_name: "Setup".to_string(),
-                work_center_id: Some(1),
-                setup_hours: dec!(1),
-                run_hours: Decimal::ZERO,
-                description: None,
-            })
+            .add_routing_operation(
+                CreateRoutingOperation {
+                    tenant_id: 1,
+                    routing_id: routing.id,
+                    sequence: 1,
+                    operation_name: "Setup".to_string(),
+                    work_center_id: Some(1),
+                    setup_hours: dec!(1),
+                    run_hours: Decimal::ZERO,
+                    description: None,
+                },
+                1,
+            )
             .await
             .unwrap();
 
         service
-            .add_routing_operation(CreateRoutingOperation {
-                routing_id: routing.id,
-                sequence: 2,
-                operation_name: "Assembly".to_string(),
-                work_center_id: Some(1),
-                setup_hours: Decimal::ZERO,
-                run_hours: dec!(5),
-                description: None,
-            })
+            .add_routing_operation(
+                CreateRoutingOperation {
+                    tenant_id: 1,
+                    routing_id: routing.id,
+                    sequence: 2,
+                    operation_name: "Assembly".to_string(),
+                    work_center_id: Some(1),
+                    setup_hours: Decimal::ZERO,
+                    run_hours: dec!(5),
+                    description: None,
+                },
+                1,
+            )
             .await
             .unwrap();
 

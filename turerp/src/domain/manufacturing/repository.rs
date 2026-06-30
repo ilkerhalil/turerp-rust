@@ -43,13 +43,20 @@ pub trait WorkOrderRepository: Send + Sync {
         &self,
         op: CreateWorkOrderOperation,
     ) -> Result<WorkOrderOperation, ApiError>;
-    async fn get_operations(&self, work_order_id: i64)
-        -> Result<Vec<WorkOrderOperation>, ApiError>;
+    async fn get_operations(
+        &self,
+        work_order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<WorkOrderOperation>, ApiError>;
     async fn add_material(
         &self,
         mat: CreateWorkOrderMaterial,
     ) -> Result<WorkOrderMaterial, ApiError>;
-    async fn get_materials(&self, work_order_id: i64) -> Result<Vec<WorkOrderMaterial>, ApiError>;
+    async fn get_materials(
+        &self,
+        work_order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<WorkOrderMaterial>, ApiError>;
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<WorkOrder, ApiError>;
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<WorkOrder>, ApiError>;
@@ -78,7 +85,11 @@ pub trait BillOfMaterialsRepository: Send + Sync {
         &self,
         line: CreateBillOfMaterialsLine,
     ) -> Result<BillOfMaterialsLine, ApiError>;
-    async fn get_lines(&self, bom_id: i64) -> Result<Vec<BillOfMaterialsLine>, ApiError>;
+    async fn get_lines(
+        &self,
+        bom_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<BillOfMaterialsLine>, ApiError>;
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<BillOfMaterials, ApiError>;
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<BillOfMaterials>, ApiError>;
@@ -103,7 +114,11 @@ pub trait RoutingRepository: Send + Sync {
         &self,
         create: CreateRoutingOperation,
     ) -> Result<RoutingOperation, ApiError>;
-    async fn get_operations(&self, routing_id: i64) -> Result<Vec<RoutingOperation>, ApiError>;
+    async fn get_operations(
+        &self,
+        routing_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<RoutingOperation>, ApiError>;
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
     async fn restore(&self, id: i64, tenant_id: i64) -> Result<Routing, ApiError>;
     async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<Routing>, ApiError>;
@@ -279,6 +294,7 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
         inner.next_op_id += 1;
         let operation = WorkOrderOperation {
             id,
+            tenant_id: op.tenant_id,
             work_order_id: op.work_order_id,
             operation_sequence: op.operation_sequence,
             operation_name: op.operation_name,
@@ -300,13 +316,17 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
     async fn get_operations(
         &self,
         work_order_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<WorkOrderOperation>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .operations
             .get(&work_order_id)
             .cloned()
-            .unwrap_or_default())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|o| o.tenant_id == tenant_id)
+            .collect())
     }
 
     async fn add_material(
@@ -320,6 +340,7 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
         inner.next_mat_id += 1;
         let material = WorkOrderMaterial {
             id,
+            tenant_id: mat.tenant_id,
             work_order_id: mat.work_order_id,
             product_id: mat.product_id,
             quantity_required: mat.quantity_required,
@@ -334,13 +355,20 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
         Ok(material)
     }
 
-    async fn get_materials(&self, work_order_id: i64) -> Result<Vec<WorkOrderMaterial>, ApiError> {
+    async fn get_materials(
+        &self,
+        work_order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<WorkOrderMaterial>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .materials
             .get(&work_order_id)
             .cloned()
-            .unwrap_or_default())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|m| m.tenant_id == tenant_id)
+            .collect())
     }
 
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
@@ -510,6 +538,7 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
         inner.next_line_id += 1;
         let bom_line = BillOfMaterialsLine {
             id,
+            tenant_id: line.tenant_id,
             bom_id: line.bom_id,
             component_product_id: line.component_product_id,
             quantity: line.quantity,
@@ -526,9 +555,20 @@ impl BillOfMaterialsRepository for InMemoryBillOfMaterialsRepository {
         Ok(bom_line)
     }
 
-    async fn get_lines(&self, bom_id: i64) -> Result<Vec<BillOfMaterialsLine>, ApiError> {
+    async fn get_lines(
+        &self,
+        bom_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<BillOfMaterialsLine>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.lines.get(&bom_id).cloned().unwrap_or_default())
+        Ok(inner
+            .lines
+            .get(&bom_id)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|l| l.tenant_id == tenant_id)
+            .collect())
     }
 
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
@@ -693,6 +733,7 @@ impl RoutingRepository for InMemoryRoutingRepository {
         inner.next_op_id += 1;
         let op = RoutingOperation {
             id,
+            tenant_id: create.tenant_id,
             routing_id: create.routing_id,
             sequence: create.sequence,
             operation_name: create.operation_name,
@@ -709,13 +750,20 @@ impl RoutingRepository for InMemoryRoutingRepository {
         Ok(op)
     }
 
-    async fn get_operations(&self, routing_id: i64) -> Result<Vec<RoutingOperation>, ApiError> {
+    async fn get_operations(
+        &self,
+        routing_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<RoutingOperation>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .operations
             .get(&routing_id)
             .cloned()
-            .unwrap_or_default())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|o| o.tenant_id == tenant_id)
+            .collect())
     }
 
     async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {

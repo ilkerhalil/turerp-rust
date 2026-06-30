@@ -102,6 +102,7 @@ Authorization: Bearer {{admin_token}}
 Content-Type: application/json
 ```
 {
+  "tenant_id": {{tenant_id}},
   "routing_id": {{routing_id}},
   "sequence": 10,
   "operation_name": "WF Assembly",
