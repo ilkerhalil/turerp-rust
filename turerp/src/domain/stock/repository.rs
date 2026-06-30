@@ -49,31 +49,54 @@ pub trait WarehouseRepository: Send + Sync {
 }
 
 /// Repository trait for StockLevel operations.
-/// Note: StockLevel does not have a tenant_id field; it is a child entity of Warehouse.
-/// Tenant isolation is enforced via the warehouse_id relationship.
+/// StockLevel carries its own `tenant_id` (migration 049); every method is
+/// tenant-scoped — a caller in tenant A can never read/mutate tenant B's rows.
+///
+/// UPSERT caveat (`update_quantity`/`reserve_quantity`/`release_quantity`):
+/// the `ON CONFLICT (warehouse_id, product_id) DO UPDATE` branch does not
+/// re-check `tenant_id` — it trusts the caller's `tenant_id` matches the
+/// existing row's tenant. This is safe because `warehouse_id` maps to exactly
+/// one tenant, and the only live caller (`create_stock_movement`) validates
+/// `warehouse_repo.find_by_id(warehouse_id, tenant_id)` BEFORE reaching the
+/// UPSERT. Any future handler wired to `reserve_stock`/`release_stock` (which
+/// currently have no HTTP route) MUST perform that same warehouse-ownership
+/// check first, or the UPSERTs must gain a `DO UPDATE ... WHERE
+/// stock_levels.tenant_id = $N` guard.
 #[async_trait]
 pub trait StockLevelRepository: Send + Sync {
     async fn find_by_warehouse_product(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
     ) -> Result<Option<StockLevel>, ApiError>;
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockLevel>, ApiError>;
-    async fn find_by_warehouse(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError>;
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockLevel>, ApiError>;
+    async fn find_by_warehouse(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockLevel>, ApiError>;
     async fn update_quantity(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
     ) -> Result<StockLevel, ApiError>;
     async fn reserve_quantity(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
     ) -> Result<StockLevel, ApiError>;
     async fn release_quantity(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
@@ -82,19 +105,34 @@ pub trait StockLevelRepository: Send + Sync {
     /// Soft delete a stock level
     async fn soft_delete(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError>;
 
     /// Restore a soft-deleted stock level
-    async fn restore(&self, warehouse_id: i64, product_id: i64) -> Result<StockLevel, ApiError>;
+    async fn restore(
+        &self,
+        tenant_id: i64,
+        warehouse_id: i64,
+        product_id: i64,
+    ) -> Result<StockLevel, ApiError>;
 
     /// Find soft-deleted stock levels
-    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError>;
+    async fn find_deleted(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockLevel>, ApiError>;
 
     /// Hard delete a stock level (permanent destruction — admin only)
-    async fn destroy(&self, warehouse_id: i64, product_id: i64) -> Result<(), ApiError>;
+    async fn destroy(
+        &self,
+        tenant_id: i64,
+        warehouse_id: i64,
+        product_id: i64,
+    ) -> Result<(), ApiError>;
 }
 
 /// Repository trait for StockMovement operations.
@@ -357,6 +395,7 @@ impl Default for InMemoryStockLevelRepository {
 impl StockLevelRepository for InMemoryStockLevelRepository {
     async fn find_by_warehouse_product(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
     ) -> Result<Option<StockLevel>, ApiError> {
@@ -364,32 +403,43 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
         Ok(inner
             .levels
             .get(&(warehouse_id, product_id))
-            .filter(|l| !l.is_deleted())
+            .filter(|l| !l.is_deleted() && l.tenant_id == tenant_id)
             .cloned())
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockLevel>, ApiError> {
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockLevel>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .levels
             .values()
-            .filter(|l| l.product_id == product_id && !l.is_deleted())
+            .filter(|l| l.product_id == product_id && l.tenant_id == tenant_id && !l.is_deleted())
             .cloned()
             .collect())
     }
 
-    async fn find_by_warehouse(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError> {
+    async fn find_by_warehouse(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockLevel>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .levels
             .values()
-            .filter(|l| l.warehouse_id == warehouse_id && !l.is_deleted())
+            .filter(|l| {
+                l.warehouse_id == warehouse_id && l.tenant_id == tenant_id && !l.is_deleted()
+            })
             .cloned()
             .collect())
     }
 
     async fn update_quantity(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
@@ -404,6 +454,7 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
                 key,
                 StockLevel {
                     id,
+                    tenant_id,
                     warehouse_id,
                     product_id,
                     quantity: Decimal::ZERO,
@@ -425,6 +476,7 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
 
     async fn reserve_quantity(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
@@ -439,6 +491,7 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
                 key,
                 StockLevel {
                     id,
+                    tenant_id,
                     warehouse_id,
                     product_id,
                     quantity: Decimal::ZERO,
@@ -468,6 +521,7 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
 
     async fn release_quantity(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
@@ -482,6 +536,7 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
                 key,
                 StockLevel {
                     id,
+                    tenant_id,
                     warehouse_id,
                     product_id,
                     quantity: Decimal::ZERO,
@@ -503,6 +558,7 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
 
     async fn soft_delete(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         deleted_by: i64,
@@ -512,40 +568,64 @@ impl StockLevelRepository for InMemoryStockLevelRepository {
         let level = inner
             .levels
             .get_mut(&key)
+            .filter(|l| l.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))?;
         level.mark_deleted(deleted_by);
         Ok(())
     }
 
-    async fn restore(&self, warehouse_id: i64, product_id: i64) -> Result<StockLevel, ApiError> {
+    async fn restore(
+        &self,
+        tenant_id: i64,
+        warehouse_id: i64,
+        product_id: i64,
+    ) -> Result<StockLevel, ApiError> {
         let mut inner = self.inner.lock();
         let key = (warehouse_id, product_id);
         let level = inner
             .levels
             .get_mut(&key)
+            .filter(|l| l.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))?;
         level.restore();
         Ok(level.clone())
     }
 
-    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError> {
+    async fn find_deleted(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockLevel>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .levels
             .values()
-            .filter(|l| l.warehouse_id == warehouse_id && l.is_deleted())
+            .filter(|l| {
+                l.warehouse_id == warehouse_id && l.tenant_id == tenant_id && l.is_deleted()
+            })
             .cloned()
             .collect())
     }
 
-    async fn destroy(&self, warehouse_id: i64, product_id: i64) -> Result<(), ApiError> {
+    async fn destroy(
+        &self,
+        tenant_id: i64,
+        warehouse_id: i64,
+        product_id: i64,
+    ) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         let key = (warehouse_id, product_id);
-        inner
-            .levels
-            .remove(&key)
-            .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))?;
-        Ok(())
+        match inner.levels.remove(&key) {
+            // Own tenant: destroy succeeds.
+            Some(level) if level.tenant_id == tenant_id => Ok(()),
+            // Cross-tenant attempt: re-insert the foreign row untouched and
+            // mask existence with NotFound.
+            Some(level) => {
+                inner.levels.insert(key, level);
+                Err(ApiError::NotFound("Stock level not found".to_string()))
+            }
+            None => Err(ApiError::NotFound("Stock level not found".to_string())),
+        }
     }
 }
 
