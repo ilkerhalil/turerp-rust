@@ -472,7 +472,7 @@ pub async fn destroy_stock_movement(
     security(("bearer_auth" = []))
 )]
 pub async fn get_stock_by_product(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -480,7 +480,7 @@ pub async fn get_stock_by_product(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        stock_service.get_stock_by_product(*path),
+        stock_service.get_stock_by_product(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -500,7 +500,7 @@ pub async fn get_stock_by_product(
     security(("bearer_auth" = []))
 )]
 pub async fn get_stock_by_warehouse(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -508,7 +508,7 @@ pub async fn get_stock_by_warehouse(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        stock_service.get_stock_by_warehouse(*path),
+        stock_service.get_stock_by_warehouse(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -537,7 +537,12 @@ pub async fn delete_stock_level(
     let i18n = resolve(&i18n);
     let (warehouse_id, product_id) = path.into_inner();
     match stock_service
-        .delete_stock_level(warehouse_id, product_id, admin_user.0.user_id()?)
+        .delete_stock_level(
+            warehouse_id,
+            product_id,
+            admin_user.0.tenant_id,
+            admin_user.0.user_id()?,
+        )
         .await
     {
         Ok(()) => {
@@ -561,13 +566,13 @@ pub async fn delete_stock_level(
     security(("bearer_auth" = []))
 )]
 pub async fn restore_stock_level(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     stock_service: web::Data<StockService>,
     path: web::Path<(i64, i64)>,
 ) -> ApiResult<HttpResponse> {
     let (warehouse_id, product_id) = path.into_inner();
     let level = stock_service
-        .restore_stock_level(warehouse_id, product_id)
+        .restore_stock_level(warehouse_id, product_id, admin_user.0.tenant_id)
         .await?;
     let response: StockLevelResponse = level.into();
     Ok(HttpResponse::Ok().json(response))
@@ -585,12 +590,12 @@ pub async fn restore_stock_level(
     security(("bearer_auth" = []))
 )]
 pub async fn list_deleted_stock_levels(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     stock_service: web::Data<StockService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
     let levels: Vec<_> = stock_service
-        .list_deleted_stock_levels(*path)
+        .list_deleted_stock_levels(*path, admin_user.0.tenant_id)
         .await?
         .into_iter()
         .map(StockLevelResponse::from)
@@ -611,13 +616,13 @@ pub async fn list_deleted_stock_levels(
     security(("bearer_auth" = []))
 )]
 pub async fn destroy_stock_level(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     stock_service: web::Data<StockService>,
     path: web::Path<(i64, i64)>,
 ) -> ApiResult<HttpResponse> {
     let (warehouse_id, product_id) = path.into_inner();
     stock_service
-        .destroy_stock_level(warehouse_id, product_id)
+        .destroy_stock_level(warehouse_id, product_id, admin_user.0.tenant_id)
         .await?;
     Ok(HttpResponse::NoContent().finish())
 }

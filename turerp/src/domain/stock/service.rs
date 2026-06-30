@@ -145,10 +145,11 @@ impl StockService {
         &self,
         warehouse_id: i64,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<StockLevelResponse, ApiError> {
         let level = self
             .stock_level_repo
-            .find_by_warehouse_product(warehouse_id, product_id)
+            .find_by_warehouse_product(tenant_id, warehouse_id, product_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))?;
         Ok(level.into())
@@ -158,8 +159,12 @@ impl StockService {
     pub async fn get_stock_by_product(
         &self,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<StockLevelResponse>, ApiError> {
-        let levels = self.stock_level_repo.find_by_product(product_id).await?;
+        let levels = self
+            .stock_level_repo
+            .find_by_product(product_id, tenant_id)
+            .await?;
         Ok(levels.into_iter().map(|l| l.into()).collect())
     }
 
@@ -167,10 +172,11 @@ impl StockService {
     pub async fn get_stock_by_warehouse(
         &self,
         warehouse_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<StockLevelResponse>, ApiError> {
         let levels = self
             .stock_level_repo
-            .find_by_warehouse(warehouse_id)
+            .find_by_warehouse(warehouse_id, tenant_id)
             .await?;
         Ok(levels.into_iter().map(|l| l.into()).collect())
     }
@@ -181,7 +187,10 @@ impl StockService {
         product_id: i64,
         tenant_id: i64,
     ) -> Result<StockSummary, ApiError> {
-        let levels = self.stock_level_repo.find_by_product(product_id).await?;
+        let levels = self
+            .stock_level_repo
+            .find_by_product(product_id, tenant_id)
+            .await?;
 
         let total_quantity: Decimal = levels.iter().map(|l| l.quantity).sum();
         let reserved_quantity: Decimal = levels.iter().map(|l| l.reserved_quantity).sum();
@@ -217,10 +226,11 @@ impl StockService {
         &self,
         warehouse_id: i64,
         product_id: i64,
+        tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
         self.stock_level_repo
-            .soft_delete(warehouse_id, product_id, deleted_by)
+            .soft_delete(tenant_id, warehouse_id, product_id, deleted_by)
             .await
     }
 
@@ -230,9 +240,10 @@ impl StockService {
         &self,
         warehouse_id: i64,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<StockLevel, ApiError> {
         self.stock_level_repo
-            .restore(warehouse_id, product_id)
+            .restore(tenant_id, warehouse_id, product_id)
             .await
     }
 
@@ -241,8 +252,11 @@ impl StockService {
     pub async fn list_deleted_stock_levels(
         &self,
         warehouse_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<StockLevel>, ApiError> {
-        self.stock_level_repo.find_deleted(warehouse_id).await
+        self.stock_level_repo
+            .find_deleted(warehouse_id, tenant_id)
+            .await
     }
 
     /// Permanently delete a stock level
@@ -251,9 +265,10 @@ impl StockService {
         &self,
         warehouse_id: i64,
         product_id: i64,
+        tenant_id: i64,
     ) -> Result<(), ApiError> {
         self.stock_level_repo
-            .destroy(warehouse_id, product_id)
+            .destroy(tenant_id, warehouse_id, product_id)
             .await
     }
 
@@ -280,7 +295,7 @@ impl StockService {
         // Get current stock level
         let current_level = self
             .stock_level_repo
-            .find_by_warehouse_product(create.warehouse_id, create.product_id)
+            .find_by_warehouse_product(tenant_id, create.warehouse_id, create.product_id)
             .await?;
 
         let new_quantity = match create.movement_type {
@@ -309,7 +324,12 @@ impl StockService {
 
         // Update stock level
         self.stock_level_repo
-            .update_quantity(create.warehouse_id, create.product_id, new_quantity)
+            .update_quantity(
+                tenant_id,
+                create.warehouse_id,
+                create.product_id,
+                new_quantity,
+            )
             .await?;
 
         // Set tenant_id and create movement record
@@ -402,10 +422,11 @@ impl StockService {
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
+        tenant_id: i64,
     ) -> Result<StockLevelResponse, ApiError> {
         let level = self
             .stock_level_repo
-            .reserve_quantity(warehouse_id, product_id, quantity)
+            .reserve_quantity(tenant_id, warehouse_id, product_id, quantity)
             .await?;
         Ok(level.into())
     }
@@ -416,10 +437,11 @@ impl StockService {
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
+        tenant_id: i64,
     ) -> Result<StockLevelResponse, ApiError> {
         let level = self
             .stock_level_repo
-            .release_quantity(warehouse_id, product_id, quantity)
+            .release_quantity(tenant_id, warehouse_id, product_id, quantity)
             .await?;
         Ok(level.into())
     }
@@ -500,7 +522,7 @@ mod tests {
         assert_eq!(movement.quantity, dec!(100));
 
         // Check stock level
-        let stock = service.get_stock_level(warehouse.id, 1).await.unwrap();
+        let stock = service.get_stock_level(warehouse.id, 1, 1).await.unwrap();
         assert_eq!(stock.quantity, dec!(100));
     }
 
@@ -559,7 +581,7 @@ mod tests {
             .await;
 
         assert!(result.is_ok());
-        let stock = service.get_stock_level(warehouse.id, 1).await.unwrap();
+        let stock = service.get_stock_level(warehouse.id, 1, 1).await.unwrap();
         assert_eq!(stock.quantity, dec!(70));
     }
 

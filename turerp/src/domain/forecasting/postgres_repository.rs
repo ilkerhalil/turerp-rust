@@ -55,6 +55,7 @@ impl From<HistoricalSaleRow> for HistoricalSale {
 #[derive(Debug, FromRow)]
 struct StockLevelRow {
     id: i64,
+    tenant_id: i64,
     warehouse_id: i64,
     product_id: i64,
     quantity: Decimal,
@@ -68,6 +69,7 @@ impl From<StockLevelRow> for StockLevel {
     fn from(row: StockLevelRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             warehouse_id: row.warehouse_id,
             product_id: row.product_id,
             quantity: row.quantity,
@@ -156,7 +158,7 @@ impl ForecastingRepository for PostgresForecastingRepository {
     ) -> Result<Vec<StockLevel>, ApiError> {
         let rows: Vec<StockLevelRow> = sqlx::query_as(
             r#"
-            SELECT sl.id, sl.warehouse_id, sl.product_id, sl.quantity,
+            SELECT sl.id, sl.tenant_id, sl.warehouse_id, sl.product_id, sl.quantity,
                    sl.reserved_quantity, sl.updated_at, sl.deleted_at, sl.deleted_by
             FROM stock_levels sl
             JOIN warehouses w ON w.id = sl.warehouse_id
@@ -182,7 +184,7 @@ impl ForecastingRepository for PostgresForecastingRepository {
     ) -> Result<Option<StockLevel>, ApiError> {
         let result: Option<StockLevelRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, quantity, reserved_quantity,
+            SELECT id, tenant_id, warehouse_id, product_id, quantity, reserved_quantity,
                    updated_at, deleted_at, deleted_by
             FROM stock_levels
             WHERE warehouse_id = $1 AND product_id = $2 AND deleted_at IS NULL

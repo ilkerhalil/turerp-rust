@@ -132,6 +132,7 @@ impl InMemoryForecastingRepository {
             (warehouse_id, product_id),
             StockLevel {
                 id,
+                tenant_id: 1,
                 warehouse_id,
                 product_id,
                 quantity,

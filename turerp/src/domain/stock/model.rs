@@ -61,6 +61,7 @@ impl From<Warehouse> for WarehouseResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct StockLevel {
     pub id: i64,
+    pub tenant_id: i64,
     pub warehouse_id: i64,
     pub product_id: i64,
     pub quantity: Decimal,

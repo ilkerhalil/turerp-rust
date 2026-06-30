@@ -331,6 +331,7 @@ impl WarehouseRepository for PostgresWarehouseRepository {
 #[derive(Debug, FromRow)]
 struct StockLevelRow {
     id: i64,
+    tenant_id: i64,
     warehouse_id: i64,
     product_id: i64,
     quantity: Decimal,
@@ -344,6 +345,7 @@ impl From<StockLevelRow> for StockLevel {
     fn from(row: StockLevelRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             warehouse_id: row.warehouse_id,
             product_id: row.product_id,
             quantity: row.quantity,
@@ -376,18 +378,20 @@ impl PostgresStockLevelRepository {
 impl StockLevelRepository for PostgresStockLevelRepository {
     async fn find_by_warehouse_product(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
     ) -> Result<Option<StockLevel>, ApiError> {
         let result: Option<StockLevelRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
+            SELECT id, tenant_id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             FROM stock_levels
-            WHERE warehouse_id = $1 AND product_id = $2 AND deleted_at IS NULL
+            WHERE warehouse_id = $1 AND product_id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             "#,
         )
         .bind(warehouse_id)
         .bind(product_id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find stock level: {}", e)))?;
@@ -395,16 +399,21 @@ impl StockLevelRepository for PostgresStockLevelRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<StockLevel>, ApiError> {
+    async fn find_by_product(
+        &self,
+        product_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockLevel>, ApiError> {
         let rows: Vec<StockLevelRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
+            SELECT id, tenant_id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             FROM stock_levels
-            WHERE product_id = $1 AND deleted_at IS NULL
+            WHERE product_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY warehouse_id
             "#,
         )
         .bind(product_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -414,16 +423,21 @@ impl StockLevelRepository for PostgresStockLevelRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn find_by_warehouse(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError> {
+    async fn find_by_warehouse(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockLevel>, ApiError> {
         let rows: Vec<StockLevelRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
+            SELECT id, tenant_id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             FROM stock_levels
-            WHERE warehouse_id = $1 AND deleted_at IS NULL
+            WHERE warehouse_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY product_id
             "#,
         )
         .bind(warehouse_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -435,23 +449,27 @@ impl StockLevelRepository for PostgresStockLevelRepository {
 
     async fn update_quantity(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
     ) -> Result<StockLevel, ApiError> {
-        // UPSERT: insert if not exists, update quantity if exists
+        // UPSERT: insert if not exists, update quantity if exists. tenant_id is
+        // set on insert and left untouched on conflict (warehouse_id maps to
+        // exactly one tenant, so the conflict row already carries this tenant).
         let row: StockLevelRow = sqlx::query_as(
             r#"
-            INSERT INTO stock_levels (warehouse_id, product_id, quantity, reserved_quantity, updated_at)
-            VALUES ($1, $2, $3, 0, NOW())
+            INSERT INTO stock_levels (warehouse_id, product_id, quantity, reserved_quantity, updated_at, tenant_id)
+            VALUES ($1, $2, $3, 0, NOW(), $4)
             ON CONFLICT (warehouse_id, product_id)
             DO UPDATE SET quantity = $3, updated_at = NOW()
-            RETURNING id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(warehouse_id)
         .bind(product_id)
         .bind(quantity)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to update stock quantity: {}", e)))?;
@@ -461,6 +479,7 @@ impl StockLevelRepository for PostgresStockLevelRepository {
 
     async fn reserve_quantity(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
@@ -468,16 +487,17 @@ impl StockLevelRepository for PostgresStockLevelRepository {
         // UPSERT: create row with zero quantities if not exists, then increment reserved
         let row: StockLevelRow = sqlx::query_as(
             r#"
-            INSERT INTO stock_levels (warehouse_id, product_id, quantity, reserved_quantity, updated_at)
-            VALUES ($1, $2, 0, $3, NOW())
+            INSERT INTO stock_levels (warehouse_id, product_id, quantity, reserved_quantity, updated_at, tenant_id)
+            VALUES ($1, $2, 0, $3, NOW(), $4)
             ON CONFLICT (warehouse_id, product_id)
             DO UPDATE SET reserved_quantity = reserved_quantity + $3, updated_at = NOW()
-            RETURNING id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(warehouse_id)
         .bind(product_id)
         .bind(quantity)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to reserve stock quantity: {}", e)))?;
@@ -490,12 +510,13 @@ impl StockLevelRepository for PostgresStockLevelRepository {
                 r#"
                 UPDATE stock_levels
                 SET reserved_quantity = reserved_quantity - $1, updated_at = NOW()
-                WHERE warehouse_id = $2 AND product_id = $3
+                WHERE warehouse_id = $2 AND product_id = $3 AND tenant_id = $4
                 "#,
             )
             .bind(quantity)
             .bind(warehouse_id)
             .bind(product_id)
+            .bind(tenant_id)
             .execute(&*self.pool)
             .await
             .map_err(|e| {
@@ -514,6 +535,7 @@ impl StockLevelRepository for PostgresStockLevelRepository {
 
     async fn release_quantity(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         quantity: Decimal,
@@ -521,16 +543,17 @@ impl StockLevelRepository for PostgresStockLevelRepository {
         // UPSERT: create row if not exists, then decrement reserved (floor at 0)
         let row: StockLevelRow = sqlx::query_as(
             r#"
-            INSERT INTO stock_levels (warehouse_id, product_id, quantity, reserved_quantity, updated_at)
-            VALUES ($1, $2, 0, 0, NOW())
+            INSERT INTO stock_levels (warehouse_id, product_id, quantity, reserved_quantity, updated_at, tenant_id)
+            VALUES ($1, $2, 0, 0, NOW(), $4)
             ON CONFLICT (warehouse_id, product_id)
             DO UPDATE SET reserved_quantity = GREATEST(reserved_quantity - $3, 0), updated_at = NOW()
-            RETURNING id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
+            RETURNING id, tenant_id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             "#,
         )
         .bind(warehouse_id)
         .bind(product_id)
         .bind(quantity)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to release stock quantity: {}", e)))?;
@@ -540,6 +563,7 @@ impl StockLevelRepository for PostgresStockLevelRepository {
 
     async fn soft_delete(
         &self,
+        tenant_id: i64,
         warehouse_id: i64,
         product_id: i64,
         deleted_by: i64,
@@ -547,12 +571,13 @@ impl StockLevelRepository for PostgresStockLevelRepository {
         let result = sqlx::query(
             r#"
             UPDATE stock_levels
-            SET deleted_at = NOW(), deleted_by = $3
-            WHERE warehouse_id = $1 AND product_id = $2 AND deleted_at IS NULL
+            SET deleted_at = NOW(), deleted_by = $4
+            WHERE warehouse_id = $1 AND product_id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             "#,
         )
         .bind(warehouse_id)
         .bind(product_id)
+        .bind(tenant_id)
         .bind(deleted_by)
         .execute(&*self.pool)
         .await
@@ -565,16 +590,22 @@ impl StockLevelRepository for PostgresStockLevelRepository {
         Ok(())
     }
 
-    async fn restore(&self, warehouse_id: i64, product_id: i64) -> Result<StockLevel, ApiError> {
+    async fn restore(
+        &self,
+        tenant_id: i64,
+        warehouse_id: i64,
+        product_id: i64,
+    ) -> Result<StockLevel, ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE stock_levels
             SET deleted_at = NULL, deleted_by = NULL
-            WHERE warehouse_id = $1 AND product_id = $2 AND deleted_at IS NOT NULL
+            WHERE warehouse_id = $1 AND product_id = $2 AND tenant_id = $3 AND deleted_at IS NOT NULL
             "#,
         )
         .bind(warehouse_id)
         .bind(product_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to restore stock level: {}", e)))?;
@@ -585,21 +616,26 @@ impl StockLevelRepository for PostgresStockLevelRepository {
             ));
         }
 
-        self.find_by_warehouse_product(warehouse_id, product_id)
+        self.find_by_warehouse_product(tenant_id, warehouse_id, product_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Stock level not found".to_string()))
     }
 
-    async fn find_deleted(&self, warehouse_id: i64) -> Result<Vec<StockLevel>, ApiError> {
+    async fn find_deleted(
+        &self,
+        warehouse_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<StockLevel>, ApiError> {
         let rows: Vec<StockLevelRow> = sqlx::query_as(
             r#"
-            SELECT id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
+            SELECT id, tenant_id, warehouse_id, product_id, quantity, reserved_quantity, updated_at, deleted_at, deleted_by
             FROM stock_levels
-            WHERE warehouse_id = $1 AND deleted_at IS NOT NULL
+            WHERE warehouse_id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC
             "#,
         )
         .bind(warehouse_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find deleted stock levels: {}", e)))?;
@@ -607,15 +643,21 @@ impl StockLevelRepository for PostgresStockLevelRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn destroy(&self, warehouse_id: i64, product_id: i64) -> Result<(), ApiError> {
+    async fn destroy(
+        &self,
+        tenant_id: i64,
+        warehouse_id: i64,
+        product_id: i64,
+    ) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM stock_levels
-            WHERE warehouse_id = $1 AND product_id = $2
+            WHERE warehouse_id = $1 AND product_id = $2 AND tenant_id = $3
             "#,
         )
         .bind(warehouse_id)
         .bind(product_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to destroy stock level: {}", e)))?;
