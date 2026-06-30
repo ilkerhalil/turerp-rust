@@ -7,6 +7,21 @@ use crate::middleware::api_key::ApiKeyAuth;
 use crate::middleware::auth::AdminUser;
 use actix_web::{web, HttpResponse};
 
+/// Reject cross-tenant access on admin api-key endpoints: 403 if the
+/// path-supplied `tenant_id` does not match the admin's own tenant. The
+/// service is always called with the auth-derived tenant (never the path
+/// value), so a foreign `tenant_id` cannot reach a query even if this guard
+/// were bypassed.
+fn enforce_tenant(path_tenant_id: i64, admin: &AdminUser) -> Result<(), ApiError> {
+    if path_tenant_id != admin.0.tenant_id {
+        return Err(ApiError::Forbidden(format!(
+            "access denied: path tenant_id {} does not match your tenant {}",
+            path_tenant_id, admin.0.tenant_id
+        )));
+    }
+    Ok(())
+}
+
 /// Create a new API key (admin only)
 #[utoipa::path(
     post,
@@ -50,12 +65,12 @@ async fn create_api_key(
     security(("bearer_auth" = [])),
 )]
 async fn list_api_keys(
-    _admin: AdminUser,
+    admin: AdminUser,
     service: web::Data<ApiKeyService>,
     path: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
-    let tenant_id = path.into_inner();
-    let keys = service.list_api_keys(tenant_id).await?;
+    enforce_tenant(path.into_inner(), &admin)?;
+    let keys = service.list_api_keys(admin.0.tenant_id).await?;
     Ok(HttpResponse::Ok().json(keys))
 }
 
@@ -77,14 +92,14 @@ async fn list_api_keys(
     security(("bearer_auth" = [])),
 )]
 async fn list_api_keys_paginated(
-    _admin: AdminUser,
+    admin: AdminUser,
     service: web::Data<ApiKeyService>,
     path: web::Path<i64>,
     query: web::Query<crate::common::pagination::PaginationParams>,
 ) -> Result<HttpResponse, ApiError> {
-    let tenant_id = path.into_inner();
+    enforce_tenant(path.into_inner(), &admin)?;
     let result = service
-        .list_api_keys_paginated(tenant_id, query.page, query.per_page)
+        .list_api_keys_paginated(admin.0.tenant_id, query.page, query.per_page)
         .await?;
     Ok(HttpResponse::Ok().json(result))
 }
@@ -107,12 +122,13 @@ async fn list_api_keys_paginated(
     security(("bearer_auth" = [])),
 )]
 async fn get_api_key(
-    _admin: AdminUser,
+    admin: AdminUser,
     service: web::Data<ApiKeyService>,
     path: web::Path<(i64, i64)>,
 ) -> Result<HttpResponse, ApiError> {
-    let (id, tenant_id) = path.into_inner();
-    let key = service.get_api_key(id, tenant_id).await?;
+    let (id, path_tenant_id) = path.into_inner();
+    enforce_tenant(path_tenant_id, &admin)?;
+    let key = service.get_api_key(id, admin.0.tenant_id).await?;
     Ok(HttpResponse::Ok().json(key))
 }
 
@@ -135,14 +151,15 @@ async fn get_api_key(
     security(("bearer_auth" = [])),
 )]
 async fn update_api_key(
-    _admin: AdminUser,
+    admin: AdminUser,
     service: web::Data<ApiKeyService>,
     path: web::Path<(i64, i64)>,
     body: web::Json<UpdateApiKey>,
 ) -> Result<HttpResponse, ApiError> {
-    let (id, tenant_id) = path.into_inner();
+    let (id, path_tenant_id) = path.into_inner();
+    enforce_tenant(path_tenant_id, &admin)?;
     let key = service
-        .update_api_key(id, tenant_id, body.into_inner())
+        .update_api_key(id, admin.0.tenant_id, body.into_inner())
         .await?;
     Ok(HttpResponse::Ok().json(key))
 }
@@ -165,12 +182,13 @@ async fn update_api_key(
     security(("bearer_auth" = [])),
 )]
 async fn delete_api_key(
-    _admin: AdminUser,
+    admin: AdminUser,
     service: web::Data<ApiKeyService>,
     path: web::Path<(i64, i64)>,
 ) -> Result<HttpResponse, ApiError> {
-    let (id, tenant_id) = path.into_inner();
-    service.delete_api_key(id, tenant_id).await?;
+    let (id, path_tenant_id) = path.into_inner();
+    enforce_tenant(path_tenant_id, &admin)?;
+    service.delete_api_key(id, admin.0.tenant_id).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -193,14 +211,15 @@ async fn delete_api_key(
     security(("bearer_auth" = [])),
 )]
 async fn soft_delete_api_key(
-    _admin: AdminUser,
+    admin: AdminUser,
     service: web::Data<ApiKeyService>,
     path: web::Path<(i64, i64)>,
 ) -> Result<HttpResponse, ApiError> {
-    let (id, tenant_id) = path.into_inner();
-    let deleted_by = _admin.0.user_id()?;
+    let (id, path_tenant_id) = path.into_inner();
+    enforce_tenant(path_tenant_id, &admin)?;
+    let deleted_by = admin.0.user_id()?;
     service
-        .soft_delete_api_key(id, tenant_id, deleted_by)
+        .soft_delete_api_key(id, admin.0.tenant_id, deleted_by)
         .await?;
     Ok(HttpResponse::NoContent().finish())
 }
@@ -223,12 +242,13 @@ async fn soft_delete_api_key(
     security(("bearer_auth" = [])),
 )]
 async fn restore_api_key(
-    _admin: AdminUser,
+    admin: AdminUser,
     service: web::Data<ApiKeyService>,
     path: web::Path<(i64, i64)>,
 ) -> Result<HttpResponse, ApiError> {
-    let (id, tenant_id) = path.into_inner();
-    service.restore_api_key(id, tenant_id).await?;
+    let (id, path_tenant_id) = path.into_inner();
+    enforce_tenant(path_tenant_id, &admin)?;
+    service.restore_api_key(id, admin.0.tenant_id).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -248,12 +268,12 @@ async fn restore_api_key(
     security(("bearer_auth" = [])),
 )]
 async fn list_deleted_api_keys(
-    _admin: AdminUser,
+    admin: AdminUser,
     service: web::Data<ApiKeyService>,
     path: web::Path<i64>,
 ) -> Result<HttpResponse, ApiError> {
-    let tenant_id = path.into_inner();
-    let keys = service.list_deleted_api_keys(tenant_id).await?;
+    enforce_tenant(path.into_inner(), &admin)?;
+    let keys = service.list_deleted_api_keys(admin.0.tenant_id).await?;
     Ok(HttpResponse::Ok().json(keys))
 }
 
@@ -275,12 +295,13 @@ async fn list_deleted_api_keys(
     security(("bearer_auth" = [])),
 )]
 async fn destroy_api_key(
-    _admin: AdminUser,
+    admin: AdminUser,
     service: web::Data<ApiKeyService>,
     path: web::Path<(i64, i64)>,
 ) -> Result<HttpResponse, ApiError> {
-    let (id, tenant_id) = path.into_inner();
-    service.destroy_api_key(id, tenant_id).await?;
+    let (id, path_tenant_id) = path.into_inner();
+    enforce_tenant(path_tenant_id, &admin)?;
+    service.destroy_api_key(id, admin.0.tenant_id).await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
