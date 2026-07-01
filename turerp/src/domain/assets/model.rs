@@ -155,6 +155,7 @@ impl Asset {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MaintenanceRecord {
     pub id: i64,
+    pub tenant_id: i64,
     pub asset_id: i64,
     pub maintenance_date: DateTime<Utc>,
     pub maintenance_type: String,

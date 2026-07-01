@@ -82,16 +82,19 @@ pub trait AssetsRepository: Send + Sync {
     /// Hard delete (destroy) an asset
     async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
-    /// Create maintenance record
+    /// Create maintenance record (tenant_id sourced from the auth principal;
+    /// the service validates the asset belongs to the caller's tenant first)
     async fn create_maintenance_record(
         &self,
         record: CreateMaintenanceRecord,
+        tenant_id: i64,
     ) -> Result<MaintenanceRecord, ApiError>;
 
-    /// Get maintenance records for an asset
+    /// Get maintenance records for an asset (tenant-scoped)
     async fn get_maintenance_records(
         &self,
         asset_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<MaintenanceRecord>, ApiError>;
 }
 
@@ -443,6 +446,7 @@ impl AssetsRepository for InMemoryAssetsRepository {
     async fn create_maintenance_record(
         &self,
         create: CreateMaintenanceRecord,
+        tenant_id: i64,
     ) -> Result<MaintenanceRecord, ApiError> {
         // Validate the record
         if create.maintenance_type.is_empty() || create.maintenance_type.len() > 100 {
@@ -463,8 +467,14 @@ impl AssetsRepository for InMemoryAssetsRepository {
 
         let mut inner = self.inner.lock();
 
-        // Verify asset exists
-        if !inner.assets.contains_key(&create.asset_id) {
+        // Verify the asset exists AND belongs to the caller's tenant
+        // (parent-ownership precheck — the body asset_id is an untrusted FK)
+        let belongs = inner
+            .assets
+            .get(&create.asset_id)
+            .map(|a| a.tenant_id == tenant_id)
+            .unwrap_or(false);
+        if !belongs {
             return Err(ApiError::NotFound(format!(
                 "Asset {} not found",
                 create.asset_id
@@ -476,6 +486,7 @@ impl AssetsRepository for InMemoryAssetsRepository {
 
         let record = MaintenanceRecord {
             id,
+            tenant_id,
             asset_id: create.asset_id,
             maintenance_date: create.maintenance_date,
             maintenance_type: create.maintenance_type,
@@ -498,13 +509,17 @@ impl AssetsRepository for InMemoryAssetsRepository {
     async fn get_maintenance_records(
         &self,
         asset_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<MaintenanceRecord>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .maintenance_records
             .get(&asset_id)
             .cloned()
-            .unwrap_or_default())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|r| r.tenant_id == tenant_id)
+            .collect())
     }
 }
 
@@ -608,22 +623,26 @@ mod tests {
             .unwrap();
 
         let record = repo
-            .create_maintenance_record(CreateMaintenanceRecord {
-                asset_id: asset.id,
-                maintenance_date: chrono::Utc::now(),
-                maintenance_type: "Preventive".to_string(),
-                description: "Annual maintenance".to_string(),
-                cost: Decimal::from(500),
-                performed_by: Some("John Doe".to_string()),
-                next_maintenance_date: Some(chrono::Utc::now() + chrono::Duration::days(365)),
-            })
+            .create_maintenance_record(
+                CreateMaintenanceRecord {
+                    asset_id: asset.id,
+                    maintenance_date: chrono::Utc::now(),
+                    maintenance_type: "Preventive".to_string(),
+                    description: "Annual maintenance".to_string(),
+                    cost: Decimal::from(500),
+                    performed_by: Some("John Doe".to_string()),
+                    next_maintenance_date: Some(chrono::Utc::now() + chrono::Duration::days(365)),
+                },
+                1,
+            )
             .await
             .unwrap();
 
         assert_eq!(record.asset_id, asset.id);
+        assert_eq!(record.tenant_id, 1);
         assert_eq!(record.maintenance_type, "Preventive");
 
-        let records = repo.get_maintenance_records(asset.id).await.unwrap();
+        let records = repo.get_maintenance_records(asset.id, 1).await.unwrap();
         assert_eq!(records.len(), 1);
     }
 }

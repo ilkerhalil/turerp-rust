@@ -748,14 +748,15 @@ impl AssetsRepository for PostgresAssetsRepository {
     async fn create_maintenance_record(
         &self,
         create: CreateMaintenanceRecord,
+        tenant_id: i64,
     ) -> Result<MaintenanceRecord, ApiError> {
         let row: MaintenanceRecordRow = sqlx::query_as(
             r#"
             INSERT INTO maintenance_records (asset_id, maintenance_date, maintenance_type,
                                                description, cost, performed_by,
-                                               next_maintenance_date, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-            RETURNING id, asset_id, maintenance_date, maintenance_type,
+                                               next_maintenance_date, created_at, tenant_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), $8)
+            RETURNING id, tenant_id, asset_id, maintenance_date, maintenance_type,
                       description, cost, performed_by, next_maintenance_date, created_at
             "#,
         )
@@ -766,6 +767,7 @@ impl AssetsRepository for PostgresAssetsRepository {
         .bind(create.cost)
         .bind(&create.performed_by)
         .bind(create.next_maintenance_date)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "MaintenanceRecord"))?;
@@ -776,17 +778,19 @@ impl AssetsRepository for PostgresAssetsRepository {
     async fn get_maintenance_records(
         &self,
         asset_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<MaintenanceRecord>, ApiError> {
         let rows: Vec<MaintenanceRecordRow> = sqlx::query_as(
             r#"
-            SELECT id, asset_id, maintenance_date, maintenance_type,
+            SELECT id, tenant_id, asset_id, maintenance_date, maintenance_type,
                    description, cost, performed_by, next_maintenance_date, created_at
             FROM maintenance_records
-            WHERE asset_id = $1
+            WHERE asset_id = $1 AND tenant_id = $2
             ORDER BY maintenance_date DESC
             "#,
         )
         .bind(asset_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to get maintenance records: {}", e)))?;
@@ -803,6 +807,7 @@ impl AssetsRepository for PostgresAssetsRepository {
 #[derive(Debug, FromRow)]
 struct MaintenanceRecordRow {
     id: i64,
+    tenant_id: i64,
     asset_id: i64,
     maintenance_date: chrono::DateTime<chrono::Utc>,
     maintenance_type: String,
@@ -817,6 +822,7 @@ impl From<MaintenanceRecordRow> for MaintenanceRecord {
     fn from(row: MaintenanceRecordRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             asset_id: row.asset_id,
             maintenance_date: row.maintenance_date,
             maintenance_type: row.maintenance_type,
