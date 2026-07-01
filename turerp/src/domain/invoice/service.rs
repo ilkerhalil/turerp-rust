@@ -47,7 +47,11 @@ impl InvoiceService {
         let invoice = self.invoice_repo.create(create.clone()).await?;
 
         // Create lines — if this fails, roll back the orphan invoice
-        let lines = match self.line_repo.create_many(invoice.id, create.lines).await {
+        let lines = match self
+            .line_repo
+            .create_many(invoice.id, create.lines, create.tenant_id)
+            .await
+        {
             Ok(lines) => lines,
             Err(e) => {
                 if let Err(rollback_err) =
@@ -69,7 +73,7 @@ impl InvoiceService {
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", id)))?;
 
-        let lines = self.line_repo.find_by_invoice(id).await?;
+        let lines = self.line_repo.find_by_invoice(id, tenant_id).await?;
 
         Ok(InvoiceResponse::from((invoice, lines)))
     }
@@ -78,8 +82,9 @@ impl InvoiceService {
     pub async fn get_invoice_lines(
         &self,
         invoice_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<crate::domain::invoice::model::InvoiceLine>, ApiError> {
-        self.line_repo.find_by_invoice(invoice_id).await
+        self.line_repo.find_by_invoice(invoice_id, tenant_id).await
     }
 
     pub async fn get_invoices_by_tenant(&self, tenant_id: i64) -> Result<Vec<Invoice>, ApiError> {
@@ -144,8 +149,8 @@ impl InvoiceService {
 
     #[tracing::instrument(skip(self), fields(tenant_id = tenant_id))]
     pub async fn delete_invoice(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        // Delete associated lines first
-        self.line_repo.delete_by_invoice(id).await?;
+        // Delete associated lines first (tenant-scoped)
+        self.line_repo.delete_by_invoice(id, tenant_id).await?;
         self.invoice_repo.delete(id, tenant_id).await
     }
 
@@ -173,8 +178,17 @@ impl InvoiceService {
 
     /// Permanently delete an invoice (admin only, after soft delete)
     pub async fn destroy_invoice(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        // Delete associated lines first
-        self.line_repo.delete_by_invoice(id).await?;
+        // Rely on the tenant-scoped invoice_repo.destroy (returns NotFound for a
+        // foreign invoice, Conflict if payments still exist). invoice_lines has
+        // ON DELETE CASCADE on invoice_id, so deleting the invoice removes its
+        // lines atomically. This deliberately does NOT call line_repo
+        // .delete_by_invoice first: that previously ran an unscoped
+        // `DELETE FROM invoice_lines WHERE invoice_id = $1` BEFORE the parent's
+        // tenant was validated — a cross-tenant hard-delete leak (a tenant-A
+        // admin could wipe tenant-B's invoice lines by guessing an invoice id,
+        // then destroy returned NotFound with no rollback). It also avoids a
+        // partial-state bug where lines were hard-deleted even when destroy
+        // later returned Conflict on existing payments.
         self.invoice_repo.destroy(id, tenant_id).await
     }
 

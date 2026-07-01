@@ -260,7 +260,9 @@ pub async fn restore_invoice(
     let invoice = invoice_service
         .restore_invoice(*path, admin_user.0.tenant_id)
         .await?;
-    let lines = invoice_service.get_invoice_lines(invoice.id).await?;
+    let lines = invoice_service
+        .get_invoice_lines(invoice.id, admin_user.0.tenant_id)
+        .await?;
     let response = InvoiceResponse::from((invoice, lines));
     Ok(HttpResponse::Ok().json(response))
 }

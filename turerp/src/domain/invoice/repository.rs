@@ -114,29 +114,35 @@ pub trait InvoiceRepository: Send + Sync {
 }
 
 /// Repository trait for InvoiceLine operations.
-/// Note: InvoiceLine does not have a tenant_id field; it is a child entity of Invoice.
-/// Tenant isolation should be enforced by looking up the parent Invoice first.
+/// InvoiceLine now carries its own tenant_id (migration 051, backfilled from
+/// invoices.tenant_id); all reads/writes scope by tenant_id in addition to the
+/// parent-invoice lookup. Mirrors PaymentRepository's tenant-isolation shape.
 #[async_trait]
 pub trait InvoiceLineRepository: Send + Sync {
     async fn create_many(
         &self,
         invoice_id: i64,
         lines: Vec<crate::domain::invoice::model::CreateInvoiceLine>,
+        tenant_id: i64,
     ) -> Result<Vec<InvoiceLine>, ApiError>;
-    async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<InvoiceLine>, ApiError>;
-    async fn delete_by_invoice(&self, invoice_id: i64) -> Result<(), ApiError>;
+    async fn find_by_invoice(
+        &self,
+        invoice_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<InvoiceLine>, ApiError>;
+    async fn delete_by_invoice(&self, invoice_id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
     /// Soft delete an invoice line
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError>;
 
     /// Restore a soft-deleted invoice line
-    async fn restore(&self, id: i64) -> Result<InvoiceLine, ApiError>;
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<InvoiceLine, ApiError>;
 
     /// Find soft-deleted invoice lines (admin use)
-    async fn find_deleted(&self) -> Result<Vec<InvoiceLine>, ApiError>;
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<InvoiceLine>, ApiError>;
 
     /// Hard delete an invoice line (permanent destruction — admin only)
-    async fn destroy(&self, id: i64) -> Result<(), ApiError>;
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for Payment operations.
@@ -684,6 +690,7 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
         &self,
         invoice_id: i64,
         create_lines: Vec<crate::domain::invoice::model::CreateInvoiceLine>,
+        tenant_id: i64,
     ) -> Result<Vec<InvoiceLine>, ApiError> {
         let mut inner = self.inner.lock();
         let mut lines = Vec::with_capacity(create_lines.len());
@@ -700,6 +707,7 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
 
             lines.push(InvoiceLine {
                 id,
+                tenant_id,
                 invoice_id,
                 product_id: create.product_id,
                 description: create.description,
@@ -718,7 +726,11 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
         Ok(lines)
     }
 
-    async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<InvoiceLine>, ApiError> {
+    async fn find_by_invoice(
+        &self,
+        invoice_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<InvoiceLine>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .lines
@@ -726,20 +738,25 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
             .cloned()
             .unwrap_or_default()
             .into_iter()
-            .filter(|l| !l.is_deleted())
+            .filter(|l| l.tenant_id == tenant_id && !l.is_deleted())
             .collect())
     }
 
-    async fn delete_by_invoice(&self, invoice_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_invoice(&self, invoice_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
-        inner.lines.remove(&invoice_id);
+        if let Some(lines) = inner.lines.get_mut(&invoice_id) {
+            lines.retain(|l| l.tenant_id != tenant_id);
+        }
         Ok(())
     }
 
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         for lines in inner.lines.values_mut() {
-            if let Some(line) = lines.iter_mut().find(|l| l.id == id) {
+            if let Some(line) = lines
+                .iter_mut()
+                .find(|l| l.id == id && l.tenant_id == tenant_id)
+            {
                 line.mark_deleted(deleted_by);
                 return Ok(());
             }
@@ -747,10 +764,13 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
         Err(ApiError::NotFound(format!("InvoiceLine {} not found", id)))
     }
 
-    async fn restore(&self, id: i64) -> Result<InvoiceLine, ApiError> {
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<InvoiceLine, ApiError> {
         let mut inner = self.inner.lock();
         for lines in inner.lines.values_mut() {
-            if let Some(line) = lines.iter_mut().find(|l| l.id == id) {
+            if let Some(line) = lines
+                .iter_mut()
+                .find(|l| l.id == id && l.tenant_id == tenant_id)
+            {
                 line.restore();
                 return Ok(line.clone());
             }
@@ -761,20 +781,24 @@ impl InvoiceLineRepository for InMemoryInvoiceLineRepository {
         )))
     }
 
-    async fn find_deleted(&self) -> Result<Vec<InvoiceLine>, ApiError> {
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<InvoiceLine>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .lines
             .values()
-            .flat_map(|v| v.iter().filter(|l| l.is_deleted()).cloned())
+            .flat_map(|v| {
+                v.iter()
+                    .filter(|l| l.tenant_id == tenant_id && l.is_deleted())
+                    .cloned()
+            })
             .collect())
     }
 
-    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         for lines in inner.lines.values_mut() {
-            if lines.iter().any(|l| l.id == id) {
-                lines.retain(|l| l.id != id);
+            if lines.iter().any(|l| l.id == id && l.tenant_id == tenant_id) {
+                lines.retain(|l| !(l.id == id && l.tenant_id == tenant_id));
                 return Ok(());
             }
         }

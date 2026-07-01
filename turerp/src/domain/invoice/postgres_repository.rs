@@ -168,6 +168,7 @@ impl From<InvoiceRowWithTotal> for (Invoice, i64) {
 #[derive(Debug, FromRow)]
 struct InvoiceLineRow {
     id: i64,
+    tenant_id: i64,
     invoice_id: i64,
     product_id: Option<i64>,
     description: String,
@@ -185,6 +186,7 @@ impl From<InvoiceLineRow> for InvoiceLine {
     fn from(row: InvoiceLineRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             invoice_id: row.invoice_id,
             product_id: row.product_id,
             description: row.description,
@@ -908,6 +910,7 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
         &self,
         invoice_id: i64,
         lines: Vec<CreateInvoiceLine>,
+        tenant_id: i64,
     ) -> Result<Vec<InvoiceLine>, ApiError> {
         let mut result = Vec::with_capacity(lines.len());
 
@@ -921,9 +924,10 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
             let row: InvoiceLineRow = sqlx::query_as(
                 r#"
                 INSERT INTO invoice_lines (invoice_id, product_id, description, quantity,
-                                           unit_price, tax_rate, discount_rate, line_total, sort_order)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                RETURNING id, invoice_id, product_id, description, quantity,
+                                           unit_price, tax_rate, discount_rate, line_total,
+                                           sort_order, tenant_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                RETURNING id, tenant_id, invoice_id, product_id, description, quantity,
                           unit_price, tax_rate, discount_rate, line_total, sort_order,
                           deleted_at, deleted_by
                 "#,
@@ -937,6 +941,7 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
             .bind(line.discount_rate)
             .bind(line_total)
             .bind(i as i32)
+            .bind(tenant_id)
             .fetch_one(&*self.pool)
             .await
             .map_err(|e| map_sqlx_error(e, "InvoiceLine"))?;
@@ -947,18 +952,23 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
         Ok(result)
     }
 
-    async fn find_by_invoice(&self, invoice_id: i64) -> Result<Vec<InvoiceLine>, ApiError> {
+    async fn find_by_invoice(
+        &self,
+        invoice_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<InvoiceLine>, ApiError> {
         let rows: Vec<InvoiceLineRow> = sqlx::query_as(
             r#"
-            SELECT id, invoice_id, product_id, description, quantity,
+            SELECT id, tenant_id, invoice_id, product_id, description, quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM invoice_lines
-            WHERE invoice_id = $1 AND deleted_at IS NULL
+            WHERE invoice_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY sort_order
             "#,
         )
         .bind(invoice_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -968,14 +978,15 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn delete_by_invoice(&self, invoice_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_invoice(&self, invoice_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             DELETE FROM invoice_lines
-            WHERE invoice_id = $1
+            WHERE invoice_id = $1 AND tenant_id = $2
             "#,
         )
         .bind(invoice_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete invoice lines: {}", e)))?;
@@ -983,15 +994,16 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
         Ok(())
     }
 
-    async fn soft_delete(&self, id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete(&self, id: i64, tenant_id: i64, deleted_by: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE invoice_lines
-            SET deleted_at = NOW(), deleted_by = $2
-            WHERE id = $1 AND deleted_at IS NULL
+            SET deleted_at = NOW(), deleted_by = $3
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .bind(deleted_by)
         .execute(&*self.pool)
         .await
@@ -1004,15 +1016,16 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
         Ok(())
     }
 
-    async fn restore(&self, id: i64) -> Result<InvoiceLine, ApiError> {
+    async fn restore(&self, id: i64, tenant_id: i64) -> Result<InvoiceLine, ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE invoice_lines
             SET deleted_at = NULL, deleted_by = NULL
-            WHERE id = $1 AND deleted_at IS NOT NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to restore invoice line: {}", e)))?;
@@ -1025,14 +1038,15 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
 
         let row: InvoiceLineRow = sqlx::query_as(
             r#"
-            SELECT id, invoice_id, product_id, description, quantity,
+            SELECT id, tenant_id, invoice_id, product_id, description, quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM invoice_lines
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "InvoiceLine"))?;
@@ -1040,17 +1054,18 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
         Ok(row.into())
     }
 
-    async fn find_deleted(&self) -> Result<Vec<InvoiceLine>, ApiError> {
+    async fn find_deleted(&self, tenant_id: i64) -> Result<Vec<InvoiceLine>, ApiError> {
         let rows: Vec<InvoiceLineRow> = sqlx::query_as(
             r#"
-            SELECT id, invoice_id, product_id, description, quantity,
+            SELECT id, tenant_id, invoice_id, product_id, description, quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM invoice_lines
-            WHERE deleted_at IS NOT NULL
+            WHERE deleted_at IS NOT NULL AND tenant_id = $1
             ORDER BY deleted_at DESC
             "#,
         )
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find deleted invoice lines: {}", e)))?;
@@ -1058,14 +1073,15 @@ impl InvoiceLineRepository for PostgresInvoiceLineRepository {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    async fn destroy(&self, id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM invoice_lines
-            WHERE id = $1
+            WHERE id = $1 AND tenant_id = $2
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to destroy invoice line: {}", e)))?;

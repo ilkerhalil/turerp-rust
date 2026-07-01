@@ -124,6 +124,7 @@ impl_soft_deletable!(Invoice);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct InvoiceLine {
     pub id: i64,
+    pub tenant_id: i64,
     pub invoice_id: i64,
     pub product_id: Option<i64>,
     pub description: String,
