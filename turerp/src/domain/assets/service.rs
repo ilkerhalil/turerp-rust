@@ -205,22 +205,33 @@ impl AssetsService {
         self.asset_repo.destroy(id, tenant_id).await
     }
 
-    /// Create a maintenance record
-    #[tracing::instrument(skip(self))]
+    /// Create a maintenance record (tenant_id from the auth principal).
+    /// Parent-ownership precheck: the body `asset_id` is an untrusted FK, so
+    /// verify the asset belongs to the caller's tenant before writing —
+    /// `get_asset` returns NotFound for a foreign asset, closing the
+    /// cross-tenant create leak.
+    #[tracing::instrument(skip(self, record), fields(tenant_id = tenant_id))]
     pub async fn create_maintenance_record(
         &self,
         record: CreateMaintenanceRecord,
+        tenant_id: i64,
     ) -> Result<MaintenanceRecord, ApiError> {
-        self.asset_repo.create_maintenance_record(record).await
+        self.get_asset(record.asset_id, tenant_id).await?;
+        self.asset_repo
+            .create_maintenance_record(record, tenant_id)
+            .await
     }
 
-    /// Get maintenance records for an asset
-    #[tracing::instrument(skip(self))]
+    /// Get maintenance records for an asset (tenant-scoped)
+    #[tracing::instrument(skip(self), fields(tenant_id = tenant_id))]
     pub async fn get_maintenance_records(
         &self,
         asset_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<MaintenanceRecord>, ApiError> {
-        self.asset_repo.get_maintenance_records(asset_id).await
+        self.asset_repo
+            .get_maintenance_records(asset_id, tenant_id)
+            .await
     }
 
     /// Create a category
@@ -398,21 +409,24 @@ mod tests {
             .unwrap();
 
         let record = service
-            .create_maintenance_record(CreateMaintenanceRecord {
-                asset_id: asset.id,
-                maintenance_date: chrono::Utc::now(),
-                maintenance_type: "Preventive".to_string(),
-                description: "Annual service".to_string(),
-                cost: Decimal::from(500),
-                performed_by: Some("John".to_string()),
-                next_maintenance_date: Some(chrono::Utc::now() + chrono::Duration::days(365)),
-            })
+            .create_maintenance_record(
+                CreateMaintenanceRecord {
+                    asset_id: asset.id,
+                    maintenance_date: chrono::Utc::now(),
+                    maintenance_type: "Preventive".to_string(),
+                    description: "Annual service".to_string(),
+                    cost: Decimal::from(500),
+                    performed_by: Some("John".to_string()),
+                    next_maintenance_date: Some(chrono::Utc::now() + chrono::Duration::days(365)),
+                },
+                1,
+            )
             .await
             .unwrap();
 
         assert_eq!(record.asset_id, asset.id);
 
-        let records = service.get_maintenance_records(asset.id).await.unwrap();
+        let records = service.get_maintenance_records(asset.id, 1).await.unwrap();
         assert_eq!(records.len(), 1);
     }
 }

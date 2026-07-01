@@ -404,7 +404,7 @@ pub async fn destroy_asset(
     security(("bearer_auth" = []))
 )]
 pub async fn create_maintenance_record(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     assets_service: web::Data<AssetsService>,
     payload: web::Json<CreateMaintenanceRecord>,
     locale: Locale,
@@ -412,7 +412,7 @@ pub async fn create_maintenance_record(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        assets_service.create_maintenance_record(payload.into_inner()),
+        assets_service.create_maintenance_record(payload.into_inner(), admin_user.0.tenant_id),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -427,7 +427,7 @@ pub async fn create_maintenance_record(
     security(("bearer_auth" = []))
 )]
 pub async fn get_maintenance_records(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     assets_service: web::Data<AssetsService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -435,7 +435,7 @@ pub async fn get_maintenance_records(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        assets_service.get_maintenance_records(*path),
+        assets_service.get_maintenance_records(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
