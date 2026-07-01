@@ -89,15 +89,17 @@ pub async fn get_boms_by_product(
     security(("bearer_auth" = []))
 )]
 pub async fn add_bom_line(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateBillOfMaterialsLine>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
     json_resp!(
-        mfg_service.add_bom_line(payload.into_inner()),
+        mfg_service.add_bom_line(create, admin_user.0.tenant_id),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -112,7 +114,7 @@ pub async fn add_bom_line(
     security(("bearer_auth" = []))
 )]
 pub async fn get_bom_lines(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -120,7 +122,7 @@ pub async fn get_bom_lines(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        mfg_service.get_bom_lines(*path),
+        mfg_service.get_bom_lines(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

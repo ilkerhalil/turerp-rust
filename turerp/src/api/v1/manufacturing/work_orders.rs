@@ -129,15 +129,17 @@ pub async fn update_work_order_status(
     security(("bearer_auth" = []))
 )]
 pub async fn add_work_order_operation(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateWorkOrderOperation>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
     json_resp!(
-        mfg_service.add_work_order_operation(payload.into_inner()),
+        mfg_service.add_work_order_operation(create, admin_user.0.tenant_id),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -152,7 +154,7 @@ pub async fn add_work_order_operation(
     security(("bearer_auth" = []))
 )]
 pub async fn get_work_order_operations(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -160,7 +162,7 @@ pub async fn get_work_order_operations(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        mfg_service.get_work_order_operations(*path),
+        mfg_service.get_work_order_operations(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()
@@ -175,15 +177,17 @@ pub async fn get_work_order_operations(
     security(("bearer_auth" = []))
 )]
 pub async fn add_work_order_material(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     mfg_service: web::Data<ManufacturingService>,
     payload: web::Json<CreateWorkOrderMaterial>,
     locale: Locale,
     i18n: Option<web::Data<I18n>>,
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
+    let mut create = payload.into_inner();
+    create.tenant_id = admin_user.0.tenant_id;
     json_resp!(
-        mfg_service.add_work_order_material(payload.into_inner()),
+        mfg_service.add_work_order_material(create, admin_user.0.tenant_id),
         HttpResponse::Created,
         i18n,
         locale.as_str()
@@ -198,7 +202,7 @@ pub async fn add_work_order_material(
     security(("bearer_auth" = []))
 )]
 pub async fn get_work_order_materials(
-    _auth_user: AuthUser,
+    auth_user: AuthUser,
     mfg_service: web::Data<ManufacturingService>,
     path: web::Path<i64>,
     locale: Locale,
@@ -206,7 +210,7 @@ pub async fn get_work_order_materials(
 ) -> ApiResult<HttpResponse> {
     let i18n = resolve(&i18n);
     json_resp!(
-        mfg_service.get_work_order_materials(*path),
+        mfg_service.get_work_order_materials(*path, auth_user.0.tenant_id),
         HttpResponse::Ok,
         i18n,
         locale.as_str()

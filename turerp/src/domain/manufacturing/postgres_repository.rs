@@ -134,6 +134,7 @@ impl From<WorkOrderRow> for WorkOrder {
 #[derive(Debug, FromRow)]
 struct WorkOrderOperationRow {
     id: i64,
+    tenant_id: i64,
     work_order_id: i64,
     operation_sequence: i32,
     operation_name: String,
@@ -149,6 +150,7 @@ impl From<WorkOrderOperationRow> for WorkOrderOperation {
     fn from(row: WorkOrderOperationRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             work_order_id: row.work_order_id,
             operation_sequence: row.operation_sequence,
             operation_name: row.operation_name,
@@ -166,6 +168,7 @@ impl From<WorkOrderOperationRow> for WorkOrderOperation {
 #[derive(Debug, FromRow)]
 struct WorkOrderMaterialRow {
     id: i64,
+    tenant_id: i64,
     work_order_id: i64,
     product_id: i64,
     quantity_required: Decimal,
@@ -177,6 +180,7 @@ impl From<WorkOrderMaterialRow> for WorkOrderMaterial {
     fn from(row: WorkOrderMaterialRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             work_order_id: row.work_order_id,
             product_id: row.product_id,
             quantity_required: row.quantity_required,
@@ -394,9 +398,9 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
             r#"
             INSERT INTO work_order_operations (work_order_id, operation_sequence, operation_name,
                                                work_center_id, planned_hours, actual_hours, status,
-                                               started_at, completed_at)
-            VALUES ($1, $2, $3, $4, $5, 0, 'Pending', NULL, NULL)
-            RETURNING id, work_order_id, operation_sequence, operation_name, work_center_id,
+                                               started_at, completed_at, tenant_id)
+            VALUES ($1, $2, $3, $4, $5, 0, 'Pending', NULL, NULL, $6)
+            RETURNING id, tenant_id, work_order_id, operation_sequence, operation_name, work_center_id,
                       planned_hours, actual_hours, status, started_at, completed_at
             "#,
         )
@@ -405,6 +409,7 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
         .bind(&op.operation_name)
         .bind(op.work_center_id)
         .bind(op.planned_hours)
+        .bind(op.tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "WorkOrderOperation"))?;
@@ -415,17 +420,19 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
     async fn get_operations(
         &self,
         work_order_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<WorkOrderOperation>, ApiError> {
         let rows: Vec<WorkOrderOperationRow> = sqlx::query_as(
             r#"
-            SELECT id, work_order_id, operation_sequence, operation_name, work_center_id,
+            SELECT id, tenant_id, work_order_id, operation_sequence, operation_name, work_center_id,
                    planned_hours, actual_hours, status, started_at, completed_at
             FROM work_order_operations
-            WHERE work_order_id = $1
+            WHERE work_order_id = $1 AND tenant_id = $2
             ORDER BY operation_sequence
             "#,
         )
         .bind(work_order_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to get work order operations: {}", e)))?;
@@ -440,14 +447,15 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
         let row: WorkOrderMaterialRow = sqlx::query_as(
             r#"
             INSERT INTO work_order_materials (work_order_id, product_id, quantity_required,
-                                              quantity_issued, is_issued)
-            VALUES ($1, $2, $3, 0, false)
-            RETURNING id, work_order_id, product_id, quantity_required, quantity_issued, is_issued
+                                              quantity_issued, is_issued, tenant_id)
+            VALUES ($1, $2, $3, 0, false, $4)
+            RETURNING id, tenant_id, work_order_id, product_id, quantity_required, quantity_issued, is_issued
             "#,
         )
         .bind(mat.work_order_id)
         .bind(mat.product_id)
         .bind(mat.quantity_required)
+        .bind(mat.tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "WorkOrderMaterial"))?;
@@ -455,15 +463,20 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
         Ok(row.into())
     }
 
-    async fn get_materials(&self, work_order_id: i64) -> Result<Vec<WorkOrderMaterial>, ApiError> {
+    async fn get_materials(
+        &self,
+        work_order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<WorkOrderMaterial>, ApiError> {
         let rows: Vec<WorkOrderMaterialRow> = sqlx::query_as(
             r#"
-            SELECT id, work_order_id, product_id, quantity_required, quantity_issued, is_issued
+            SELECT id, tenant_id, work_order_id, product_id, quantity_required, quantity_issued, is_issued
             FROM work_order_materials
-            WHERE work_order_id = $1
+            WHERE work_order_id = $1 AND tenant_id = $2
             "#,
         )
         .bind(work_order_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to get work order materials: {}", e)))?;
@@ -593,6 +606,7 @@ impl From<BillOfMaterialsRow> for BillOfMaterials {
 #[derive(Debug, FromRow)]
 struct BillOfMaterialsLineRow {
     id: i64,
+    tenant_id: i64,
     bom_id: i64,
     component_product_id: i64,
     quantity: Decimal,
@@ -606,6 +620,7 @@ impl From<BillOfMaterialsLineRow> for BillOfMaterialsLine {
     fn from(row: BillOfMaterialsLineRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             bom_id: row.bom_id,
             component_product_id: row.component_product_id,
             quantity: row.quantity,
@@ -747,9 +762,9 @@ impl BillOfMaterialsRepository for PostgresBillOfMaterialsRepository {
         let row: BillOfMaterialsLineRow = sqlx::query_as(
             r#"
             INSERT INTO bom_lines (bom_id, component_product_id, quantity, unit_id,
-                                  scrap_percentage, is_optional, notes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id, bom_id, component_product_id, quantity, unit_id,
+                                  scrap_percentage, is_optional, notes, tenant_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, tenant_id, bom_id, component_product_id, quantity, unit_id,
                       scrap_percentage, is_optional, notes
             "#,
         )
@@ -760,6 +775,7 @@ impl BillOfMaterialsRepository for PostgresBillOfMaterialsRepository {
         .bind(line.scrap_percentage)
         .bind(line.is_optional)
         .bind(&line.notes)
+        .bind(line.tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "BillOfMaterialsLine"))?;
@@ -767,17 +783,22 @@ impl BillOfMaterialsRepository for PostgresBillOfMaterialsRepository {
         Ok(row.into())
     }
 
-    async fn get_lines(&self, bom_id: i64) -> Result<Vec<BillOfMaterialsLine>, ApiError> {
+    async fn get_lines(
+        &self,
+        bom_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<BillOfMaterialsLine>, ApiError> {
         let rows: Vec<BillOfMaterialsLineRow> = sqlx::query_as(
             r#"
-            SELECT id, bom_id, component_product_id, quantity, unit_id,
+            SELECT id, tenant_id, bom_id, component_product_id, quantity, unit_id,
                    scrap_percentage, is_optional, notes
             FROM bom_lines
-            WHERE bom_id = $1
+            WHERE bom_id = $1 AND tenant_id = $2
             ORDER BY id
             "#,
         )
         .bind(bom_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to get BOM lines: {}", e)))?;
@@ -905,6 +926,7 @@ impl From<RoutingRow> for Routing {
 #[derive(Debug, FromRow)]
 struct RoutingOperationRow {
     id: i64,
+    tenant_id: i64,
     routing_id: i64,
     sequence: i32,
     operation_name: String,
@@ -918,6 +940,7 @@ impl From<RoutingOperationRow> for RoutingOperation {
     fn from(row: RoutingOperationRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             routing_id: row.routing_id,
             sequence: row.sequence,
             operation_name: row.operation_name,
@@ -1043,9 +1066,9 @@ impl RoutingRepository for PostgresRoutingRepository {
         let row: RoutingOperationRow = sqlx::query_as(
             r#"
             INSERT INTO routing_operations (routing_id, sequence, operation_name, work_center_id,
-                                            setup_hours, run_hours, description)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id, routing_id, sequence, operation_name, work_center_id,
+                                            setup_hours, run_hours, description, tenant_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id, tenant_id, routing_id, sequence, operation_name, work_center_id,
                       setup_hours, run_hours, description
             "#,
         )
@@ -1056,6 +1079,7 @@ impl RoutingRepository for PostgresRoutingRepository {
         .bind(create.setup_hours)
         .bind(create.run_hours)
         .bind(&create.description)
+        .bind(create.tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| map_sqlx_error(e, "RoutingOperation"))?;
@@ -1063,17 +1087,22 @@ impl RoutingRepository for PostgresRoutingRepository {
         Ok(row.into())
     }
 
-    async fn get_operations(&self, routing_id: i64) -> Result<Vec<RoutingOperation>, ApiError> {
+    async fn get_operations(
+        &self,
+        routing_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<RoutingOperation>, ApiError> {
         let rows: Vec<RoutingOperationRow> = sqlx::query_as(
             r#"
-            SELECT id, routing_id, sequence, operation_name, work_center_id,
+            SELECT id, tenant_id, routing_id, sequence, operation_name, work_center_id,
                    setup_hours, run_hours, description
             FROM routing_operations
-            WHERE routing_id = $1
+            WHERE routing_id = $1 AND tenant_id = $2
             ORDER BY sequence
             "#,
         )
         .bind(routing_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to get routing operations: {}", e)))?;

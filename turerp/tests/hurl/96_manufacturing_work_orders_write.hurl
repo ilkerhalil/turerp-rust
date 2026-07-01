@@ -160,6 +160,7 @@ Authorization: Bearer {{admin_token}}
 Content-Type: application/json
 ```
 {
+  "tenant_id": {{tenant_id}},
   "work_order_id": {{work_order_id}},
   "operation_sequence": 10,
   "operation_name": "WF Turn",
@@ -191,6 +192,7 @@ Authorization: Bearer {{admin_token}}
 Content-Type: application/json
 ```
 {
+  "tenant_id": {{tenant_id}},
   "work_order_id": {{work_order_id}},
   "product_id": {{product_id}},
   "quantity_required": "50.00"
