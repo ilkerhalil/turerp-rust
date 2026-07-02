@@ -133,7 +133,7 @@ lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"] }
 handlebars = "6.0"
 
 # XML parsing (CAMT.053 / ISO 20022)
-quick-xml = { version = "0.37", features = ["serialize"] }
+quick-xml = { version = "0.41", features = ["serialize"] }
 
 # Barcode / QR code generation
 barcodes = { version = "0.1", features = ["image"] }
