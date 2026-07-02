@@ -72,21 +72,41 @@ pub trait SalesOrderLineRepository: Send + Sync {
         &self,
         order_id: i64,
         lines: Vec<CreateSalesOrderLine>,
+        tenant_id: i64,
     ) -> Result<Vec<SalesOrderLine>, ApiError>;
-    async fn find_by_order(&self, order_id: i64) -> Result<Vec<SalesOrderLine>, ApiError>;
-    async fn delete_by_order(&self, order_id: i64) -> Result<(), ApiError>;
+    async fn find_by_order(
+        &self,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<SalesOrderLine>, ApiError>;
+    async fn delete_by_order(&self, order_id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
-    /// Soft delete a sales order line
-    async fn soft_delete(&self, id: i64, order_id: i64, deleted_by: i64) -> Result<(), ApiError>;
+    /// Soft delete a sales order line (tenant-scoped)
+    async fn soft_delete(
+        &self,
+        id: i64,
+        order_id: i64,
+        deleted_by: i64,
+        tenant_id: i64,
+    ) -> Result<(), ApiError>;
 
-    /// Restore a soft-deleted sales order line
-    async fn restore(&self, id: i64, order_id: i64) -> Result<SalesOrderLine, ApiError>;
+    /// Restore a soft-deleted sales order line (tenant-scoped)
+    async fn restore(
+        &self,
+        id: i64,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<SalesOrderLine, ApiError>;
 
-    /// Find soft-deleted sales order lines
-    async fn find_deleted(&self, order_id: i64) -> Result<Vec<SalesOrderLine>, ApiError>;
+    /// Find soft-deleted sales order lines (tenant-scoped)
+    async fn find_deleted(
+        &self,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<SalesOrderLine>, ApiError>;
 
-    /// Hard delete a sales order line (permanent destruction -- admin only)
-    async fn destroy(&self, id: i64, order_id: i64) -> Result<(), ApiError>;
+    /// Hard delete a sales order line (permanent destruction -- admin only, tenant-scoped)
+    async fn destroy(&self, id: i64, order_id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Repository trait for Quotation operations
@@ -149,26 +169,41 @@ pub trait QuotationLineRepository: Send + Sync {
         &self,
         quotation_id: i64,
         lines: Vec<CreateQuotationLine>,
+        tenant_id: i64,
     ) -> Result<Vec<QuotationLine>, ApiError>;
-    async fn find_by_quotation(&self, quotation_id: i64) -> Result<Vec<QuotationLine>, ApiError>;
-    async fn delete_by_quotation(&self, quotation_id: i64) -> Result<(), ApiError>;
+    async fn find_by_quotation(
+        &self,
+        quotation_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<QuotationLine>, ApiError>;
+    async fn delete_by_quotation(&self, quotation_id: i64, tenant_id: i64) -> Result<(), ApiError>;
 
-    /// Soft delete a quotation line
+    /// Soft delete a quotation line (tenant-scoped)
     async fn soft_delete(
         &self,
         id: i64,
         quotation_id: i64,
         deleted_by: i64,
+        tenant_id: i64,
     ) -> Result<(), ApiError>;
 
-    /// Restore a soft-deleted quotation line
-    async fn restore(&self, id: i64, quotation_id: i64) -> Result<QuotationLine, ApiError>;
+    /// Restore a soft-deleted quotation line (tenant-scoped)
+    async fn restore(
+        &self,
+        id: i64,
+        quotation_id: i64,
+        tenant_id: i64,
+    ) -> Result<QuotationLine, ApiError>;
 
-    /// Find soft-deleted quotation lines
-    async fn find_deleted(&self, quotation_id: i64) -> Result<Vec<QuotationLine>, ApiError>;
+    /// Find soft-deleted quotation lines (tenant-scoped)
+    async fn find_deleted(
+        &self,
+        quotation_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<QuotationLine>, ApiError>;
 
-    /// Hard delete a quotation line (permanent destruction -- admin only)
-    async fn destroy(&self, id: i64, quotation_id: i64) -> Result<(), ApiError>;
+    /// Hard delete a quotation line (permanent destruction -- admin only, tenant-scoped)
+    async fn destroy(&self, id: i64, quotation_id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type aliases
@@ -466,6 +501,7 @@ impl SalesOrderLineRepository for InMemorySalesOrderLineRepository {
         &self,
         order_id: i64,
         create_lines: Vec<CreateSalesOrderLine>,
+        tenant_id: i64,
     ) -> Result<Vec<SalesOrderLine>, ApiError> {
         let mut inner = self.inner.lock();
         let mut lines = Vec::with_capacity(create_lines.len());
@@ -478,6 +514,7 @@ impl SalesOrderLineRepository for InMemorySalesOrderLineRepository {
 
             lines.push(SalesOrderLine {
                 id,
+                tenant_id,
                 order_id,
                 product_id: create.product_id,
                 description: create.description,
@@ -496,7 +533,11 @@ impl SalesOrderLineRepository for InMemorySalesOrderLineRepository {
         Ok(lines)
     }
 
-    async fn find_by_order(&self, order_id: i64) -> Result<Vec<SalesOrderLine>, ApiError> {
+    async fn find_by_order(
+        &self,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<SalesOrderLine>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .lines
@@ -504,17 +545,26 @@ impl SalesOrderLineRepository for InMemorySalesOrderLineRepository {
             .cloned()
             .unwrap_or_default()
             .into_iter()
-            .filter(|l| !l.is_deleted())
+            .filter(|l| l.tenant_id == tenant_id && !l.is_deleted())
             .collect())
     }
 
-    async fn delete_by_order(&self, order_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_order(&self, order_id: i64, _tenant_id: i64) -> Result<(), ApiError> {
+        // The HashMap bucket is keyed by order_id (one tenant per order); the
+        // caller has already validated ownership or is rolling back a just-created
+        // own order, so removing the bucket is tenant-safe.
         let mut inner = self.inner.lock();
         inner.lines.remove(&order_id);
         Ok(())
     }
 
-    async fn soft_delete(&self, id: i64, order_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete(
+        &self,
+        id: i64,
+        order_id: i64,
+        deleted_by: i64,
+        tenant_id: i64,
+    ) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         let lines = inner
             .lines
@@ -522,13 +572,18 @@ impl SalesOrderLineRepository for InMemorySalesOrderLineRepository {
             .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", order_id)))?;
         let line = lines
             .iter_mut()
-            .find(|l| l.id == id)
+            .find(|l| l.id == id && l.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Sales order line {} not found", id)))?;
         line.mark_deleted(deleted_by);
         Ok(())
     }
 
-    async fn restore(&self, id: i64, order_id: i64) -> Result<SalesOrderLine, ApiError> {
+    async fn restore(
+        &self,
+        id: i64,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<SalesOrderLine, ApiError> {
         let mut inner = self.inner.lock();
         let lines = inner
             .lines
@@ -536,13 +591,17 @@ impl SalesOrderLineRepository for InMemorySalesOrderLineRepository {
             .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", order_id)))?;
         let line = lines
             .iter_mut()
-            .find(|l| l.id == id)
+            .find(|l| l.id == id && l.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Sales order line {} not found", id)))?;
         line.restore();
         Ok(line.clone())
     }
 
-    async fn find_deleted(&self, order_id: i64) -> Result<Vec<SalesOrderLine>, ApiError> {
+    async fn find_deleted(
+        &self,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<SalesOrderLine>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .lines
@@ -550,17 +609,21 @@ impl SalesOrderLineRepository for InMemorySalesOrderLineRepository {
             .cloned()
             .unwrap_or_default()
             .into_iter()
-            .filter(|l| l.is_deleted())
+            .filter(|l| l.tenant_id == tenant_id && l.is_deleted())
             .collect())
     }
 
-    async fn destroy(&self, id: i64, order_id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, order_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         let lines = inner
             .lines
             .get_mut(&order_id)
             .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", order_id)))?;
-        lines.retain(|l| l.id != id);
+        let before = lines.len();
+        lines.retain(|l| !(l.id == id && l.tenant_id == tenant_id));
+        if lines.len() == before {
+            return Err(ApiError::NotFound("Sales order line not found".to_string()));
+        }
         Ok(())
     }
 }
@@ -850,6 +913,7 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
         &self,
         quotation_id: i64,
         create_lines: Vec<CreateQuotationLine>,
+        tenant_id: i64,
     ) -> Result<Vec<QuotationLine>, ApiError> {
         let mut inner = self.inner.lock();
         let mut lines = Vec::with_capacity(create_lines.len());
@@ -866,6 +930,7 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
 
             lines.push(QuotationLine {
                 id,
+                tenant_id,
                 quotation_id,
                 product_id: create.product_id,
                 description: create.description,
@@ -884,7 +949,11 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
         Ok(lines)
     }
 
-    async fn find_by_quotation(&self, quotation_id: i64) -> Result<Vec<QuotationLine>, ApiError> {
+    async fn find_by_quotation(
+        &self,
+        quotation_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<QuotationLine>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .lines
@@ -892,11 +961,19 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
             .cloned()
             .unwrap_or_default()
             .into_iter()
-            .filter(|l| !l.is_deleted())
+            .filter(|l| l.tenant_id == tenant_id && !l.is_deleted())
             .collect())
     }
 
-    async fn delete_by_quotation(&self, quotation_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_quotation(
+        &self,
+        quotation_id: i64,
+        _tenant_id: i64,
+    ) -> Result<(), ApiError> {
+        // The HashMap bucket is keyed by quotation_id (one tenant per
+        // quotation); the caller has already validated ownership or is rolling
+        // back a just-created own quotation, so removing the bucket is
+        // tenant-safe.
         let mut inner = self.inner.lock();
         inner.lines.remove(&quotation_id);
         Ok(())
@@ -907,6 +984,7 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
         id: i64,
         quotation_id: i64,
         deleted_by: i64,
+        tenant_id: i64,
     ) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         let lines = inner
@@ -915,13 +993,18 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
             .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", quotation_id)))?;
         let line = lines
             .iter_mut()
-            .find(|l| l.id == id)
+            .find(|l| l.id == id && l.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Quotation line {} not found", id)))?;
         line.mark_deleted(deleted_by);
         Ok(())
     }
 
-    async fn restore(&self, id: i64, quotation_id: i64) -> Result<QuotationLine, ApiError> {
+    async fn restore(
+        &self,
+        id: i64,
+        quotation_id: i64,
+        tenant_id: i64,
+    ) -> Result<QuotationLine, ApiError> {
         let mut inner = self.inner.lock();
         let lines = inner
             .lines
@@ -929,13 +1012,17 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
             .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", quotation_id)))?;
         let line = lines
             .iter_mut()
-            .find(|l| l.id == id)
+            .find(|l| l.id == id && l.tenant_id == tenant_id)
             .ok_or_else(|| ApiError::NotFound(format!("Quotation line {} not found", id)))?;
         line.restore();
         Ok(line.clone())
     }
 
-    async fn find_deleted(&self, quotation_id: i64) -> Result<Vec<QuotationLine>, ApiError> {
+    async fn find_deleted(
+        &self,
+        quotation_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<QuotationLine>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .lines
@@ -943,17 +1030,21 @@ impl QuotationLineRepository for InMemoryQuotationLineRepository {
             .cloned()
             .unwrap_or_default()
             .into_iter()
-            .filter(|l| l.is_deleted())
+            .filter(|l| l.tenant_id == tenant_id && l.is_deleted())
             .collect())
     }
 
-    async fn destroy(&self, id: i64, quotation_id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, quotation_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
         let lines = inner
             .lines
             .get_mut(&quotation_id)
             .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", quotation_id)))?;
-        lines.retain(|l| l.id != id);
+        let before = lines.len();
+        lines.retain(|l| !(l.id == id && l.tenant_id == tenant_id));
+        if lines.len() == before {
+            return Err(ApiError::NotFound("Quotation line not found".to_string()));
+        }
         Ok(())
     }
 }

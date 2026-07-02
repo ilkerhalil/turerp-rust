@@ -129,6 +129,7 @@ impl_soft_deletable!(SalesOrder);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SalesOrderLine {
     pub id: i64,
+    pub tenant_id: i64,
     pub order_id: i64,
     pub product_id: Option<i64>,
     pub description: String,
@@ -173,6 +174,7 @@ impl_soft_deletable!(Quotation);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct QuotationLine {
     pub id: i64,
+    pub tenant_id: i64,
     pub quotation_id: i64,
     pub product_id: Option<i64>,
     pub description: String,

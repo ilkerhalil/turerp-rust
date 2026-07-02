@@ -263,8 +263,9 @@ pub async fn delete_sales_order_line(
     let i18n = resolve(&i18n);
     let (order_id, line_id) = path.into_inner();
     let deleted_by = admin_user.0.user_id()?;
+    let tenant_id = admin_user.0.tenant_id;
     match sales_service
-        .soft_delete_order_line(line_id, order_id, deleted_by)
+        .soft_delete_order_line(line_id, order_id, tenant_id, deleted_by)
         .await
     {
         Ok(()) => {
@@ -283,12 +284,14 @@ pub async fn delete_sales_order_line(
     security(("bearer_auth" = []))
 )]
 pub async fn restore_sales_order_line(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<(i64, i64)>,
 ) -> ApiResult<HttpResponse> {
     let (order_id, line_id) = path.into_inner();
-    let line = sales_service.restore_order_line(line_id, order_id).await?;
+    let line = sales_service
+        .restore_order_line(line_id, order_id, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(line))
 }
 
@@ -300,11 +303,13 @@ pub async fn restore_sales_order_line(
     security(("bearer_auth" = []))
 )]
 pub async fn list_deleted_sales_order_lines(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let lines: Vec<_> = sales_service.list_deleted_order_lines(*path).await?;
+    let lines: Vec<_> = sales_service
+        .list_deleted_order_lines(*path, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(lines))
 }
 
@@ -316,12 +321,14 @@ pub async fn list_deleted_sales_order_lines(
     security(("bearer_auth" = []))
 )]
 pub async fn destroy_sales_order_line(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<(i64, i64)>,
 ) -> ApiResult<HttpResponse> {
     let (order_id, line_id) = path.into_inner();
-    sales_service.destroy_order_line(line_id, order_id).await?;
+    sales_service
+        .destroy_order_line(line_id, order_id, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::NoContent().finish())
 }
 
@@ -597,8 +604,9 @@ pub async fn delete_quotation_line(
     let i18n = resolve(&i18n);
     let (quotation_id, line_id) = path.into_inner();
     let deleted_by = admin_user.0.user_id()?;
+    let tenant_id = admin_user.0.tenant_id;
     match sales_service
-        .soft_delete_quotation_line(line_id, quotation_id, deleted_by)
+        .soft_delete_quotation_line(line_id, quotation_id, tenant_id, deleted_by)
         .await
     {
         Ok(()) => {
@@ -617,13 +625,13 @@ pub async fn delete_quotation_line(
     security(("bearer_auth" = []))
 )]
 pub async fn restore_quotation_line(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<(i64, i64)>,
 ) -> ApiResult<HttpResponse> {
     let (quotation_id, line_id) = path.into_inner();
     let line = sales_service
-        .restore_quotation_line(line_id, quotation_id)
+        .restore_quotation_line(line_id, quotation_id, admin_user.0.tenant_id)
         .await?;
     Ok(HttpResponse::Ok().json(line))
 }
@@ -636,11 +644,13 @@ pub async fn restore_quotation_line(
     security(("bearer_auth" = []))
 )]
 pub async fn list_deleted_quotation_lines(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<i64>,
 ) -> ApiResult<HttpResponse> {
-    let lines: Vec<_> = sales_service.list_deleted_quotation_lines(*path).await?;
+    let lines: Vec<_> = sales_service
+        .list_deleted_quotation_lines(*path, admin_user.0.tenant_id)
+        .await?;
     Ok(HttpResponse::Ok().json(lines))
 }
 
@@ -652,13 +662,13 @@ pub async fn list_deleted_quotation_lines(
     security(("bearer_auth" = []))
 )]
 pub async fn destroy_quotation_line(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     sales_service: web::Data<SalesService>,
     path: web::Path<(i64, i64)>,
 ) -> ApiResult<HttpResponse> {
     let (quotation_id, line_id) = path.into_inner();
     sales_service
-        .destroy_quotation_line(line_id, quotation_id)
+        .destroy_quotation_line(line_id, quotation_id, admin_user.0.tenant_id)
         .await?;
     Ok(HttpResponse::NoContent().finish())
 }

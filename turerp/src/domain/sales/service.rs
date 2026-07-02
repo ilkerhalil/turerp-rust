@@ -53,7 +53,7 @@ impl SalesService {
         let order = self.order_repo.create(create.clone()).await?;
         let lines = self
             .order_line_repo
-            .create_many(order.id, create.lines)
+            .create_many(order.id, create.lines, create.tenant_id)
             .await?;
 
         Ok(SalesOrderResponse::from((order, lines)))
@@ -71,7 +71,7 @@ impl SalesService {
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", id)))?;
 
-        let lines = self.order_line_repo.find_by_order(id).await?;
+        let lines = self.order_line_repo.find_by_order(id, tenant_id).await?;
 
         Ok(SalesOrderResponse::from((order, lines)))
     }
@@ -141,7 +141,7 @@ impl SalesService {
 
     #[tracing::instrument(skip(self))]
     pub async fn delete_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.order_line_repo.delete_by_order(id).await?;
+        self.order_line_repo.delete_by_order(id, tenant_id).await?;
         self.order_repo.delete(id, tenant_id).await
     }
 
@@ -153,24 +153,37 @@ impl SalesService {
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
-        // Soft delete lines first
-        let lines = self.order_line_repo.find_by_order(id).await?;
+        // Parent first: a tenant-scoped soft_delete gates NotFound for a foreign
+        // order before any line is touched (closes the soft_delete-before-parent
+        // leak). The order FK soft-delete is an UPDATE (no CASCADE), so the lines
+        // are unaffected and can be soft-deleted afterwards.
+        self.order_repo
+            .soft_delete(id, tenant_id, deleted_by)
+            .await?;
+        let lines = self.order_line_repo.find_by_order(id, tenant_id).await?;
         for line in lines {
             self.order_line_repo
-                .soft_delete(line.id, id, deleted_by)
+                .soft_delete(line.id, id, deleted_by, tenant_id)
                 .await?;
         }
-        self.order_repo.soft_delete(id, tenant_id, deleted_by).await
+        Ok(())
     }
 
     /// Restore a soft-deleted sales order and its lines
     #[tracing::instrument(skip(self))]
     pub async fn restore_order(&self, id: i64, tenant_id: i64) -> Result<SalesOrder, ApiError> {
         let order = self.order_repo.restore(id, tenant_id).await?;
-        // Restore all soft-deleted lines
-        let deleted_lines = self.order_line_repo.find_deleted(order.id).await?;
+        // Restore all soft-deleted lines (tenant-scoped)
+        let deleted_lines = self
+            .order_line_repo
+            .find_deleted(order.id, tenant_id)
+            .await?;
         for line in deleted_lines {
-            let _ = self.order_line_repo.restore(line.id, order.id).await.ok();
+            let _ = self
+                .order_line_repo
+                .restore(line.id, order.id, tenant_id)
+                .await
+                .ok();
         }
         Ok(order)
     }
@@ -183,7 +196,10 @@ impl SalesService {
         tenant_id: i64,
     ) -> Result<SalesOrderResponse, ApiError> {
         let order = self.restore_order(id, tenant_id).await?;
-        let lines = self.order_line_repo.find_by_order(order.id).await?;
+        let lines = self
+            .order_line_repo
+            .find_by_order(order.id, tenant_id)
+            .await?;
         Ok(SalesOrderResponse::from((order, lines)))
     }
 
@@ -196,7 +212,12 @@ impl SalesService {
     /// Permanently delete a sales order (admin only, after soft delete)
     #[tracing::instrument(skip(self))]
     pub async fn destroy_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.order_line_repo.delete_by_order(id).await?;
+        // The tenant-scoped parent destroy gates NotFound for a foreign order.
+        // The parent FK has ON DELETE CASCADE (003), which removes the order's
+        // lines atomically with the parent -- the redundant unscoped
+        // delete_by_order(id) call is dropped (mirror of the #194 invoice_lines
+        // fix and 054): it ran on the raw caller id *before* the tenant-scoped
+        // parent destroy, hard-deleting a foreign tenant's lines.
         self.order_repo.destroy(id, tenant_id).await
     }
 
@@ -218,7 +239,7 @@ impl SalesService {
         let quotation = self.quotation_repo.create(create.clone()).await?;
         let lines = self
             .quotation_line_repo
-            .create_many(quotation.id, create.lines)
+            .create_many(quotation.id, create.lines, create.tenant_id)
             .await?;
 
         Ok(QuotationResponse::from((quotation, lines)))
@@ -236,7 +257,10 @@ impl SalesService {
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", id)))?;
 
-        let lines = self.quotation_line_repo.find_by_quotation(id).await?;
+        let lines = self
+            .quotation_line_repo
+            .find_by_quotation(id, tenant_id)
+            .await?;
 
         Ok(QuotationResponse::from((quotation, lines)))
     }
@@ -336,7 +360,7 @@ impl SalesService {
         // Get quotation lines
         let quote_lines = self
             .quotation_line_repo
-            .find_by_quotation(quotation_id)
+            .find_by_quotation(quotation_id, tenant_id)
             .await?;
 
         // Create sales order lines
@@ -372,7 +396,7 @@ impl SalesService {
 
         let lines = match self
             .order_line_repo
-            .create_many(order.id, order_lines_clone)
+            .create_many(order.id, order_lines_clone, tenant_id)
             .await
         {
             Ok(lines) => lines,
@@ -392,7 +416,11 @@ impl SalesService {
             .link_to_order(quotation_id, order.id)
             .await
         {
-            if let Err(rollback_err) = self.order_line_repo.delete_by_order(order.id).await {
+            if let Err(rollback_err) = self
+                .order_line_repo
+                .delete_by_order(order.id, tenant_id)
+                .await
+            {
                 tracing::warn!(error = %rollback_err, "Failed to roll back order lines for order {} after quotation linking failed", order.id);
             }
             if let Err(rollback_err) = self.order_repo.delete(order.id, quotation.tenant_id).await {
@@ -406,7 +434,9 @@ impl SalesService {
 
     #[tracing::instrument(skip(self))]
     pub async fn delete_quotation(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.quotation_line_repo.delete_by_quotation(id).await?;
+        self.quotation_line_repo
+            .delete_by_quotation(id, tenant_id)
+            .await?;
         self.quotation_repo.delete(id, tenant_id).await
     }
 
@@ -418,26 +448,37 @@ impl SalesService {
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
-        let lines = self.quotation_line_repo.find_by_quotation(id).await?;
-        for line in lines {
-            self.quotation_line_repo
-                .soft_delete(line.id, id, deleted_by)
-                .await?;
-        }
+        // Parent first: a tenant-scoped soft_delete gates NotFound for a foreign
+        // quotation before any line is touched (closes the soft_delete-before-
+        // parent leak). The quotation soft-delete is an UPDATE (no CASCADE), so
+        // the lines are unaffected and can be soft-deleted afterwards.
         self.quotation_repo
             .soft_delete(id, tenant_id, deleted_by)
-            .await
+            .await?;
+        let lines = self
+            .quotation_line_repo
+            .find_by_quotation(id, tenant_id)
+            .await?;
+        for line in lines {
+            self.quotation_line_repo
+                .soft_delete(line.id, id, deleted_by, tenant_id)
+                .await?;
+        }
+        Ok(())
     }
 
     /// Restore a soft-deleted quotation and its lines
     #[tracing::instrument(skip(self))]
     pub async fn restore_quotation(&self, id: i64, tenant_id: i64) -> Result<Quotation, ApiError> {
         let quotation = self.quotation_repo.restore(id, tenant_id).await?;
-        let deleted_lines = self.quotation_line_repo.find_deleted(quotation.id).await?;
+        let deleted_lines = self
+            .quotation_line_repo
+            .find_deleted(quotation.id, tenant_id)
+            .await?;
         for line in deleted_lines {
             let _ = self
                 .quotation_line_repo
-                .restore(line.id, quotation.id)
+                .restore(line.id, quotation.id, tenant_id)
                 .await
                 .ok();
         }
@@ -454,7 +495,7 @@ impl SalesService {
         let quotation = self.restore_quotation(id, tenant_id).await?;
         let lines = self
             .quotation_line_repo
-            .find_by_quotation(quotation.id)
+            .find_by_quotation(quotation.id, tenant_id)
             .await?;
         Ok(QuotationResponse::from((quotation, lines)))
     }
@@ -471,95 +512,158 @@ impl SalesService {
     /// Permanently delete a quotation (admin only, after soft delete)
     #[tracing::instrument(skip(self))]
     pub async fn destroy_quotation(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.quotation_line_repo.delete_by_quotation(id).await?;
+        // The tenant-scoped parent destroy gates NotFound for a foreign
+        // quotation. The parent FK has ON DELETE CASCADE (003), which removes the
+        // quotation's lines atomically with the parent -- the redundant unscoped
+        // delete_by_quotation(id) call is dropped (mirror of the #194
+        // invoice_lines fix and 054/057): it ran on the raw caller id *before* the
+        // tenant-scoped parent destroy, hard-deleting a foreign tenant's lines.
         self.quotation_repo.destroy(id, tenant_id).await
     }
 
     // Sales Order Line operations
 
-    /// Soft delete a sales order line
+    /// Soft delete a sales order line (admin only, tenant-scoped)
     #[tracing::instrument(skip(self))]
     pub async fn soft_delete_order_line(
         &self,
         line_id: i64,
         order_id: i64,
+        tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
+        // Parent-ownership precheck: a tenant-scoped find_by_id gates NotFound
+        // for a foreign order before the line is touched. This plus the repo's
+        // `AND order_id = $N AND tenant_id = $N` filter closes the per-line IDOR
+        // (a tenant-A admin could formerly soft-delete tenant-B's line by
+        // guessing line_id, since the Postgres impl ignored order_id entirely).
+        self.order_repo
+            .find_by_id(order_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", order_id)))?;
         self.order_line_repo
-            .soft_delete(line_id, order_id, deleted_by)
+            .soft_delete(line_id, order_id, deleted_by, tenant_id)
             .await
     }
 
-    /// Restore a soft-deleted sales order line
+    /// Restore a soft-deleted sales order line (admin only, tenant-scoped)
     #[tracing::instrument(skip(self))]
     pub async fn restore_order_line(
         &self,
         line_id: i64,
         order_id: i64,
+        tenant_id: i64,
     ) -> Result<SalesOrderLine, ApiError> {
-        self.order_line_repo.restore(line_id, order_id).await
+        self.order_repo
+            .find_by_id(order_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", order_id)))?;
+        self.order_line_repo
+            .restore(line_id, order_id, tenant_id)
+            .await
     }
 
-    /// List soft-deleted sales order lines
+    /// List soft-deleted sales order lines (admin only, tenant-scoped)
     #[tracing::instrument(skip(self))]
     pub async fn list_deleted_order_lines(
         &self,
         order_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<SalesOrderLine>, ApiError> {
-        self.order_line_repo.find_deleted(order_id).await
+        self.order_repo
+            .find_by_id(order_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", order_id)))?;
+        self.order_line_repo.find_deleted(order_id, tenant_id).await
     }
 
-    /// Permanently delete a sales order line
+    /// Permanently delete a sales order line (admin only, tenant-scoped)
     #[tracing::instrument(skip(self))]
-    pub async fn destroy_order_line(&self, line_id: i64, order_id: i64) -> Result<(), ApiError> {
-        self.order_line_repo.destroy(line_id, order_id).await
+    pub async fn destroy_order_line(
+        &self,
+        line_id: i64,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<(), ApiError> {
+        self.order_repo
+            .find_by_id(order_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Sales order {} not found", order_id)))?;
+        self.order_line_repo
+            .destroy(line_id, order_id, tenant_id)
+            .await
     }
 
     // Quotation Line operations
 
-    /// Soft delete a quotation line
+    /// Soft delete a quotation line (admin only, tenant-scoped)
     #[tracing::instrument(skip(self))]
     pub async fn soft_delete_quotation_line(
         &self,
         line_id: i64,
         quotation_id: i64,
+        tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
+        // Parent-ownership precheck (mirror of the order-line path): a
+        // tenant-scoped find_by_id gates NotFound for a foreign quotation before
+        // the line is touched, closing the per-line IDOR.
+        self.quotation_repo
+            .find_by_id(quotation_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", quotation_id)))?;
         self.quotation_line_repo
-            .soft_delete(line_id, quotation_id, deleted_by)
+            .soft_delete(line_id, quotation_id, deleted_by, tenant_id)
             .await
     }
 
-    /// Restore a soft-deleted quotation line
+    /// Restore a soft-deleted quotation line (admin only, tenant-scoped)
     #[tracing::instrument(skip(self))]
     pub async fn restore_quotation_line(
         &self,
         line_id: i64,
         quotation_id: i64,
+        tenant_id: i64,
     ) -> Result<QuotationLine, ApiError> {
+        self.quotation_repo
+            .find_by_id(quotation_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", quotation_id)))?;
         self.quotation_line_repo
-            .restore(line_id, quotation_id)
+            .restore(line_id, quotation_id, tenant_id)
             .await
     }
 
-    /// List soft-deleted quotation lines
+    /// List soft-deleted quotation lines (admin only, tenant-scoped)
     #[tracing::instrument(skip(self))]
     pub async fn list_deleted_quotation_lines(
         &self,
         quotation_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<QuotationLine>, ApiError> {
-        self.quotation_line_repo.find_deleted(quotation_id).await
+        self.quotation_repo
+            .find_by_id(quotation_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", quotation_id)))?;
+        self.quotation_line_repo
+            .find_deleted(quotation_id, tenant_id)
+            .await
     }
 
-    /// Permanently delete a quotation line
+    /// Permanently delete a quotation line (admin only, tenant-scoped)
     #[tracing::instrument(skip(self))]
     pub async fn destroy_quotation_line(
         &self,
         line_id: i64,
         quotation_id: i64,
+        tenant_id: i64,
     ) -> Result<(), ApiError> {
+        self.quotation_repo
+            .find_by_id(quotation_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Quotation {} not found", quotation_id)))?;
         self.quotation_line_repo
-            .destroy(line_id, quotation_id)
+            .destroy(line_id, quotation_id, tenant_id)
             .await
     }
 }
