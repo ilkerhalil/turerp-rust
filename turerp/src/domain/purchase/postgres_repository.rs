@@ -429,8 +429,9 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             UPDATE purchase_order_lines
             SET received_quantity = $1
             WHERE id = $2
-            RETURNING id, order_id, product_id, description, quantity, received_quantity,
-                      unit_price, tax_rate, discount_rate, line_total, sort_order
+            RETURNING id, tenant_id, order_id, product_id, description, quantity, received_quantity,
+                      unit_price, tax_rate, discount_rate, line_total, sort_order,
+                      deleted_at, deleted_by
             "#,
         )
         .bind(received_qty)
@@ -471,6 +472,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
 #[derive(Debug, FromRow)]
 struct PurchaseOrderLineRow {
     id: i64,
+    tenant_id: i64,
     order_id: i64,
     product_id: Option<i64>,
     description: String,
@@ -489,6 +491,7 @@ impl From<PurchaseOrderLineRow> for PurchaseOrderLine {
     fn from(row: PurchaseOrderLineRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             order_id: row.order_id,
             product_id: row.product_id,
             description: row.description,
@@ -528,6 +531,7 @@ impl PurchaseOrderLineRepository for PostgresPurchaseOrderLineRepository {
         &self,
         order_id: i64,
         lines: Vec<CreatePurchaseOrderLine>,
+        tenant_id: i64,
     ) -> Result<Vec<PurchaseOrderLine>, ApiError> {
         let mut result = Vec::with_capacity(lines.len());
 
@@ -539,11 +543,11 @@ impl PurchaseOrderLineRepository for PostgresPurchaseOrderLineRepository {
                 r#"
                 INSERT INTO purchase_order_lines (order_id, product_id, description, quantity,
                                                   received_quantity, unit_price, tax_rate, discount_rate,
-                                                  line_total, sort_order)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                RETURNING id, order_id, product_id, description, quantity, received_quantity,
-                          unit_price, tax_rate, discount_rate, line_total, sort_order,
-                          deleted_at, deleted_by
+                                                  line_total, sort_order, tenant_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                RETURNING id, tenant_id, order_id, product_id, description, quantity,
+                          received_quantity, unit_price, tax_rate, discount_rate, line_total,
+                          sort_order, deleted_at, deleted_by
                 "#,
             )
             .bind(order_id)
@@ -556,6 +560,7 @@ impl PurchaseOrderLineRepository for PostgresPurchaseOrderLineRepository {
             .bind(line.discount_rate)
             .bind(line_total)
             .bind(i as i32)
+            .bind(tenant_id)
             .fetch_one(&*self.pool)
             .await
             .map_err(|e| map_sqlx_error(e, "PurchaseOrderLine"))?;
@@ -566,18 +571,23 @@ impl PurchaseOrderLineRepository for PostgresPurchaseOrderLineRepository {
         Ok(result)
     }
 
-    async fn find_by_order(&self, order_id: i64) -> Result<Vec<PurchaseOrderLine>, ApiError> {
+    async fn find_by_order(
+        &self,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<PurchaseOrderLine>, ApiError> {
         let rows: Vec<PurchaseOrderLineRow> = sqlx::query_as(
             r#"
-            SELECT id, order_id, product_id, description, quantity, received_quantity,
+            SELECT id, tenant_id, order_id, product_id, description, quantity, received_quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM purchase_order_lines
-            WHERE order_id = $1 AND deleted_at IS NULL
+            WHERE order_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY sort_order
             "#,
         )
         .bind(order_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -590,17 +600,22 @@ impl PurchaseOrderLineRepository for PostgresPurchaseOrderLineRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<PurchaseOrderLine>, ApiError> {
+    async fn find_by_id(
+        &self,
+        id: i64,
+        tenant_id: i64,
+    ) -> Result<Option<PurchaseOrderLine>, ApiError> {
         let result: Option<PurchaseOrderLineRow> = sqlx::query_as(
             r#"
-            SELECT id, order_id, product_id, description, quantity, received_quantity,
+            SELECT id, tenant_id, order_id, product_id, description, quantity, received_quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM purchase_order_lines
-            WHERE id = $1 AND deleted_at IS NULL
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(tenant_id)
         .fetch_optional(&*self.pool)
         .await
         .map_err(|e| {
@@ -610,14 +625,15 @@ impl PurchaseOrderLineRepository for PostgresPurchaseOrderLineRepository {
         Ok(result.map(|r| r.into()))
     }
 
-    async fn delete_by_order(&self, order_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_order(&self, order_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             DELETE FROM purchase_order_lines
-            WHERE order_id = $1
+            WHERE order_id = $1 AND tenant_id = $2
             "#,
         )
         .bind(order_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete purchase order lines: {}", e)))?;
@@ -625,16 +641,22 @@ impl PurchaseOrderLineRepository for PostgresPurchaseOrderLineRepository {
         Ok(())
     }
 
-    async fn soft_delete_by_order(&self, order_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete_by_order(
+        &self,
+        order_id: i64,
+        deleted_by: i64,
+        tenant_id: i64,
+    ) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             UPDATE purchase_order_lines
             SET deleted_at = NOW(), deleted_by = $2
-            WHERE order_id = $1 AND deleted_at IS NULL
+            WHERE order_id = $1 AND tenant_id = $3 AND deleted_at IS NULL
             "#,
         )
         .bind(order_id)
         .bind(deleted_by)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| {
@@ -644,15 +666,16 @@ impl PurchaseOrderLineRepository for PostgresPurchaseOrderLineRepository {
         Ok(())
     }
 
-    async fn restore_by_order(&self, order_id: i64) -> Result<(), ApiError> {
+    async fn restore_by_order(&self, order_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             UPDATE purchase_order_lines
             SET deleted_at = NULL, deleted_by = NULL
-            WHERE order_id = $1 AND deleted_at IS NOT NULL
+            WHERE order_id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             "#,
         )
         .bind(order_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| {
@@ -944,6 +967,7 @@ impl GoodsReceiptRepository for PostgresGoodsReceiptRepository {
 #[derive(Debug, FromRow)]
 struct GoodsReceiptLineRow {
     id: i64,
+    tenant_id: i64,
     receipt_id: i64,
     order_line_id: i64,
     product_id: Option<i64>,
@@ -958,6 +982,7 @@ impl From<GoodsReceiptLineRow> for GoodsReceiptLine {
     fn from(row: GoodsReceiptLineRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             receipt_id: row.receipt_id,
             order_line_id: row.order_line_id,
             product_id: row.product_id,
@@ -993,6 +1018,7 @@ impl GoodsReceiptLineRepository for PostgresGoodsReceiptLineRepository {
         &self,
         receipt_id: i64,
         lines: Vec<CreateGoodsReceiptLine>,
+        tenant_id: i64,
     ) -> Result<Vec<GoodsReceiptLine>, ApiError> {
         let mut result = Vec::with_capacity(lines.len());
 
@@ -1000,10 +1026,10 @@ impl GoodsReceiptLineRepository for PostgresGoodsReceiptLineRepository {
             let row: GoodsReceiptLineRow = sqlx::query_as(
                 r#"
                 INSERT INTO goods_receipt_lines (receipt_id, order_line_id, product_id, quantity,
-                                                  condition, notes)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING id, receipt_id, order_line_id, product_id, quantity, condition, notes,
-                          deleted_at, deleted_by
+                                                  condition, notes, tenant_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id, tenant_id, receipt_id, order_line_id, product_id, quantity,
+                          condition, notes, deleted_at, deleted_by
                 "#,
             )
             .bind(receipt_id)
@@ -1012,6 +1038,7 @@ impl GoodsReceiptLineRepository for PostgresGoodsReceiptLineRepository {
             .bind(line.quantity)
             .bind(&line.condition)
             .bind(&line.notes)
+            .bind(tenant_id)
             .fetch_one(&*self.pool)
             .await
             .map_err(|e| map_sqlx_error(e, "GoodsReceiptLine"))?;
@@ -1022,16 +1049,21 @@ impl GoodsReceiptLineRepository for PostgresGoodsReceiptLineRepository {
         Ok(result)
     }
 
-    async fn find_by_receipt(&self, receipt_id: i64) -> Result<Vec<GoodsReceiptLine>, ApiError> {
+    async fn find_by_receipt(
+        &self,
+        receipt_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<GoodsReceiptLine>, ApiError> {
         let rows: Vec<GoodsReceiptLineRow> = sqlx::query_as(
             r#"
-            SELECT id, receipt_id, order_line_id, product_id, quantity, condition, notes,
-                   deleted_at, deleted_by
+            SELECT id, tenant_id, receipt_id, order_line_id, product_id, quantity, condition,
+                   notes, deleted_at, deleted_by
             FROM goods_receipt_lines
-            WHERE receipt_id = $1 AND deleted_at IS NULL
+            WHERE receipt_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(receipt_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -1044,14 +1076,15 @@ impl GoodsReceiptLineRepository for PostgresGoodsReceiptLineRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn delete_by_receipt(&self, receipt_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_receipt(&self, receipt_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             DELETE FROM goods_receipt_lines
-            WHERE receipt_id = $1
+            WHERE receipt_id = $1 AND tenant_id = $2
             "#,
         )
         .bind(receipt_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to delete goods receipt lines: {}", e)))?;
@@ -1063,16 +1096,18 @@ impl GoodsReceiptLineRepository for PostgresGoodsReceiptLineRepository {
         &self,
         receipt_id: i64,
         deleted_by: i64,
+        tenant_id: i64,
     ) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             UPDATE goods_receipt_lines
             SET deleted_at = NOW(), deleted_by = $2
-            WHERE receipt_id = $1 AND deleted_at IS NULL
+            WHERE receipt_id = $1 AND tenant_id = $3 AND deleted_at IS NULL
             "#,
         )
         .bind(receipt_id)
         .bind(deleted_by)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| {
@@ -1082,15 +1117,16 @@ impl GoodsReceiptLineRepository for PostgresGoodsReceiptLineRepository {
         Ok(())
     }
 
-    async fn restore_by_receipt(&self, receipt_id: i64) -> Result<(), ApiError> {
+    async fn restore_by_receipt(&self, receipt_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             UPDATE goods_receipt_lines
             SET deleted_at = NULL, deleted_by = NULL
-            WHERE receipt_id = $1 AND deleted_at IS NOT NULL
+            WHERE receipt_id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             "#,
         )
         .bind(receipt_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to restore goods receipt lines: {}", e)))?;
@@ -1656,6 +1692,7 @@ impl PurchaseRequestRepository for PostgresPurchaseRequestRepository {
 #[derive(Debug, FromRow)]
 struct PurchaseRequestLineRow {
     id: i64,
+    tenant_id: i64,
     request_id: i64,
     product_id: Option<i64>,
     description: String,
@@ -1670,6 +1707,7 @@ impl From<PurchaseRequestLineRow> for PurchaseRequestLine {
     fn from(row: PurchaseRequestLineRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             request_id: row.request_id,
             product_id: row.product_id,
             description: row.description,
@@ -1705,6 +1743,7 @@ impl PurchaseRequestLineRepository for PostgresPurchaseRequestLineRepository {
         &self,
         request_id: i64,
         lines: Vec<CreatePurchaseRequestLine>,
+        tenant_id: i64,
     ) -> Result<Vec<PurchaseRequestLine>, ApiError> {
         let mut result = Vec::with_capacity(lines.len());
 
@@ -1712,10 +1751,10 @@ impl PurchaseRequestLineRepository for PostgresPurchaseRequestLineRepository {
             let row: PurchaseRequestLineRow = sqlx::query_as(
                 r#"
                 INSERT INTO purchase_request_lines (request_id, product_id, description, quantity,
-                                                     notes, sort_order)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING id, request_id, product_id, description, quantity, notes, sort_order,
-                          deleted_at, deleted_by
+                                                     notes, sort_order, tenant_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id, tenant_id, request_id, product_id, description, quantity, notes,
+                          sort_order, deleted_at, deleted_by
                 "#,
             )
             .bind(request_id)
@@ -1724,6 +1763,7 @@ impl PurchaseRequestLineRepository for PostgresPurchaseRequestLineRepository {
             .bind(line.quantity)
             .bind(&line.notes)
             .bind(i as i32)
+            .bind(tenant_id)
             .fetch_one(&*self.pool)
             .await
             .map_err(|e| map_sqlx_error(e, "PurchaseRequestLine"))?;
@@ -1734,17 +1774,22 @@ impl PurchaseRequestLineRepository for PostgresPurchaseRequestLineRepository {
         Ok(result)
     }
 
-    async fn find_by_request(&self, request_id: i64) -> Result<Vec<PurchaseRequestLine>, ApiError> {
+    async fn find_by_request(
+        &self,
+        request_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<PurchaseRequestLine>, ApiError> {
         let rows: Vec<PurchaseRequestLineRow> = sqlx::query_as(
             r#"
-            SELECT id, request_id, product_id, description, quantity, notes, sort_order,
-                   deleted_at, deleted_by
+            SELECT id, tenant_id, request_id, product_id, description, quantity, notes,
+                   sort_order, deleted_at, deleted_by
             FROM purchase_request_lines
-            WHERE request_id = $1 AND deleted_at IS NULL
+            WHERE request_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY sort_order
             "#,
         )
         .bind(request_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -1757,14 +1802,15 @@ impl PurchaseRequestLineRepository for PostgresPurchaseRequestLineRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn delete_by_request(&self, request_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_request(&self, request_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             DELETE FROM purchase_request_lines
-            WHERE request_id = $1
+            WHERE request_id = $1 AND tenant_id = $2
             "#,
         )
         .bind(request_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| {
@@ -1778,16 +1824,18 @@ impl PurchaseRequestLineRepository for PostgresPurchaseRequestLineRepository {
         &self,
         request_id: i64,
         deleted_by: i64,
+        tenant_id: i64,
     ) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             UPDATE purchase_request_lines
             SET deleted_at = NOW(), deleted_by = $2
-            WHERE request_id = $1 AND deleted_at IS NULL
+            WHERE request_id = $1 AND tenant_id = $3 AND deleted_at IS NULL
             "#,
         )
         .bind(request_id)
         .bind(deleted_by)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| {
@@ -1799,15 +1847,16 @@ impl PurchaseRequestLineRepository for PostgresPurchaseRequestLineRepository {
         Ok(())
     }
 
-    async fn restore_by_request(&self, request_id: i64) -> Result<(), ApiError> {
+    async fn restore_by_request(&self, request_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             UPDATE purchase_request_lines
             SET deleted_at = NULL, deleted_by = NULL
-            WHERE request_id = $1
+            WHERE request_id = $1 AND tenant_id = $2
             "#,
         )
         .bind(request_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| {
