@@ -84,8 +84,37 @@ jobs:
         run: cargo install cargo-audit
 
       - name: Run security audit
-        # RUSTSEC-2023-0071: rsa Marvin Attack - only affects sqlx-mysql which we don't use
-        run: cargo audit --ignore RUSTSEC-2023-0071
+        # RUSTSEC-2023-0071: rsa Marvin Attack - only affects sqlx-mysql which we don't use.
+        # RUSTSEC-2026-0194 / RUSTSEC-2026-0195: quick-xml quadratic-attr-check and
+        #   unbounded-namespace-decl DoS (Solution: upgrade to >=0.41.0).
+        #
+        #   DIRECT dep quick-xml is bumped 0.37 -> 0.41 (Cargo.toml) as
+        #   defense-in-depth. Note the only direct-quick-xml consumer
+        #   (camt_parser::parse_camt053, reached via BankService::parse_camt_statement)
+        #   is currently TEST-ONLY -- parse_camt_statement has no HTTP route and is
+        #   called only from tests (service.rs). The actual tenant-facing CAMT.053
+        #   upload path (POST /v1/bank/accounts/{id}/statements -> upload_statement,
+        #   bank.rs:272) uses the REGEX-based bank_parsers::parse_camt053, not
+        #   quick-xml, so it is unaffected by these advisories. Bumping the direct
+        #   dep is still strictly better than ignoring it: a bumpable direct dep
+        #   we control should be fixed, not suppressed, so a future wiring of
+        #   parse_camt_statement lands on the safe version.
+        #
+        #   These ignores cover ONLY the residual TRANSITIVE quick-xml 0.32.0
+        #   (rust-s3 0.35 -> aws-creds 0.37). That path is NON-LIVE: S3FileStorage
+        #   is never constructed by the running app -- src/lib.rs wires
+        #   LocalFileStorage (975/1586) -- so aws-creds' AWS STS/S3 XML parsing
+        #   is not exercised at runtime. Even if S3 were wired, the DoS vectors
+        #   require *malformed* XML (duplicate start-tag attributes / unbounded
+        #   xmlns declarations); S3/MinIO ListObjects responses embed object keys
+        #   as XML-escaped values, not raw markup, so tenant-controlled keys
+        #   cannot trigger them, and the S3 endpoint/creds are operator-configured
+        #   (trusted in the SaaS threat model). The path is also un-bumpable:
+        #   aws-creds 0.39.1 (latest) pins quick-xml ^0.38 (<0.39), so no
+        #   rust-s3/aws-creds release reaches 0.41 without vendoring + backporting
+        #   the fix (disproportionate for a non-live path).
+        #   Re-evaluate when aws-creds ships a quick-xml >=0.41 release.
+        run: cargo audit --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0194 --ignore RUSTSEC-2026-0195
 
   build-release:
     name: Build Release
