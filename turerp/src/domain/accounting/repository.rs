@@ -80,9 +80,14 @@ pub trait JournalLineRepository: Send + Sync {
         &self,
         entry_id: i64,
         lines: Vec<CreateJournalLine>,
+        tenant_id: i64,
     ) -> Result<Vec<JournalLine>, ApiError>;
-    async fn find_by_entry(&self, entry_id: i64) -> Result<Vec<JournalLine>, ApiError>;
-    async fn delete_by_entry(&self, entry_id: i64) -> Result<(), ApiError>;
+    async fn find_by_entry(
+        &self,
+        entry_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<JournalLine>, ApiError>;
+    async fn delete_by_entry(&self, entry_id: i64, tenant_id: i64) -> Result<(), ApiError>;
 }
 
 /// Type aliases
@@ -709,6 +714,7 @@ impl JournalLineRepository for InMemoryJournalLineRepository {
         &self,
         entry_id: i64,
         create_lines: Vec<CreateJournalLine>,
+        tenant_id: i64,
     ) -> Result<Vec<JournalLine>, ApiError> {
         for line in &create_lines {
             line.validate()
@@ -723,6 +729,7 @@ impl JournalLineRepository for InMemoryJournalLineRepository {
             inner.next_id += 1;
             lines.push(JournalLine {
                 id,
+                tenant_id,
                 entry_id,
                 account_id: create.account_id,
                 cost_center_id: None,
@@ -737,14 +744,28 @@ impl JournalLineRepository for InMemoryJournalLineRepository {
         Ok(lines)
     }
 
-    async fn find_by_entry(&self, entry_id: i64) -> Result<Vec<JournalLine>, ApiError> {
+    async fn find_by_entry(
+        &self,
+        entry_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<JournalLine>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.lines.get(&entry_id).cloned().unwrap_or_default())
+        Ok(inner
+            .lines
+            .get(&entry_id)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|l| l.tenant_id == tenant_id)
+            .collect())
     }
 
-    async fn delete_by_entry(&self, entry_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_entry(&self, entry_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
-        inner.lines.remove(&entry_id);
+        // Only drop lines owned by the caller's tenant (defense-in-depth backstop).
+        if let Some(existing) = inner.lines.get_mut(&entry_id) {
+            existing.retain(|l| l.tenant_id != tenant_id);
+        }
         Ok(())
     }
 }

@@ -96,7 +96,10 @@ impl AccountingService {
         create: CreateJournalEntry,
     ) -> Result<JournalEntry, ApiError> {
         let entry = self.entry_repo.create(create.clone()).await?;
-        let _lines = self.line_repo.create_many(entry.id, create.lines).await?;
+        let _lines = self
+            .line_repo
+            .create_many(entry.id, create.lines, create.tenant_id)
+            .await?;
         Ok(entry)
     }
 
@@ -253,7 +256,7 @@ impl AccountingService {
             let mut credit_total = Decimal::ZERO;
 
             for entry in &posted_entries {
-                let lines = self.line_repo.find_by_entry(entry.id).await?;
+                let lines = self.line_repo.find_by_entry(entry.id, tenant_id).await?;
                 for line in lines {
                     if line.account_id == account.id {
                         debit_total += line.debit;

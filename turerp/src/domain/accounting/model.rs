@@ -213,6 +213,7 @@ impl std::str::FromStr for JournalEntryStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct JournalLine {
     pub id: i64,
+    pub tenant_id: i64,
     pub entry_id: i64,
     pub account_id: i64,
     pub cost_center_id: Option<i64>,

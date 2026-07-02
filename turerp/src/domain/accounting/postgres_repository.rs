@@ -144,6 +144,7 @@ impl From<JournalEntryRow> for JournalEntry {
 #[derive(Debug, FromRow)]
 struct JournalLineRow {
     id: i64,
+    tenant_id: i64,
     entry_id: i64,
     account_id: i64,
     cost_center_id: Option<i64>,
@@ -157,6 +158,7 @@ impl From<JournalLineRow> for JournalLine {
     fn from(row: JournalLineRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             entry_id: row.entry_id,
             account_id: row.account_id,
             cost_center_id: row.cost_center_id,
@@ -771,6 +773,7 @@ impl JournalLineRepository for PostgresJournalLineRepository {
         &self,
         entry_id: i64,
         lines: Vec<CreateJournalLine>,
+        tenant_id: i64,
     ) -> Result<Vec<JournalLine>, ApiError> {
         if lines.is_empty() {
             return Ok(Vec::new());
@@ -781,9 +784,9 @@ impl JournalLineRepository for PostgresJournalLineRepository {
         for line in lines {
             let row: JournalLineRow = sqlx::query_as(
                 r#"
-                INSERT INTO journal_lines (entry_id, account_id, debit, credit, description, reference)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING id, entry_id, account_id, debit, credit, description, reference
+                INSERT INTO journal_lines (entry_id, account_id, debit, credit, description, reference, tenant_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                RETURNING id, tenant_id, entry_id, account_id, debit, credit, description, reference
                 "#,
             )
             .bind(entry_id)
@@ -792,6 +795,7 @@ impl JournalLineRepository for PostgresJournalLineRepository {
             .bind(line.credit)
             .bind(&line.description)
             .bind(&line.reference)
+            .bind(tenant_id)
             .fetch_one(&*self.pool)
             .await
             .map_err(|e| map_sqlx_error(e, "JournalLine"))?;
@@ -802,16 +806,21 @@ impl JournalLineRepository for PostgresJournalLineRepository {
         Ok(results)
     }
 
-    async fn find_by_entry(&self, entry_id: i64) -> Result<Vec<JournalLine>, ApiError> {
+    async fn find_by_entry(
+        &self,
+        entry_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<JournalLine>, ApiError> {
         let rows: Vec<JournalLineRow> = sqlx::query_as(
             r#"
-            SELECT id, entry_id, account_id, debit, credit, description, reference
+            SELECT id, tenant_id, entry_id, account_id, debit, credit, description, reference
             FROM journal_lines
-            WHERE entry_id = $1
+            WHERE entry_id = $1 AND tenant_id = $2
             ORDER BY id ASC
             "#,
         )
         .bind(entry_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find journal lines by entry: {}", e)))?;
@@ -819,14 +828,15 @@ impl JournalLineRepository for PostgresJournalLineRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn delete_by_entry(&self, entry_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_entry(&self, entry_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             DELETE FROM journal_lines
-            WHERE entry_id = $1
+            WHERE entry_id = $1 AND tenant_id = $2
             "#,
         )
         .bind(entry_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| {
