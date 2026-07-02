@@ -123,6 +123,7 @@ impl_soft_deletable!(PurchaseOrder);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PurchaseOrderLine {
     pub id: i64,
+    pub tenant_id: i64,
     pub order_id: i64,
     pub product_id: Option<i64>,
     pub description: String,
@@ -163,6 +164,7 @@ impl_soft_deletable!(PurchaseRequest);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct PurchaseRequestLine {
     pub id: i64,
+    pub tenant_id: i64,
     pub request_id: i64,
     pub product_id: Option<i64>,
     pub description: String,
@@ -197,6 +199,7 @@ impl_soft_deletable!(GoodsReceipt);
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct GoodsReceiptLine {
     pub id: i64,
+    pub tenant_id: i64,
     pub receipt_id: i64,
     pub order_line_id: i64,
     pub product_id: Option<i64>,

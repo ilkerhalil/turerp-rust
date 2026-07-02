@@ -78,7 +78,7 @@ impl PurchaseService {
         let order = self.order_repo.create(create.clone()).await?;
         let lines = self
             .order_line_repo
-            .create_many(order.id, create.lines)
+            .create_many(order.id, create.lines, create.tenant_id)
             .await?;
 
         Ok(PurchaseOrderResponse::from((order, lines)))
@@ -96,7 +96,7 @@ impl PurchaseService {
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Purchase order {} not found", id)))?;
 
-        let lines = self.order_line_repo.find_by_order(id).await?;
+        let lines = self.order_line_repo.find_by_order(id, tenant_id).await?;
 
         Ok(PurchaseOrderResponse::from((order, lines)))
     }
@@ -138,7 +138,7 @@ impl PurchaseService {
 
     #[tracing::instrument(skip(self))]
     pub async fn delete_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.order_line_repo.delete_by_order(id).await?;
+        self.order_line_repo.delete_by_order(id, tenant_id).await?;
         self.order_repo.delete(id, tenant_id).await
     }
 
@@ -150,10 +150,17 @@ impl PurchaseService {
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
-        self.order_line_repo
-            .soft_delete_by_order(id, deleted_by)
+        // Parent-first: the tenant-scoped parent soft_delete gates the operation
+        // (returns NotFound for a foreign-tenant order) before any line rows are
+        // touched, so a caller cannot soft-delete another tenant's lines by
+        // guessing the order id. The line soft-delete is additionally scoped by
+        // tenant_id as a SQL-level backstop.
+        self.order_repo
+            .soft_delete(id, tenant_id, deleted_by)
             .await?;
-        self.order_repo.soft_delete(id, tenant_id, deleted_by).await
+        self.order_line_repo
+            .soft_delete_by_order(id, deleted_by, tenant_id)
+            .await
     }
 
     /// Restore a soft-deleted purchase order
@@ -164,7 +171,7 @@ impl PurchaseService {
         tenant_id: i64,
     ) -> Result<crate::domain::purchase::model::PurchaseOrder, ApiError> {
         let order = self.order_repo.restore(id, tenant_id).await?;
-        self.order_line_repo.restore_by_order(id).await?;
+        self.order_line_repo.restore_by_order(id, tenant_id).await?;
         Ok(order)
     }
 
@@ -176,7 +183,10 @@ impl PurchaseService {
         tenant_id: i64,
     ) -> Result<PurchaseOrderResponse, ApiError> {
         let order = self.restore_order(id, tenant_id).await?;
-        let lines = self.order_line_repo.find_by_order(order.id).await?;
+        let lines = self
+            .order_line_repo
+            .find_by_order(order.id, tenant_id)
+            .await?;
         Ok(PurchaseOrderResponse::from((order, lines)))
     }
 
@@ -192,7 +202,11 @@ impl PurchaseService {
     /// Permanently delete a purchase order (admin only, after soft delete)
     #[tracing::instrument(skip(self))]
     pub async fn destroy_order(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.order_line_repo.delete_by_order(id).await?;
+        // Rely on the tenant-scoped parent destroy + the ON DELETE CASCADE on
+        // purchase_order_lines.order_id to remove the lines. The previous
+        // unscoped delete_by_order(id) ran BEFORE the tenant-scoped parent
+        // destroy and hard-deleted another tenant's lines by guessing the order
+        // id (the #194 destroy-ordering leak); it is dropped here.
         self.order_repo.destroy(id, tenant_id).await
     }
 
@@ -243,7 +257,7 @@ impl PurchaseService {
         let receipt = self.receipt_repo.create(create.clone()).await?;
         let lines = self
             .receipt_line_repo
-            .create_many(receipt.id, create.lines)
+            .create_many(receipt.id, create.lines, tenant_id)
             .await?;
 
         // Update order status based on receipt quantities
@@ -253,13 +267,16 @@ impl PurchaseService {
             .await?;
         let order_lines = self
             .order_line_repo
-            .find_by_order(create.purchase_order_id)
+            .find_by_order(create.purchase_order_id, tenant_id)
             .await?;
 
         // Calculate total received quantities from all receipts
         let mut total_received = Decimal::ZERO;
         for r in &all_receipts {
-            let receipt_lines = self.receipt_line_repo.find_by_receipt(r.id).await?;
+            let receipt_lines = self
+                .receipt_line_repo
+                .find_by_receipt(r.id, tenant_id)
+                .await?;
             for l in receipt_lines {
                 total_received += l.quantity;
             }
@@ -294,7 +311,10 @@ impl PurchaseService {
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Goods receipt {} not found", id)))?;
 
-        let lines = self.receipt_line_repo.find_by_receipt(id).await?;
+        let lines = self
+            .receipt_line_repo
+            .find_by_receipt(id, tenant_id)
+            .await?;
 
         Ok(GoodsReceiptResponse::from((receipt, lines)))
     }
@@ -320,7 +340,9 @@ impl PurchaseService {
 
     #[tracing::instrument(skip(self))]
     pub async fn delete_receipt(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.receipt_line_repo.delete_by_receipt(id).await?;
+        self.receipt_line_repo
+            .delete_by_receipt(id, tenant_id)
+            .await?;
         self.receipt_repo.delete(id, tenant_id).await
     }
 
@@ -332,11 +354,15 @@ impl PurchaseService {
         tenant_id: i64,
         deleted_by: i64,
     ) -> Result<(), ApiError> {
-        self.receipt_line_repo
-            .soft_delete_by_receipt(id, deleted_by)
-            .await?;
+        // Parent-first: the tenant-scoped parent soft_delete gates the operation
+        // (returns NotFound for a foreign-tenant receipt) before any line rows
+        // are touched. The line soft-delete is additionally scoped by tenant_id
+        // as a SQL-level backstop.
         self.receipt_repo
             .soft_delete(id, tenant_id, deleted_by)
+            .await?;
+        self.receipt_line_repo
+            .soft_delete_by_receipt(id, deleted_by, tenant_id)
             .await
     }
 
@@ -348,7 +374,9 @@ impl PurchaseService {
         tenant_id: i64,
     ) -> Result<crate::domain::purchase::model::GoodsReceipt, ApiError> {
         let receipt = self.receipt_repo.restore(id, tenant_id).await?;
-        self.receipt_line_repo.restore_by_receipt(id).await?;
+        self.receipt_line_repo
+            .restore_by_receipt(id, tenant_id)
+            .await?;
         Ok(receipt)
     }
 
@@ -360,7 +388,10 @@ impl PurchaseService {
         tenant_id: i64,
     ) -> Result<GoodsReceiptResponse, ApiError> {
         let receipt = self.restore_receipt(id, tenant_id).await?;
-        let lines = self.receipt_line_repo.find_by_receipt(receipt.id).await?;
+        let lines = self
+            .receipt_line_repo
+            .find_by_receipt(receipt.id, tenant_id)
+            .await?;
         Ok(GoodsReceiptResponse::from((receipt, lines)))
     }
 
@@ -376,7 +407,11 @@ impl PurchaseService {
     /// Permanently delete a goods receipt (admin only, after soft delete)
     #[tracing::instrument(skip(self))]
     pub async fn destroy_receipt(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        self.receipt_line_repo.delete_by_receipt(id).await?;
+        // Rely on the tenant-scoped parent destroy + the ON DELETE CASCADE on
+        // goods_receipt_lines.receipt_id to remove the lines. The previous
+        // unscoped delete_by_receipt(id) ran BEFORE the tenant-scoped parent
+        // destroy and hard-deleted another tenant's lines by guessing the
+        // receipt id (the #194 destroy-ordering leak); it is dropped here.
         self.receipt_repo.destroy(id, tenant_id).await
     }
 
@@ -405,7 +440,7 @@ impl PurchaseService {
 
         let request = request_repo.create(create.clone()).await?;
         let lines = request_line_repo
-            .create_many(request.id, create.lines)
+            .create_many(request.id, create.lines, create.tenant_id)
             .await?;
 
         Ok(PurchaseRequestResponse::from((request, lines)))
@@ -430,7 +465,7 @@ impl PurchaseService {
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Purchase request {} not found", id)))?;
 
-        let lines = request_line_repo.find_by_request(id).await?;
+        let lines = request_line_repo.find_by_request(id, tenant_id).await?;
 
         Ok(PurchaseRequestResponse::from((request, lines)))
     }
@@ -561,7 +596,7 @@ impl PurchaseService {
             ApiError::Internal("Purchase request line repository not configured".to_string())
         })?;
 
-        request_line_repo.delete_by_request(id).await?;
+        request_line_repo.delete_by_request(id, tenant_id).await?;
         request_repo.delete(id, tenant_id).await
     }
 
@@ -581,10 +616,14 @@ impl PurchaseService {
             ApiError::Internal("Purchase request line repository not configured".to_string())
         })?;
 
+        // Parent-first: the tenant-scoped parent soft_delete gates the operation
+        // (returns NotFound for a foreign-tenant request) before any line rows
+        // are touched. The line soft-delete is additionally scoped by tenant_id
+        // as a SQL-level backstop.
+        request_repo.soft_delete(id, tenant_id, deleted_by).await?;
         request_line_repo
-            .soft_delete_by_request(id, deleted_by)
-            .await?;
-        request_repo.soft_delete(id, tenant_id, deleted_by).await
+            .soft_delete_by_request(id, deleted_by, tenant_id)
+            .await
     }
 
     /// Restore a soft-deleted purchase request
@@ -603,7 +642,7 @@ impl PurchaseService {
         })?;
 
         let request = request_repo.restore(id, tenant_id).await?;
-        request_line_repo.restore_by_request(id).await?;
+        request_line_repo.restore_by_request(id, tenant_id).await?;
         Ok(request)
     }
 
@@ -620,7 +659,9 @@ impl PurchaseService {
             ApiError::Internal("Purchase request line repository not configured".to_string())
         })?;
 
-        let lines = request_line_repo.find_by_request(request.id).await?;
+        let lines = request_line_repo
+            .find_by_request(request.id, tenant_id)
+            .await?;
         Ok(PurchaseRequestResponse::from((request, lines)))
     }
 
@@ -644,11 +685,11 @@ impl PurchaseService {
             ApiError::Internal("Purchase request repository not configured".to_string())
         })?;
 
-        let request_line_repo = self.request_line_repo.as_ref().ok_or_else(|| {
-            ApiError::Internal("Purchase request line repository not configured".to_string())
-        })?;
-
-        request_line_repo.delete_by_request(id).await?;
+        // Rely on the tenant-scoped parent destroy + the ON DELETE CASCADE on
+        // purchase_request_lines.request_id to remove the lines. The previous
+        // unscoped delete_by_request(id) ran BEFORE the tenant-scoped parent
+        // destroy and hard-deleted another tenant's lines by guessing the
+        // request id (the #194 destroy-ordering leak); it is dropped here.
         request_repo.destroy(id, tenant_id).await
     }
 }
