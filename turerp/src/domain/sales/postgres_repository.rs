@@ -156,6 +156,7 @@ impl From<SalesOrderRowWithTotal> for (SalesOrder, i64) {
 #[derive(Debug, FromRow)]
 struct SalesOrderLineRow {
     id: i64,
+    tenant_id: i64,
     order_id: i64,
     product_id: Option<i64>,
     description: String,
@@ -173,6 +174,7 @@ impl From<SalesOrderLineRow> for SalesOrderLine {
     fn from(row: SalesOrderLineRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             order_id: row.order_id,
             product_id: row.product_id,
             description: row.description,
@@ -308,6 +310,7 @@ impl From<QuotationRowWithTotal> for (Quotation, i64) {
 #[derive(Debug, FromRow)]
 struct QuotationLineRow {
     id: i64,
+    tenant_id: i64,
     quotation_id: i64,
     product_id: Option<i64>,
     description: String,
@@ -325,6 +328,7 @@ impl From<QuotationLineRow> for QuotationLine {
     fn from(row: QuotationLineRow) -> Self {
         Self {
             id: row.id,
+            tenant_id: row.tenant_id,
             quotation_id: row.quotation_id,
             product_id: row.product_id,
             description: row.description,
@@ -776,6 +780,7 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
         &self,
         order_id: i64,
         lines: Vec<CreateSalesOrderLine>,
+        tenant_id: i64,
     ) -> Result<Vec<SalesOrderLine>, ApiError> {
         let mut result_lines = Vec::with_capacity(lines.len());
 
@@ -785,9 +790,10 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
             let row: SalesOrderLineRow = sqlx::query_as(
                 r#"
                 INSERT INTO sales_order_lines (order_id, product_id, description, quantity,
-                                               unit_price, tax_rate, discount_rate, line_total, sort_order)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                RETURNING id, order_id, product_id, description, quantity,
+                                               unit_price, tax_rate, discount_rate, line_total,
+                                               sort_order, tenant_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                RETURNING id, tenant_id, order_id, product_id, description, quantity,
                           unit_price, tax_rate, discount_rate, line_total, sort_order,
                           deleted_at, deleted_by
                 "#,
@@ -801,6 +807,7 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
             .bind(create.discount_rate)
             .bind(line_total)
             .bind(i as i32)
+            .bind(tenant_id)
             .fetch_one(&*self.pool)
             .await
             .map_err(|e| map_sqlx_error(e, "SalesOrderLine"))?;
@@ -811,18 +818,23 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
         Ok(result_lines)
     }
 
-    async fn find_by_order(&self, order_id: i64) -> Result<Vec<SalesOrderLine>, ApiError> {
+    async fn find_by_order(
+        &self,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<SalesOrderLine>, ApiError> {
         let rows: Vec<SalesOrderLineRow> = sqlx::query_as(
             r#"
-            SELECT id, order_id, product_id, description, quantity,
+            SELECT id, tenant_id, order_id, product_id, description, quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM sales_order_lines
-            WHERE order_id = $1 AND deleted_at IS NULL
+            WHERE order_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY sort_order
             "#,
         )
         .bind(order_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -832,14 +844,15 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn delete_by_order(&self, order_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_order(&self, order_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             DELETE FROM sales_order_lines
-            WHERE order_id = $1
+            WHERE order_id = $1 AND tenant_id = $2
             "#,
         )
         .bind(order_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| {
@@ -852,15 +865,23 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
         Ok(())
     }
 
-    async fn soft_delete(&self, id: i64, _order_id: i64, deleted_by: i64) -> Result<(), ApiError> {
+    async fn soft_delete(
+        &self,
+        id: i64,
+        order_id: i64,
+        deleted_by: i64,
+        tenant_id: i64,
+    ) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE sales_order_lines
-            SET deleted_at = NOW(), deleted_by = $2
-            WHERE id = $1 AND deleted_at IS NULL
+            SET deleted_at = NOW(), deleted_by = $4
+            WHERE id = $1 AND order_id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(order_id)
+        .bind(tenant_id)
         .bind(deleted_by)
         .execute(&*self.pool)
         .await
@@ -875,15 +896,22 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
         Ok(())
     }
 
-    async fn restore(&self, id: i64, _order_id: i64) -> Result<SalesOrderLine, ApiError> {
+    async fn restore(
+        &self,
+        id: i64,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<SalesOrderLine, ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE sales_order_lines
             SET deleted_at = NULL, deleted_by = NULL
-            WHERE id = $1 AND deleted_at IS NOT NULL
+            WHERE id = $1 AND order_id = $2 AND tenant_id = $3 AND deleted_at IS NOT NULL
             "#,
         )
         .bind(id)
+        .bind(order_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to restore sales order line: {}", e)))?;
@@ -896,14 +924,16 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
 
         let row: SalesOrderLineRow = sqlx::query_as(
             r#"
-            SELECT id, order_id, product_id, description, quantity,
+            SELECT id, tenant_id, order_id, product_id, description, quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM sales_order_lines
-            WHERE id = $1
+            WHERE id = $1 AND order_id = $2 AND tenant_id = $3
             "#,
         )
         .bind(id)
+        .bind(order_id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| {
@@ -913,18 +943,23 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
         Ok(row.into())
     }
 
-    async fn find_deleted(&self, order_id: i64) -> Result<Vec<SalesOrderLine>, ApiError> {
+    async fn find_deleted(
+        &self,
+        order_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<SalesOrderLine>, ApiError> {
         let rows: Vec<SalesOrderLineRow> = sqlx::query_as(
             r#"
-            SELECT id, order_id, product_id, description, quantity,
+            SELECT id, tenant_id, order_id, product_id, description, quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM sales_order_lines
-            WHERE order_id = $1 AND deleted_at IS NOT NULL
+            WHERE order_id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             ORDER BY sort_order
             "#,
         )
         .bind(order_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -934,14 +969,16 @@ impl SalesOrderLineRepository for PostgresSalesOrderLineRepository {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    async fn destroy(&self, id: i64, _order_id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, order_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM sales_order_lines
-            WHERE id = $1
+            WHERE id = $1 AND order_id = $2 AND tenant_id = $3
             "#,
         )
         .bind(id)
+        .bind(order_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to destroy sales order line: {}", e)))?;
@@ -1367,6 +1404,7 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
         &self,
         quotation_id: i64,
         lines: Vec<CreateQuotationLine>,
+        tenant_id: i64,
     ) -> Result<Vec<QuotationLine>, ApiError> {
         let mut result_lines = Vec::with_capacity(lines.len());
 
@@ -1380,9 +1418,10 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
             let row: QuotationLineRow = sqlx::query_as(
                 r#"
                 INSERT INTO quotation_lines (quotation_id, product_id, description, quantity,
-                                             unit_price, tax_rate, discount_rate, line_total, sort_order)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                RETURNING id, quotation_id, product_id, description, quantity,
+                                             unit_price, tax_rate, discount_rate, line_total,
+                                             sort_order, tenant_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                RETURNING id, tenant_id, quotation_id, product_id, description, quantity,
                           unit_price, tax_rate, discount_rate, line_total, sort_order,
                           deleted_at, deleted_by
                 "#,
@@ -1396,6 +1435,7 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
             .bind(create.discount_rate)
             .bind(line_total)
             .bind(i as i32)
+            .bind(tenant_id)
             .fetch_one(&*self.pool)
             .await
             .map_err(|e| map_sqlx_error(e, "QuotationLine"))?;
@@ -1406,18 +1446,23 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
         Ok(result_lines)
     }
 
-    async fn find_by_quotation(&self, quotation_id: i64) -> Result<Vec<QuotationLine>, ApiError> {
+    async fn find_by_quotation(
+        &self,
+        quotation_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<QuotationLine>, ApiError> {
         let rows: Vec<QuotationLineRow> = sqlx::query_as(
             r#"
-            SELECT id, quotation_id, product_id, description, quantity,
+            SELECT id, tenant_id, quotation_id, product_id, description, quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM quotation_lines
-            WHERE quotation_id = $1 AND deleted_at IS NULL
+            WHERE quotation_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY sort_order
             "#,
         )
         .bind(quotation_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -1430,14 +1475,15 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
 
-    async fn delete_by_quotation(&self, quotation_id: i64) -> Result<(), ApiError> {
+    async fn delete_by_quotation(&self, quotation_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         sqlx::query(
             r#"
             DELETE FROM quotation_lines
-            WHERE quotation_id = $1
+            WHERE quotation_id = $1 AND tenant_id = $2
             "#,
         )
         .bind(quotation_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| {
@@ -1453,17 +1499,20 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
     async fn soft_delete(
         &self,
         id: i64,
-        _quotation_id: i64,
+        quotation_id: i64,
         deleted_by: i64,
+        tenant_id: i64,
     ) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE quotation_lines
-            SET deleted_at = NOW(), deleted_by = $2
-            WHERE id = $1 AND deleted_at IS NULL
+            SET deleted_at = NOW(), deleted_by = $4
+            WHERE id = $1 AND quotation_id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
+        .bind(quotation_id)
+        .bind(tenant_id)
         .bind(deleted_by)
         .execute(&*self.pool)
         .await
@@ -1476,15 +1525,22 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
         Ok(())
     }
 
-    async fn restore(&self, id: i64, _quotation_id: i64) -> Result<QuotationLine, ApiError> {
+    async fn restore(
+        &self,
+        id: i64,
+        quotation_id: i64,
+        tenant_id: i64,
+    ) -> Result<QuotationLine, ApiError> {
         let result = sqlx::query(
             r#"
             UPDATE quotation_lines
             SET deleted_at = NULL, deleted_by = NULL
-            WHERE id = $1 AND deleted_at IS NOT NULL
+            WHERE id = $1 AND quotation_id = $2 AND tenant_id = $3 AND deleted_at IS NOT NULL
             "#,
         )
         .bind(id)
+        .bind(quotation_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to restore quotation line: {}", e)))?;
@@ -1497,14 +1553,16 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
 
         let row: QuotationLineRow = sqlx::query_as(
             r#"
-            SELECT id, quotation_id, product_id, description, quantity,
+            SELECT id, tenant_id, quotation_id, product_id, description, quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM quotation_lines
-            WHERE id = $1
+            WHERE id = $1 AND quotation_id = $2 AND tenant_id = $3
             "#,
         )
         .bind(id)
+        .bind(quotation_id)
+        .bind(tenant_id)
         .fetch_one(&*self.pool)
         .await
         .map_err(|e| {
@@ -1514,18 +1572,23 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
         Ok(row.into())
     }
 
-    async fn find_deleted(&self, quotation_id: i64) -> Result<Vec<QuotationLine>, ApiError> {
+    async fn find_deleted(
+        &self,
+        quotation_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<QuotationLine>, ApiError> {
         let rows: Vec<QuotationLineRow> = sqlx::query_as(
             r#"
-            SELECT id, quotation_id, product_id, description, quantity,
+            SELECT id, tenant_id, quotation_id, product_id, description, quantity,
                    unit_price, tax_rate, discount_rate, line_total, sort_order,
                    deleted_at, deleted_by
             FROM quotation_lines
-            WHERE quotation_id = $1 AND deleted_at IS NOT NULL
+            WHERE quotation_id = $1 AND tenant_id = $2 AND deleted_at IS NOT NULL
             ORDER BY sort_order
             "#,
         )
         .bind(quotation_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -1535,14 +1598,16 @@ impl QuotationLineRepository for PostgresQuotationLineRepository {
         Ok(rows.into_iter().map(Into::into).collect())
     }
 
-    async fn destroy(&self, id: i64, _quotation_id: i64) -> Result<(), ApiError> {
+    async fn destroy(&self, id: i64, quotation_id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let result = sqlx::query(
             r#"
             DELETE FROM quotation_lines
-            WHERE id = $1
+            WHERE id = $1 AND quotation_id = $2 AND tenant_id = $3
             "#,
         )
         .bind(id)
+        .bind(quotation_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to destroy quotation line: {}", e)))?;
