@@ -225,6 +225,54 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             version: "046_workflow_templates_soft_delete",
             sql: include_str!("../../migrations/046_workflow_templates_soft_delete.sql"),
         },
+        Migration {
+            version: "047_warehouses_updated_at_and_enable",
+            sql: include_str!("../../migrations/047_warehouses_updated_at_and_enable.sql"),
+        },
+        Migration {
+            version: "048_hr_attendance_leave_requests_tenant_id",
+            sql: include_str!("../../migrations/048_hr_attendance_leave_requests_tenant_id.sql"),
+        },
+        Migration {
+            version: "049_stock_levels_tenant_id",
+            sql: include_str!("../../migrations/049_stock_levels_tenant_id.sql"),
+        },
+        Migration {
+            version: "050_manufacturing_children_tenant_id",
+            sql: include_str!("../../migrations/050_manufacturing_children_tenant_id.sql"),
+        },
+        Migration {
+            version: "051_invoice_lines_tenant_id",
+            sql: include_str!("../../migrations/051_invoice_lines_tenant_id.sql"),
+        },
+        Migration {
+            version: "052_maintenance_records_tenant_id",
+            sql: include_str!("../../migrations/052_maintenance_records_tenant_id.sql"),
+        },
+        Migration {
+            version: "053_journal_lines_tenant_id",
+            sql: include_str!("../../migrations/053_journal_lines_tenant_id.sql"),
+        },
+        Migration {
+            version: "054_purchase_order_lines_tenant_id",
+            sql: include_str!("../../migrations/054_purchase_order_lines_tenant_id.sql"),
+        },
+        Migration {
+            version: "055_goods_receipt_lines_tenant_id",
+            sql: include_str!("../../migrations/055_goods_receipt_lines_tenant_id.sql"),
+        },
+        Migration {
+            version: "056_purchase_request_lines_tenant_id",
+            sql: include_str!("../../migrations/056_purchase_request_lines_tenant_id.sql"),
+        },
+        Migration {
+            version: "057_sales_order_lines_tenant_id",
+            sql: include_str!("../../migrations/057_sales_order_lines_tenant_id.sql"),
+        },
+        Migration {
+            version: "058_quotation_lines_tenant_id",
+            sql: include_str!("../../migrations/058_quotation_lines_tenant_id.sql"),
+        },
     ];
 
     // Ensure migrations tracking table exists (outside transaction).
@@ -353,6 +401,62 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
 /// down-replay so there is no concurrent writer.
 pub async fn run_migrations_down(pool: &PgPool) -> Result<usize, ApiError> {
     const DOWN_MIGRATIONS: &[Migration] = &[
+        Migration {
+            version: "058_quotation_lines_tenant_id",
+            sql: include_str!("../../migrations/down/058_quotation_lines_tenant_id.down.sql"),
+        },
+        Migration {
+            version: "057_sales_order_lines_tenant_id",
+            sql: include_str!("../../migrations/down/057_sales_order_lines_tenant_id.down.sql"),
+        },
+        Migration {
+            version: "056_purchase_request_lines_tenant_id",
+            sql: include_str!(
+                "../../migrations/down/056_purchase_request_lines_tenant_id.down.sql"
+            ),
+        },
+        Migration {
+            version: "055_goods_receipt_lines_tenant_id",
+            sql: include_str!("../../migrations/down/055_goods_receipt_lines_tenant_id.down.sql"),
+        },
+        Migration {
+            version: "054_purchase_order_lines_tenant_id",
+            sql: include_str!("../../migrations/down/054_purchase_order_lines_tenant_id.down.sql"),
+        },
+        Migration {
+            version: "053_journal_lines_tenant_id",
+            sql: include_str!("../../migrations/down/053_journal_lines_tenant_id.down.sql"),
+        },
+        Migration {
+            version: "052_maintenance_records_tenant_id",
+            sql: include_str!("../../migrations/down/052_maintenance_records_tenant_id.down.sql"),
+        },
+        Migration {
+            version: "051_invoice_lines_tenant_id",
+            sql: include_str!("../../migrations/down/051_invoice_lines_tenant_id.down.sql"),
+        },
+        Migration {
+            version: "050_manufacturing_children_tenant_id",
+            sql: include_str!(
+                "../../migrations/down/050_manufacturing_children_tenant_id.down.sql"
+            ),
+        },
+        Migration {
+            version: "049_stock_levels_tenant_id",
+            sql: include_str!("../../migrations/down/049_stock_levels_tenant_id.down.sql"),
+        },
+        Migration {
+            version: "048_hr_attendance_leave_requests_tenant_id",
+            sql: include_str!(
+                "../../migrations/down/048_hr_attendance_leave_requests_tenant_id.down.sql"
+            ),
+        },
+        Migration {
+            version: "047_warehouses_updated_at_and_enable",
+            sql: include_str!(
+                "../../migrations/down/047_warehouses_updated_at_and_enable.down.sql"
+            ),
+        },
         Migration {
             version: "046_workflow_templates_soft_delete",
             sql: include_str!("../../migrations/down/046_workflow_templates_soft_delete.down.sql"),
