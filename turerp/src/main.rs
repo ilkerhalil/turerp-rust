@@ -393,10 +393,48 @@ async fn main() -> std::io::Result<()> {
     // earlier migrations". We exit after the down-replay so the
     // app does not start writing with a partial schema.
     //
-    // Operator command:
+    // Operator command (non-production):
     //   docker compose run --rm -e MIGRATIONS_DOWN=1 turerp
+    //
+    // Operator command (production) — requires an explicit second
+    // confirmation env (see the guard below):
+    //   docker compose run --rm \
+    //     -e MIGRATIONS_DOWN=1 \
+    //     -e MIGRATIONS_DOWN_CONFIRM=I_UNDERSTAND_THIS_IS_DESTRUCTIVE \
+    //     turerp
     if std::env::var("MIGRATIONS_DOWN").as_deref() == Ok("1") {
-        tracing::warn!("MIGRATIONS_DOWN=1 — running down-replay then exiting");
+        // Production down-replay safety guard. The down migrations are
+        // destructive (they DROP tenant_id columns/indexes/FKs that the
+        // #162 cross-tenant leak-audit added). An accidental
+        // MIGRATIONS_DOWN=1 leaking into a helm values file or a k8s
+        // CronJob/Job env would replay ALL downs and re-open the leak
+        // class the audit closed. In production we therefore refuse to
+        // run any down migration unless the operator also sets
+        // MIGRATIONS_DOWN_CONFIRM to the exact acknowledgment phrase
+        // below. The phrase is deliberately NOT `1` so that a
+        // copy-paste of `MIGRATIONS_DOWN=1` does not silently carry a
+        // matching `=1` confirm. Safe default = refuse + exit before
+        // any down SQL runs. Non-production (development) keeps the
+        // original single-env behavior so local rollback is unaffected.
+        if config.is_production() {
+            let confirm = std::env::var("MIGRATIONS_DOWN_CONFIRM").unwrap_or_default();
+            if confirm != "I_UNDERSTAND_THIS_IS_DESTRUCTIVE" {
+                tracing::error!(
+                    "MIGRATIONS_DOWN=1 refused in production: down-replay is \
+                     destructive (drops tenant_id columns and re-opens the \
+                     cross-tenant leak class). To proceed, set \
+                     MIGRATIONS_DOWN_CONFIRM=I_UNDERSTAND_THIS_IS_DESTRUCTIVE. \
+                     Aborting before any down migration runs."
+                );
+                std::process::exit(1);
+            }
+            tracing::warn!(
+                "MIGRATIONS_DOWN=1 confirmed in production — running \
+                 down-replay then exiting"
+            );
+        } else {
+            tracing::warn!("MIGRATIONS_DOWN=1 — running down-replay then exiting");
+        }
         let down_pool = turerp::db::create_pool(&config.database)
             .await
             .unwrap_or_else(|e| {
