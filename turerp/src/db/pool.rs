@@ -7,6 +7,14 @@ use std::time::Duration;
 use crate::config::DatabaseConfig;
 use crate::error::ApiError;
 
+/// Fixed key for the migration advisory lock (see `run_migrations` /
+/// `run_migrations_down`). Packed from the ASCII bytes of `"TURERP"` so it
+/// is distinctive and unlikely to collide with any app-level advisory lock
+/// (none currently exist in the codebase). A single int8 key is shared by
+/// the up and down paths so a concurrent up-boot and down-replay are also
+/// mutually exclusive.
+const MIGRATION_ADVISORY_LOCK_KEY: i64 = 0x5455_5245_5250; // "TURERP"
+
 /// Create a PostgreSQL connection pool
 pub async fn create_pool(config: &DatabaseConfig) -> Result<PgPool, ApiError> {
     PgPoolOptions::new()
@@ -286,6 +294,33 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
     .await
     .map_err(|e| ApiError::Database(format!("Failed to create migrations table: {}", e)))?;
 
+    // Multi-replica guard: serialize migration application across
+    // concurrently-booting replicas. Without this, two replicas can both
+    // see `already_applied = false` for a NON-idempotent migration (e.g.
+    // 048-058 `ADD CONSTRAINT fk_..._tenant` — Postgres has no IF NOT EXISTS
+    // for ADD CONSTRAINT): both run the DDL, the loser's tx fails with
+    // "constraint already exists", the tolerance policy below rolls it back
+    // and continues WITHOUT recording it, so the loser retries on every boot
+    // → perpetual warn-on-boot and a migration that is never recorded. With
+    // the lock, replica B blocks until replica A finishes, then B finds every
+    // migration `already_applied` and skips. We use a TRANSACTION-scoped
+    // advisory lock (`pg_advisory_xact_lock`) held in a dedicated outer tx:
+    // it auto-releases when that tx commits at the end OR is rolled back on
+    // any early-return `?` error path (Drop), so the lock can never leak even
+    // if this function aborts mid-run. The per-migration DDL txs below use
+    // separate pool connections; the lock is cluster-wide keyed by the int,
+    // so it blocks other replicas regardless of which connection they use.
+    let mut lock_tx = pool.begin().await.map_err(|e| {
+        ApiError::Database(format!("Failed to start migration advisory-lock tx: {}", e))
+    })?;
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(MIGRATION_ADVISORY_LOCK_KEY)
+        .execute(&mut *lock_tx)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!("Failed to acquire migration advisory lock: {}", e))
+        })?;
+
     for mig in MIGRATIONS {
         // Each migration runs in its OWN transaction. A failure rolls back only
         // that migration's partial DDL — prior migrations stay committed. The
@@ -368,6 +403,11 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
             }
         }
     }
+
+    // Release the advisory lock by committing the outer lock tx. On any
+    // early-return `?` error path above, `lock_tx` is dropped → rolled back
+    // → the xact lock is released there, so this is the only success path.
+    let _ = lock_tx.commit().await;
 
     Ok(())
 }
@@ -661,6 +701,35 @@ pub async fn run_migrations_down(pool: &PgPool) -> Result<usize, ApiError> {
 
     let mut replayed: usize = 0;
 
+    // Multi-replica guard (mirror of `run_migrations`): serialize down-replay
+    // across concurrently-booting replicas AND against a concurrent up-boot.
+    // Down-replay is destructive (drops tenant_id columns/FKs), so two
+    // concurrent down-replays racing on the same `__migrations` rows would
+    // both `DELETE` + run the same `down.sql`; an up-boot racing a down-replay
+    // could re-`ADD` a column the down is dropping. The same int8 key is used
+    // so up and down are mutually exclusive. Transaction-scoped lock held in a
+    // dedicated outer tx → auto-released on commit (success path below) or on
+    // Drop-rollback (the early-return `?` error paths in this loop), so it can
+    // never leak. Down-replay is operator-initiated (`MIGRATIONS_DOWN=1`, exits
+    // after) and prod-gated by the confirm env (main.rs), so contention is
+    // rare; the lock makes the rare case safe.
+    let mut lock_tx = pool.begin().await.map_err(|e| {
+        ApiError::Database(format!(
+            "Failed to start down-replay advisory-lock tx: {}",
+            e
+        ))
+    })?;
+    sqlx::query("SELECT pg_advisory_xact_lock($1)")
+        .bind(MIGRATION_ADVISORY_LOCK_KEY)
+        .execute(&mut *lock_tx)
+        .await
+        .map_err(|e| {
+            ApiError::Database(format!(
+                "Failed to acquire down-replay advisory lock: {}",
+                e
+            ))
+        })?;
+
     for mig in DOWN_MIGRATIONS {
         let already_applied: bool =
             sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM __migrations WHERE version = $1)")
@@ -726,5 +795,8 @@ pub async fn run_migrations_down(pool: &PgPool) -> Result<usize, ApiError> {
     }
 
     tracing::info!("Down-replay complete: {} migrations reversed", replayed);
+    // Release the down-replay advisory lock (success path). Early-return `?`
+    // error paths in the loop drop `lock_tx` → rollback → auto-release.
+    let _ = lock_tx.commit().await;
     Ok(replayed)
 }
