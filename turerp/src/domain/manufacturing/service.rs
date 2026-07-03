@@ -70,14 +70,6 @@ impl ManufacturingService {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn get_work_orders_by_product(
-        &self,
-        product_id: i64,
-    ) -> Result<Vec<WorkOrder>, ApiError> {
-        self.work_order_repo.find_by_product(product_id).await
-    }
-
-    #[tracing::instrument(skip(self))]
     pub async fn update_work_order_status(
         &self,
         id: i64,

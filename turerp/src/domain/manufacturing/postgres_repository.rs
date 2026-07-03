@@ -317,25 +317,6 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<WorkOrder>, ApiError> {
-        let rows: Vec<WorkOrderRow> = sqlx::query_as(
-            r#"
-            SELECT id, tenant_id, name, product_id, quantity, bom_id, routing_id,
-                   status, priority, planned_start, planned_end,
-                   actual_start, actual_end, created_at, updated_at
-            FROM work_orders
-            WHERE product_id = $1
-            ORDER BY created_at DESC
-            "#,
-        )
-        .bind(product_id)
-        .fetch_all(&*self.pool)
-        .await
-        .map_err(|e| ApiError::Database(format!("Failed to find work orders by product: {}", e)))?;
-
-        Ok(rows.into_iter().map(|r| r.into()).collect())
-    }
-
     async fn find_by_status(
         &self,
         tenant_id: i64,
