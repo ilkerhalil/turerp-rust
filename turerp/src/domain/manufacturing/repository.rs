@@ -27,7 +27,6 @@ pub trait WorkOrderRepository: Send + Sync {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<WorkOrder>, ApiError>;
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<WorkOrder>, ApiError>;
     async fn find_by_status(
         &self,
         tenant_id: i64,
@@ -240,16 +239,6 @@ impl WorkOrderRepository for InMemoryWorkOrderRepository {
             .collect();
 
         Ok(PaginatedResult::new(items, page, per_page, total))
-    }
-
-    async fn find_by_product(&self, product_id: i64) -> Result<Vec<WorkOrder>, ApiError> {
-        let inner = self.inner.lock();
-        Ok(inner
-            .work_orders
-            .values()
-            .filter(|x| x.product_id == product_id && !x.is_deleted())
-            .cloned()
-            .collect())
     }
 
     async fn find_by_status(
