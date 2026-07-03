@@ -206,3 +206,136 @@ fn all_postgres_tables_have_migrations() {
         missing,
     );
 }
+
+/// Collect the on-disk up-migration stems (`migrations/*.sql` minus the
+/// `.sql` suffix). The `down/` subdirectory is skipped (it holds
+/// `*.down.sql` files, not up migrations).
+fn disk_up_migration_stems() -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let Ok(entries) = fs::read_dir("migrations") else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("sql") {
+            continue;
+        }
+        let Some(fname) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if let Some(stem) = fname.strip_suffix(".sql") {
+            out.insert(stem.to_string());
+        }
+    }
+    out
+}
+
+/// Collect the on-disk down-migration stems (`migrations/down/*.down.sql`
+/// minus the `.down.sql` suffix).
+fn disk_down_migration_stems() -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let Ok(entries) = fs::read_dir("migrations/down") else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("sql") {
+            continue;
+        }
+        let Some(fname) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if let Some(stem) = fname.strip_suffix(".down.sql") {
+            out.insert(stem.to_string());
+        }
+    }
+    out
+}
+
+/// Extract the `version: "..."` strings from a named `const` migration
+/// array in `src/db/pool.rs` (e.g. `MIGRATIONS` or `DOWN_MIGRATIONS`).
+/// The array is `const NAME: &[Migration] = &[ ... ];` — we scan from the
+/// `&[` after the name to the first `];` and pull every `version: "..."`
+/// line. Version strings are filename stems, so they must match the
+/// on-disk file stems exactly.
+fn pool_migration_versions(array_name: &str) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let Ok(content) = fs::read_to_string("src/db/pool.rs") else {
+        return out;
+    };
+    let needle = format!("const {array_name}: &[Migration] = &[");
+    let Some(start) = content.find(&needle) else {
+        return out;
+    };
+    let body_start = start + needle.len();
+    let Some(end) = content[body_start..].find("];") else {
+        return out;
+    };
+    let body = &content[body_start..body_start + end];
+    for line in body.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed.strip_prefix("version:") else {
+            continue;
+        };
+        let rest = rest.trim_start();
+        let Some(rest) = rest.strip_prefix('"') else {
+            continue;
+        };
+        if let Some(end_q) = rest.find('"') {
+            out.insert(rest[..end_q].to_string());
+        }
+    }
+    out
+}
+
+/// Regression guard for the bug fixed in PR #206 / issue #205: the app's
+/// custom migration runner (`src/db/pool.rs` `MIGRATIONS` array, applied at
+/// startup) is the SOLE migrator in production (Dockerfile = app binary,
+/// no external `sqlx migrate`). A migration file on disk that is NOT
+/// registered in the array is silently never applied in production — which
+/// is how 047-058 (the entire #162 cross-tenant leak-audit) ended up absent
+/// in prod. CI's Test job has no database, so the gap never surfaced there.
+/// This test asserts the array ≡ the disk set so the next unregistered
+/// migration fails CI instead of prod.
+#[test]
+fn pool_migrations_array_matches_disk_up() {
+    let disk = disk_up_migration_stems();
+    let array = pool_migration_versions("MIGRATIONS");
+    let not_registered: Vec<_> = disk.difference(&array).collect();
+    let dangling: Vec<_> = array.difference(&disk).collect();
+    assert!(
+        not_registered.is_empty() && dangling.is_empty(),
+        "src/db/pool.rs `MIGRATIONS` array is out of sync with `migrations/*.sql`.\n\
+         On disk but NOT in the array (would NOT be applied in production — the \
+         app is the sole migrator): {:?}\n\
+         In the array but NO file on disk (dangling include_str!): {:?}\n\
+         Every new migration file MUST be registered in `src/db/pool.rs` \
+         `MIGRATIONS` (ascending) AND `DOWN_MIGRATIONS` (descending).",
+        not_registered,
+        dangling,
+    );
+}
+
+/// Mirror of the up guard for the `DOWN_MIGRATIONS` array vs
+/// `migrations/down/*.down.sql`. A down file on disk but unregistered in
+/// the array would be skipped by `run_migrations_down`; an array entry
+/// with no file is a dangling include_str! (compile-caught, but flagged
+/// here too for a single-point parity report).
+#[test]
+fn pool_migrations_array_matches_disk_down() {
+    let disk = disk_down_migration_stems();
+    let array = pool_migration_versions("DOWN_MIGRATIONS");
+    let not_registered: Vec<_> = disk.difference(&array).collect();
+    let dangling: Vec<_> = array.difference(&disk).collect();
+    assert!(
+        not_registered.is_empty() && dangling.is_empty(),
+        "src/db/pool.rs `DOWN_MIGRATIONS` array is out of sync with \
+         `migrations/down/*.down.sql`.\n\
+         On disk but NOT in the array: {:?}\n\
+         In the array but NO file on disk: {:?}\n\
+         Every new down-migration MUST be registered in `DOWN_MIGRATIONS` \
+         (descending) AND its up counterpart in `MIGRATIONS` (ascending).",
+        not_registered,
+        dangling,
+    );
+}
