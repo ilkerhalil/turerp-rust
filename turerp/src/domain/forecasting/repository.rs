@@ -47,13 +47,6 @@ pub trait ForecastingRepository: Send + Sync {
         tenant_id: i64,
         warehouse_id: Option<i64>,
     ) -> Result<Vec<StockLevel>, ApiError>;
-
-    /// Get stock level for a specific product in a warehouse
-    async fn get_stock_level(
-        &self,
-        warehouse_id: i64,
-        product_id: i64,
-    ) -> Result<Option<StockLevel>, ApiError>;
 }
 
 /// Type alias for boxed forecasting repository
@@ -198,18 +191,5 @@ impl ForecastingRepository for InMemoryForecastingRepository {
             })
             .cloned()
             .collect())
-    }
-
-    async fn get_stock_level(
-        &self,
-        warehouse_id: i64,
-        product_id: i64,
-    ) -> Result<Option<StockLevel>, ApiError> {
-        let inner = self.inner.lock();
-        Ok(inner
-            .stock_levels
-            .get(&(warehouse_id, product_id))
-            .filter(|l| l.deleted_at.is_none())
-            .cloned())
     }
 }

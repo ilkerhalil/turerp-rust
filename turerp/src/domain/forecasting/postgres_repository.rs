@@ -176,26 +176,4 @@ impl ForecastingRepository for PostgresForecastingRepository {
 
         Ok(rows.into_iter().map(|r| r.into()).collect())
     }
-
-    async fn get_stock_level(
-        &self,
-        warehouse_id: i64,
-        product_id: i64,
-    ) -> Result<Option<StockLevel>, ApiError> {
-        let result: Option<StockLevelRow> = sqlx::query_as(
-            r#"
-            SELECT id, tenant_id, warehouse_id, product_id, quantity, reserved_quantity,
-                   updated_at, deleted_at, deleted_by
-            FROM stock_levels
-            WHERE warehouse_id = $1 AND product_id = $2 AND deleted_at IS NULL
-            "#,
-        )
-        .bind(warehouse_id)
-        .bind(product_id)
-        .fetch_optional(&*self.pool)
-        .await
-        .map_err(|e| ApiError::Database(format!("Failed to fetch stock level: {}", e)))?;
-
-        Ok(result.map(|r| r.into()))
-    }
 }
