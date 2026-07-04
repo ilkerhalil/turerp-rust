@@ -1,6 +1,8 @@
 //! Purchase service for business logic
 
 use crate::common::pagination::PaginatedResult;
+use crate::domain::cari::repository::BoxCariRepository;
+use crate::domain::product::repository::BoxProductRepository;
 use crate::domain::purchase::model::{
     CreateGoodsReceipt, CreatePurchaseOrder, CreatePurchaseRequest, GoodsReceiptResponse,
     GoodsReceiptStatus, PurchaseOrderResponse, PurchaseOrderStatus, PurchaseRequestResponse,
@@ -22,6 +24,8 @@ pub struct PurchaseService {
     receipt_line_repo: BoxGoodsReceiptLineRepository,
     request_repo: Option<BoxPurchaseRequestRepository>,
     request_line_repo: Option<BoxPurchaseRequestLineRepository>,
+    cari_repo: BoxCariRepository,
+    product_repo: BoxProductRepository,
 }
 
 impl PurchaseService {
@@ -30,6 +34,8 @@ impl PurchaseService {
         order_line_repo: BoxPurchaseOrderLineRepository,
         receipt_repo: BoxGoodsReceiptRepository,
         receipt_line_repo: BoxGoodsReceiptLineRepository,
+        cari_repo: BoxCariRepository,
+        product_repo: BoxProductRepository,
     ) -> Self {
         Self {
             order_repo,
@@ -38,10 +44,13 @@ impl PurchaseService {
             receipt_line_repo,
             request_repo: None,
             request_line_repo: None,
+            cari_repo,
+            product_repo,
         }
     }
 
     /// Create service with purchase request support
+    #[allow(clippy::too_many_arguments)]
     pub fn with_requests(
         order_repo: BoxPurchaseOrderRepository,
         order_line_repo: BoxPurchaseOrderLineRepository,
@@ -49,6 +58,8 @@ impl PurchaseService {
         receipt_line_repo: BoxGoodsReceiptLineRepository,
         request_repo: BoxPurchaseRequestRepository,
         request_line_repo: BoxPurchaseRequestLineRepository,
+        cari_repo: BoxCariRepository,
+        product_repo: BoxProductRepository,
     ) -> Self {
         Self {
             order_repo,
@@ -57,7 +68,52 @@ impl PurchaseService {
             receipt_line_repo,
             request_repo: Some(request_repo),
             request_line_repo: Some(request_line_repo),
+            cari_repo,
+            product_repo,
         }
+    }
+
+    /// Parent-ownership precheck: verify the vendor (cari) belongs to the
+    /// caller's tenant before any INSERT. A body-controlled `cari_id`
+    /// referencing a foreign tenant's vendor would otherwise create an
+    /// orphaned purchase order (cross-tenant IDOR).
+    async fn ensure_cari_owned(&self, cari_id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.cari_repo
+            .find_by_id(cari_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", cari_id)))?;
+        Ok(())
+    }
+
+    /// Parent-ownership precheck for line-level products: verify every line
+    /// `product_id` (Some only — None is a legitimate no-product line) belongs
+    /// to the caller's tenant. Single batched `find_by_ids` lookup; a foreign
+    /// product is not returned by the tenant-scoped query, so a count mismatch
+    /// means at least one line references a foreign product.
+    async fn ensure_line_products_owned(
+        &self,
+        product_ids: impl IntoIterator<Item = Option<i64>>,
+        tenant_id: i64,
+    ) -> Result<(), ApiError> {
+        let ids: Vec<i64> = {
+            let set: std::collections::HashSet<i64> = product_ids.into_iter().flatten().collect();
+            let mut v: Vec<i64> = set.into_iter().collect();
+            v.sort_unstable();
+            v
+        };
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let found = self.product_repo.find_by_ids(&ids, tenant_id).await?;
+        if found.len() != ids.len() {
+            let found_ids: std::collections::HashSet<i64> = found.iter().map(|p| p.id).collect();
+            let missing = ids.iter().find(|id| !found_ids.contains(id)).copied();
+            return Err(ApiError::NotFound(format!(
+                "Product {} not found",
+                missing.unwrap_or(-1)
+            )));
+        }
+        Ok(())
     }
 
     // Purchase Order operations
@@ -74,6 +130,16 @@ impl PurchaseService {
             line.validate()
                 .map_err(|e| ApiError::Validation(e.join(", ")))?;
         }
+
+        // Parent-ownership prechecks: reject body-controlled FKs that reference
+        // a foreign tenant's vendor or product before any INSERT.
+        self.ensure_cari_owned(create.cari_id, create.tenant_id)
+            .await?;
+        self.ensure_line_products_owned(
+            create.lines.iter().map(|l| l.product_id),
+            create.tenant_id,
+        )
+        .await?;
 
         let order = self.order_repo.create(create.clone()).await?;
         let lines = self
@@ -254,6 +320,29 @@ impl PurchaseService {
             )));
         }
 
+        // Parent-ownership prechecks on the receipt lines. Load the PO's own
+        // lines once (tenant-scoped) and validate every receipt line's
+        // `order_line_id` actually belongs to THIS PO (HashSet membership —
+        // stronger than a per-line tenant check, which would accept a line
+        // from a different PO of the same tenant). Also validate each line's
+        // `product_id` (Some only) belongs to the caller's tenant.
+        let order_lines = self
+            .order_line_repo
+            .find_by_order(create.purchase_order_id, tenant_id)
+            .await?;
+        let valid_line_ids: std::collections::HashSet<i64> =
+            order_lines.iter().map(|l| l.id).collect();
+        for line in &create.lines {
+            if !valid_line_ids.contains(&line.order_line_id) {
+                return Err(ApiError::NotFound(format!(
+                    "Purchase order line {} not found on purchase order {}",
+                    line.order_line_id, create.purchase_order_id
+                )));
+            }
+        }
+        self.ensure_line_products_owned(create.lines.iter().map(|l| l.product_id), tenant_id)
+            .await?;
+
         let receipt = self.receipt_repo.create(create.clone()).await?;
         let lines = self
             .receipt_line_repo
@@ -263,10 +352,6 @@ impl PurchaseService {
         // Update order status based on receipt quantities
         let all_receipts = self
             .receipt_repo
-            .find_by_order(create.purchase_order_id, tenant_id)
-            .await?;
-        let order_lines = self
-            .order_line_repo
             .find_by_order(create.purchase_order_id, tenant_id)
             .await?;
 
@@ -437,6 +522,15 @@ impl PurchaseService {
             line.validate()
                 .map_err(|e| ApiError::Validation(e.join(", ")))?;
         }
+
+        // Parent-ownership precheck: reject body-controlled line `product_id`s
+        // that reference a foreign tenant's product before any INSERT.
+        // `requested_by` is a user-id FK, out of scope (separate class).
+        self.ensure_line_products_owned(
+            create.lines.iter().map(|l| l.product_id),
+            create.tenant_id,
+        )
+        .await?;
 
         let request = request_repo.create(create.clone()).await?;
         let lines = request_line_repo
@@ -697,6 +791,10 @@ impl PurchaseService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::cari::model::CreateCari;
+    use crate::domain::cari::repository::InMemoryCariRepository;
+    use crate::domain::product::model::CreateProduct;
+    use crate::domain::product::repository::InMemoryProductRepository;
     use crate::domain::purchase::model::{
         CreateGoodsReceiptLine, CreatePurchaseOrderLine, CreatePurchaseRequestLine,
     };
@@ -709,7 +807,52 @@ mod tests {
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
-    fn create_service() -> PurchaseService {
+    // Seed cari + product on tenants 1 and 2 (InMemory create() auto-assigns
+    // ids from 1: cari 1/2, product 1/2) so the happy-path tests (cari_id=1 /
+    // product_id=Some(1) / tenant_id=1) pass the parent-ownership prechecks
+    // and the cross-tenant IDOR rejection tests can reference a foreign parent.
+    async fn seed_parents() -> (BoxCariRepository, BoxProductRepository) {
+        let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
+        cari_repo
+            .create(CreateCari {
+                code: "C1".to_string(),
+                name: "Vendor T1".to_string(),
+                tenant_id: 1,
+                created_by: 1,
+                ..Default::default()
+            })
+            .await
+            .expect("seed cari t1");
+        cari_repo
+            .create(CreateCari {
+                code: "C2".to_string(),
+                name: "Vendor T2".to_string(),
+                tenant_id: 2,
+                created_by: 1,
+                ..Default::default()
+            })
+            .await
+            .expect("seed cari t2");
+
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        for tenant in [1, 2] {
+            product_repo
+                .create(CreateProduct {
+                    tenant_id: tenant,
+                    code: format!("P{}", tenant),
+                    name: format!("Product T{}", tenant),
+                    purchase_price: Decimal::ZERO,
+                    sale_price: Decimal::ZERO,
+                    tax_rate: Decimal::ZERO,
+                    ..Default::default()
+                })
+                .await
+                .expect("seed product");
+        }
+        (cari_repo, product_repo)
+    }
+
+    async fn create_service() -> PurchaseService {
         let order_repo =
             Arc::new(InMemoryPurchaseOrderRepository::new()) as BoxPurchaseOrderRepository;
         let order_line_repo =
@@ -718,10 +861,18 @@ mod tests {
             Arc::new(InMemoryGoodsReceiptRepository::new()) as BoxGoodsReceiptRepository;
         let receipt_line_repo =
             Arc::new(InMemoryGoodsReceiptLineRepository::new()) as BoxGoodsReceiptLineRepository;
-        PurchaseService::new(order_repo, order_line_repo, receipt_repo, receipt_line_repo)
+        let (cari_repo, product_repo) = seed_parents().await;
+        PurchaseService::new(
+            order_repo,
+            order_line_repo,
+            receipt_repo,
+            receipt_line_repo,
+            cari_repo,
+            product_repo,
+        )
     }
 
-    fn create_service_with_requests() -> PurchaseService {
+    async fn create_service_with_requests() -> PurchaseService {
         let order_repo =
             Arc::new(InMemoryPurchaseOrderRepository::new()) as BoxPurchaseOrderRepository;
         let order_line_repo =
@@ -734,6 +885,7 @@ mod tests {
             Arc::new(InMemoryPurchaseRequestRepository::new()) as BoxPurchaseRequestRepository;
         let request_line_repo = Arc::new(InMemoryPurchaseRequestLineRepository::new())
             as BoxPurchaseRequestLineRepository;
+        let (cari_repo, product_repo) = seed_parents().await;
         PurchaseService::with_requests(
             order_repo,
             order_line_repo,
@@ -741,12 +893,14 @@ mod tests {
             receipt_line_repo,
             request_repo,
             request_line_repo,
+            cari_repo,
+            product_repo,
         )
     }
 
     #[tokio::test]
     async fn test_create_purchase_order() {
-        let service = create_service();
+        let service = create_service().await;
 
         let create = CreatePurchaseOrder {
             tenant_id: 1,
@@ -775,7 +929,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_goods_receipt() {
-        let service = create_service();
+        let service = create_service().await;
 
         // Create purchase order first
         let order_create = CreatePurchaseOrder {
@@ -827,7 +981,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_purchase_request() {
-        let service = create_service_with_requests();
+        let service = create_service_with_requests().await;
 
         let create = CreatePurchaseRequest {
             tenant_id: 1,
@@ -853,7 +1007,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_request_status() {
-        let service = create_service_with_requests();
+        let service = create_service_with_requests().await;
 
         // Create request
         let create = CreatePurchaseRequest {
@@ -887,7 +1041,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_purchase_request() {
-        let service = create_service_with_requests();
+        let service = create_service_with_requests().await;
 
         let create = CreatePurchaseRequest {
             tenant_id: 1,
@@ -913,5 +1067,160 @@ mod tests {
         // Verify deletion
         let result = service.get_purchase_request(request.id, 1).await;
         assert!(result.is_err());
+    }
+
+    // Cross-tenant IDOR rejection: a tenant-1 caller must NOT be able to
+    // create a purchase order referencing a tenant-2 vendor (cari_id=2 exists
+    // but belongs to tenant 2).
+    #[tokio::test]
+    async fn test_create_purchase_order_rejects_foreign_cari() {
+        let service = create_service().await;
+        let create = CreatePurchaseOrder {
+            tenant_id: 1,
+            company_id: 1,
+            cari_id: 2, // exists, but belongs to tenant 2
+            order_date: chrono::Utc::now(),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            expected_delivery_date: None,
+            notes: None,
+            lines: vec![CreatePurchaseOrderLine {
+                product_id: Some(1),
+                description: "Test Product".to_string(),
+                quantity: dec!(1),
+                unit_price: dec!(50),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        };
+        let result = service.create_purchase_order(create).await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    // Cross-tenant IDOR rejection: a tenant-1 caller must NOT be able to
+    // create a purchase order whose line references a tenant-2 product.
+    #[tokio::test]
+    async fn test_create_purchase_order_rejects_foreign_product() {
+        let service = create_service().await;
+        let create = CreatePurchaseOrder {
+            tenant_id: 1,
+            company_id: 1,
+            cari_id: 1, // own-tenant vendor
+            order_date: chrono::Utc::now(),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            expected_delivery_date: None,
+            notes: None,
+            lines: vec![CreatePurchaseOrderLine {
+                product_id: Some(2), // exists, but belongs to tenant 2
+                description: "Foreign Product".to_string(),
+                quantity: dec!(1),
+                unit_price: dec!(50),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        };
+        let result = service.create_purchase_order(create).await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    // Cross-tenant IDOR rejection: a tenant-1 caller must NOT be able to
+    // create a purchase request whose line references a tenant-2 product.
+    #[tokio::test]
+    async fn test_create_purchase_request_rejects_foreign_product() {
+        let service = create_service_with_requests().await;
+        let create = CreatePurchaseRequest {
+            tenant_id: 1,
+            company_id: 1,
+            requested_by: 1,
+            department: None,
+            priority: "High".to_string(),
+            reason: None,
+            lines: vec![CreatePurchaseRequestLine {
+                product_id: Some(2), // exists, but belongs to tenant 2
+                description: "Foreign Product".to_string(),
+                quantity: dec!(1),
+                notes: None,
+            }],
+        };
+        let result = service.create_purchase_request(create).await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    // Cross-tenant IDOR rejection: a goods-receipt line must NOT be able to
+    // reference an order_line_id that does not belong to the receipt's own
+    // purchase order (even if the line exists on a different PO of the same
+    // tenant). The precheck validates membership in THIS PO's line set.
+    #[tokio::test]
+    async fn test_create_goods_receipt_rejects_foreign_order_line() {
+        let service = create_service().await;
+
+        // Create PO #1 (tenant 1) and approve it.
+        let order_create = CreatePurchaseOrder {
+            tenant_id: 1,
+            company_id: 1,
+            cari_id: 1,
+            order_date: chrono::Utc::now(),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            expected_delivery_date: None,
+            notes: None,
+            lines: vec![CreatePurchaseOrderLine {
+                product_id: Some(1),
+                description: "Line A".to_string(),
+                quantity: dec!(10),
+                unit_price: dec!(50),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        };
+        let order_a = service.create_purchase_order(order_create).await.unwrap();
+        service
+            .update_order_status(order_a.id, PurchaseOrderStatus::Approved, 1)
+            .await
+            .unwrap();
+
+        // Create PO #2 (tenant 1) and approve it; its line has a different id.
+        let order_b_create = CreatePurchaseOrder {
+            tenant_id: 1,
+            company_id: 1,
+            cari_id: 1,
+            order_date: chrono::Utc::now(),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            expected_delivery_date: None,
+            notes: None,
+            lines: vec![CreatePurchaseOrderLine {
+                product_id: Some(1),
+                description: "Line B".to_string(),
+                quantity: dec!(10),
+                unit_price: dec!(50),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        };
+        let order_b = service.create_purchase_order(order_b_create).await.unwrap();
+        service
+            .update_order_status(order_b.id, PurchaseOrderStatus::Approved, 1)
+            .await
+            .unwrap();
+
+        // Receipt against PO #1, but referencing PO #2's line id.
+        let receipt_create = CreateGoodsReceipt {
+            tenant_id: 1,
+            company_id: 1,
+            purchase_order_id: order_a.id,
+            receipt_date: chrono::Utc::now(),
+            notes: None,
+            lines: vec![CreateGoodsReceiptLine {
+                order_line_id: order_b.lines[0].id, // belongs to PO #2, not PO #1
+                product_id: Some(1),
+                quantity: dec!(10),
+                condition: "Good".to_string(),
+                notes: None,
+            }],
+        };
+        let result = service.create_goods_receipt(receipt_create, 1).await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
     }
 }

@@ -14,7 +14,8 @@ use common::*;
 async fn test_create_purchase_order_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let cari_id = seed_cari!(&app, &token, user_id, 1);
 
     let now = chrono::Utc::now();
     let req = auth_request(
@@ -23,7 +24,7 @@ async fn test_create_purchase_order_success() {
         &token,
     )
     .set_json(json!({
-        "cari_id": 1,
+        "cari_id": cari_id,
         "order_date": now.to_rfc3339(),
         "tenant_id": 1,
         "lines": [{
@@ -50,7 +51,8 @@ async fn test_create_purchase_order_success() {
 async fn test_list_purchase_orders_paginated() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let cari_id = seed_cari!(&app, &token, user_id, 1);
 
     let now = chrono::Utc::now();
     for i in 1..=3 {
@@ -60,7 +62,7 @@ async fn test_list_purchase_orders_paginated() {
             &token,
         )
         .set_json(json!({
-            "cari_id": 1,
+            "cari_id": cari_id,
             "order_date": now.to_rfc3339(),
             "tenant_id": 1,
             "lines": [{
@@ -96,7 +98,8 @@ async fn test_list_purchase_orders_paginated() {
 async fn test_get_purchase_order_by_status() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let cari_id = seed_cari!(&app, &token, user_id, 1);
 
     let now = chrono::Utc::now();
     let req = auth_request(
@@ -105,7 +108,7 @@ async fn test_get_purchase_order_by_status() {
         &token,
     )
     .set_json(json!({
-        "cari_id": 1,
+        "cari_id": cari_id,
         "order_date": now.to_rfc3339(),
         "tenant_id": 1,
         "lines": [{
@@ -138,7 +141,8 @@ async fn test_get_purchase_order_by_status() {
 async fn test_get_purchase_order_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let cari_id = seed_cari!(&app, &token, user_id, 1);
 
     let now = chrono::Utc::now();
     let create_req = auth_request(
@@ -147,7 +151,7 @@ async fn test_get_purchase_order_success() {
         &token,
     )
     .set_json(json!({
-        "cari_id": 1,
+        "cari_id": cari_id,
         "order_date": now.to_rfc3339(),
         "tenant_id": 1,
         "lines": [{
@@ -199,7 +203,8 @@ async fn test_get_purchase_order_not_found() {
 async fn test_update_purchase_order_status() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let cari_id = seed_cari!(&app, &token, user_id, 1);
 
     let now = chrono::Utc::now();
     let create_req = auth_request(
@@ -208,7 +213,7 @@ async fn test_update_purchase_order_status() {
         &token,
     )
     .set_json(json!({
-        "cari_id": 1,
+        "cari_id": cari_id,
         "order_date": now.to_rfc3339(),
         "tenant_id": 1,
         "lines": [{
@@ -248,7 +253,8 @@ async fn test_update_purchase_order_status() {
 async fn test_delete_and_restore_purchase_order() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let cari_id = seed_cari!(&app, &token, user_id, 1);
 
     let now = chrono::Utc::now();
     let create_req = auth_request(
@@ -257,7 +263,7 @@ async fn test_delete_and_restore_purchase_order() {
         &token,
     )
     .set_json(json!({
-        "cari_id": 1,
+        "cari_id": cari_id,
         "order_date": now.to_rfc3339(),
         "tenant_id": 1,
         "lines": [{
@@ -323,7 +329,8 @@ async fn test_delete_and_restore_purchase_order() {
 async fn test_list_deleted_purchase_orders() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let cari_id = seed_cari!(&app, &token, user_id, 1);
 
     let now = chrono::Utc::now();
     let create_req = auth_request(
@@ -332,7 +339,7 @@ async fn test_list_deleted_purchase_orders() {
         &token,
     )
     .set_json(json!({
-        "cari_id": 1,
+        "cari_id": cari_id,
         "order_date": now.to_rfc3339(),
         "tenant_id": 1,
         "lines": [{
@@ -379,7 +386,8 @@ async fn test_list_deleted_purchase_orders() {
 async fn test_destroy_purchase_order_permanently() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let cari_id = seed_cari!(&app, &token, user_id, 1);
 
     let now = chrono::Utc::now();
     let create_req = auth_request(
@@ -388,7 +396,7 @@ async fn test_destroy_purchase_order_permanently() {
         &token,
     )
     .set_json(json!({
-        "cari_id": 1,
+        "cari_id": cari_id,
         "order_date": now.to_rfc3339(),
         "tenant_id": 1,
         "lines": [{
