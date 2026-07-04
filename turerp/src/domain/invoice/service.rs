@@ -1,11 +1,16 @@
 //! Invoice service for business logic
+use std::collections::HashSet;
+
 use crate::common::pagination::PaginatedResult;
+use crate::domain::cari::repository::BoxCariRepository;
+use crate::domain::cost_center::repository::BoxCostCenterRepository;
 use crate::domain::invoice::model::{
     CreateInvoice, CreatePayment, Invoice, InvoiceResponse, InvoiceStatus, Payment,
 };
 use crate::domain::invoice::repository::{
     BoxInvoiceLineRepository, BoxInvoiceRepository, BoxPaymentRepository,
 };
+use crate::domain::product::repository::BoxProductRepository;
 use crate::error::ApiError;
 use tracing;
 
@@ -15,6 +20,9 @@ pub struct InvoiceService {
     invoice_repo: BoxInvoiceRepository,
     line_repo: BoxInvoiceLineRepository,
     payment_repo: BoxPaymentRepository,
+    cari_repo: BoxCariRepository,
+    cost_center_repo: BoxCostCenterRepository,
+    product_repo: BoxProductRepository,
 }
 
 impl InvoiceService {
@@ -22,12 +30,74 @@ impl InvoiceService {
         invoice_repo: BoxInvoiceRepository,
         line_repo: BoxInvoiceLineRepository,
         payment_repo: BoxPaymentRepository,
+        cari_repo: BoxCariRepository,
+        cost_center_repo: BoxCostCenterRepository,
+        product_repo: BoxProductRepository,
     ) -> Self {
         Self {
             invoice_repo,
             line_repo,
             payment_repo,
+            cari_repo,
+            cost_center_repo,
+            product_repo,
         }
+    }
+
+    /// Parent-ownership precheck: the invoice's `cari_id` must belong to the
+    /// caller's tenant. Mirrors the established pattern (assets/manufacturing/
+    /// sales/purchase) — returns `NotFound` if the cari is foreign/missing/
+    /// soft-deleted, BEFORE any repo INSERT.
+    async fn ensure_cari_owned(&self, cari_id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.cari_repo
+            .find_by_id(cari_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", cari_id)))?;
+        Ok(())
+    }
+
+    /// Parent-ownership precheck for the optional `cost_center_id`. `None` is a
+    /// legitimate "no cost center" value and is never rejected.
+    async fn ensure_cost_center_owned(
+        &self,
+        cost_center_id: Option<i64>,
+        tenant_id: i64,
+    ) -> Result<(), ApiError> {
+        if let Some(cc_id) = cost_center_id {
+            self.cost_center_repo
+                .find_by_id(cc_id, tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound(format!("Cost center {} not found", cc_id)))?;
+        }
+        Ok(())
+    }
+
+    /// Parent-ownership precheck for per-line `product_id` (batched). Collects
+    /// every `Some(product_id)`, dedups, and issues a single tenant-scoped
+    /// `find_by_ids`; a foreign/missing product is simply not returned → count
+    /// mismatch → `NotFound`. `None` lines are legitimate no-product lines and
+    /// are skipped.
+    async fn ensure_line_products_owned(
+        &self,
+        lines: &[crate::domain::invoice::model::CreateInvoiceLine],
+        tenant_id: i64,
+    ) -> Result<(), ApiError> {
+        let mut set: HashSet<i64> = lines.iter().filter_map(|l| l.product_id).collect();
+        if set.is_empty() {
+            return Ok(());
+        }
+        let mut ids: Vec<i64> = set.drain().collect();
+        ids.sort_unstable();
+        let found = self.product_repo.find_by_ids(&ids, tenant_id).await?;
+        if found.len() != ids.len() {
+            let found_ids: HashSet<i64> = found.iter().map(|p| p.id).collect();
+            let missing = ids.iter().find(|id| !found_ids.contains(id));
+            return Err(ApiError::NotFound(format!(
+                "Product {} not found",
+                missing.unwrap_or(&-1)
+            )));
+        }
+        Ok(())
     }
 
     // Invoice operations
@@ -42,6 +112,18 @@ impl InvoiceService {
             line.validate()
                 .map_err(|e| ApiError::Validation(e.join(", ")))?;
         }
+
+        // Parent-ownership prechecks: the body-controlled cari_id, cost_center_id,
+        // and per-line product_id must belong to the caller's tenant before the
+        // INSERT — closes the cross-tenant IDOR (a tenant-A admin referencing a
+        // tenant-B cari/cost center/product). tenant_id is the auth-overwritten
+        // value (handler sets create.tenant_id = auth_user.0.tenant_id).
+        self.ensure_cari_owned(create.cari_id, create.tenant_id)
+            .await?;
+        self.ensure_cost_center_owned(create.cost_center_id, create.tenant_id)
+            .await?;
+        self.ensure_line_products_owned(&create.lines, create.tenant_id)
+            .await?;
 
         // Create invoice
         let invoice = self.invoice_repo.create(create.clone()).await?;
@@ -341,25 +423,124 @@ impl InvoiceService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::cari::model::CreateCari;
+    use crate::domain::cari::repository::InMemoryCariRepository;
+    use crate::domain::cost_center::model::{CostCenterType, CreateCostCenter};
+    use crate::domain::cost_center::repository::InMemoryCostCenterRepository;
     use crate::domain::invoice::model::{CreateInvoiceLine, InvoiceType};
     use crate::domain::invoice::repository::{
         InMemoryInvoiceLineRepository, InMemoryInvoiceRepository, InMemoryPaymentRepository,
     };
+    use crate::domain::product::model::CreateProduct;
+    use crate::domain::product::repository::InMemoryProductRepository;
     use chrono::Utc;
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
-    fn create_service() -> InvoiceService {
+    async fn create_service() -> InvoiceService {
         let invoice_repo = Arc::new(InMemoryInvoiceRepository::new()) as BoxInvoiceRepository;
         let line_repo = Arc::new(InMemoryInvoiceLineRepository::new()) as BoxInvoiceLineRepository;
         let payment_repo = Arc::new(InMemoryPaymentRepository::new()) as BoxPaymentRepository;
-        InvoiceService::new(invoice_repo, line_repo, payment_repo)
+
+        // Seed the parent entities the create-invoice prechecks validate against.
+        // InMemory repo create() auto-assigns ids starting at 1, matching the
+        // cari_id=1 / product_id=Some(1) / tenant_id=1 used by the happy-path
+        // tests below. A second cari/product/cost_center is seeded on tenant 2
+        // (ids 2) so the cross-tenant IDOR rejection tests can reference a
+        // foreign parent.
+        let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
+        cari_repo
+            .create(CreateCari {
+                code: "C1".to_string(),
+                name: "Test Cari T1".to_string(),
+                tenant_id: 1,
+                created_by: 1,
+                ..Default::default()
+            })
+            .await
+            .expect("seed cari t1");
+        cari_repo
+            .create(CreateCari {
+                code: "C2".to_string(),
+                name: "Test Cari T2".to_string(),
+                tenant_id: 2,
+                created_by: 1,
+                ..Default::default()
+            })
+            .await
+            .expect("seed cari t2");
+
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        product_repo
+            .create(CreateProduct {
+                tenant_id: 1,
+                code: "P1".to_string(),
+                name: "Test Product T1".to_string(),
+                purchase_price: Decimal::ZERO,
+                sale_price: Decimal::ZERO,
+                tax_rate: Decimal::ZERO,
+                ..Default::default()
+            })
+            .await
+            .expect("seed product t1");
+        product_repo
+            .create(CreateProduct {
+                tenant_id: 2,
+                code: "P2".to_string(),
+                name: "Test Product T2".to_string(),
+                purchase_price: Decimal::ZERO,
+                sale_price: Decimal::ZERO,
+                tax_rate: Decimal::ZERO,
+                ..Default::default()
+            })
+            .await
+            .expect("seed product t2");
+
+        let cost_center_repo =
+            Arc::new(InMemoryCostCenterRepository::new()) as BoxCostCenterRepository;
+        cost_center_repo
+            .create(
+                CreateCostCenter {
+                    code: "CC1".to_string(),
+                    name: "Test Cost Center T1".to_string(),
+                    description: None,
+                    center_type: CostCenterType::Cost,
+                    parent_id: None,
+                    is_active: true,
+                },
+                1,
+            )
+            .await
+            .expect("seed cost center t1");
+        cost_center_repo
+            .create(
+                CreateCostCenter {
+                    code: "CC2".to_string(),
+                    name: "Test Cost Center T2".to_string(),
+                    description: None,
+                    center_type: CostCenterType::Cost,
+                    parent_id: None,
+                    is_active: true,
+                },
+                2,
+            )
+            .await
+            .expect("seed cost center t2");
+
+        InvoiceService::new(
+            invoice_repo,
+            line_repo,
+            payment_repo,
+            cari_repo,
+            cost_center_repo,
+            product_repo,
+        )
     }
 
     #[tokio::test]
     async fn test_create_invoice() {
-        let service = create_service();
+        let service = create_service().await;
         let now = Utc::now();
 
         let create = CreateInvoice {
@@ -393,7 +574,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_payment() {
-        let service = create_service();
+        let service = create_service().await;
         let now = Utc::now();
 
         // Create invoice
@@ -443,7 +624,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_full_payment() {
-        let service = create_service();
+        let service = create_service().await;
         let now = Utc::now();
 
         let create = CreateInvoice {
@@ -486,5 +667,70 @@ mod tests {
 
         let updated = service.get_invoice(invoice.id, 1).await.unwrap();
         assert_eq!(updated.status, InvoiceStatus::Paid);
+    }
+
+    fn base_invoice(tenant_id: i64, cari_id: i64) -> CreateInvoice {
+        let now = Utc::now();
+        CreateInvoice {
+            tenant_id,
+            company_id: 1,
+            invoice_type: InvoiceType::SalesInvoice,
+            cari_id,
+            issue_date: now,
+            due_date: now + chrono::Duration::days(30),
+            currency: "USD".to_string(),
+            exchange_rate: Decimal::ONE,
+            notes: None,
+            cost_center_id: None,
+            lines: vec![CreateInvoiceLine {
+                product_id: Some(1),
+                description: "Test Product".to_string(),
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_invoice_rejects_foreign_cari() {
+        // Tenant 1 references cari 2, which belongs to tenant 2 -> NotFound.
+        let service = create_service().await;
+        let mut create = base_invoice(1, 2);
+        create.lines[0].product_id = Some(1); // owned product, isolate cari failure
+        let err = service.create_invoice(create).await.unwrap_err();
+        assert!(matches!(err, ApiError::NotFound(_)), "got {:?}", err);
+    }
+
+    #[tokio::test]
+    async fn test_create_invoice_rejects_foreign_product() {
+        // Tenant 1 references product 2, which belongs to tenant 2 -> NotFound.
+        let service = create_service().await;
+        let mut create = base_invoice(1, 1); // owned cari, isolate product failure
+        create.lines[0].product_id = Some(2);
+        let err = service.create_invoice(create).await.unwrap_err();
+        assert!(matches!(err, ApiError::NotFound(_)), "got {:?}", err);
+    }
+
+    #[tokio::test]
+    async fn test_create_invoice_rejects_foreign_cost_center() {
+        // Tenant 1 references cost center 2, which belongs to tenant 2 -> NotFound.
+        let service = create_service().await;
+        let mut create = base_invoice(1, 1); // owned cari + product, isolate CC failure
+        create.cost_center_id = Some(2);
+        let err = service.create_invoice(create).await.unwrap_err();
+        assert!(matches!(err, ApiError::NotFound(_)), "got {:?}", err);
+    }
+
+    #[tokio::test]
+    async fn test_create_invoice_allows_no_product_line() {
+        // A line with product_id = None is a legitimate no-product line and must
+        // NOT be rejected by the product-ownership precheck.
+        let service = create_service().await;
+        let mut create = base_invoice(1, 1);
+        create.lines[0].product_id = None;
+        let result = service.create_invoice(create).await;
+        assert!(result.is_ok(), "got {:?}", result.err());
     }
 }

@@ -354,6 +354,7 @@ pub async fn create_cross_company_invoice(
             req.seller_company_id,
             req.buyer_company_id,
             req.lines,
+            admin_user.0.user_id()?,
         ),
         HttpResponse::Created,
         i18n,
