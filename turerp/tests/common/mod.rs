@@ -257,6 +257,34 @@ macro_rules! create_workflow_template {
     }};
 }
 
+/// Helper macro to create a cari (customer/vendor) and return its id, for
+/// integration tests whose create-endpoint prechecks require an owned parent FK.
+/// Mirrors the established inline pattern in `invoice_crud_test.rs`.
+/// Usage: `let cari_id = seed_cari!(&app, &token, user_id, 1);`
+#[macro_export]
+macro_rules! seed_cari {
+    ($app:expr, $token:expr, $user_id:expr, $tenant_id:expr) => {{
+        let req = auth_request(
+            actix_web::http::Method::POST,
+            "/api/v1/caris",
+            $token,
+        )
+        .set_json(json!({
+            "code": format!("CARI-{}", uuid::Uuid::new_v4()),
+            "name": "Test Cari",
+            "cari_type": "customer",
+            "created_by": $user_id,
+            "tenant_id": $tenant_id,
+        }))
+        .to_request();
+        let resp = test::call_service($app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED, "Cari creation failed");
+        let body = to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        json["id"].as_i64().unwrap()
+    }};
+}
+
 #[allow(dead_code)]
 pub fn auth_request(method: actix_web::http::Method, uri: &str, token: &str) -> test::TestRequest {
     test::TestRequest::default()
