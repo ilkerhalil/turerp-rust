@@ -621,7 +621,14 @@ pub mod app {
         let invoice_line_repo =
             Arc::new(InMemoryInvoiceLineRepository::new()) as BoxInvoiceLineRepository;
         let payment_repo = Arc::new(InMemoryPaymentRepository::new()) as BoxPaymentRepository;
-        let invoice_service = InvoiceService::new(invoice_repo, invoice_line_repo, payment_repo);
+        let invoice_service = InvoiceService::new(
+            invoice_repo,
+            invoice_line_repo,
+            payment_repo,
+            cari_repo.clone(),
+            cost_center_repo.clone(),
+            product_repo.clone(),
+        );
 
         // Sales
         let sales_order_repo =
@@ -1017,6 +1024,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(stock_service.clone()),
             Arc::new(product_service.clone()),
+            cari_repo.clone(),
             inter_company_repo,
         );
 
@@ -1250,7 +1258,14 @@ pub mod app {
         let invoice_repo = PostgresInvoiceRepository::new(pool.clone()).into_boxed();
         let invoice_line_repo = PostgresInvoiceLineRepository::new(pool.clone()).into_boxed();
         let payment_repo = PostgresPaymentRepository::new(pool.clone()).into_boxed();
-        let invoice_service = InvoiceService::new(invoice_repo, invoice_line_repo, payment_repo);
+        let invoice_service = InvoiceService::new(
+            invoice_repo,
+            invoice_line_repo,
+            payment_repo,
+            cari_repo.clone(),
+            cost_center_repo.clone(),
+            product_repo.clone(),
+        );
 
         // Sales - PostgreSQL
         let sales_order_repo = PostgresSalesOrderRepository::new(pool.clone()).into_boxed();
@@ -1637,6 +1652,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(stock_service.clone()),
             Arc::new(product_service.clone()),
+            cari_repo.clone(),
             inter_company_repo,
         );
 

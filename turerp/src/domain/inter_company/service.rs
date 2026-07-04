@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 use rust_decimal::Decimal;
 
+use crate::domain::cari::model::{CariType, CreateCari};
+use crate::domain::cari::repository::BoxCariRepository;
 use crate::domain::company::service::CompanyService;
 use crate::domain::inter_company::model::{
     CreateInterCompanyInvoice, CreateInterCompanyStockTransfer, InterCompanyInvoiceLine,
@@ -24,6 +26,7 @@ pub struct InterCompanyService {
     invoice_service: Arc<InvoiceService>,
     stock_service: Arc<StockService>,
     product_service: Arc<ProductService>,
+    cari_repo: BoxCariRepository,
     repository: BoxInterCompanyRepository,
 }
 
@@ -33,6 +36,7 @@ impl InterCompanyService {
         invoice_service: Arc<InvoiceService>,
         stock_service: Arc<StockService>,
         product_service: Arc<ProductService>,
+        cari_repo: BoxCariRepository,
         repository: BoxInterCompanyRepository,
     ) -> Self {
         Self {
@@ -40,8 +44,48 @@ impl InterCompanyService {
             invoice_service,
             stock_service,
             product_service,
+            cari_repo,
             repository,
         }
+    }
+
+    /// Ensure a cari (customer/vendor) record exists for a counterparty company
+    /// and return its id. Cross-company invoices reference the counterparty as a
+    /// `cari_id`; a cari must actually exist (and be tenant-owned) for the
+    /// invoice `cari_id` precheck to pass. The cari is created once per
+    /// company + role using a deterministic code, so repeated cross-invoice
+    /// calls reuse the same cari instead of creating duplicates.
+    async fn ensure_counterparty_cari(
+        &self,
+        company_id: i64,
+        tenant_id: i64,
+        created_by: i64,
+        cari_type: CariType,
+        name: &str,
+    ) -> Result<i64, ApiError> {
+        let code = format!("IC-{}-{}", cari_type, company_id);
+        if let Some(existing) = self.cari_repo.find_by_code(&code, tenant_id).await? {
+            return Ok(existing.id);
+        }
+        // Cari name is validated to max 200 chars; the company name can itself
+        // be up to 200, so cap the formatted label to honor the invariant.
+        let mut label = format!("{} ({})", name, cari_type);
+        if label.len() > 200 {
+            label = label.chars().take(200).collect();
+        }
+        let cari = self
+            .cari_repo
+            .create(CreateCari {
+                code,
+                name: label,
+                cari_type,
+                tenant_id,
+                company_id,
+                created_by,
+                ..Default::default()
+            })
+            .await?;
+        Ok(cari.id)
     }
 
     /// Create a cross-company sales invoice and corresponding purchase invoice.
@@ -52,13 +96,14 @@ impl InterCompanyService {
         seller_company_id: i64,
         buyer_company_id: i64,
         lines: Vec<InterCompanyInvoiceLine>,
+        created_by: i64,
     ) -> Result<InterCompanyInvoiceResult, ApiError> {
         // Validate both companies exist and belong to the tenant
-        let _ = self
+        let seller_company = self
             .company_service
             .get_company(seller_company_id, tenant_id)
             .await?;
-        let _ = self
+        let buyer_company = self
             .company_service
             .get_company(buyer_company_id, tenant_id)
             .await?;
@@ -88,6 +133,32 @@ impl InterCompanyService {
             }
         }
 
+        // Ensure a real, tenant-owned cari exists for each counterparty — only
+        // after all validation (companies + transfer pricing) has passed, so a
+        // 400 pricing violation does not materialize orphan cari rows. The sales
+        // invoice's counterparty is the buyer (Customer); the purchase invoice's
+        // counterparty is the seller (Vendor). Previously the company id was
+        // stuffed into `cari_id` (orphan FK — no cari row), which the invoice
+        // `cari_id` precheck now correctly rejects.
+        let buyer_cari_id = self
+            .ensure_counterparty_cari(
+                buyer_company_id,
+                tenant_id,
+                created_by,
+                CariType::Customer,
+                &buyer_company.name,
+            )
+            .await?;
+        let seller_cari_id = self
+            .ensure_counterparty_cari(
+                seller_company_id,
+                tenant_id,
+                created_by,
+                CariType::Vendor,
+                &seller_company.name,
+            )
+            .await?;
+
         // Create sales invoice for seller
         let sales_lines: Vec<CreateInvoiceLine> = lines
             .iter()
@@ -107,7 +178,7 @@ impl InterCompanyService {
                 tenant_id,
                 company_id: seller_company_id,
                 invoice_type: InvoiceType::SalesInvoice,
-                cari_id: buyer_company_id,
+                cari_id: buyer_cari_id,
                 issue_date: chrono::Utc::now(),
                 due_date: chrono::Utc::now() + chrono::Duration::days(30),
                 currency: "TRY".to_string(),
@@ -140,7 +211,7 @@ impl InterCompanyService {
                 tenant_id,
                 company_id: buyer_company_id,
                 invoice_type: InvoiceType::PurchaseInvoice,
-                cari_id: seller_company_id,
+                cari_id: seller_cari_id,
                 issue_date: chrono::Utc::now(),
                 due_date: chrono::Utc::now() + chrono::Duration::days(30),
                 currency: "TRY".to_string(),
