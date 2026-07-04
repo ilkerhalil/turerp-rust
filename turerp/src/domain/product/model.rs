@@ -147,7 +147,7 @@ impl From<ProductVariant> for ProductVariantResponse {
 }
 
 /// Create product request
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 pub struct CreateProduct {
     pub tenant_id: i64,
     #[serde(default = "default_company_id")]
