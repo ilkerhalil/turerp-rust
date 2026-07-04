@@ -165,6 +165,16 @@ impl HrService {
         &self,
         create: CreateAttendance,
     ) -> Result<Attendance, ApiError> {
+        // Parent-ownership precheck: the employee must belong to the caller's
+        // tenant, else a tenant-A caller could record attendance against
+        // tenant-B's employee (cross-tenant orphan write). The handler forces
+        // `create.tenant_id` from the auth token, so it is the auth-derived
+        // tenant here. Also yields a clean NotFound for a bogus employee_id
+        // instead of an FK violation.
+        self.employee_repo
+            .find_by_id(create.employee_id, create.tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Employee not found".to_string()))?;
         self.attendance_repo.create(create).await
     }
 
@@ -229,6 +239,20 @@ impl HrService {
         &self,
         create: CreateLeaveRequest,
     ) -> Result<LeaveRequest, ApiError> {
+        // Parent-ownership precheck: the employee and leave type must belong to
+        // the caller's tenant, else a tenant-A caller could file a leave
+        // request referencing tenant-B's employee/leave-type (cross-tenant
+        // orphan write). The handler forces `create.tenant_id` from the auth
+        // token. Also yields a clean NotFound for a bogus id instead of an FK
+        // violation.
+        self.employee_repo
+            .find_by_id(create.employee_id, create.tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Employee not found".to_string()))?;
+        self.leave_type_repo
+            .find_by_id(create.leave_type_id, create.tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Leave type not found".to_string()))?;
         self.leave_request_repo.create(create).await
     }
 
@@ -504,6 +528,55 @@ mod tests {
         )
     }
 
+    /// Seed an employee on `tenant_id` and return its id. The InMemory repo
+    /// auto-assigns ids starting at 1, so the first employee on tenant 1 is
+    /// id 1 and the first on tenant 2 is id 2 — matching the cross-tenant
+    /// IDOR negative tests below.
+    async fn seed_employee(service: &HrService, tenant_id: i64) -> i64 {
+        let employee = service
+            .create_employee(CreateEmployee {
+                tenant_id,
+                company_id: 1,
+                user_id: None,
+                employee_number: format!("EMP-{}", tenant_id),
+                first_name: "Test".to_string(),
+                last_name: "User".to_string(),
+                email: format!("emp{}@test.com", tenant_id),
+                phone: None,
+                department: None,
+                position: None,
+                hire_date: chrono::Utc::now(),
+                salary: Decimal::ZERO,
+                tc_kimlik_no: format!("1000000000{}", tenant_id),
+                children_count: 0,
+            })
+            .await
+            .expect("seed employee");
+        employee.id
+    }
+
+    fn attendance(employee_id: i64, tenant_id: i64) -> CreateAttendance {
+        CreateAttendance {
+            employee_id,
+            date: chrono::Utc::now(),
+            check_in: Some(chrono::Utc::now()),
+            check_out: Some(chrono::Utc::now() + chrono::Duration::hours(8)),
+            notes: None,
+            tenant_id,
+        }
+    }
+
+    fn leave_request(employee_id: i64, leave_type_id: i64, tenant_id: i64) -> CreateLeaveRequest {
+        CreateLeaveRequest {
+            employee_id,
+            leave_type_id,
+            start_date: chrono::Utc::now(),
+            end_date: chrono::Utc::now() + chrono::Duration::days(3),
+            reason: None,
+            tenant_id,
+        }
+    }
+
     #[tokio::test]
     async fn test_create_employee() {
         let service = create_service();
@@ -531,16 +604,52 @@ mod tests {
     #[tokio::test]
     async fn test_record_attendance() {
         let service = create_service();
-        let create = CreateAttendance {
-            employee_id: 1,
-            date: chrono::Utc::now(),
-            check_in: Some(chrono::Utc::now()),
-            check_out: Some(chrono::Utc::now() + chrono::Duration::hours(8)),
-            notes: None,
-            tenant_id: 1,
-        };
-        let result = service.record_attendance(create).await;
+        let employee_id = seed_employee(&service, 1).await;
+        let result = service.record_attendance(attendance(employee_id, 1)).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_record_attendance_rejects_foreign_employee() {
+        let service = create_service();
+        // employee_id 1 exists only on tenant 1; tenant 2 has no such row.
+        let employee_id = seed_employee(&service, 1).await;
+        let result = service.record_attendance(attendance(employee_id, 2)).await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn test_create_leave_request() {
+        let service = create_service();
+        let employee_id = seed_employee(&service, 1).await;
+        // Default leave types are seeded on tenant 1 (ids 1-3).
+        let result = service
+            .create_leave_request(leave_request(employee_id, 1, 1))
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_create_leave_request_rejects_foreign_employee() {
+        let service = create_service();
+        let employee_id = seed_employee(&service, 1).await;
+        // employee belongs to tenant 1; tenant 2 caller cannot reference it.
+        let result = service
+            .create_leave_request(leave_request(employee_id, 1, 2))
+            .await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn test_create_leave_request_rejects_foreign_leave_type() {
+        let service = create_service();
+        let employee_id = seed_employee(&service, 2).await;
+        // leave_type_id 1 is seeded on tenant 1 only; tenant 2 has no leave
+        // types, so the precheck must reject before INSERT.
+        let result = service
+            .create_leave_request(leave_request(employee_id, 1, 2))
+            .await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
     }
 
     #[tokio::test]

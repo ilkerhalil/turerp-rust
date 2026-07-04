@@ -294,6 +294,16 @@ impl SgkPayrollService {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
+        // Parent-ownership precheck: the employee must belong to the caller's
+        // tenant, else a tenant-A caller could post a bonus against tenant-B's
+        // employee (cross-tenant orphan write). The handler forces
+        // `create.tenant_id` from the auth token, so it is the auth-derived
+        // tenant here. Also yields a clean NotFound for a bogus employee_id
+        // instead of an FK violation.
+        self.hr_provider
+            .find_employee_by_id(create.employee_id, create.tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Employee not found".to_string()))?;
         let bonus = EmployeeBonus {
             id: 0,
             employee_id: create.employee_id,
@@ -470,6 +480,37 @@ mod tests {
         assert_eq!(result.tc_kimlik_no, "12345678901");
         assert_eq!(result.sgk_sicil_no, "SGK001");
         assert!(result.is_active);
+    }
+
+    fn sample_bonus(employee_id: i64, tenant_id: i64) -> CreateEmployeeBonus {
+        CreateEmployeeBonus {
+            employee_id,
+            tenant_id,
+            bonus_type: "performance".to_string(),
+            amount: Decimal::new(50000, 2),
+            bonus_month: 6,
+            bonus_year: 2026,
+            description: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_add_bonus() {
+        let (hr, service) = create_service();
+        let emp = hr.create_employee(sample_create_employee()).await.unwrap();
+        let result = service.add_bonus(sample_bonus(emp.id, 1)).await;
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().employee_id, emp.id);
+    }
+
+    #[tokio::test]
+    async fn test_add_bonus_rejects_foreign_employee() {
+        let (hr, service) = create_service();
+        // employee exists only on tenant 1; a tenant-2 caller cannot post a
+        // bonus against it (cross-tenant orphan write).
+        let emp = hr.create_employee(sample_create_employee()).await.unwrap();
+        let result = service.add_bonus(sample_bonus(emp.id, 2)).await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
     }
 
     #[tokio::test]
