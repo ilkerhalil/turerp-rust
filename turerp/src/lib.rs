@@ -701,8 +701,12 @@ pub mod app {
         let bom_repo =
             Arc::new(InMemoryBillOfMaterialsRepository::new()) as BoxBillOfMaterialsRepository;
         let routing_repo = Arc::new(InMemoryRoutingRepository::new()) as BoxRoutingRepository;
-        let manufacturing_service =
-            ManufacturingService::new(work_order_repo, bom_repo, routing_repo);
+        let manufacturing_service = ManufacturingService::new(
+            work_order_repo,
+            bom_repo,
+            routing_repo,
+            product_repo.clone(),
+        );
 
         // CRM
         let lead_repo = Arc::new(InMemoryLeadRepository::new()) as BoxLeadRepository;
@@ -1332,8 +1336,12 @@ pub mod app {
         let work_order_repo = PostgresWorkOrderRepository::new(pool.clone()).into_boxed();
         let bom_repo = PostgresBillOfMaterialsRepository::new(pool.clone()).into_boxed();
         let routing_repo = PostgresRoutingRepository::new(pool.clone()).into_boxed();
-        let manufacturing_service =
-            ManufacturingService::new(work_order_repo, bom_repo, routing_repo);
+        let manufacturing_service = ManufacturingService::new(
+            work_order_repo,
+            bom_repo,
+            routing_repo,
+            product_repo.clone(),
+        );
 
         // CRM - PostgreSQL
         let lead_repo = PostgresLeadRepository::new(pool.clone()).into_boxed();

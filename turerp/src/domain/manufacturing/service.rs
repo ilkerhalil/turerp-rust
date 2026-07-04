@@ -12,6 +12,7 @@ use crate::domain::manufacturing::model::{
 use crate::domain::manufacturing::repository::{
     BoxBillOfMaterialsRepository, BoxRoutingRepository, BoxWorkOrderRepository,
 };
+use crate::domain::product::repository::BoxProductRepository;
 use crate::error::ApiError;
 
 #[derive(Clone)]
@@ -19,6 +20,7 @@ pub struct ManufacturingService {
     work_order_repo: BoxWorkOrderRepository,
     bom_repo: BoxBillOfMaterialsRepository,
     routing_repo: BoxRoutingRepository,
+    product_repo: BoxProductRepository,
 }
 
 impl ManufacturingService {
@@ -26,18 +28,51 @@ impl ManufacturingService {
         work_order_repo: BoxWorkOrderRepository,
         bom_repo: BoxBillOfMaterialsRepository,
         routing_repo: BoxRoutingRepository,
+        product_repo: BoxProductRepository,
     ) -> Self {
         Self {
             work_order_repo,
             bom_repo,
             routing_repo,
+            product_repo,
         }
     }
 
     // Work Order methods
     #[tracing::instrument(skip(self))]
     pub async fn create_work_order(&self, create: CreateWorkOrder) -> Result<WorkOrder, ApiError> {
+        // Parent-ownership precheck: product_id (required) + bom_id/routing_id
+        // (optional) must belong to the caller's tenant, else a tenant-A caller
+        // could open a work order against tenant-B's product/BOM/routing
+        // (cross-tenant orphan write). The handler forces `create.tenant_id`
+        // from the auth token, so it is the auth-derived tenant here. Also
+        // yields a clean NotFound for a bogus id instead of an FK violation.
+        let tenant_id = create.tenant_id;
+        self.ensure_product_owned(create.product_id, tenant_id)
+            .await?;
+        if let Some(bom_id) = create.bom_id {
+            self.bom_repo
+                .find_by_id(bom_id, tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound("BOM not found".to_string()))?;
+        }
+        if let Some(routing_id) = create.routing_id {
+            self.routing_repo
+                .find_by_id(routing_id, tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound("Routing not found".to_string()))?;
+        }
         self.work_order_repo.create(create).await
+    }
+
+    /// Tenant-scoped product-ownership precheck. Returns `NotFound` if the
+    /// product does not belong to the caller's tenant (or does not exist).
+    async fn ensure_product_owned(&self, product_id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.product_repo
+            .find_by_id(product_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Product not found".to_string()))?;
+        Ok(())
     }
 
     #[tracing::instrument(skip(self))]
@@ -120,6 +155,11 @@ impl ManufacturingService {
             .find_by_id(create.work_order_id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))?;
+        // Parent-ownership precheck: the material's product must belong to the
+        // caller's tenant, else a tenant-A caller could attach tenant-B's
+        // product as a work-order material (cross-tenant orphan write).
+        self.ensure_product_owned(create.product_id, tenant_id)
+            .await?;
         self.work_order_repo.add_material(create).await
     }
 
@@ -140,6 +180,12 @@ impl ManufacturingService {
         &self,
         create: CreateBillOfMaterials,
     ) -> Result<BillOfMaterials, ApiError> {
+        // Parent-ownership precheck: the BOM's product must belong to the
+        // caller's tenant, else a tenant-A caller could define a BOM against
+        // tenant-B's product (cross-tenant orphan write). The handler forces
+        // `create.tenant_id` from the auth token.
+        self.ensure_product_owned(create.product_id, create.tenant_id)
+            .await?;
         self.bom_repo.create(create).await
     }
 
@@ -183,6 +229,11 @@ impl ManufacturingService {
             .find_by_id(create.bom_id, tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound("BOM not found".to_string()))?;
+        // Parent-ownership precheck: the line's component product must belong
+        // to the caller's tenant, else a tenant-A caller could reference
+        // tenant-B's product as a BOM component (cross-tenant orphan write).
+        self.ensure_product_owned(create.component_product_id, tenant_id)
+            .await?;
         self.bom_repo.add_line(create).await
     }
 
@@ -198,6 +249,12 @@ impl ManufacturingService {
     // Routing methods
     #[tracing::instrument(skip(self))]
     pub async fn create_routing(&self, create: CreateRouting) -> Result<Routing, ApiError> {
+        // Parent-ownership precheck: the routing's product must belong to the
+        // caller's tenant, else a tenant-A caller could define a routing
+        // against tenant-B's product (cross-tenant orphan write). The handler
+        // forces `create.tenant_id` from the auth token.
+        self.ensure_product_owned(create.product_id, create.tenant_id)
+            .await?;
         self.routing_repo.create(create).await
     }
 
@@ -403,24 +460,54 @@ mod tests {
     use crate::domain::manufacturing::repository::{
         InMemoryBillOfMaterialsRepository, InMemoryRoutingRepository, InMemoryWorkOrderRepository,
     };
+    use crate::domain::product::model::CreateProduct;
+    use crate::domain::product::repository::{BoxProductRepository, InMemoryProductRepository};
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
-    fn create_service() -> ManufacturingService {
+    fn create_service() -> (ManufacturingService, BoxProductRepository) {
         let wo_repo = Arc::new(InMemoryWorkOrderRepository::new()) as BoxWorkOrderRepository;
         let bom_repo =
             Arc::new(InMemoryBillOfMaterialsRepository::new()) as BoxBillOfMaterialsRepository;
         let routing_repo = Arc::new(InMemoryRoutingRepository::new()) as BoxRoutingRepository;
-        ManufacturingService::new(wo_repo, bom_repo, routing_repo)
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        let service =
+            ManufacturingService::new(wo_repo, bom_repo, routing_repo, product_repo.clone());
+        (service, product_repo)
+    }
+
+    /// Seed a product on `tenant_id` and return its id. The InMemory repo uses
+    /// a GLOBAL auto-id counter, so the first seeded product is id 1, the next
+    /// id 2, etc. — matching the cross-tenant IDOR negative tests (a product
+    /// seeded on tenant 1 has an id that does not exist on tenant 2).
+    async fn seed_product(repo: &BoxProductRepository, tenant_id: i64) -> i64 {
+        let product = repo
+            .create(CreateProduct {
+                tenant_id,
+                company_id: 1,
+                code: format!("PROD-{}-{}", tenant_id, uuid::Uuid::new_v4()),
+                name: format!("Product for tenant {}", tenant_id),
+                description: None,
+                category_id: None,
+                unit_id: None,
+                barcode: None,
+                purchase_price: Decimal::ZERO,
+                sale_price: Decimal::ZERO,
+                tax_rate: Decimal::ZERO,
+            })
+            .await
+            .expect("seed product");
+        product.id
     }
 
     #[tokio::test]
     async fn test_create_work_order() {
-        let service = create_service();
+        let (service, products) = create_service();
+        let product_id = seed_product(&products, 1).await;
         let create = CreateWorkOrder {
             tenant_id: 1,
             name: "WO-001".to_string(),
-            product_id: 1,
+            product_id,
             quantity: dec!(100),
             bom_id: None,
             routing_id: None,
@@ -434,11 +521,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_work_order_rejects_foreign_product() {
+        let (service, products) = create_service();
+        // product exists only on tenant 1; a tenant-2 caller cannot open a
+        // work order against it (cross-tenant orphan write).
+        let product_id = seed_product(&products, 1).await;
+        let create = CreateWorkOrder {
+            tenant_id: 2,
+            name: "WO-foreign".to_string(),
+            product_id,
+            quantity: dec!(100),
+            bom_id: None,
+            routing_id: None,
+            priority: WorkOrderPriority::Normal,
+            planned_start: None,
+            planned_end: None,
+        };
+        let result = service.create_work_order(create).await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    #[tokio::test]
     async fn test_create_bom() {
-        let service = create_service();
+        let (service, products) = create_service();
+        let product_id = seed_product(&products, 1).await;
         let create = CreateBillOfMaterials {
             tenant_id: 1,
-            product_id: 1,
+            product_id,
             version: "1.0".to_string(),
             is_active: true,
             is_primary: true,
@@ -450,12 +559,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_bom_rejects_foreign_product() {
+        let (service, products) = create_service();
+        let product_id = seed_product(&products, 1).await;
+        let result = service
+            .create_bom(CreateBillOfMaterials {
+                tenant_id: 2,
+                product_id,
+                version: "1.0".to_string(),
+                is_active: true,
+                is_primary: true,
+                valid_from: None,
+                valid_to: None,
+            })
+            .await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    #[tokio::test]
     async fn test_add_bom_line() {
-        let service = create_service();
+        let (service, products) = create_service();
+        let bom_product = seed_product(&products, 1).await;
+        let component_product = seed_product(&products, 1).await;
         let bom = service
             .create_bom(CreateBillOfMaterials {
                 tenant_id: 1,
-                product_id: 1,
+                product_id: bom_product,
                 version: "1.0".to_string(),
                 is_active: true,
                 is_primary: true,
@@ -470,7 +599,7 @@ mod tests {
                 CreateBillOfMaterialsLine {
                     tenant_id: 1,
                     bom_id: bom.id,
-                    component_product_id: 2,
+                    component_product_id: component_product,
                     quantity: dec!(5),
                     unit_id: Some(1),
                     scrap_percentage: dec!(5),
@@ -486,11 +615,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_add_bom_line_rejects_foreign_component() {
+        let (service, products) = create_service();
+        // Tenant-2 BOM (product seeded on tenant 2) ...
+        let t2_product = seed_product(&products, 2).await;
+        let bom = service
+            .create_bom(CreateBillOfMaterials {
+                tenant_id: 2,
+                product_id: t2_product,
+                version: "1.0".to_string(),
+                is_active: true,
+                is_primary: true,
+                valid_from: None,
+                valid_to: None,
+            })
+            .await
+            .unwrap();
+        // ... referencing a tenant-1 component product (cross-tenant orphan).
+        let t1_component = seed_product(&products, 1).await;
+        let result = service
+            .add_bom_line(
+                CreateBillOfMaterialsLine {
+                    tenant_id: 2,
+                    bom_id: bom.id,
+                    component_product_id: t1_component,
+                    quantity: dec!(5),
+                    unit_id: Some(1),
+                    scrap_percentage: dec!(5),
+                    is_optional: false,
+                    notes: None,
+                },
+                2,
+            )
+            .await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    #[tokio::test]
     async fn test_create_routing() {
-        let service = create_service();
+        let (service, products) = create_service();
+        let product_id = seed_product(&products, 1).await;
         let create = CreateRouting {
             tenant_id: 1,
-            product_id: 1,
+            product_id,
             version: "1.0".to_string(),
             is_active: true,
             is_primary: true,
@@ -500,14 +667,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_routing_rejects_foreign_product() {
+        let (service, products) = create_service();
+        let product_id = seed_product(&products, 1).await;
+        let result = service
+            .create_routing(CreateRouting {
+                tenant_id: 2,
+                product_id,
+                version: "1.0".to_string(),
+                is_active: true,
+                is_primary: true,
+            })
+            .await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    #[tokio::test]
     async fn test_material_requirements_calculation() {
-        let service = create_service();
+        let (service, products) = create_service();
+        let bom_product = seed_product(&products, 1).await;
+        let component_product = seed_product(&products, 1).await;
 
         // Create BOM
         let bom = service
             .create_bom(CreateBillOfMaterials {
                 tenant_id: 1,
-                product_id: 1,
+                product_id: bom_product,
                 version: "1.0".to_string(),
                 is_active: true,
                 is_primary: true,
@@ -523,7 +708,7 @@ mod tests {
                 CreateBillOfMaterialsLine {
                     tenant_id: 1,
                     bom_id: bom.id,
-                    component_product_id: 2,
+                    component_product_id: component_product,
                     quantity: dec!(2),
                     unit_id: Some(1),
                     scrap_percentage: dec!(10),
@@ -537,7 +722,7 @@ mod tests {
 
         // Calculate for quantity of 10
         let requirements = service
-            .calculate_material_requirements(1, dec!(10), 1)
+            .calculate_material_requirements(bom_product, dec!(10), 1)
             .await
             .unwrap();
         assert_eq!(requirements.len(), 1);
@@ -547,13 +732,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_production_time_calculation() {
-        let service = create_service();
+        let (service, products) = create_service();
+        let product_id = seed_product(&products, 1).await;
 
         // Create routing
         let routing = service
             .create_routing(CreateRouting {
                 tenant_id: 1,
-                product_id: 1,
+                product_id,
                 version: "1.0".to_string(),
                 is_active: true,
                 is_primary: true,
