@@ -769,6 +769,8 @@ pub mod app {
             receipt_line_repo,
             request_repo,
             request_line_repo,
+            cari_repo.clone(),
+            product_repo.clone(),
         );
 
         // Audit
@@ -1345,6 +1347,8 @@ pub mod app {
             receipt_line_repo,
             request_repo,
             request_line_repo,
+            cari_repo.clone(),
+            product_repo.clone(),
         );
 
         // Vendor Portal - PostgreSQL
