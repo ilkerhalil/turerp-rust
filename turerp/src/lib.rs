@@ -594,6 +594,14 @@ pub mod app {
         let cari_repo_import = cari_repo.clone();
         let cari_service = CariService::new(cari_repo);
 
+        // Product (hoisted early: shared by the sales/invoice/stock/manufacturing/qc
+        // create-* parent-ownership prechecks, all of which are constructed below).
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+
+        // Cost Centers (hoisted early: shared by the invoice create-* precheck).
+        let cost_center_repo =
+            Arc::new(InMemoryCostCenterRepository::new()) as BoxCostCenterRepository;
+
         // Company
         let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
         let company_service = CompanyService::new(company_repo);
@@ -719,8 +727,7 @@ pub mod app {
             Arc::new(InMemoryFeatureFlagRepository::new()) as Arc<dyn FeatureFlagRepository>;
         let feature_service = FeatureFlagService::new(feature_repo);
 
-        // Product
-        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        // Product (repo constructed hoisted above; consume clones here)
         let product_repo_import = product_repo.clone();
         let category_repo = Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
         let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
@@ -728,9 +735,13 @@ pub mod app {
         // lookups (product_variants has no tenant_id column of its own).
         let variant_repo = Arc::new(InMemoryProductVariantRepository::new(product_repo.clone()))
             as BoxProductVariantRepository;
-        let product_service =
-            ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo)
-                .with_cache(cache_service.clone());
+        let product_service = ProductService::with_variants(
+            product_repo.clone(),
+            category_repo,
+            unit_repo,
+            variant_repo,
+        )
+        .with_cache(cache_service.clone());
 
         // Barcode
         let barcode_repo = Arc::new(InMemoryBarcodeRepository::new()) as BoxBarcodeRepository;
@@ -925,10 +936,8 @@ pub mod app {
         let bank_repo = Arc::new(InMemoryBankRepository::new()) as BoxBankRepository;
         let bank_service = BankService::new(bank_repo);
 
-        // Cost Centers
-        let cost_center_repo =
-            Arc::new(InMemoryCostCenterRepository::new()) as BoxCostCenterRepository;
-        let cost_center_service = CostCenterService::new(cost_center_repo);
+        // Cost Centers (repo constructed hoisted above; consume a clone here)
+        let cost_center_service = CostCenterService::new(cost_center_repo.clone());
 
         // Dashboard
         let dashboard_repo = Arc::new(InMemoryDashboardRepository::new()) as BoxDashboardRepository;
@@ -1213,6 +1222,14 @@ pub mod app {
         let cari_repo_import = cari_repo.clone();
         let cari_service = CariService::new(cari_repo);
 
+        // Product - PostgreSQL (hoisted early: shared by the sales/invoice/stock/
+        // manufacturing/qc create-* parent-ownership prechecks constructed below).
+        let product_repo =
+            PostgresProductRepository::new(pool.clone(), cache_service.clone()).into_boxed();
+
+        // Cost Centers - PostgreSQL (hoisted early: shared by the invoice precheck).
+        let cost_center_repo = PostgresCostCenterRepository::new(pool.clone()).into_boxed();
+
         // Company - PostgreSQL
         let company_repo = PostgresCompanyRepository::new(pool.clone()).into_boxed();
         let company_service = CompanyService::new(company_repo);
@@ -1373,16 +1390,18 @@ pub mod app {
         let settings_repo = PostgresSettingsRepository::new(pool.clone()).into_boxed();
         let settings_service = crate::domain::settings::SettingsService::new(settings_repo);
 
-        // Product - PostgreSQL
-        let product_repo =
-            PostgresProductRepository::new(pool.clone(), cache_service.clone()).into_boxed();
+        // Product - PostgreSQL (repo constructed hoisted above; consume clones here)
         let product_repo_import = product_repo.clone();
         let category_repo = PostgresCategoryRepository::new(pool.clone()).into_boxed();
         let unit_repo = PostgresUnitRepository::new(pool.clone()).into_boxed();
         let variant_repo = PostgresProductVariantRepository::new(pool.clone()).into_boxed();
-        let product_service =
-            ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo)
-                .with_cache(cache_service.clone());
+        let product_service = ProductService::with_variants(
+            product_repo.clone(),
+            category_repo,
+            unit_repo,
+            variant_repo,
+        )
+        .with_cache(cache_service.clone());
 
         // Barcode - PostgreSQL
         let barcode_repo = PostgresBarcodeRepository::new(pool.clone()).into_boxed();
@@ -1403,9 +1422,8 @@ pub mod app {
         let bank_repo = PostgresBankRepository::new(pool.clone()).into_boxed();
         let bank_service = BankService::new(bank_repo);
 
-        // Cost Centers - PostgreSQL
-        let cost_center_repo = PostgresCostCenterRepository::new(pool.clone()).into_boxed();
-        let cost_center_service = CostCenterService::new(cost_center_repo);
+        // Cost Centers - PostgreSQL (repo constructed hoisted above; consume a clone here)
+        let cost_center_service = CostCenterService::new(cost_center_repo.clone());
 
         // Dashboard - PostgreSQL
         let dashboard_repo = PostgresDashboardRepository::new(pool.clone()).into_boxed();
