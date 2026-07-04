@@ -613,8 +613,12 @@ pub mod app {
         let stock_movement_repo =
             Arc::new(InMemoryStockMovementRepository::new()) as BoxStockMovementRepository;
         let stock_movement_repo_import = stock_movement_repo.clone();
-        let stock_service =
-            StockService::new(warehouse_repo, stock_level_repo, stock_movement_repo);
+        let stock_service = StockService::new(
+            warehouse_repo,
+            stock_level_repo,
+            stock_movement_repo,
+            product_repo.clone(),
+        );
 
         // Invoice
         let invoice_repo = Arc::new(InMemoryInvoiceRepository::new()) as BoxInvoiceRepository;
@@ -1251,8 +1255,12 @@ pub mod app {
         let stock_level_repo = PostgresStockLevelRepository::new(pool.clone()).into_boxed();
         let stock_movement_repo = PostgresStockMovementRepository::new(pool.clone()).into_boxed();
         let stock_movement_repo_import = stock_movement_repo.clone();
-        let stock_service =
-            StockService::new(warehouse_repo, stock_level_repo, stock_movement_repo);
+        let stock_service = StockService::new(
+            warehouse_repo,
+            stock_level_repo,
+            stock_movement_repo,
+            product_repo.clone(),
+        );
 
         // Invoice - PostgreSQL
         let invoice_repo = PostgresInvoiceRepository::new(pool.clone()).into_boxed();

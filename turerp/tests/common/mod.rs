@@ -285,6 +285,38 @@ macro_rules! seed_cari {
     }};
 }
 
+/// Helper macro to create a product and return its id, for integration tests
+/// whose create-endpoint prechecks require an owned parent `product_id` FK
+/// (stock movements, work orders, BOMs, routings, inspections, NCRs). Mirrors
+/// the inline `create_product!` in `inter_company_api_test.rs` but lives in the
+/// shared common module and parameterizes the tenant. `CreateProduct` has no
+/// `created_by` field, so none is sent.
+/// Usage: `let product_id = seed_product!(&app, &token, 1);`
+#[macro_export]
+macro_rules! seed_product {
+    ($app:expr, $token:expr, $tenant_id:expr) => {{
+        let req = auth_request(
+            actix_web::http::Method::POST,
+            "/api/v1/products",
+            $token,
+        )
+        .set_json(json!({
+            "code": format!("PROD-{}", uuid::Uuid::new_v4()),
+            "name": "Test Product",
+            "purchase_price": 50.0,
+            "sale_price": 100.0,
+            "tax_rate": 18.0,
+            "tenant_id": $tenant_id,
+        }))
+        .to_request();
+        let resp = test::call_service($app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED, "Product creation failed");
+        let body = to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        json["id"].as_i64().unwrap()
+    }};
+}
+
 #[allow(dead_code)]
 pub fn auth_request(method: actix_web::http::Method, uri: &str, token: &str) -> test::TestRequest {
     test::TestRequest::default()

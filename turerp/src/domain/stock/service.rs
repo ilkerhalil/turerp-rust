@@ -2,6 +2,7 @@
 use rust_decimal::Decimal;
 
 use crate::common::pagination::PaginatedResult;
+use crate::domain::product::repository::BoxProductRepository;
 use crate::domain::stock::model::{
     CreateStockMovement, CreateWarehouse, MovementType, StockLevel, StockLevelResponse,
     StockMovement, StockMovementResponse, StockSummary, Warehouse, WarehouseResponse,
@@ -17,6 +18,7 @@ pub struct StockService {
     warehouse_repo: BoxWarehouseRepository,
     stock_level_repo: BoxStockLevelRepository,
     stock_movement_repo: BoxStockMovementRepository,
+    product_repo: BoxProductRepository,
 }
 
 impl StockService {
@@ -24,11 +26,13 @@ impl StockService {
         warehouse_repo: BoxWarehouseRepository,
         stock_level_repo: BoxStockLevelRepository,
         stock_movement_repo: BoxStockMovementRepository,
+        product_repo: BoxProductRepository,
     ) -> Self {
         Self {
             warehouse_repo,
             stock_level_repo,
             stock_movement_repo,
+            product_repo,
         }
     }
 
@@ -292,6 +296,21 @@ impl StockService {
                 ApiError::NotFound(format!("Warehouse {} not found", create.warehouse_id))
             })?;
 
+        // Parent-ownership precheck: the body-controlled `product_id` must belong
+        // to the caller's tenant before we touch stock levels. Without this, the
+        // `find_by_warehouse_product` lookup below returns None for a foreign
+        // product without rejecting, so a Purchase/Return/ProductionIn movement
+        // would orphan a `stock_level` row onto a foreign `product_id` (and a
+        // Sale/ProductionOut/Waste movement would silently no-op on a phantom
+        // level). `tenant_id` is the auth-overwritten service arg (set into
+        // create.tenant_id below). Mirrors the established precheck pattern.
+        self.product_repo
+            .find_by_id(create.product_id, tenant_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Product {} not found", create.product_id))
+            })?;
+
         // Get current stock level
         let current_level = self
             .stock_level_repo
@@ -450,25 +469,65 @@ impl StockService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::product::model::CreateProduct;
+    use crate::domain::product::repository::InMemoryProductRepository;
     use crate::domain::stock::model::MovementType;
     use crate::domain::stock::repository::{
         InMemoryStockLevelRepository, InMemoryStockMovementRepository, InMemoryWarehouseRepository,
     };
+    use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
-    fn create_service() -> StockService {
+    async fn create_service() -> StockService {
         let warehouse_repo = Arc::new(InMemoryWarehouseRepository::new()) as BoxWarehouseRepository;
         let stock_level_repo =
             Arc::new(InMemoryStockLevelRepository::new()) as BoxStockLevelRepository;
         let stock_movement_repo =
             Arc::new(InMemoryStockMovementRepository::new()) as BoxStockMovementRepository;
-        StockService::new(warehouse_repo, stock_level_repo, stock_movement_repo)
+
+        // Seed the parent product the create-stock-movement precheck validates
+        // against. InMemory repo create() auto-assigns ids starting at 1,
+        // matching the product_id = 1 used by the happy-path tests below. A
+        // second product is seeded on tenant 2 (id 2) so the cross-tenant IDOR
+        // rejection test can reference a foreign product.
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        product_repo
+            .create(CreateProduct {
+                tenant_id: 1,
+                code: "P1".to_string(),
+                name: "Test Product T1".to_string(),
+                purchase_price: Decimal::ZERO,
+                sale_price: Decimal::ZERO,
+                tax_rate: Decimal::ZERO,
+                ..Default::default()
+            })
+            .await
+            .expect("seed product t1");
+        product_repo
+            .create(CreateProduct {
+                tenant_id: 2,
+                code: "P2".to_string(),
+                name: "Test Product T2".to_string(),
+                purchase_price: Decimal::ZERO,
+                sale_price: Decimal::ZERO,
+                tax_rate: Decimal::ZERO,
+                ..Default::default()
+            })
+            .await
+            .expect("seed product t2");
+
+        StockService::new(
+            warehouse_repo,
+            stock_level_repo,
+            stock_movement_repo,
+            product_repo,
+        )
     }
 
     #[tokio::test]
     async fn test_create_warehouse() {
-        let service = create_service();
+        let service = create_service().await;
 
         let create = CreateWarehouse {
             tenant_id: 1,
@@ -485,7 +544,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_stock_in_movement() {
-        let service = create_service();
+        let service = create_service().await;
 
         // Create warehouse
         let warehouse = service
@@ -528,7 +587,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_stock_out_movement() {
-        let service = create_service();
+        let service = create_service().await;
 
         let warehouse = service
             .create_warehouse(CreateWarehouse {
@@ -587,7 +646,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_insufficient_stock() {
-        let service = create_service();
+        let service = create_service().await;
 
         let warehouse = service
             .create_warehouse(CreateWarehouse {
@@ -620,5 +679,43 @@ mod tests {
             .await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_create_stock_movement_rejects_foreign_product() {
+        // Tenant 1 owns warehouse id 1 but references product 2, which belongs to
+        // tenant 2 -> the product-ownership precheck returns NotFound before any
+        // stock_level row is touched (cross-tenant IDOR / orphan level prevented).
+        let service = create_service().await;
+        let warehouse = service
+            .create_warehouse(CreateWarehouse {
+                tenant_id: 1,
+                company_id: 1,
+                code: "WH001".to_string(),
+                name: "Main".to_string(),
+                address: None,
+            })
+            .await
+            .unwrap();
+
+        let err = service
+            .create_stock_movement(
+                CreateStockMovement {
+                    tenant_id: 1,
+                    company_id: 1,
+                    warehouse_id: warehouse.id,
+                    product_id: 2,
+                    movement_type: MovementType::Purchase,
+                    quantity: dec!(100),
+                    reference_type: None,
+                    reference_id: None,
+                    notes: None,
+                    created_by: 1,
+                },
+                1,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ApiError::NotFound(_)), "got {:?}", err);
     }
 }
