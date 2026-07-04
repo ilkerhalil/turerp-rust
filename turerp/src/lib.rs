@@ -592,7 +592,7 @@ pub mod app {
         // Cari
         let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
         let cari_repo_import = cari_repo.clone();
-        let cari_service = CariService::new(cari_repo);
+        let cari_service = CariService::new(cari_repo.clone());
 
         // Product (hoisted early: shared by the sales/invoice/stock/manufacturing/qc
         // create-* parent-ownership prechecks, all of which are constructed below).
@@ -636,6 +636,8 @@ pub mod app {
             sales_order_line_repo,
             quotation_repo,
             quotation_line_repo,
+            cari_repo.clone(),
+            product_repo.clone(),
         );
 
         // HR
@@ -1220,7 +1222,7 @@ pub mod app {
         let cari_repo =
             PostgresCariRepository::new(pool.clone(), cache_service.clone()).into_boxed();
         let cari_repo_import = cari_repo.clone();
-        let cari_service = CariService::new(cari_repo);
+        let cari_service = CariService::new(cari_repo.clone());
 
         // Product - PostgreSQL (hoisted early: shared by the sales/invoice/stock/
         // manufacturing/qc create-* parent-ownership prechecks constructed below).
@@ -1259,6 +1261,8 @@ pub mod app {
             sales_order_line_repo,
             quotation_repo,
             quotation_line_repo,
+            cari_repo.clone(),
+            product_repo.clone(),
         );
 
         // HR - PostgreSQL

@@ -1,5 +1,7 @@
 //! Sales service for business logic
 use crate::common::pagination::PaginatedResult;
+use crate::domain::cari::repository::BoxCariRepository;
+use crate::domain::product::repository::BoxProductRepository;
 use crate::domain::sales::model::{
     CreateQuotation, CreateSalesOrder, CreateSalesOrderLine, Quotation, QuotationLine,
     QuotationResponse, QuotationStatus, SalesOrder, SalesOrderLine, SalesOrderResponse,
@@ -18,6 +20,8 @@ pub struct SalesService {
     order_line_repo: BoxSalesOrderLineRepository,
     quotation_repo: BoxQuotationRepository,
     quotation_line_repo: BoxQuotationLineRepository,
+    cari_repo: BoxCariRepository,
+    product_repo: BoxProductRepository,
 }
 
 impl SalesService {
@@ -26,13 +30,61 @@ impl SalesService {
         order_line_repo: BoxSalesOrderLineRepository,
         quotation_repo: BoxQuotationRepository,
         quotation_line_repo: BoxQuotationLineRepository,
+        cari_repo: BoxCariRepository,
+        product_repo: BoxProductRepository,
     ) -> Self {
         Self {
             order_repo,
             order_line_repo,
             quotation_repo,
             quotation_line_repo,
+            cari_repo,
+            product_repo,
         }
+    }
+
+    /// Parent-ownership precheck: verify the customer (cari) belongs to the
+    /// caller's tenant before any INSERT. A body-controlled `cari_id`
+    /// referencing a foreign tenant's customer would otherwise create an
+    /// orphaned sales order / quotation (cross-tenant IDOR).
+    async fn ensure_cari_owned(&self, cari_id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        self.cari_repo
+            .find_by_id(cari_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Cari {} not found", cari_id)))?;
+        Ok(())
+    }
+
+    /// Parent-ownership precheck for line-level products: verify every line
+    /// `product_id` (Some only — None is a legitimate no-product line) belongs
+    /// to the caller's tenant. Uses a single batched `find_by_ids` lookup; a
+    /// foreign product is simply not returned by the tenant-scoped query, so a
+    /// count mismatch means at least one line references a foreign product.
+    async fn ensure_line_products_owned(
+        &self,
+        product_ids: impl IntoIterator<Item = Option<i64>>,
+        tenant_id: i64,
+    ) -> Result<(), ApiError> {
+        let ids: Vec<i64> = {
+            let mut set: std::collections::HashSet<i64> =
+                product_ids.into_iter().flatten().collect();
+            let mut v: Vec<i64> = set.drain().collect();
+            v.sort_unstable();
+            v
+        };
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let found = self.product_repo.find_by_ids(&ids, tenant_id).await?;
+        if found.len() != ids.len() {
+            let found_ids: std::collections::HashSet<i64> = found.iter().map(|p| p.id).collect();
+            let missing = ids.iter().find(|id| !found_ids.contains(id)).copied();
+            return Err(ApiError::NotFound(format!(
+                "Product {} not found",
+                missing.unwrap_or(-1)
+            )));
+        }
+        Ok(())
     }
 
     // Sales Order operations
@@ -49,6 +101,16 @@ impl SalesService {
             line.validate()
                 .map_err(|e| ApiError::Validation(e.join(", ")))?;
         }
+
+        // Parent-ownership prechecks: reject body-controlled FKs that reference
+        // a foreign tenant's customer or product before any INSERT.
+        self.ensure_cari_owned(create.cari_id, create.tenant_id)
+            .await?;
+        self.ensure_line_products_owned(
+            create.lines.iter().map(|l| l.product_id),
+            create.tenant_id,
+        )
+        .await?;
 
         let order = self.order_repo.create(create.clone()).await?;
         let lines = self
@@ -235,6 +297,16 @@ impl SalesService {
             line.validate()
                 .map_err(|e| ApiError::Validation(e.join(", ")))?;
         }
+
+        // Parent-ownership prechecks: reject body-controlled FKs that reference
+        // a foreign tenant's customer or product before any INSERT.
+        self.ensure_cari_owned(create.cari_id, create.tenant_id)
+            .await?;
+        self.ensure_line_products_owned(
+            create.lines.iter().map(|l| l.product_id),
+            create.tenant_id,
+        )
+        .await?;
 
         let quotation = self.quotation_repo.create(create.clone()).await?;
         let lines = self
@@ -671,6 +743,10 @@ impl SalesService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::cari::model::CreateCari;
+    use crate::domain::cari::repository::InMemoryCariRepository;
+    use crate::domain::product::model::CreateProduct;
+    use crate::domain::product::repository::InMemoryProductRepository;
     use crate::domain::sales::model::CreateQuotationLine;
     use crate::domain::sales::repository::{
         InMemoryQuotationLineRepository, InMemoryQuotationRepository,
@@ -681,24 +757,80 @@ mod tests {
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
-    fn create_service() -> SalesService {
+    async fn create_service() -> SalesService {
         let order_repo = Arc::new(InMemorySalesOrderRepository::new()) as BoxSalesOrderRepository;
         let order_line_repo =
             Arc::new(InMemorySalesOrderLineRepository::new()) as BoxSalesOrderLineRepository;
         let quotation_repo = Arc::new(InMemoryQuotationRepository::new()) as BoxQuotationRepository;
         let quotation_line_repo =
             Arc::new(InMemoryQuotationLineRepository::new()) as BoxQuotationLineRepository;
+
+        // Seed the parent entities the create-* prechecks validate against.
+        // InMemory repo create() auto-assigns ids starting at 1, matching the
+        // cari_id=1 / product_id=Some(1) / tenant_id=1 used by the happy-path
+        // tests below. A second cari/product is seeded on tenant 2 (ids 2) so
+        // the cross-tenant IDOR rejection tests can reference a foreign parent.
+        let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
+        cari_repo
+            .create(CreateCari {
+                code: "C1".to_string(),
+                name: "Test Cari T1".to_string(),
+                tenant_id: 1,
+                created_by: 1,
+                ..Default::default()
+            })
+            .await
+            .expect("seed cari t1");
+        cari_repo
+            .create(CreateCari {
+                code: "C2".to_string(),
+                name: "Test Cari T2".to_string(),
+                tenant_id: 2,
+                created_by: 1,
+                ..Default::default()
+            })
+            .await
+            .expect("seed cari t2");
+
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        product_repo
+            .create(CreateProduct {
+                tenant_id: 1,
+                code: "P1".to_string(),
+                name: "Test Product T1".to_string(),
+                purchase_price: Decimal::ZERO,
+                sale_price: Decimal::ZERO,
+                tax_rate: Decimal::ZERO,
+                ..Default::default()
+            })
+            .await
+            .expect("seed product t1");
+        product_repo
+            .create(CreateProduct {
+                tenant_id: 2,
+                code: "P2".to_string(),
+                name: "Test Product T2".to_string(),
+                purchase_price: Decimal::ZERO,
+                sale_price: Decimal::ZERO,
+                tax_rate: Decimal::ZERO,
+                ..Default::default()
+            })
+            .await
+            .expect("seed product t2");
+
         SalesService::new(
             order_repo,
             order_line_repo,
             quotation_repo,
             quotation_line_repo,
+            cari_repo,
+            product_repo,
         )
     }
 
     #[tokio::test]
     async fn test_create_sales_order() {
-        let service = create_service();
+        let service = create_service().await;
 
         let create = CreateSalesOrder {
             tenant_id: 1,
@@ -729,7 +861,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_quotation() {
-        let service = create_service();
+        let service = create_service().await;
 
         let create = CreateQuotation {
             tenant_id: 1,
@@ -754,7 +886,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_convert_quotation_to_order() {
-        let service = create_service();
+        let service = create_service().await;
 
         // Create quotation
         let quote_create = CreateQuotation {
@@ -784,5 +916,95 @@ mod tests {
         let updated_quote = service.get_quotation(quotation.id, 1).await.unwrap();
         assert_eq!(updated_quote.status, QuotationStatus::ConvertedToOrder);
         assert!(updated_quote.sales_order_id.is_some());
+    }
+
+    // Cross-tenant IDOR rejection: a tenant-1 caller must NOT be able to
+    // create a sales order referencing a tenant-2 customer (cari_id=2 exists
+    // but belongs to tenant 2). The parent-ownership precheck must reject it
+    // with NotFound before any INSERT.
+    #[tokio::test]
+    async fn test_create_sales_order_rejects_foreign_cari() {
+        let service = create_service().await;
+        let create = CreateSalesOrder {
+            tenant_id: 1,
+            company_id: 1,
+            cari_id: 2, // exists, but belongs to tenant 2
+            order_date: chrono::Utc::now(),
+            delivery_date: None,
+            notes: None,
+            shipping_address: None,
+            billing_address: None,
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            lines: vec![CreateSalesOrderLine {
+                product_id: Some(1),
+                description: "Test Product".to_string(),
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        };
+        let result = service.create_sales_order(create).await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    // Cross-tenant IDOR rejection: a tenant-1 caller must NOT be able to
+    // create a sales order whose line references a tenant-2 product
+    // (product_id=2 exists but belongs to tenant 2).
+    #[tokio::test]
+    async fn test_create_sales_order_rejects_foreign_product() {
+        let service = create_service().await;
+        let create = CreateSalesOrder {
+            tenant_id: 1,
+            company_id: 1,
+            cari_id: 1, // own-tenant cari
+            order_date: chrono::Utc::now(),
+            delivery_date: None,
+            notes: None,
+            shipping_address: None,
+            billing_address: None,
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            lines: vec![CreateSalesOrderLine {
+                product_id: Some(2), // exists, but belongs to tenant 2
+                description: "Foreign Product".to_string(),
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        };
+        let result = service.create_sales_order(create).await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    // A line with no product (product_id: None) is a legitimate no-product
+    // line and must NOT be rejected by the product precheck.
+    #[tokio::test]
+    async fn test_create_sales_order_allows_no_product_line() {
+        let service = create_service().await;
+        let create = CreateSalesOrder {
+            tenant_id: 1,
+            company_id: 1,
+            cari_id: 1,
+            order_date: chrono::Utc::now(),
+            delivery_date: None,
+            notes: None,
+            shipping_address: None,
+            billing_address: None,
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            lines: vec![CreateSalesOrderLine {
+                product_id: None, // legitimate no-product line
+                description: "Service line".to_string(),
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        };
+        let result = service.create_sales_order(create).await;
+        assert!(result.is_ok());
     }
 }

@@ -164,7 +164,7 @@ impl Cari {
 }
 
 /// Data for creating a new cari
-#[derive(Debug, Clone, Deserialize, Serialize, Validate, ToSchema)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Validate, ToSchema)]
 pub struct CreateCari {
     #[validate(length(min = 1, max = 50))]
     pub code: String,
