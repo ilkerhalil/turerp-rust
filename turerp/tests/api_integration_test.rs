@@ -946,6 +946,26 @@ async fn test_stock_movement_create() {
     let wh_json: serde_json::Value = serde_json::from_slice(&wh_body).unwrap();
     let wh_id = wh_json["id"].as_i64().unwrap();
 
+    // Seed a tenant-owned product (the create-stock-movement precheck now
+    // validates the body-controlled product_id against the caller's tenant).
+    let prod_req = test::TestRequest::post()
+        .uri("/api/v1/products")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "code": format!("PROD-{}", uuid::Uuid::new_v4()),
+            "name": "Test Product",
+            "purchase_price": 50.0,
+            "sale_price": 100.0,
+            "tax_rate": 18.0,
+            "tenant_id": 1,
+        }))
+        .to_request();
+    let prod_resp = test::call_service(&app, prod_req).await;
+    assert_eq!(prod_resp.status(), StatusCode::CREATED);
+    let prod_body = to_bytes(prod_resp.into_body()).await.unwrap();
+    let prod_json: serde_json::Value = serde_json::from_slice(&prod_body).unwrap();
+    let product_id = prod_json["id"].as_i64().unwrap();
+
     // Create stock movement
     let move_req = test::TestRequest::post()
         .uri("/api/v1/stock/movements")
@@ -953,7 +973,7 @@ async fn test_stock_movement_create() {
         .set_json(json!({
             "tenant_id": 1,
             "warehouse_id": wh_id,
-            "product_id": 1,
+            "product_id": product_id,
             "movement_type": "Purchase",
             "quantity": "100.00",
             "created_by": user_id,
