@@ -325,6 +325,12 @@ impl ProjectRepository for InMemoryProjectRepository {
 /// Inner state for InMemoryWbsItemRepository
 struct InMemoryWbsItemInner {
     items: std::collections::HashMap<i64, WbsItem>,
+    /// Per-item owning tenant. `wbs_items` has no `tenant_id` column; tenant
+    /// isolation is indirect via the parent project. The InMemory impl mirrors
+    /// the Postgres JOIN-scoping by recording the tenant passed to `create` so
+    /// that `find_by_id`/`find_by_project`/`update_progress`/`delete` can scope
+    /// by tenant (required for the parent-ownership prechecks to be meaningful).
+    tenants: std::collections::HashMap<i64, i64>,
     next_id: i64,
 }
 
@@ -336,6 +342,7 @@ impl InMemoryWbsItemRepository {
         Self {
             inner: Mutex::new(InMemoryWbsItemInner {
                 items: std::collections::HashMap::new(),
+                tenants: std::collections::HashMap::new(),
                 next_id: 1,
             }),
         }
@@ -349,7 +356,7 @@ impl Default for InMemoryWbsItemRepository {
 
 #[async_trait]
 impl WbsItemRepository for InMemoryWbsItemRepository {
-    async fn create(&self, _tenant_id: i64, create: CreateWbsItem) -> Result<WbsItem, ApiError> {
+    async fn create(&self, tenant_id: i64, create: CreateWbsItem) -> Result<WbsItem, ApiError> {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
@@ -367,34 +374,42 @@ impl WbsItemRepository for InMemoryWbsItemRepository {
             progress: Decimal::ZERO,
             sort_order: inner.next_id as i32,
         };
+        inner.tenants.insert(id, tenant_id);
         inner.items.insert(id, item.clone());
         Ok(item)
     }
     async fn find_by_project(
         &self,
         project_id: i64,
-        _tenant_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<WbsItem>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .items
             .values()
-            .filter(|x| x.project_id == project_id)
+            .filter(|x| x.project_id == project_id && inner.tenants.get(&x.id) == Some(&tenant_id))
             .cloned()
             .collect())
     }
-    async fn find_by_id(&self, id: i64, _tenant_id: i64) -> Result<Option<WbsItem>, ApiError> {
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<WbsItem>, ApiError> {
         let inner = self.inner.lock();
-        Ok(inner.items.get(&id).cloned())
+        if inner.tenants.get(&id) == Some(&tenant_id) {
+            Ok(inner.items.get(&id).cloned())
+        } else {
+            Ok(None)
+        }
     }
     async fn update_progress(
         &self,
         id: i64,
-        _tenant_id: i64,
+        tenant_id: i64,
         progress: Decimal,
         hours: Decimal,
     ) -> Result<WbsItem, ApiError> {
         let mut inner = self.inner.lock();
+        if inner.tenants.get(&id) != Some(&tenant_id) {
+            return Err(ApiError::NotFound("WBS item not found".to_string()));
+        }
         let item = inner
             .items
             .get_mut(&id)
@@ -403,8 +418,12 @@ impl WbsItemRepository for InMemoryWbsItemRepository {
         item.actual_hours = hours;
         Ok(item.clone())
     }
-    async fn delete(&self, id: i64, _tenant_id: i64) -> Result<(), ApiError> {
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
         let mut inner = self.inner.lock();
+        if inner.tenants.get(&id) != Some(&tenant_id) {
+            return Err(ApiError::NotFound("WBS item not found".to_string()));
+        }
+        inner.tenants.remove(&id);
         inner.items.remove(&id);
         Ok(())
     }

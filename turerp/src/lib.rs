@@ -693,7 +693,8 @@ pub mod app {
         let project_repo = Arc::new(InMemoryProjectRepository::new()) as BoxProjectRepository;
         let wbs_repo = Arc::new(InMemoryWbsItemRepository::new()) as BoxWbsItemRepository;
         let cost_repo = Arc::new(InMemoryProjectCostRepository::new()) as BoxProjectCostRepository;
-        let project_service = ProjectService::new(project_repo, wbs_repo, cost_repo);
+        let project_service =
+            ProjectService::new(project_repo, wbs_repo, cost_repo, cari_repo.clone());
 
         // Manufacturing
         let work_order_repo =
@@ -1334,7 +1335,8 @@ pub mod app {
         let project_repo = PostgresProjectRepository::new(pool.clone()).into_boxed();
         let wbs_repo = PostgresWbsItemRepository::new(pool.clone()).into_boxed();
         let cost_repo = PostgresProjectCostRepository::new(pool.clone()).into_boxed();
-        let project_service = ProjectService::new(project_repo, wbs_repo, cost_repo);
+        let project_service =
+            ProjectService::new(project_repo, wbs_repo, cost_repo, cari_repo.clone());
 
         // Manufacturing - PostgreSQL
         let work_order_repo = PostgresWorkOrderRepository::new(pool.clone()).into_boxed();

@@ -3,6 +3,7 @@
 use rust_decimal::Decimal;
 
 use crate::common::pagination::PaginatedResult;
+use crate::domain::cari::repository::BoxCariRepository;
 use crate::domain::project::model::{
     CreateProject, CreateProjectCost, CreateWbsItem, Project, ProjectCost, ProjectProfitability,
     ProjectStatus, WbsItem,
@@ -17,6 +18,7 @@ pub struct ProjectService {
     project_repo: BoxProjectRepository,
     wbs_repo: BoxWbsItemRepository,
     cost_repo: BoxProjectCostRepository,
+    cari_repo: BoxCariRepository,
 }
 
 impl ProjectService {
@@ -24,15 +26,26 @@ impl ProjectService {
         project_repo: BoxProjectRepository,
         wbs_repo: BoxWbsItemRepository,
         cost_repo: BoxProjectCostRepository,
+        cari_repo: BoxCariRepository,
     ) -> Self {
         Self {
             project_repo,
             wbs_repo,
             cost_repo,
+            cari_repo,
         }
     }
     #[tracing::instrument(skip(self))]
     pub async fn create_project(&self, create: CreateProject) -> Result<Project, ApiError> {
+        // Parent-ownership precheck: an optional cari_id must reference a cari
+        // owned by the caller's tenant (auth-overwritten in create.tenant_id)
+        // before the project INSERT, to prevent a cross-tenant orphan FK.
+        if let Some(cari_id) = create.cari_id {
+            self.cari_repo
+                .find_by_id(cari_id, create.tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound("Cari not found".to_string()))?;
+        }
         self.project_repo.create(create).await
     }
     #[tracing::instrument(skip(self))]
@@ -74,6 +87,19 @@ impl ProjectService {
         tenant_id: i64,
         create: CreateWbsItem,
     ) -> Result<WbsItem, ApiError> {
+        // Parent-ownership precheck: project_id (required) must reference a
+        // tenant-owned project; parent_id (optional, WBS self-reference) must
+        // reference a tenant-owned WBS item — both before the INSERT.
+        self.project_repo
+            .find_by_id(create.project_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))?;
+        if let Some(parent_id) = create.parent_id {
+            self.wbs_repo
+                .find_by_id(parent_id, tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound("WBS parent not found".to_string()))?;
+        }
         self.wbs_repo.create(tenant_id, create).await
     }
     #[tracing::instrument(skip(self))]
@@ -115,6 +141,19 @@ impl ProjectService {
         tenant_id: i64,
         create: CreateProjectCost,
     ) -> Result<ProjectCost, ApiError> {
+        // Parent-ownership precheck: project_id (required) must reference a
+        // tenant-owned project; wbs_item_id (optional) must reference a
+        // tenant-owned WBS item — both before the INSERT.
+        self.project_repo
+            .find_by_id(create.project_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Project not found".to_string()))?;
+        if let Some(wbs_item_id) = create.wbs_item_id {
+            self.wbs_repo
+                .find_by_id(wbs_item_id, tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound("WBS item not found".to_string()))?;
+        }
         self.cost_repo.create(tenant_id, create).await
     }
     #[tracing::instrument(skip(self))]
@@ -188,6 +227,8 @@ impl ProjectService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::cari::model::{CariType, CreateCari};
+    use crate::domain::cari::repository::{BoxCariRepository, InMemoryCariRepository};
     use crate::domain::project::model::CostType;
     use crate::domain::project::repository::{
         InMemoryProjectCostRepository, InMemoryProjectRepository, InMemoryWbsItemRepository,
@@ -199,7 +240,46 @@ mod tests {
         let project_repo = Arc::new(InMemoryProjectRepository::new()) as BoxProjectRepository;
         let wbs_repo = Arc::new(InMemoryWbsItemRepository::new()) as BoxWbsItemRepository;
         let cost_repo = Arc::new(InMemoryProjectCostRepository::new()) as BoxProjectCostRepository;
-        ProjectService::new(project_repo, wbs_repo, cost_repo)
+        let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
+        ProjectService::new(project_repo, wbs_repo, cost_repo, cari_repo)
+    }
+
+    /// Like `create_service` but also returns the cari repo so tests can seed
+    /// caris on specific tenants for cross-tenant IDOR negatives.
+    fn create_service_with_cari() -> (ProjectService, BoxCariRepository) {
+        let project_repo = Arc::new(InMemoryProjectRepository::new()) as BoxProjectRepository;
+        let wbs_repo = Arc::new(InMemoryWbsItemRepository::new()) as BoxWbsItemRepository;
+        let cost_repo = Arc::new(InMemoryProjectCostRepository::new()) as BoxProjectCostRepository;
+        let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
+        let service = ProjectService::new(project_repo, wbs_repo, cost_repo, cari_repo.clone());
+        (service, cari_repo)
+    }
+
+    /// Helper: seed a cari on a tenant via the repo and return its id.
+    async fn seed_cari(cari_repo: &BoxCariRepository, tenant_id: i64) -> i64 {
+        let cari = cari_repo
+            .create(CreateCari {
+                code: format!("CARI-{}", tenant_id),
+                name: format!("Cari T{}", tenant_id),
+                cari_type: CariType::Customer,
+                tax_number: None,
+                tax_office: None,
+                identity_number: None,
+                email: None,
+                phone: None,
+                address: None,
+                city: None,
+                country: None,
+                postal_code: None,
+                credit_limit: Decimal::ZERO,
+                default_currency: "TRY".to_string(),
+                tenant_id,
+                company_id: 0,
+                created_by: 1,
+            })
+            .await
+            .unwrap();
+        cari.id
     }
 
     #[tokio::test]
@@ -280,5 +360,242 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(cost.amount, dec!(500));
+    }
+
+    #[tokio::test]
+    async fn test_create_project_rejects_foreign_cari() {
+        let (service, cari_repo) = create_service_with_cari();
+        // Seed a cari on tenant 2, then try to attach it to a tenant-1 project.
+        let foreign_cari_id = seed_cari(&cari_repo, 2).await;
+        let result = service
+            .create_project(CreateProject {
+                tenant_id: 1,
+                name: "P1".to_string(),
+                description: None,
+                cari_id: Some(foreign_cari_id),
+                start_date: None,
+                end_date: None,
+                budget: dec!(1000),
+            })
+            .await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::NotFound(msg) if msg == "Cari not found"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_create_project_accepts_owned_cari() {
+        let (service, cari_repo) = create_service_with_cari();
+        let owned_cari_id = seed_cari(&cari_repo, 1).await;
+        let result = service
+            .create_project(CreateProject {
+                tenant_id: 1,
+                name: "P1".to_string(),
+                description: None,
+                cari_id: Some(owned_cari_id),
+                start_date: None,
+                end_date: None,
+                budget: dec!(1000),
+            })
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_create_wbs_item_rejects_foreign_project() {
+        let service = create_service();
+        // Create a project on tenant 2.
+        let foreign_project = service
+            .create_project(CreateProject {
+                tenant_id: 2,
+                name: "Foreign".to_string(),
+                description: None,
+                cari_id: None,
+                start_date: None,
+                end_date: None,
+                budget: dec!(1000),
+            })
+            .await
+            .unwrap();
+        // Try to attach a WBS item to it as tenant 1.
+        let result = service
+            .create_wbs_item(
+                1,
+                CreateWbsItem {
+                    project_id: foreign_project.id,
+                    parent_id: None,
+                    name: "Phase 1".to_string(),
+                    code: "1.0".to_string(),
+                    planned_hours: dec!(40),
+                },
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::NotFound(msg) if msg == "Project not found"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_create_wbs_item_rejects_foreign_parent() {
+        let service = create_service();
+        // Owned project on tenant 1.
+        let project = service
+            .create_project(CreateProject {
+                tenant_id: 1,
+                name: "P1".to_string(),
+                description: None,
+                cari_id: None,
+                start_date: None,
+                end_date: None,
+                budget: dec!(1000),
+            })
+            .await
+            .unwrap();
+        // Foreign WBS parent on tenant 2 (under a tenant-2 project).
+        let foreign_project = service
+            .create_project(CreateProject {
+                tenant_id: 2,
+                name: "P2".to_string(),
+                description: None,
+                cari_id: None,
+                start_date: None,
+                end_date: None,
+                budget: dec!(1000),
+            })
+            .await
+            .unwrap();
+        let foreign_parent = service
+            .create_wbs_item(
+                2,
+                CreateWbsItem {
+                    project_id: foreign_project.id,
+                    parent_id: None,
+                    name: "Foreign Phase".to_string(),
+                    code: "1.0".to_string(),
+                    planned_hours: dec!(40),
+                },
+            )
+            .await
+            .unwrap();
+        // Tenant 1 references the tenant-2 WBS item as parent.
+        let result = service
+            .create_wbs_item(
+                1,
+                CreateWbsItem {
+                    project_id: project.id,
+                    parent_id: Some(foreign_parent.id),
+                    name: "Phase 1".to_string(),
+                    code: "1.0".to_string(),
+                    planned_hours: dec!(40),
+                },
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::NotFound(msg) if msg == "WBS parent not found"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_create_project_cost_rejects_foreign_project() {
+        let service = create_service();
+        let foreign_project = service
+            .create_project(CreateProject {
+                tenant_id: 2,
+                name: "Foreign".to_string(),
+                description: None,
+                cari_id: None,
+                start_date: None,
+                end_date: None,
+                budget: dec!(1000),
+            })
+            .await
+            .unwrap();
+        let result = service
+            .create_project_cost(
+                1,
+                CreateProjectCost {
+                    project_id: foreign_project.id,
+                    wbs_item_id: None,
+                    cost_type: CostType::Labor,
+                    amount: dec!(500),
+                    description: "Work".to_string(),
+                    incurred_at: chrono::Utc::now(),
+                },
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::NotFound(msg) if msg == "Project not found"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_create_project_cost_rejects_foreign_wbs_item() {
+        let service = create_service();
+        // Owned project on tenant 1.
+        let project = service
+            .create_project(CreateProject {
+                tenant_id: 1,
+                name: "P1".to_string(),
+                description: None,
+                cari_id: None,
+                start_date: None,
+                end_date: None,
+                budget: dec!(1000),
+            })
+            .await
+            .unwrap();
+        // Foreign WBS item on tenant 2.
+        let foreign_project = service
+            .create_project(CreateProject {
+                tenant_id: 2,
+                name: "P2".to_string(),
+                description: None,
+                cari_id: None,
+                start_date: None,
+                end_date: None,
+                budget: dec!(1000),
+            })
+            .await
+            .unwrap();
+        let foreign_wbs = service
+            .create_wbs_item(
+                2,
+                CreateWbsItem {
+                    project_id: foreign_project.id,
+                    parent_id: None,
+                    name: "Foreign Phase".to_string(),
+                    code: "1.0".to_string(),
+                    planned_hours: dec!(40),
+                },
+            )
+            .await
+            .unwrap();
+        // Tenant 1 references the tenant-2 WBS item on a cost.
+        let result = service
+            .create_project_cost(
+                1,
+                CreateProjectCost {
+                    project_id: project.id,
+                    wbs_item_id: Some(foreign_wbs.id),
+                    cost_type: CostType::Labor,
+                    amount: dec!(500),
+                    description: "Work".to_string(),
+                    incurred_at: chrono::Utc::now(),
+                },
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::NotFound(msg) if msg == "WBS item not found"
+        ));
     }
 }
