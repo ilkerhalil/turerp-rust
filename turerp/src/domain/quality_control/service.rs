@@ -1,5 +1,7 @@
 //! Quality control service
 
+use crate::domain::manufacturing::repository::BoxWorkOrderRepository;
+use crate::domain::product::repository::BoxProductRepository;
 use crate::domain::quality_control::model::{
     CreateInspection, CreateNonConformanceReport, Inspection, NonConformanceReport,
     UpdateInspection, UpdateNonConformanceReport,
@@ -11,13 +13,22 @@ use crate::error::ApiError;
 pub struct QualityControlService {
     inspection_repo: BoxInspectionRepository,
     ncr_repo: BoxNcrRepository,
+    product_repo: BoxProductRepository,
+    work_order_repo: BoxWorkOrderRepository,
 }
 
 impl QualityControlService {
-    pub fn new(inspection_repo: BoxInspectionRepository, ncr_repo: BoxNcrRepository) -> Self {
+    pub fn new(
+        inspection_repo: BoxInspectionRepository,
+        ncr_repo: BoxNcrRepository,
+        product_repo: BoxProductRepository,
+        work_order_repo: BoxWorkOrderRepository,
+    ) -> Self {
         Self {
             inspection_repo,
             ncr_repo,
+            product_repo,
+            work_order_repo,
         }
     }
 
@@ -27,6 +38,30 @@ impl QualityControlService {
         &self,
         create: CreateInspection,
     ) -> Result<Inspection, ApiError> {
+        // Parent-ownership precheck: the body-controlled `product_id` (required)
+        // and `work_order_id` (optional) must belong to the caller's tenant
+        // before the INSERT, otherwise a tenant-A admin could file an inspection
+        // referencing a tenant-B product/work order (cross-tenant orphan write).
+        // `create.tenant_id` is overwritten from auth by the handler before this
+        // call, so it is the caller's real tenant.
+        // Validate the request shape BEFORE the parent-ownership precheck so a
+        // malformed request (e.g. `product_id <= 0`, bad quantities) is rejected
+        // as 400 BadRequest rather than masked as a 404 precheck miss. The repo
+        // re-validates (harmless) on the INSERT path.
+        create
+            .validate()
+            .map_err(|e| ApiError::Validation(e.join(", ")))?;
+        let tenant_id = create.tenant_id;
+        self.product_repo
+            .find_by_id(create.product_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Product not found".to_string()))?;
+        if let Some(work_order_id) = create.work_order_id {
+            self.work_order_repo
+                .find_by_id(work_order_id, tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))?;
+        }
         self.inspection_repo.create(create).await
     }
 
@@ -82,6 +117,30 @@ impl QualityControlService {
         &self,
         create: CreateNonConformanceReport,
     ) -> Result<NonConformanceReport, ApiError> {
+        // Parent-ownership precheck: the body-controlled `product_id` (required)
+        // and `inspection_id` (optional) must belong to the caller's tenant
+        // before the INSERT, otherwise a tenant-A admin could file an NCR
+        // referencing a tenant-B product/inspection (cross-tenant orphan write).
+        // `create.tenant_id` is overwritten from auth by the handler before this
+        // call, so it is the caller's real tenant.
+        // Validate the request shape BEFORE the parent-ownership precheck so a
+        // malformed request (e.g. `product_id <= 0`, empty description) is
+        // rejected as 400 BadRequest rather than masked as a 404 precheck miss.
+        // The repo re-validates (harmless) on the INSERT path.
+        create
+            .validate()
+            .map_err(|e| ApiError::Validation(e.join(", ")))?;
+        let tenant_id = create.tenant_id;
+        self.product_repo
+            .find_by_id(create.product_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound("Product not found".to_string()))?;
+        if let Some(inspection_id) = create.inspection_id {
+            self.inspection_repo
+                .find_by_id(inspection_id, tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound("Inspection not found".to_string()))?;
+        }
         self.ncr_repo.create(create).await
     }
 
@@ -179,29 +238,100 @@ impl QualityControlService {
 #[cfg(test)]
 mod qc_tests {
     use super::*;
+    use crate::domain::manufacturing::model::{CreateWorkOrder, WorkOrderPriority};
+    use crate::domain::manufacturing::repository::{
+        BoxWorkOrderRepository, InMemoryWorkOrderRepository,
+    };
+    use crate::domain::product::model::CreateProduct;
+    use crate::domain::product::repository::{BoxProductRepository, InMemoryProductRepository};
     use crate::domain::quality_control::model::{
         CreateInspection, CreateNonConformanceReport, InspectionStatus, NcrType,
     };
     use crate::domain::quality_control::repository::{
         InMemoryInspectionRepository, InMemoryNcrRepository,
     };
+    use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
-    fn create_qc_service() -> QualityControlService {
+    fn create_qc_service() -> (
+        QualityControlService,
+        BoxProductRepository,
+        BoxWorkOrderRepository,
+    ) {
         let inspection_repo =
             Arc::new(InMemoryInspectionRepository::new()) as BoxInspectionRepository;
         let ncr_repo = Arc::new(InMemoryNcrRepository::new()) as BoxNcrRepository;
-        QualityControlService::new(inspection_repo, ncr_repo)
+        let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
+        let work_order_repo =
+            Arc::new(InMemoryWorkOrderRepository::new()) as BoxWorkOrderRepository;
+        let service = QualityControlService::new(
+            inspection_repo,
+            ncr_repo,
+            product_repo.clone(),
+            work_order_repo.clone(),
+        );
+        (service, product_repo, work_order_repo)
+    }
+
+    /// Seed a product on `tenant_id` and return its id. The InMemory repo uses a
+    /// global auto-id counter, so the first seeded product is id 1, the next id 2,
+    /// etc. `find_by_id` filters by tenant_id, so an id seeded on tenant 1 does
+    /// NOT exist on tenant 2 (genuine cross-tenant NotFound, no false pass).
+    async fn seed_product(repo: &BoxProductRepository, tenant_id: i64) -> i64 {
+        let product = repo
+            .create(CreateProduct {
+                tenant_id,
+                company_id: 1,
+                code: format!("PROD-{}-{}", tenant_id, uuid::Uuid::new_v4()),
+                name: format!("Product for tenant {}", tenant_id),
+                description: None,
+                category_id: None,
+                unit_id: None,
+                barcode: None,
+                purchase_price: Decimal::ZERO,
+                sale_price: Decimal::ZERO,
+                tax_rate: Decimal::ZERO,
+            })
+            .await
+            .expect("seed product");
+        product.id
+    }
+
+    /// Seed a work order on `tenant_id` (referencing `product_id`) and return its
+    /// id. The InMemory work-order repo does not validate the product, so any
+    /// tenant-owned product id is fine.
+    async fn seed_work_order(
+        repo: &BoxWorkOrderRepository,
+        tenant_id: i64,
+        product_id: i64,
+    ) -> i64 {
+        let wo = repo
+            .create(CreateWorkOrder {
+                tenant_id,
+                name: format!("WO-{}", uuid::Uuid::new_v4()),
+                product_id,
+                quantity: dec!(1),
+                bom_id: None,
+                routing_id: None,
+                priority: WorkOrderPriority::Normal,
+                planned_start: None,
+                planned_end: None,
+            })
+            .await
+            .expect("seed work order");
+        wo.id
     }
 
     #[tokio::test]
     async fn test_create_inspection() {
-        let service = create_qc_service();
+        let (service, product_repo, work_order_repo) = create_qc_service();
+        let product_id = seed_product(&product_repo, 1).await;
+        let work_order_id = seed_work_order(&work_order_repo, 1, product_id).await;
         let create = CreateInspection {
             tenant_id: 1,
-            work_order_id: Some(1),
-            product_id: 1,
+            work_order_id: Some(work_order_id),
+            product_id,
             inspection_type: "Visual".to_string(),
             quantity_inspected: dec!(100),
             quantity_passed: dec!(95),
@@ -218,12 +348,81 @@ mod qc_tests {
     }
 
     #[tokio::test]
+    async fn test_create_inspection_rejects_foreign_product() {
+        // Tenant-1 product; tenant-2 caller references it -> NotFound.
+        let (service, product_repo, _work_order_repo) = create_qc_service();
+        let foreign_product_id = seed_product(&product_repo, 1).await;
+        let create = CreateInspection {
+            tenant_id: 2,
+            work_order_id: None,
+            product_id: foreign_product_id,
+            inspection_type: "Visual".to_string(),
+            quantity_inspected: dec!(100),
+            quantity_passed: dec!(95),
+            quantity_failed: dec!(5),
+            status: InspectionStatus::Passed,
+            inspector_id: Some(1),
+            notes: None,
+        };
+        let result = service.create_inspection(create).await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::NotFound(msg) if msg == "Product not found"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_create_inspection_rejects_foreign_work_order() {
+        // Tenant-2 product (passes the product precheck) + tenant-1 work order ->
+        // NotFound on the work order, isolating the work-order precheck.
+        let (service, product_repo, work_order_repo) = create_qc_service();
+        let product_id = seed_product(&product_repo, 2).await;
+        let foreign_work_order_id = seed_work_order(&work_order_repo, 1, product_id).await;
+        let create = CreateInspection {
+            tenant_id: 2,
+            work_order_id: Some(foreign_work_order_id),
+            product_id,
+            inspection_type: "Visual".to_string(),
+            quantity_inspected: dec!(100),
+            quantity_passed: dec!(95),
+            quantity_failed: dec!(5),
+            status: InspectionStatus::Passed,
+            inspector_id: Some(1),
+            notes: None,
+        };
+        let result = service.create_inspection(create).await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::NotFound(msg) if msg == "Work order not found"
+        ));
+    }
+
+    #[tokio::test]
     async fn test_create_ncr() {
-        let service = create_qc_service();
+        let (service, product_repo, _work_order_repo) = create_qc_service();
+        let product_id = seed_product(&product_repo, 1).await;
+        // Seed an inspection on tenant 1 so the optional inspection_id is owned.
+        let inspection = service
+            .create_inspection(CreateInspection {
+                tenant_id: 1,
+                work_order_id: None,
+                product_id,
+                inspection_type: "Visual".to_string(),
+                quantity_inspected: dec!(100),
+                quantity_passed: dec!(95),
+                quantity_failed: dec!(5),
+                status: InspectionStatus::Passed,
+                inspector_id: Some(1),
+                notes: None,
+            })
+            .await
+            .expect("seed inspection");
         let create = CreateNonConformanceReport {
             tenant_id: 1,
-            inspection_id: Some(1),
-            product_id: 1,
+            inspection_id: Some(inspection.id),
+            product_id,
             ncr_type: NcrType::Minor,
             description: "Scratch on surface".to_string(),
             root_cause: None,
@@ -234,5 +433,67 @@ mod qc_tests {
         assert!(result.is_ok());
         let ncr = result.unwrap();
         assert_eq!(ncr.description, "Scratch on surface");
+    }
+
+    #[tokio::test]
+    async fn test_create_ncr_rejects_foreign_product() {
+        // Tenant-1 product; tenant-2 caller references it -> NotFound.
+        let (service, product_repo, _work_order_repo) = create_qc_service();
+        let foreign_product_id = seed_product(&product_repo, 1).await;
+        let create = CreateNonConformanceReport {
+            tenant_id: 2,
+            inspection_id: None,
+            product_id: foreign_product_id,
+            ncr_type: NcrType::Minor,
+            description: "Scratch on surface".to_string(),
+            root_cause: None,
+            corrective_action: None,
+            raised_by: 1,
+        };
+        let result = service.create_ncr(create).await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::NotFound(msg) if msg == "Product not found"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_create_ncr_rejects_foreign_inspection() {
+        // Tenant-2 product (passes the product precheck) + tenant-1 inspection ->
+        // NotFound on the inspection, isolating the inspection precheck.
+        let (service, product_repo, _work_order_repo) = create_qc_service();
+        let product_id = seed_product(&product_repo, 2).await;
+        let foreign_inspection = service
+            .create_inspection(CreateInspection {
+                tenant_id: 1,
+                work_order_id: None,
+                product_id: seed_product(&product_repo, 1).await,
+                inspection_type: "Visual".to_string(),
+                quantity_inspected: dec!(100),
+                quantity_passed: dec!(95),
+                quantity_failed: dec!(5),
+                status: InspectionStatus::Passed,
+                inspector_id: Some(1),
+                notes: None,
+            })
+            .await
+            .expect("seed foreign inspection");
+        let create = CreateNonConformanceReport {
+            tenant_id: 2,
+            inspection_id: Some(foreign_inspection.id),
+            product_id,
+            ncr_type: NcrType::Minor,
+            description: "Scratch on surface".to_string(),
+            root_cause: None,
+            corrective_action: None,
+            raised_by: 1,
+        };
+        let result = service.create_ncr(create).await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::NotFound(msg) if msg == "Inspection not found"
+        ));
     }
 }
