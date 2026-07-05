@@ -11,6 +11,8 @@ async fn test_create_ncr_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
+    let inspection_id = seed_inspection!(&app, &token, 1, product_id);
 
     let req = auth_request(
         actix_web::http::Method::POST,
@@ -19,8 +21,8 @@ async fn test_create_ncr_success() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "inspection_id": 1,
-        "product_id": 1,
+        "inspection_id": inspection_id,
+        "product_id": product_id,
         "ncr_type": "Minor",
         "description": "Surface scratch",
         "root_cause": "Handling damage",
@@ -34,7 +36,7 @@ async fn test_create_ncr_success() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["product_id"], 1);
+    assert_eq!(json["product_id"], product_id);
     assert_eq!(json["description"], "Surface scratch");
     assert_eq!(json["ncr_type"], "Minor");
     assert_eq!(json["status"], "Open");
@@ -70,6 +72,7 @@ async fn test_list_ncrs() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     for i in 1..=3 {
         let req = auth_request(
@@ -79,7 +82,7 @@ async fn test_list_ncrs() {
         )
         .set_json(json!({
             "tenant_id": 1,
-            "product_id": i,
+            "product_id": product_id,
             "ncr_type": "Minor",
             "description": format!("Defect {}", i),
             "raised_by": 1
@@ -109,6 +112,7 @@ async fn test_get_ncr_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -117,7 +121,7 @@ async fn test_get_ncr_success() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "ncr_type": "Major",
         "description": "Critical dimension out of tolerance",
         "raised_by": 1
@@ -165,6 +169,7 @@ async fn test_update_ncr_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -173,7 +178,7 @@ async fn test_update_ncr_success() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "ncr_type": "Minor",
         "description": "Initial description",
         "raised_by": 1
@@ -215,6 +220,7 @@ async fn test_update_ncr_to_closed() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -223,7 +229,7 @@ async fn test_update_ncr_to_closed() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "ncr_type": "Minor",
         "description": "Test close",
         "raised_by": 1
@@ -273,6 +279,7 @@ async fn test_soft_delete_and_restore_ncr() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -281,7 +288,7 @@ async fn test_soft_delete_and_restore_ncr() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "ncr_type": "Minor",
         "description": "To be deleted",
         "raised_by": 1
@@ -339,6 +346,7 @@ async fn test_list_deleted_ncrs() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -347,7 +355,7 @@ async fn test_list_deleted_ncrs() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "ncr_type": "Minor",
         "description": "Deleted NCR",
         "raised_by": 1
@@ -388,6 +396,7 @@ async fn test_destroy_ncr_permanently() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -396,7 +405,7 @@ async fn test_destroy_ncr_permanently() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "ncr_type": "Minor",
         "description": "To destroy",
         "raised_by": 1

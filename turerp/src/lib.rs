@@ -702,7 +702,7 @@ pub mod app {
             Arc::new(InMemoryBillOfMaterialsRepository::new()) as BoxBillOfMaterialsRepository;
         let routing_repo = Arc::new(InMemoryRoutingRepository::new()) as BoxRoutingRepository;
         let manufacturing_service = ManufacturingService::new(
-            work_order_repo,
+            work_order_repo.clone(),
             bom_repo,
             routing_repo,
             product_repo.clone(),
@@ -808,8 +808,12 @@ pub mod app {
                 as crate::domain::quality_control::BoxInspectionRepository;
         let ncr_repo = Arc::new(crate::domain::quality_control::InMemoryNcrRepository::new())
             as crate::domain::quality_control::BoxNcrRepository;
-        let qc_service =
-            crate::domain::quality_control::QualityControlService::new(inspection_repo, ncr_repo);
+        let qc_service = crate::domain::quality_control::QualityControlService::new(
+            inspection_repo,
+            ncr_repo,
+            product_repo.clone(),
+            work_order_repo,
+        );
 
         // Settings
         let settings_repo = Arc::new(crate::domain::settings::InMemorySettingsRepository::new())
@@ -1337,7 +1341,7 @@ pub mod app {
         let bom_repo = PostgresBillOfMaterialsRepository::new(pool.clone()).into_boxed();
         let routing_repo = PostgresRoutingRepository::new(pool.clone()).into_boxed();
         let manufacturing_service = ManufacturingService::new(
-            work_order_repo,
+            work_order_repo.clone(),
             bom_repo,
             routing_repo,
             product_repo.clone(),
@@ -1413,8 +1417,12 @@ pub mod app {
         // Quality Control - PostgreSQL
         let inspection_repo = PostgresInspectionRepository::new(pool.clone()).into_boxed();
         let ncr_repo = PostgresNcrRepository::new(pool.clone()).into_boxed();
-        let qc_service =
-            crate::domain::quality_control::QualityControlService::new(inspection_repo, ncr_repo);
+        let qc_service = crate::domain::quality_control::QualityControlService::new(
+            inspection_repo,
+            ncr_repo,
+            product_repo.clone(),
+            work_order_repo,
+        );
 
         // Assets - PostgreSQL
         let asset_repo = PostgresAssetsRepository::new(pool.clone());

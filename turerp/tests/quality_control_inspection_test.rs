@@ -11,6 +11,8 @@ async fn test_create_inspection_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
+    let work_order_id = seed_work_order!(&app, &token, 1, product_id);
 
     let req = auth_request(
         actix_web::http::Method::POST,
@@ -19,8 +21,8 @@ async fn test_create_inspection_success() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "work_order_id": 1,
-        "product_id": 1,
+        "work_order_id": work_order_id,
+        "product_id": product_id,
         "inspection_type": "Visual",
         "quantity_inspected": "100.00",
         "quantity_passed": "95.00",
@@ -36,7 +38,7 @@ async fn test_create_inspection_success() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["product_id"], 1);
+    assert_eq!(json["product_id"], product_id);
     assert_eq!(json["inspection_type"], "Visual");
     assert_eq!(json["status"], "Passed");
     assert_eq!(json["quantity_inspected"], "100.00");
@@ -100,6 +102,7 @@ async fn test_list_inspections() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     for i in 1..=3 {
         let req = auth_request(
@@ -109,8 +112,8 @@ async fn test_list_inspections() {
         )
         .set_json(json!({
             "tenant_id": 1,
-            "product_id": i,
-            "inspection_type": "Visual",
+            "product_id": product_id,
+            "inspection_type": format!("Visual-{}", i),
             "quantity_inspected": "100.00",
             "quantity_passed": "95.00",
             "quantity_failed": "5.00",
@@ -141,6 +144,7 @@ async fn test_get_inspection_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -149,7 +153,7 @@ async fn test_get_inspection_success() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "inspection_type": "Dimensional",
         "quantity_inspected": "50.00",
         "quantity_passed": "48.00",
@@ -199,6 +203,7 @@ async fn test_update_inspection_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -207,7 +212,7 @@ async fn test_update_inspection_success() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "inspection_type": "Visual",
         "quantity_inspected": "100.00",
         "quantity_passed": "90.00",
@@ -269,6 +274,7 @@ async fn test_soft_delete_and_restore_inspection() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -277,7 +283,7 @@ async fn test_soft_delete_and_restore_inspection() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "inspection_type": "Visual",
         "quantity_inspected": "100.00",
         "quantity_passed": "95.00",
@@ -337,6 +343,7 @@ async fn test_list_deleted_inspections() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -345,7 +352,7 @@ async fn test_list_deleted_inspections() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "inspection_type": "Visual",
         "quantity_inspected": "100.00",
         "quantity_passed": "95.00",
@@ -388,6 +395,7 @@ async fn test_destroy_inspection_permanently() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -396,7 +404,7 @@ async fn test_destroy_inspection_permanently() {
     )
     .set_json(json!({
         "tenant_id": 1,
-        "product_id": 1,
+        "product_id": product_id,
         "inspection_type": "Visual",
         "quantity_inspected": "100.00",
         "quantity_passed": "95.00",

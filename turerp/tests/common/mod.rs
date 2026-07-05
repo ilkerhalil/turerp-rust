@@ -317,6 +317,69 @@ macro_rules! seed_product {
     }};
 }
 
+/// Helper macro to create a manufacturing work order (referencing `product_id`)
+/// and return its id, for integration tests whose create-endpoint prechecks
+/// require an owned parent `work_order_id` FK (inspections). The work order's
+/// own `product_id` precheck is satisfied by the caller-supplied (tenant-owned)
+/// product id.
+/// Usage: `let work_order_id = seed_work_order!(&app, &token, 1, product_id);`
+#[macro_export]
+macro_rules! seed_work_order {
+    ($app:expr, $token:expr, $tenant_id:expr, $product_id:expr) => {{
+        let req = auth_request(
+            actix_web::http::Method::POST,
+            "/api/v1/manufacturing/work-orders",
+            $token,
+        )
+        .set_json(json!({
+            "tenant_id": $tenant_id,
+            "name": format!("WO-{}", uuid::Uuid::new_v4()),
+            "product_id": $product_id,
+            "quantity": "1.00",
+            "priority": "Normal",
+        }))
+        .to_request();
+        let resp = test::call_service($app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED, "Work order creation failed");
+        let body = to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        json["id"].as_i64().unwrap()
+    }};
+}
+
+/// Helper macro to create a quality-control inspection (referencing
+/// `product_id`, no work order) and return its id, for integration tests whose
+/// create-endpoint prechecks require an owned parent `inspection_id` FK (NCRs).
+/// The inspection's own `product_id` precheck is satisfied by the caller-supplied
+/// (tenant-owned) product id.
+/// Usage: `let inspection_id = seed_inspection!(&app, &token, 1, product_id);`
+#[macro_export]
+macro_rules! seed_inspection {
+    ($app:expr, $token:expr, $tenant_id:expr, $product_id:expr) => {{
+        let req = auth_request(
+            actix_web::http::Method::POST,
+            "/api/v1/manufacturing/inspections",
+            $token,
+        )
+        .set_json(json!({
+            "tenant_id": $tenant_id,
+            "work_order_id": null,
+            "product_id": $product_id,
+            "inspection_type": "Visual",
+            "quantity_inspected": "100.00",
+            "quantity_passed": "95.00",
+            "quantity_failed": "5.00",
+            "status": "Passed",
+        }))
+        .to_request();
+        let resp = test::call_service($app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED, "Inspection creation failed");
+        let body = to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        json["id"].as_i64().unwrap()
+    }};
+}
+
 #[allow(dead_code)]
 pub fn auth_request(method: actix_web::http::Method, uri: &str, token: &str) -> test::TestRequest {
     test::TestRequest::default()
