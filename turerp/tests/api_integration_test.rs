@@ -1563,13 +1563,35 @@ async fn test_manufacturing_work_order() {
 
     let (token, _) = register_admin!(&app_state, 1);
 
+    // Seed a tenant-owned product first: create_work_order now prechecks the
+    // body-controlled product_id against the caller's tenant (cross-tenant
+    // IDOR closure), so a hard-coded product_id:1 would 404 against the empty
+    // InMemory state.
+    let prod_req = test::TestRequest::post()
+        .uri("/api/v1/products")
+        .insert_header(("Authorization", format!("Bearer {}", token)))
+        .set_json(json!({
+            "code": format!("PROD-{}", uuid::Uuid::new_v4()),
+            "name": "Mfg Test Product",
+            "purchase_price": 50.0,
+            "sale_price": 100.0,
+            "tax_rate": 18.0,
+            "tenant_id": 1
+        }))
+        .to_request();
+    let prod_resp = test::call_service(&app, prod_req).await;
+    assert_eq!(prod_resp.status(), StatusCode::CREATED);
+    let prod_json: serde_json::Value =
+        serde_json::from_slice(&to_bytes(prod_resp.into_body()).await.unwrap()).unwrap();
+    let product_id = prod_json["id"].as_i64().unwrap();
+
     // Create work order
     let create_req = test::TestRequest::post()
         .uri("/api/v1/manufacturing/work-orders")
         .insert_header(("Authorization", format!("Bearer {}", token)))
         .set_json(json!({
             "name": "WO-001",
-            "product_id": 1,
+            "product_id": product_id,
             "quantity": "100.00",
             "priority": "Normal",
             "tenant_id": 1

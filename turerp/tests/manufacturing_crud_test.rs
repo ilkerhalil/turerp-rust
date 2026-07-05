@@ -15,6 +15,7 @@ async fn test_create_work_order_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     let req = auth_request(
         actix_web::http::Method::POST,
@@ -24,7 +25,7 @@ async fn test_create_work_order_success() {
     .set_json(json!({
         "tenant_id": 1,
         "name": "WO-001",
-        "product_id": 1,
+        "product_id": product_id,
         "quantity": "100.00",
         "priority": "Normal",
         "planned_start": null,
@@ -38,7 +39,7 @@ async fn test_create_work_order_success() {
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["name"], "WO-001");
-    assert_eq!(json["product_id"], 1);
+    assert_eq!(json["product_id"], product_id);
     assert_eq!(json["status"], "Draft");
     assert!(json["id"].is_number());
 }
@@ -48,6 +49,7 @@ async fn test_list_work_orders_paginated() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let product_id = seed_product!(&app, &token, 1);
 
     for i in 1..=3 {
         let req = auth_request(
@@ -58,7 +60,7 @@ async fn test_list_work_orders_paginated() {
         .set_json(json!({
             "tenant_id": 1,
             "name": format!("WO-00{}", i),
-            "product_id": i,
+            "product_id": product_id,
             "quantity": "100.00",
             "priority": "Normal"
         }))
@@ -89,6 +91,7 @@ async fn test_get_work_order_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let _product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -145,6 +148,7 @@ async fn test_update_work_order_status_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let _product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -190,6 +194,7 @@ async fn test_soft_delete_and_restore_work_order() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let _product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -261,6 +266,7 @@ async fn test_list_deleted_work_orders() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let _product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -312,6 +318,7 @@ async fn test_destroy_work_order_permanently() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    let _product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
