@@ -177,7 +177,15 @@ strip = true
 # (full debug), and avoids the split-debuginfo=unpacked .dwo explosion that
 # accumulated 46k+ orphan files / ~7 GB under target/ in the past.
 debug = "line-tables-only"
-incremental = true
+# Disable incremental compilation. Even with line-tables-only debug info, this
+# project's dependency tree compiles to a very large debug target/ (azul,
+# rav1e, image, aws-lc-rs, lopdf, opentelemetry, ...), and the incremental
+# cache was a large share of it — enough to fill a 99 GB /data volume together
+# with docker + other projects, causing ENOSPC link failures. CI already sets
+# CARGO_INCREMENTAL=0 (one-shot builds); this makes local dev consistent and
+# keeps target/ bounded. Trade-off: iterative rebuilds recompile changed
+# crates + dependents from scratch (cargo-sweep still prunes stale artifacts).
+incremental = false
 
 [profile.dev.build-override]
 # Build scripts and proc-macros never need debug info; skip it entirely.
