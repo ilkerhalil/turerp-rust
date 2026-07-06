@@ -2,6 +2,8 @@
 
 use crate::common::pagination::PaginatedResult;
 use crate::domain::cari::repository::BoxCariRepository;
+use crate::domain::company::service::ensure_company_owned;
+use crate::domain::company::BoxCompanyRepository;
 use crate::domain::product::repository::BoxProductRepository;
 use crate::domain::purchase::model::{
     CreateGoodsReceipt, CreatePurchaseOrder, CreatePurchaseRequest, GoodsReceiptResponse,
@@ -26,6 +28,7 @@ pub struct PurchaseService {
     request_line_repo: Option<BoxPurchaseRequestLineRepository>,
     cari_repo: BoxCariRepository,
     product_repo: BoxProductRepository,
+    company_repo: BoxCompanyRepository,
 }
 
 impl PurchaseService {
@@ -36,6 +39,7 @@ impl PurchaseService {
         receipt_line_repo: BoxGoodsReceiptLineRepository,
         cari_repo: BoxCariRepository,
         product_repo: BoxProductRepository,
+        company_repo: BoxCompanyRepository,
     ) -> Self {
         Self {
             order_repo,
@@ -46,6 +50,7 @@ impl PurchaseService {
             request_line_repo: None,
             cari_repo,
             product_repo,
+            company_repo,
         }
     }
 
@@ -60,6 +65,7 @@ impl PurchaseService {
         request_line_repo: BoxPurchaseRequestLineRepository,
         cari_repo: BoxCariRepository,
         product_repo: BoxProductRepository,
+        company_repo: BoxCompanyRepository,
     ) -> Self {
         Self {
             order_repo,
@@ -70,6 +76,7 @@ impl PurchaseService {
             request_line_repo: Some(request_line_repo),
             cari_repo,
             product_repo,
+            company_repo,
         }
     }
 
@@ -140,6 +147,11 @@ impl PurchaseService {
             create.tenant_id,
         )
         .await?;
+
+        // Parent-ownership precheck: the body-controlled company_id must belong
+        // to the caller's tenant (the legacy `1` sentinel is skipped for backward
+        // compat). Prevents stamping a purchase order onto a foreign-tenant company.
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
 
         let order = self.order_repo.create(create.clone()).await?;
         let lines = self
@@ -343,6 +355,13 @@ impl PurchaseService {
         self.ensure_line_products_owned(create.lines.iter().map(|l| l.product_id), tenant_id)
             .await?;
 
+        // Parent-ownership precheck: the body-controlled company_id must belong
+        // to the caller's tenant (the legacy `1` sentinel is skipped for backward
+        // compat). `tenant_id` is the auth-derived tenant (forced onto the body
+        // above), so a forged body tenant cannot escape. Prevents stamping a
+        // goods receipt onto a foreign-tenant company.
+        ensure_company_owned(&self.company_repo, create.company_id, tenant_id).await?;
+
         let receipt = self.receipt_repo.create(create.clone()).await?;
         let lines = self
             .receipt_line_repo
@@ -531,6 +550,11 @@ impl PurchaseService {
             create.tenant_id,
         )
         .await?;
+
+        // Parent-ownership precheck: the body-controlled company_id must belong
+        // to the caller's tenant (the legacy `1` sentinel is skipped for backward
+        // compat). Prevents stamping a purchase request onto a foreign-tenant company.
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
 
         let request = request_repo.create(create.clone()).await?;
         let lines = request_line_repo
@@ -793,6 +817,9 @@ mod tests {
     use super::*;
     use crate::domain::cari::model::CreateCari;
     use crate::domain::cari::repository::InMemoryCariRepository;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
+    use crate::domain::company::service::LEGACY_COMPANY_ID;
+    use crate::domain::company::CreateCompany;
     use crate::domain::product::model::CreateProduct;
     use crate::domain::product::repository::InMemoryProductRepository;
     use crate::domain::purchase::model::{
@@ -811,7 +838,14 @@ mod tests {
     // ids from 1: cari 1/2, product 1/2) so the happy-path tests (cari_id=1 /
     // product_id=Some(1) / tenant_id=1) pass the parent-ownership prechecks
     // and the cross-tenant IDOR rejection tests can reference a foreign parent.
-    async fn seed_parents() -> (BoxCariRepository, BoxProductRepository) {
+    // Also seeds a company_repo: tenant-1 company consumes id=1 (= the
+    // LEGACY_COMPANY_ID sentinel skipped by the precheck), so the tenant-2
+    // company gets a non-sentinel id (id=2) for the company_id reject tests.
+    async fn seed_parents() -> (
+        BoxCariRepository,
+        BoxProductRepository,
+        BoxCompanyRepository,
+    ) {
         let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
         cari_repo
             .create(CreateCari {
@@ -849,7 +883,24 @@ mod tests {
                 .await
                 .expect("seed product");
         }
-        (cari_repo, product_repo)
+
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        for tenant in [1, 2] {
+            company_repo
+                .create(CreateCompany {
+                    code: format!("CO{}", tenant),
+                    name: format!("Company T{}", tenant),
+                    tax_number: None,
+                    address: None,
+                    city: None,
+                    country: None,
+                    currency: "TRY".to_string(),
+                    tenant_id: tenant,
+                })
+                .await
+                .expect("seed company");
+        }
+        (cari_repo, product_repo, company_repo)
     }
 
     async fn create_service() -> PurchaseService {
@@ -861,7 +912,7 @@ mod tests {
             Arc::new(InMemoryGoodsReceiptRepository::new()) as BoxGoodsReceiptRepository;
         let receipt_line_repo =
             Arc::new(InMemoryGoodsReceiptLineRepository::new()) as BoxGoodsReceiptLineRepository;
-        let (cari_repo, product_repo) = seed_parents().await;
+        let (cari_repo, product_repo, company_repo) = seed_parents().await;
         PurchaseService::new(
             order_repo,
             order_line_repo,
@@ -869,6 +920,7 @@ mod tests {
             receipt_line_repo,
             cari_repo,
             product_repo,
+            company_repo,
         )
     }
 
@@ -885,7 +937,7 @@ mod tests {
             Arc::new(InMemoryPurchaseRequestRepository::new()) as BoxPurchaseRequestRepository;
         let request_line_repo = Arc::new(InMemoryPurchaseRequestLineRepository::new())
             as BoxPurchaseRequestLineRepository;
-        let (cari_repo, product_repo) = seed_parents().await;
+        let (cari_repo, product_repo, company_repo) = seed_parents().await;
         PurchaseService::with_requests(
             order_repo,
             order_line_repo,
@@ -895,6 +947,7 @@ mod tests {
             request_line_repo,
             cari_repo,
             product_repo,
+            company_repo,
         )
     }
 
@@ -1222,5 +1275,150 @@ mod tests {
         };
         let result = service.create_goods_receipt(receipt_create, 1).await;
         assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    // ---- company_id parent-ownership precheck (cross-tenant IDOR) ----
+
+    // Resolve the tenant-2 (foreign) company id seeded by seed_parents. It is
+    // non-sentinel (the tenant-1 company consumed id=1 = LEGACY_COMPANY_ID).
+    async fn foreign_company_id(service: &PurchaseService) -> i64 {
+        let id = service
+            .company_repo
+            .find_by_tenant(2)
+            .await
+            .expect("list tenant-2 companies")
+            .into_iter()
+            .map(|c| c.id)
+            .next()
+            .expect("tenant-2 company seeded");
+        assert_ne!(id, LEGACY_COMPANY_ID);
+        id
+    }
+
+    // Cross-tenant IDOR rejection (company_id sub-class): a tenant-1 caller
+    // must NOT be able to create a purchase order stamped onto a tenant-2
+    // company. cari_id=1 / product_id=Some(1) are own-tenant (FK prechecks
+    // pass), so the NotFound is uniquely from the company_id precheck.
+    #[tokio::test]
+    async fn test_create_purchase_order_rejects_foreign_company() {
+        let service = create_service().await;
+        let foreign_company_id = foreign_company_id(&service).await;
+
+        let create = CreatePurchaseOrder {
+            tenant_id: 1,
+            company_id: foreign_company_id,
+            cari_id: 1, // own-tenant vendor (FK precheck passes)
+            order_date: chrono::Utc::now(),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            expected_delivery_date: None,
+            notes: None,
+            lines: vec![CreatePurchaseOrderLine {
+                product_id: Some(1), // own-tenant product (FK precheck passes)
+                description: "Test Product".to_string(),
+                quantity: dec!(10),
+                unit_price: dec!(50),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        };
+        let result = service.create_purchase_order(create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a purchase order under a tenant-2 company, got {:?}",
+            result
+        );
+    }
+
+    // Cross-tenant IDOR rejection (company_id sub-class): a tenant-1 caller
+    // must NOT be able to create a goods receipt stamped onto a tenant-2
+    // company. The receipt references a valid approved tenant-1 PO + its own
+    // line + an own-tenant product (all prior prechecks pass), so the NotFound
+    // is uniquely from the company_id precheck.
+    #[tokio::test]
+    async fn test_create_goods_receipt_rejects_foreign_company() {
+        let service = create_service().await;
+        let foreign_company_id = foreign_company_id(&service).await;
+
+        // Valid tenant-1 PO (company_id=1 sentinel -> PO company precheck
+        // passes), then approve it (required before receiving goods).
+        let order = service
+            .create_purchase_order(CreatePurchaseOrder {
+                tenant_id: 1,
+                company_id: 1,
+                cari_id: 1,
+                order_date: chrono::Utc::now(),
+                currency: "TRY".to_string(),
+                exchange_rate: Decimal::ONE,
+                expected_delivery_date: None,
+                notes: None,
+                lines: vec![CreatePurchaseOrderLine {
+                    product_id: Some(1),
+                    description: "Test Product".to_string(),
+                    quantity: dec!(10),
+                    unit_price: dec!(50),
+                    tax_rate: dec!(18),
+                    discount_rate: dec!(0),
+                }],
+            })
+            .await
+            .expect("create tenant-1 PO");
+        service
+            .update_order_status(order.id, PurchaseOrderStatus::Approved, 1)
+            .await
+            .expect("approve PO");
+
+        // Receipt against the valid PO, but stamped onto a foreign company.
+        let receipt_create = CreateGoodsReceipt {
+            tenant_id: 1,
+            company_id: foreign_company_id,
+            purchase_order_id: order.id,
+            receipt_date: chrono::Utc::now(),
+            notes: None,
+            lines: vec![CreateGoodsReceiptLine {
+                order_line_id: order.lines[0].id, // belongs to THIS PO
+                product_id: Some(1),              // own-tenant product
+                quantity: dec!(10),
+                condition: "Good".to_string(),
+                notes: None,
+            }],
+        };
+        let result = service.create_goods_receipt(receipt_create, 1).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a goods receipt under a tenant-2 company, got {:?}",
+            result
+        );
+    }
+
+    // Cross-tenant IDOR rejection (company_id sub-class): a tenant-1 caller
+    // must NOT be able to create a purchase request stamped onto a tenant-2
+    // company. product_id=Some(1) is own-tenant (FK precheck passes), so the
+    // NotFound is uniquely from the company_id precheck.
+    #[tokio::test]
+    async fn test_create_purchase_request_rejects_foreign_company() {
+        let service = create_service_with_requests().await;
+        let foreign_company_id = foreign_company_id(&service).await;
+
+        let create = CreatePurchaseRequest {
+            tenant_id: 1,
+            company_id: foreign_company_id,
+            requested_by: 1,
+            department: Some("IT".to_string()),
+            priority: "High".to_string(),
+            reason: None,
+            lines: vec![CreatePurchaseRequestLine {
+                product_id: Some(1), // own-tenant product (FK precheck passes)
+                description: "Laptop".to_string(),
+                quantity: dec!(5),
+                notes: None,
+            }],
+        };
+        let result = service.create_purchase_request(create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a purchase request under a tenant-2 company, got {:?}",
+            result
+        );
     }
 }

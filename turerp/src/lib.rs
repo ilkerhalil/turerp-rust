@@ -790,6 +790,7 @@ pub mod app {
             request_line_repo,
             cari_repo.clone(),
             product_repo.clone(),
+            company_repo.clone(),
         );
 
         // Audit
@@ -1391,6 +1392,7 @@ pub mod app {
             request_line_repo,
             cari_repo.clone(),
             product_repo.clone(),
+            company_repo.clone(),
         );
 
         // Vendor Portal - PostgreSQL
