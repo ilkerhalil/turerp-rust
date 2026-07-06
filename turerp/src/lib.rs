@@ -651,6 +651,7 @@ pub mod app {
             quotation_line_repo,
             cari_repo.clone(),
             product_repo.clone(),
+            company_repo.clone(),
         );
 
         // HR
@@ -1302,6 +1303,7 @@ pub mod app {
             quotation_line_repo,
             cari_repo.clone(),
             product_repo.clone(),
+            company_repo.clone(),
         );
 
         // HR - PostgreSQL
