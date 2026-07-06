@@ -961,7 +961,7 @@ pub mod app {
 
         // Bank
         let bank_repo = Arc::new(InMemoryBankRepository::new()) as BoxBankRepository;
-        let bank_service = BankService::new(bank_repo);
+        let bank_service = BankService::new(bank_repo, company_repo.clone());
 
         // Cost Centers (repo constructed hoisted above; consume a clone here)
         let cost_center_service = CostCenterService::new(cost_center_repo.clone());
@@ -1475,7 +1475,7 @@ pub mod app {
 
         // Bank - PostgreSQL
         let bank_repo = PostgresBankRepository::new(pool.clone()).into_boxed();
-        let bank_service = BankService::new(bank_repo);
+        let bank_service = BankService::new(bank_repo, company_repo.clone());
 
         // Cost Centers - PostgreSQL (repo constructed hoisted above; consume a clone here)
         let cost_center_service = CostCenterService::new(cost_center_repo.clone());

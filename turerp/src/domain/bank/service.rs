@@ -18,6 +18,8 @@ use crate::domain::bank::model::{
     UpdateBankAccount, UpdateReconciliationRule,
 };
 use crate::domain::bank::repository::BoxBankRepository;
+use crate::domain::company::service::ensure_company_owned;
+use crate::domain::company::BoxCompanyRepository;
 use crate::error::ApiError;
 
 static INVOICE_REF_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -46,13 +48,15 @@ fn validate_regex_pattern(pattern: &str) -> Result<(), String> {
 #[derive(Clone)]
 pub struct BankService {
     repo: BoxBankRepository,
+    company_repo: BoxCompanyRepository,
     regex_cache: Arc<parking_lot::Mutex<HashMap<String, Regex>>>,
 }
 
 impl BankService {
-    pub fn new(repo: BoxBankRepository) -> Self {
+    pub fn new(repo: BoxBankRepository, company_repo: BoxCompanyRepository) -> Self {
         Self {
             repo,
+            company_repo,
             regex_cache: Arc::new(parking_lot::Mutex::new(HashMap::new())),
         }
     }
@@ -77,6 +81,13 @@ impl BankService {
                 tracing::warn!(tenant_id = create.tenant_id, bank_code = %create.bank_code, "Invalid bank code");
                 ApiError::Validation(format!("Invalid bank code: {}", e))
             })?;
+
+        // Parent-ownership precheck: an optional body-controlled company_id must
+        // belong to the caller's tenant if present (the legacy `1` sentinel is
+        // skipped for backward compat; `None` = no specific company, never reject).
+        if let Some(company_id) = create.company_id {
+            ensure_company_owned(&self.company_repo, company_id, create.tenant_id).await?;
+        }
 
         let tenant_id = create.tenant_id;
         let account = self.repo.create_account(create).await?;
@@ -118,6 +129,14 @@ impl BankService {
         update
             .validate()
             .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+        // Parent-ownership precheck on the update path too: UpdateBankAccount
+        // persists company_id (COALESCE into the row), so an optional body
+        // company_id must belong to the caller's tenant to prevent a cross-tenant
+        // restamp. The legacy `1` sentinel is skipped; `None` = leave unchanged.
+        if let Some(company_id) = update.company_id {
+            ensure_company_owned(&self.company_repo, company_id, tenant_id).await?;
+        }
 
         let account = self.repo.update_account(id, tenant_id, update).await?;
         tracing::info!(tenant_id, account_id = id, "Updated bank account");
@@ -665,12 +684,36 @@ mod tests {
     use super::*;
     use crate::domain::bank::model::BankCode;
     use crate::domain::bank::repository::InMemoryBankRepository;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
+    use crate::domain::company::service::LEGACY_COMPANY_ID;
+    use crate::domain::company::{CompanyRepository, CreateCompany};
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> BankService {
         let repo = Arc::new(InMemoryBankRepository::new()) as BoxBankRepository;
-        BankService::new(repo)
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        BankService::new(repo, company_repo)
+    }
+
+    /// Seed a company for `tenant_id` and return its id. The InMemory company repo
+    /// auto-id starts at 1 (= LEGACY_COMPANY_ID sentinel, skipped by the
+    /// precheck), so seed a tenant-1 company first to consume id=1, then the
+    /// target tenant's company gets a non-sentinel id (id=2).
+    async fn seed_company(repo: &BoxCompanyRepository, tenant_id: i64, code: &str) -> i64 {
+        repo.create(CreateCompany {
+            code: code.to_string(),
+            name: format!("Co-{}", code),
+            tax_number: None,
+            address: None,
+            city: None,
+            country: None,
+            currency: "TRY".to_string(),
+            tenant_id,
+        })
+        .await
+        .map(|c| c.id)
+        .expect("seed company")
     }
 
     #[tokio::test]
@@ -1056,5 +1099,123 @@ mod tests {
         let service = create_service();
         let result = service.parse_camt_statement(1, "not xml".to_string()).await;
         assert!(result.is_err());
+    }
+
+    // ---- company_id parent-ownership precheck (cross-tenant IDOR) ----
+
+    #[tokio::test]
+    async fn test_create_account_rejects_foreign_company() {
+        let service = create_service();
+        let company_repo = service.company_repo.clone();
+
+        // Consume the id=1 sentinel with a tenant-1 company, so the tenant-2
+        // foreign company gets a non-sentinel id (the precheck only skips id=1).
+        seed_company(&company_repo, 1, "T1").await;
+        let foreign_company_id = seed_company(&company_repo, 2, "T2").await;
+        assert_ne!(foreign_company_id, LEGACY_COMPANY_ID);
+
+        // A tenant-1 caller stamps a tenant-2 company id -> must be rejected.
+        let create = CreateBankAccount {
+            bank_code: "ziraat".to_string(),
+            account_number: "11111111".to_string(),
+            account_name: "Foreign Co Account".to_string(),
+            currency: "TRY".to_string(),
+            iban: None,
+            branch_code: None,
+            is_active: true,
+            tenant_id: 1,
+            company_id: Some(foreign_company_id),
+        };
+        let result = service.create_account(create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a bank account under a tenant-2 company, got {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_account_accepts_legacy_company_sentinel() {
+        let service = create_service();
+
+        // company_id = Some(LEGACY_COMPANY_ID) is the backward-compat sentinel;
+        // the precheck skips it -> create succeeds (no company seeded at all).
+        let create = CreateBankAccount {
+            bank_code: "ziraat".to_string(),
+            account_number: "22222222".to_string(),
+            account_name: "Sentinel Co Account".to_string(),
+            currency: "TRY".to_string(),
+            iban: None,
+            branch_code: None,
+            is_active: true,
+            tenant_id: 1,
+            company_id: Some(LEGACY_COMPANY_ID),
+        };
+        let result = service.create_account(create).await;
+        assert!(result.is_ok(), "sentinel company_id should be accepted");
+    }
+
+    #[tokio::test]
+    async fn test_create_account_accepts_none_company() {
+        // company_id = None = no specific company; the precheck is skipped.
+        let service = create_service();
+        let create = CreateBankAccount {
+            bank_code: "isbankasi".to_string(),
+            account_number: "33333333".to_string(),
+            account_name: "No Co Account".to_string(),
+            currency: "TRY".to_string(),
+            iban: None,
+            branch_code: None,
+            is_active: true,
+            tenant_id: 1,
+            company_id: None,
+        };
+        let result = service.create_account(create).await;
+        assert!(result.is_ok(), "None company_id should be accepted");
+    }
+
+    #[tokio::test]
+    async fn test_update_account_rejects_foreign_company_restamp() {
+        // The update path persists company_id (COALESCE into the row), so it is a
+        // second cross-tenant restamp vector. A tenant-1 caller must NOT be able to
+        // move a tenant-1 account to a tenant-2 company via update.
+        let service = create_service();
+        let company_repo = service.company_repo.clone();
+
+        // Create a tenant-1 account (no company initially).
+        let account = service
+            .create_account(CreateBankAccount {
+                bank_code: "ziraat".to_string(),
+                account_number: "44444444".to_string(),
+                account_name: "T1 Account".to_string(),
+                currency: "TRY".to_string(),
+                iban: None,
+                branch_code: None,
+                is_active: true,
+                tenant_id: 1,
+                company_id: None,
+            })
+            .await
+            .expect("create tenant-1 account");
+
+        seed_company(&company_repo, 1, "T1").await;
+        let foreign_company_id = seed_company(&company_repo, 2, "T2").await;
+        assert_ne!(foreign_company_id, LEGACY_COMPANY_ID);
+
+        let update = UpdateBankAccount {
+            account_number: None,
+            account_name: None,
+            currency: None,
+            iban: None,
+            branch_code: None,
+            is_active: None,
+            company_id: Some(foreign_company_id),
+        };
+        let result = service.update_account(account.id, 1, update).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT restamp a tenant-1 account to a tenant-2 company, got {:?}",
+            result
+        );
     }
 }
