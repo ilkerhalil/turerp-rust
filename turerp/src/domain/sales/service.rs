@@ -1,6 +1,8 @@
 //! Sales service for business logic
 use crate::common::pagination::PaginatedResult;
 use crate::domain::cari::repository::BoxCariRepository;
+use crate::domain::company::service::ensure_company_owned;
+use crate::domain::company::BoxCompanyRepository;
 use crate::domain::product::repository::BoxProductRepository;
 use crate::domain::sales::model::{
     CreateQuotation, CreateSalesOrder, CreateSalesOrderLine, Quotation, QuotationLine,
@@ -22,6 +24,7 @@ pub struct SalesService {
     quotation_line_repo: BoxQuotationLineRepository,
     cari_repo: BoxCariRepository,
     product_repo: BoxProductRepository,
+    company_repo: BoxCompanyRepository,
 }
 
 impl SalesService {
@@ -32,6 +35,7 @@ impl SalesService {
         quotation_line_repo: BoxQuotationLineRepository,
         cari_repo: BoxCariRepository,
         product_repo: BoxProductRepository,
+        company_repo: BoxCompanyRepository,
     ) -> Self {
         Self {
             order_repo,
@@ -40,6 +44,7 @@ impl SalesService {
             quotation_line_repo,
             cari_repo,
             product_repo,
+            company_repo,
         }
     }
 
@@ -111,6 +116,11 @@ impl SalesService {
             create.tenant_id,
         )
         .await?;
+
+        // Parent-ownership precheck: the body-controlled company_id must belong
+        // to the caller's tenant (the legacy `1` sentinel is skipped for backward
+        // compat). Prevents stamping a sales order onto a foreign-tenant company.
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
 
         let order = self.order_repo.create(create.clone()).await?;
         let lines = self
@@ -307,6 +317,11 @@ impl SalesService {
             create.tenant_id,
         )
         .await?;
+
+        // Parent-ownership precheck: the body-controlled company_id must belong
+        // to the caller's tenant (the legacy `1` sentinel is skipped for backward
+        // compat). Prevents stamping a quotation onto a foreign-tenant company.
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
 
         let quotation = self.quotation_repo.create(create.clone()).await?;
         let lines = self
@@ -745,6 +760,9 @@ mod tests {
     use super::*;
     use crate::domain::cari::model::CreateCari;
     use crate::domain::cari::repository::InMemoryCariRepository;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
+    use crate::domain::company::service::LEGACY_COMPANY_ID;
+    use crate::domain::company::CreateCompany;
     use crate::domain::product::model::CreateProduct;
     use crate::domain::product::repository::InMemoryProductRepository;
     use crate::domain::sales::model::CreateQuotationLine;
@@ -818,6 +836,39 @@ mod tests {
             .await
             .expect("seed product t2");
 
+        // Company repo for the company_id parent-ownership precheck. The InMemory
+        // auto-id starts at 1 (= LEGACY_COMPANY_ID sentinel, skipped by the
+        // precheck), so seeding a tenant-1 company first consumes id=1 and the
+        // tenant-2 company gets a non-sentinel id (id=2) — the reject test then
+        // references the real find_by_id branch, not the sentinel short-circuit.
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        company_repo
+            .create(CreateCompany {
+                code: "CO1".to_string(),
+                name: "Test Company T1".to_string(),
+                tax_number: None,
+                address: None,
+                city: None,
+                country: None,
+                currency: "TRY".to_string(),
+                tenant_id: 1,
+            })
+            .await
+            .expect("seed company t1");
+        company_repo
+            .create(CreateCompany {
+                code: "CO2".to_string(),
+                name: "Test Company T2".to_string(),
+                tax_number: None,
+                address: None,
+                city: None,
+                country: None,
+                currency: "TRY".to_string(),
+                tenant_id: 2,
+            })
+            .await
+            .expect("seed company t2");
+
         SalesService::new(
             order_repo,
             order_line_repo,
@@ -825,6 +876,7 @@ mod tests {
             quotation_line_repo,
             cari_repo,
             product_repo,
+            company_repo,
         )
     }
 
@@ -1006,5 +1058,95 @@ mod tests {
         };
         let result = service.create_sales_order(create).await;
         assert!(result.is_ok());
+    }
+
+    // Cross-tenant IDOR rejection (company_id sub-class): a tenant-1 caller
+    // must NOT be able to create a sales order stamped onto a tenant-2 company.
+    // cari_id=1 / product_id=Some(1) are own-tenant (FK prechecks pass), so the
+    // NotFound is uniquely from the company_id parent-ownership precheck. The
+    // foreign company id is non-sentinel (seed_company consumes id=1 for the
+    // tenant-1 company, so the tenant-2 company gets id=2).
+    #[tokio::test]
+    async fn test_create_sales_order_rejects_foreign_company() {
+        let service = create_service().await;
+        let foreign_company_id = service
+            .company_repo
+            .find_by_tenant(2)
+            .await
+            .expect("list tenant-2 companies")
+            .into_iter()
+            .map(|c| c.id)
+            .next()
+            .expect("tenant-2 company seeded");
+        assert_ne!(foreign_company_id, LEGACY_COMPANY_ID);
+
+        let create = CreateSalesOrder {
+            tenant_id: 1,
+            company_id: foreign_company_id,
+            cari_id: 1, // own-tenant cari (FK precheck passes)
+            order_date: chrono::Utc::now(),
+            delivery_date: None,
+            notes: None,
+            shipping_address: None,
+            billing_address: None,
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            lines: vec![CreateSalesOrderLine {
+                product_id: Some(1), // own-tenant product (FK precheck passes)
+                description: "Test Product".to_string(),
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        };
+        let result = service.create_sales_order(create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a sales order under a tenant-2 company, got {:?}",
+            result
+        );
+    }
+
+    // Cross-tenant IDOR rejection (company_id sub-class): a tenant-1 caller
+    // must NOT be able to create a quotation stamped onto a tenant-2 company.
+    // cari_id=1 / product_id=Some(1) are own-tenant (FK prechecks pass), so the
+    // NotFound is uniquely from the company_id parent-ownership precheck.
+    #[tokio::test]
+    async fn test_create_quotation_rejects_foreign_company() {
+        let service = create_service().await;
+        let foreign_company_id = service
+            .company_repo
+            .find_by_tenant(2)
+            .await
+            .expect("list tenant-2 companies")
+            .into_iter()
+            .map(|c| c.id)
+            .next()
+            .expect("tenant-2 company seeded");
+        assert_ne!(foreign_company_id, LEGACY_COMPANY_ID);
+
+        let create = CreateQuotation {
+            tenant_id: 1,
+            company_id: foreign_company_id,
+            cari_id: 1, // own-tenant cari (FK precheck passes)
+            valid_until: chrono::Utc::now() + Duration::days(7),
+            notes: None,
+            terms: None,
+            lines: vec![CreateQuotationLine {
+                product_id: Some(1), // own-tenant product (FK precheck passes)
+                description: "Test Product".to_string(),
+                quantity: dec!(1),
+                unit_price: dec!(100),
+                tax_rate: dec!(18),
+                discount_rate: dec!(0),
+            }],
+        };
+        let result = service.create_quotation(create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a quotation under a tenant-2 company, got {:?}",
+            result
+        );
     }
 }
