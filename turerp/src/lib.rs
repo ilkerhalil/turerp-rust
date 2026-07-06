@@ -634,6 +634,7 @@ pub mod app {
             cari_repo.clone(),
             cost_center_repo.clone(),
             product_repo.clone(),
+            company_repo.clone(),
         );
 
         // Sales
@@ -1287,6 +1288,7 @@ pub mod app {
             cari_repo.clone(),
             cost_center_repo.clone(),
             product_repo.clone(),
+            company_repo.clone(),
         );
 
         // Sales - PostgreSQL
