@@ -3,6 +3,8 @@ use std::sync::Arc;
 
 use crate::cache::{cache_get, cache_key, cache_set, CacheService};
 use crate::common::pagination::PaginatedResult;
+use crate::domain::company::service::ensure_company_owned;
+use crate::domain::company::BoxCompanyRepository;
 use crate::domain::product::model::{
     Category, CreateCategory, CreateProduct, CreateProductVariant, CreateUnit, Product,
     ProductVariantResponse, Unit, UpdateCategory, UpdateProduct, UpdateProductVariant, UpdateUnit,
@@ -21,6 +23,7 @@ pub struct ProductService {
     product_repo: BoxProductRepository,
     category_repo: BoxCategoryRepository,
     unit_repo: BoxUnitRepository,
+    company_repo: BoxCompanyRepository,
     variant_repo: Option<BoxProductVariantRepository>,
     cache: Option<Arc<dyn CacheService>>,
 }
@@ -30,11 +33,13 @@ impl ProductService {
         product_repo: BoxProductRepository,
         category_repo: BoxCategoryRepository,
         unit_repo: BoxUnitRepository,
+        company_repo: BoxCompanyRepository,
     ) -> Self {
         Self {
             product_repo,
             category_repo,
             unit_repo,
+            company_repo,
             variant_repo: None,
             cache: None,
         }
@@ -46,11 +51,13 @@ impl ProductService {
         category_repo: BoxCategoryRepository,
         unit_repo: BoxUnitRepository,
         variant_repo: BoxProductVariantRepository,
+        company_repo: BoxCompanyRepository,
     ) -> Self {
         Self {
             product_repo,
             category_repo,
             unit_repo,
+            company_repo,
             variant_repo: Some(variant_repo),
             cache: None,
         }
@@ -92,6 +99,10 @@ impl ProductService {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
+
+        // Parent-ownership precheck: body-controlled company_id must belong to the
+        // caller's tenant (the legacy `1` sentinel is skipped for backward compat).
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
 
         // Check if code exists for this tenant
         if self
@@ -274,6 +285,9 @@ impl ProductService {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
+        // Parent-ownership precheck: body-controlled company_id must belong to the
+        // caller's tenant (the legacy `1` sentinel is skipped for backward compat).
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
         let category = self.category_repo.create(create).await?;
         self.invalidate_category_cache(category.tenant_id).await;
         Ok(category)
@@ -426,6 +440,9 @@ impl ProductService {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
+        // Parent-ownership precheck: body-controlled company_id must belong to the
+        // caller's tenant (the legacy `1` sentinel is skipped for backward compat).
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
         let unit = self.unit_repo.create(create).await?;
         self.invalidate_unit_cache(unit.tenant_id).await;
         Ok(unit)
@@ -722,6 +739,9 @@ impl ProductService {
 mod tests {
     use super::*;
     use crate::cache::NoopCacheService;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
+    use crate::domain::company::service::LEGACY_COMPANY_ID;
+    use crate::domain::company::{CompanyRepository, CreateCompany};
     use crate::domain::product::repository::{
         InMemoryCategoryRepository, InMemoryProductRepository, InMemoryProductVariantRepository,
         InMemoryUnitRepository,
@@ -733,14 +753,16 @@ mod tests {
         let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
         let category_repo = Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
         let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
-        ProductService::new(product_repo, category_repo, unit_repo)
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        ProductService::new(product_repo, category_repo, unit_repo, company_repo)
     }
 
     fn create_service_with_cache() -> ProductService {
         let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
         let category_repo = Arc::new(InMemoryCategoryRepository::new()) as BoxCategoryRepository;
         let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
-        ProductService::new(product_repo, category_repo, unit_repo)
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        ProductService::new(product_repo, category_repo, unit_repo, company_repo)
             .with_cache(Arc::new(NoopCacheService))
     }
 
@@ -750,7 +772,35 @@ mod tests {
         let unit_repo = Arc::new(InMemoryUnitRepository::new()) as BoxUnitRepository;
         let variant_repo = Arc::new(InMemoryProductVariantRepository::new(product_repo.clone()))
             as BoxProductVariantRepository;
-        ProductService::with_variants(product_repo, category_repo, unit_repo, variant_repo)
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        ProductService::with_variants(
+            product_repo,
+            category_repo,
+            unit_repo,
+            variant_repo,
+            company_repo,
+        )
+    }
+
+    /// Seed a company for `tenant_id` and return its id. Mirrors the cari test
+    /// helper: the InMemory company repo auto-id starts at 1 (= LEGACY_COMPANY_ID
+    /// sentinel, which the precheck skips), so to obtain a non-sentinel id for a
+    /// real foreign-tenant company we first seed a tenant-1 company to consume
+    /// id=1, then seed the target tenant's company (id=2).
+    async fn seed_company(repo: &BoxCompanyRepository, tenant_id: i64, code: &str) -> i64 {
+        repo.create(CreateCompany {
+            code: code.to_string(),
+            name: format!("Co-{}", code),
+            tax_number: None,
+            address: None,
+            city: None,
+            country: None,
+            currency: "TRY".to_string(),
+            tenant_id,
+        })
+        .await
+        .map(|c| c.id)
+        .expect("seed company")
     }
 
     #[tokio::test]
@@ -1234,5 +1284,87 @@ mod tests {
         let from_tenant_1 = service.get_variant(v.id, 1).await.unwrap();
         assert_eq!(from_tenant_1.id, v.id);
         assert_eq!(from_tenant_1.name, "Tenant1 Variant");
+    }
+
+    // ---- company_id parent-ownership precheck (cross-tenant IDOR) ----
+
+    #[tokio::test]
+    async fn test_create_product_rejects_foreign_company() {
+        let service = create_service();
+        let company_repo = service.company_repo.clone();
+
+        // Consume the id=1 sentinel with a tenant-1 company, so the tenant-2
+        // foreign company gets a non-sentinel id (the precheck only skips id=1).
+        seed_company(&company_repo, 1, "T1").await;
+        let foreign_company_id = seed_company(&company_repo, 2, "T2").await;
+        assert_ne!(foreign_company_id, LEGACY_COMPANY_ID);
+
+        // A tenant-1 caller stamps a tenant-2 company id → must be rejected.
+        let create = CreateProduct {
+            tenant_id: 1,
+            company_id: foreign_company_id,
+            code: "P-FOR".to_string(),
+            name: "Foreign Co Product".to_string(),
+            description: None,
+            category_id: None,
+            unit_id: None,
+            barcode: None,
+            purchase_price: dec!(100.0),
+            sale_price: dec!(150.0),
+            tax_rate: dec!(18.0),
+        };
+        let result = service.create_product(create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a product under a tenant-2 company, got {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_category_rejects_foreign_company() {
+        let service = create_service();
+        let company_repo = service.company_repo.clone();
+
+        seed_company(&company_repo, 1, "T1").await;
+        let foreign_company_id = seed_company(&company_repo, 2, "T2").await;
+        assert_ne!(foreign_company_id, LEGACY_COMPANY_ID);
+
+        let create = CreateCategory {
+            tenant_id: 1,
+            company_id: foreign_company_id,
+            name: "Foreign Co Category".to_string(),
+            parent_id: None,
+        };
+        let result = service.create_category(create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a category under a tenant-2 company, got {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_unit_rejects_foreign_company() {
+        let service = create_service();
+        let company_repo = service.company_repo.clone();
+
+        seed_company(&company_repo, 1, "T1").await;
+        let foreign_company_id = seed_company(&company_repo, 2, "T2").await;
+        assert_ne!(foreign_company_id, LEGACY_COMPANY_ID);
+
+        let create = CreateUnit {
+            tenant_id: 1,
+            company_id: foreign_company_id,
+            code: "U-FOR".to_string(),
+            name: "Foreign Co Unit".to_string(),
+            is_integer: false,
+        };
+        let result = service.create_unit(create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a unit under a tenant-2 company, got {:?}",
+            result
+        );
     }
 }

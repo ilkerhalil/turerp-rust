@@ -760,6 +760,7 @@ pub mod app {
             category_repo,
             unit_repo,
             variant_repo,
+            company_repo.clone(),
         )
         .with_cache(cache_service.clone());
 
@@ -1453,6 +1454,7 @@ pub mod app {
             category_repo,
             unit_repo,
             variant_repo,
+            company_repo.clone(),
         )
         .with_cache(cache_service.clone());
 
