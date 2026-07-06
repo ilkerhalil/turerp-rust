@@ -589,10 +589,14 @@ pub mod app {
             revoked_token_store,
         );
 
+        // Company (hoisted early: shared by the company_id parent-ownership
+        // prechecks across create-* services, all constructed below).
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+
         // Cari
         let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
         let cari_repo_import = cari_repo.clone();
-        let cari_service = CariService::new(cari_repo.clone());
+        let cari_service = CariService::new(cari_repo.clone(), company_repo.clone());
 
         // Product (hoisted early: shared by the sales/invoice/stock/manufacturing/qc
         // create-* parent-ownership prechecks, all of which are constructed below).
@@ -602,9 +606,7 @@ pub mod app {
         let cost_center_repo =
             Arc::new(InMemoryCostCenterRepository::new()) as BoxCostCenterRepository;
 
-        // Company
-        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
-        let company_service = CompanyService::new(company_repo);
+        let company_service = CompanyService::new(company_repo.clone());
 
         // Stock
         let warehouse_repo = Arc::new(InMemoryWarehouseRepository::new()) as BoxWarehouseRepository;
@@ -1241,11 +1243,15 @@ pub mod app {
             revoked_token_store,
         );
 
+        // Company - PostgreSQL (hoisted early: shared by the company_id
+        // parent-ownership prechecks across create-* services constructed below).
+        let company_repo = PostgresCompanyRepository::new(pool.clone()).into_boxed();
+
         // Cari - PostgreSQL
         let cari_repo =
             PostgresCariRepository::new(pool.clone(), cache_service.clone()).into_boxed();
         let cari_repo_import = cari_repo.clone();
-        let cari_service = CariService::new(cari_repo.clone());
+        let cari_service = CariService::new(cari_repo.clone(), company_repo.clone());
 
         // Product - PostgreSQL (hoisted early: shared by the sales/invoice/stock/
         // manufacturing/qc create-* parent-ownership prechecks constructed below).
@@ -1255,9 +1261,7 @@ pub mod app {
         // Cost Centers - PostgreSQL (hoisted early: shared by the invoice precheck).
         let cost_center_repo = PostgresCostCenterRepository::new(pool.clone()).into_boxed();
 
-        // Company - PostgreSQL
-        let company_repo = PostgresCompanyRepository::new(pool.clone()).into_boxed();
-        let company_service = CompanyService::new(company_repo);
+        let company_service = CompanyService::new(company_repo.clone());
 
         // Stock - PostgreSQL
         let warehouse_repo = PostgresWarehouseRepository::new(pool.clone()).into_boxed();

@@ -5,6 +5,8 @@ use validator::Validate;
 use crate::common::pagination::PaginatedResult;
 use crate::domain::cari::model::{Cari, CariResponse, CreateCari, UpdateCari};
 use crate::domain::cari::repository::BoxCariRepository;
+use crate::domain::company::service::ensure_company_owned;
+use crate::domain::company::BoxCompanyRepository;
 use crate::error::ApiError;
 use tracing;
 
@@ -12,11 +14,12 @@ use tracing;
 #[derive(Clone)]
 pub struct CariService {
     repo: BoxCariRepository,
+    company_repo: BoxCompanyRepository,
 }
 
 impl CariService {
-    pub fn new(repo: BoxCariRepository) -> Self {
-        Self { repo }
+    pub fn new(repo: BoxCariRepository, company_repo: BoxCompanyRepository) -> Self {
+        Self { repo, company_repo }
     }
 
     /// Create a new cari account
@@ -26,6 +29,12 @@ impl CariService {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.to_string()))?;
+
+        // Parent-ownership precheck: a body-controlled company_id must reference a
+        // company owned by the caller's tenant (auth-overwritten in
+        // create.tenant_id) before the INSERT. The legacy phantom `1` sentinel
+        // ("no specific company"; column is NOT NULL DEFAULT 1, no FK) is skipped.
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
 
         // Check if code exists
         if self
@@ -246,12 +255,35 @@ mod tests {
     use super::*;
     use crate::domain::cari::model::CariType;
     use crate::domain::cari::repository::InMemoryCariRepository;
+    use crate::domain::company::model::CreateCompany;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
+    use crate::domain::company::BoxCompanyRepository;
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
     fn create_service() -> CariService {
         let repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
-        CariService::new(repo)
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        CariService::new(repo, company_repo)
+    }
+
+    /// Helper: seed a real company on a tenant via the repo and return its id
+    /// (used to exercise the non-sentinel branch of the company_id precheck).
+    async fn seed_company(company_repo: &BoxCompanyRepository, tenant_id: i64) -> i64 {
+        let company = company_repo
+            .create(CreateCompany {
+                code: format!("COMP-{}", tenant_id),
+                name: format!("Company T{}", tenant_id),
+                tax_number: None,
+                address: None,
+                city: None,
+                country: None,
+                currency: "TRY".to_string(),
+                tenant_id,
+            })
+            .await
+            .unwrap();
+        company.id
     }
 
     #[tokio::test]
@@ -479,5 +511,118 @@ mod tests {
         // Verify deleted
         let result = service.get_cari(created.id, 1).await;
         assert!(result.is_err());
+    }
+
+    /// A cari referencing a company owned by another tenant must be rejected
+    /// before the INSERT (cross-tenant IDOR closure on company_id).
+    #[tokio::test]
+    async fn test_create_cari_rejects_foreign_company() {
+        let service = create_service();
+        // Seed an owned company on tenant 1 first so the InMemory auto-id
+        // counter advances past the legacy phantom `1` (the first company
+        // created would otherwise get id == LEGACY_COMPANY_ID and be skipped by
+        // the sentinel-aware precheck). The tenant-2 company then gets a real
+        // non-sentinel id.
+        let _owned = seed_company(&service.company_repo, 1).await;
+        let foreign_company_id = seed_company(&service.company_repo, 2).await;
+        assert_ne!(
+            foreign_company_id,
+            crate::domain::company::service::LEGACY_COMPANY_ID
+        );
+
+        let create = CreateCari {
+            code: "C-FOREIGN".to_string(),
+            name: "Foreign Company Cari".to_string(),
+            cari_type: CariType::Customer,
+            tax_number: None,
+            tax_office: None,
+            identity_number: None,
+            email: None,
+            phone: None,
+            address: None,
+            city: None,
+            country: None,
+            postal_code: None,
+            credit_limit: Decimal::ZERO,
+            tenant_id: 1,
+            company_id: foreign_company_id,
+            created_by: 1,
+            default_currency: "TRY".to_string(),
+        };
+
+        let result = service.create_cari(create).await;
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            ApiError::NotFound(msg) if msg == "Company not found"
+        ));
+    }
+
+    /// A cari referencing an owned company must be accepted.
+    #[tokio::test]
+    async fn test_create_cari_accepts_owned_company() {
+        let service = create_service();
+        // Advance the InMemory auto-id counter past the legacy phantom `1` so
+        // the owned company gets a real non-sentinel id (exercising the actual
+        // precheck success path, not the sentinel skip).
+        let _phantom = seed_company(&service.company_repo, 2).await;
+        let owned_company_id = seed_company(&service.company_repo, 1).await;
+        assert_ne!(
+            owned_company_id,
+            crate::domain::company::service::LEGACY_COMPANY_ID
+        );
+
+        let create = CreateCari {
+            code: "C-OWNED".to_string(),
+            name: "Owned Company Cari".to_string(),
+            cari_type: CariType::Customer,
+            tax_number: None,
+            tax_office: None,
+            identity_number: None,
+            email: None,
+            phone: None,
+            address: None,
+            city: None,
+            country: None,
+            postal_code: None,
+            credit_limit: Decimal::ZERO,
+            tenant_id: 1,
+            company_id: owned_company_id,
+            created_by: 1,
+            default_currency: "TRY".to_string(),
+        };
+
+        let result = service.create_cari(create).await;
+        assert!(result.is_ok());
+    }
+
+    /// The legacy phantom `company_id == 1` sentinel ("no specific company") is
+    /// accepted unchanged (backward compatibility) — not a real reference.
+    #[tokio::test]
+    async fn test_create_cari_accepts_legacy_company_sentinel() {
+        let service = create_service();
+
+        let create = CreateCari {
+            code: "C-PHANTOM".to_string(),
+            name: "Phantom Company Cari".to_string(),
+            cari_type: CariType::Customer,
+            tax_number: None,
+            tax_office: None,
+            identity_number: None,
+            email: None,
+            phone: None,
+            address: None,
+            city: None,
+            country: None,
+            postal_code: None,
+            credit_limit: Decimal::ZERO,
+            tenant_id: 1,
+            company_id: crate::domain::company::service::LEGACY_COMPANY_ID,
+            created_by: 1,
+            default_currency: "TRY".to_string(),
+        };
+
+        let result = service.create_cari(create).await;
+        assert!(result.is_ok());
     }
 }
