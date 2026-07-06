@@ -7,6 +7,37 @@ use crate::domain::company::model::{Company, CompanyResponse, CreateCompany, Upd
 use crate::domain::company::repository::BoxCompanyRepository;
 use crate::error::ApiError;
 
+/// Legacy "no specific company" sentinel. The `company_id` column was added by
+/// migration 023+ as `BIGINT NOT NULL DEFAULT 1` with **no FK** to
+/// `companies(id)` ("default 1 for backward compatibility"). Rows stamped with
+/// `1` therefore need not reference an existing company. The parent-ownership
+/// precheck (`ensure_company_owned`) skips this sentinel so legacy/default
+/// callers are not rejected; any other `company_id` must be owned by the
+/// caller's tenant.
+pub const LEGACY_COMPANY_ID: i64 = 1;
+
+/// Parent-ownership precheck for a body-controlled `company_id` (sentinel-aware).
+///
+/// Returns `NotFound` if `company_id` does not belong to `tenant_id`, **except**
+/// the legacy phantom `1` (`LEGACY_COMPANY_ID`) which is accepted unchanged for
+/// backward compatibility (the column is `NOT NULL DEFAULT 1` with no FK, so `1`
+/// is a "no specific company" sentinel, not a real reference). Closes the
+/// cross-tenant IDOR where a tenant-A caller stamps a tenant-B company id (or a
+/// fabricated id) onto a row in their own tenant.
+pub async fn ensure_company_owned(
+    repo: &BoxCompanyRepository,
+    company_id: i64,
+    tenant_id: i64,
+) -> Result<(), ApiError> {
+    if company_id == LEGACY_COMPANY_ID {
+        return Ok(());
+    }
+    repo.find_by_id(company_id, tenant_id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("Company not found".to_string()))?;
+    Ok(())
+}
+
 #[derive(Clone)]
 pub struct CompanyService {
     repo: BoxCompanyRepository,
