@@ -40,6 +40,15 @@ impl CostCenterService {
             tracing::warn!(tenant_id, "Cost center name is empty");
             return Err(ApiError::Validation("Name is required".to_string()));
         }
+        // Parent-ownership precheck: a body-controlled parent_id (self-ref to
+        // cost_centers(id), tenant-scoped) must belong to the caller's tenant,
+        // else a caller could nest a cost center under a foreign-tenant parent.
+        // None = no parent (top-level), skipped.
+        if let Some(pid) = create.parent_id {
+            self.repo.find_by_id(pid, tenant_id).await?.ok_or_else(|| {
+                ApiError::NotFound(format!("Parent cost center {} not found", pid))
+            })?;
+        }
         let center = self.repo.create(create, tenant_id).await?;
         tracing::info!(tenant_id, cost_center_id = center.id, "Created cost center");
         Ok(center)
@@ -83,6 +92,15 @@ impl CostCenterService {
         tenant_id: i64,
         update: UpdateCostCenter,
     ) -> Result<CostCenter, ApiError> {
+        // Parent-ownership precheck on the double-Option parent_id:
+        //   Some(Some(pid)) = set parent -> validate pid belongs to caller tenant
+        //   Some(None)      = clear parent -> legitimate, skip
+        //   None            = leave unchanged -> skip
+        if let Some(Some(pid)) = update.parent_id {
+            self.repo.find_by_id(pid, tenant_id).await?.ok_or_else(|| {
+                ApiError::NotFound(format!("Parent cost center {} not found", pid))
+            })?;
+        }
         let center = self.repo.update(id, tenant_id, update).await?;
         tracing::info!(tenant_id, cost_center_id = id, "Updated cost center");
         Ok(center)
@@ -1070,5 +1088,172 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(none.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_create_cost_center_rejects_foreign_parent() {
+        // Cross-tenant IDOR guard: parent_id (self-ref to cost_centers(id),
+        // tenant-scoped) must belong to the caller's tenant. A foreign or
+        // nonexistent parent is rejected with NotFound before the row is written.
+        let svc = make_service();
+
+        // Seed a tenant-1 parent so the same-tenant path is provably reachable.
+        let parent = svc
+            .create_cost_center(
+                CreateCostCenter {
+                    code: "P-001".to_string(),
+                    name: "Parent".to_string(),
+                    description: None,
+                    center_type: CostCenterType::Cost,
+                    parent_id: None,
+                    is_active: true,
+                },
+                1,
+            )
+            .await
+            .unwrap();
+
+        // Same-tenant parent: ok.
+        let child = svc
+            .create_cost_center(
+                CreateCostCenter {
+                    code: "C-001".to_string(),
+                    name: "Child".to_string(),
+                    description: None,
+                    center_type: CostCenterType::Cost,
+                    parent_id: Some(parent.id),
+                    is_active: true,
+                },
+                1,
+            )
+            .await
+            .unwrap();
+        assert_eq!(child.parent_id, Some(parent.id));
+
+        // Foreign tenant: tenant 2 cannot use tenant-1's parent id.
+        let err = svc
+            .create_cost_center(
+                CreateCostCenter {
+                    code: "C-002".to_string(),
+                    name: "Foreign child".to_string(),
+                    description: None,
+                    center_type: CostCenterType::Cost,
+                    parent_id: Some(parent.id),
+                    is_active: true,
+                },
+                2,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ApiError::NotFound(_)));
+
+        // Nonexistent parent id is also rejected (no orphan write).
+        let err = svc
+            .create_cost_center(
+                CreateCostCenter {
+                    code: "C-003".to_string(),
+                    name: "Orphan".to_string(),
+                    description: None,
+                    center_type: CostCenterType::Cost,
+                    parent_id: Some(999999),
+                    is_active: true,
+                },
+                1,
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ApiError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn test_update_cost_center_rejects_foreign_parent() {
+        // Cross-tenant IDOR guard on the update path (double-Option parent_id):
+        // Some(Some(pid)) = re-parent -> validate; Some(None) = clear -> ok; None
+        // = leave unchanged -> ok.
+        let svc = make_service();
+
+        let parent = svc
+            .create_cost_center(
+                CreateCostCenter {
+                    code: "P-002".to_string(),
+                    name: "Parent".to_string(),
+                    description: None,
+                    center_type: CostCenterType::Cost,
+                    parent_id: None,
+                    is_active: true,
+                },
+                1,
+            )
+            .await
+            .unwrap();
+        let target = svc
+            .create_cost_center(
+                CreateCostCenter {
+                    code: "T-002".to_string(),
+                    name: "Target".to_string(),
+                    description: None,
+                    center_type: CostCenterType::Cost,
+                    parent_id: None,
+                    is_active: true,
+                },
+                1,
+            )
+            .await
+            .unwrap();
+
+        // Same-tenant re-parent: ok.
+        let moved = svc
+            .update_cost_center(
+                target.id,
+                1,
+                UpdateCostCenter {
+                    code: None,
+                    name: None,
+                    description: None,
+                    center_type: None,
+                    parent_id: Some(Some(parent.id)),
+                    is_active: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(moved.parent_id, Some(parent.id));
+
+        // Foreign tenant cannot re-parent tenant-1's target onto tenant-1's
+        // parent (tenant 2 has no such parent).
+        let err = svc
+            .update_cost_center(
+                target.id,
+                2,
+                UpdateCostCenter {
+                    code: None,
+                    name: None,
+                    description: None,
+                    center_type: None,
+                    parent_id: Some(Some(parent.id)),
+                    is_active: None,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ApiError::NotFound(_)));
+
+        // Clearing the parent (Some(None)) is legitimate and must NOT be rejected.
+        let cleared = svc
+            .update_cost_center(
+                target.id,
+                1,
+                UpdateCostCenter {
+                    code: None,
+                    name: None,
+                    description: None,
+                    center_type: None,
+                    parent_id: Some(None),
+                    is_active: None,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(cleared.parent_id, None);
     }
 }
