@@ -43,6 +43,26 @@ impl UserPermissions {
     }
 }
 
+/// Parent-ownership precheck for a body-controlled user FK (`assigned_to`,
+/// `user_id`, `inspector_id`, …). Returns `NotFound` if `user_id` does not
+/// belong to `tenant_id`. Closes the cross-tenant IDOR where a tenant-A
+/// caller stamps a tenant-B user id (or a fabricated id) onto a row in their
+/// own tenant. Callers holding an `Option<i64>` field should guard with
+/// `if let Some(id) = … { ensure_user_owned(...) }` — `None` is a legitimate
+/// "unassigned / no linked user" and must NOT be rejected. Unlike
+/// `ensure_company_owned` there is no legacy sentinel to skip: the `users`
+/// table has a real FK and no default-id phantom.
+pub async fn ensure_user_owned(
+    repo: &BoxUserRepository,
+    user_id: i64,
+    tenant_id: i64,
+) -> Result<(), ApiError> {
+    repo.find_by_id(user_id, tenant_id)
+        .await?
+        .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
+    Ok(())
+}
+
 /// User service
 #[derive(Clone)]
 pub struct UserService {
