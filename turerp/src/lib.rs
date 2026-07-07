@@ -754,7 +754,8 @@ pub mod app {
 
         // Assets
         let asset_repo = Arc::new(InMemoryAssetsRepository::new()) as BoxAssetsRepository;
-        let assets_service = AssetsService::new(asset_repo, company_repo.clone());
+        let assets_service =
+            AssetsService::new(asset_repo, company_repo.clone(), user_repo.clone());
 
         // Feature Flags
         let feature_repo =
@@ -1469,6 +1470,7 @@ pub mod app {
         let assets_service = AssetsService::new(
             Arc::new(asset_repo) as Arc<dyn AssetsRepository>,
             company_repo.clone(),
+            user_repo.clone(),
         );
 
         // Feature Flags - PostgreSQL
