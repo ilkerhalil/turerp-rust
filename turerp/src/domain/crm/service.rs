@@ -3,6 +3,7 @@
 use rust_decimal::Decimal;
 
 use crate::common::pagination::PaginatedResult;
+use crate::domain::cari::repository::BoxCariRepository;
 use crate::domain::crm::model::{
     Campaign, CampaignStatus, CreateCampaign, CreateLead, CreateOpportunity, CreateTicket, Lead,
     LeadStatus, Opportunity, OpportunityStatus, Ticket, TicketStatus,
@@ -21,6 +22,7 @@ pub struct CrmService {
     campaign_repo: BoxCampaignRepository,
     ticket_repo: BoxTicketRepository,
     user_repo: BoxUserRepository,
+    cari_repo: BoxCariRepository,
 }
 
 impl CrmService {
@@ -30,6 +32,7 @@ impl CrmService {
         campaign_repo: BoxCampaignRepository,
         ticket_repo: BoxTicketRepository,
         user_repo: BoxUserRepository,
+        cari_repo: BoxCariRepository,
     ) -> Self {
         Self {
             lead_repo,
@@ -37,6 +40,7 @@ impl CrmService {
             campaign_repo,
             ticket_repo,
             user_repo,
+            cari_repo,
         }
     }
 
@@ -170,6 +174,15 @@ impl CrmService {
                 .find_by_id(lead_id, create.tenant_id)
                 .await?
                 .ok_or_else(|| ApiError::NotFound(format!("Lead {} not found", lead_id)))?;
+        }
+        // Parent-ownership precheck: an optional `customer_id` (cari FK,
+        // 003:854) must belong to the caller's tenant. `None` = opportunity
+        // with no linked customer, never rejected.
+        if let Some(customer_id) = create.customer_id {
+            self.cari_repo
+                .find_by_id(customer_id, create.tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound(format!("Customer {} not found", customer_id)))?;
         }
         self.opportunity_repo.create(create).await
     }
@@ -389,6 +402,15 @@ impl CrmService {
         if let Some(id) = create.assigned_to {
             ensure_user_owned(&self.user_repo, id, create.tenant_id).await?;
         }
+        // Parent-ownership precheck: an optional `customer_id` (cari FK,
+        // 003:905) must belong to the caller's tenant. `None` = ticket with
+        // no linked customer, never rejected.
+        if let Some(customer_id) = create.customer_id {
+            self.cari_repo
+                .find_by_id(customer_id, create.tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound(format!("Customer {} not found", customer_id)))?;
+        }
         self.ticket_repo.create(create).await
     }
 
@@ -530,6 +552,8 @@ impl CrmService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::cari::model::CreateCari;
+    use crate::domain::cari::repository::InMemoryCariRepository;
     use crate::domain::crm::model::TicketPriority;
     use crate::domain::crm::repository::{
         InMemoryCampaignRepository, InMemoryLeadRepository, InMemoryOpportunityRepository,
@@ -546,6 +570,32 @@ mod tests {
         let campaign_repo = Arc::new(InMemoryCampaignRepository::new()) as BoxCampaignRepository;
         let ticket_repo = Arc::new(InMemoryTicketRepository::new()) as BoxTicketRepository;
         let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
+        // Seed the parent cari (customer) entities the create-* prechecks
+        // validate against. InMemory auto-id starts at 1, matching the
+        // `customer_id: Some(1)` happy-path tests below; a tenant-2 cari
+        // (auto-id 2) is the foreign referent for the cross-tenant IDOR
+        // rejection tests.
+        let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
+        cari_repo
+            .create(CreateCari {
+                code: "C1".to_string(),
+                name: "Test Cari T1".to_string(),
+                tenant_id: 1,
+                created_by: 1,
+                ..Default::default()
+            })
+            .await
+            .expect("seed cari t1");
+        cari_repo
+            .create(CreateCari {
+                code: "C2".to_string(),
+                name: "Test Cari T2".to_string(),
+                tenant_id: 2,
+                created_by: 1,
+                ..Default::default()
+            })
+            .await
+            .expect("seed cari t2");
         // Seed a tenant-1 user (auto-id 1) so the existing happy-path tests that
         // stamp `assigned_to: Some(1)` resolve against the caller's tenant.
         user_repo
@@ -578,7 +628,14 @@ mod tests {
             )
             .await
             .unwrap();
-        CrmService::new(lead_repo, opp_repo, campaign_repo, ticket_repo, user_repo)
+        CrmService::new(
+            lead_repo,
+            opp_repo,
+            campaign_repo,
+            ticket_repo,
+            user_repo,
+            cari_repo,
+        )
     }
 
     #[tokio::test]
@@ -838,5 +895,111 @@ mod tests {
 
         // None lead → not rejected (direct opportunity, no originating lead).
         assert!(service.create_opportunity(base()).await.is_ok());
+    }
+
+    /// Rejects an opportunity stamped onto a foreign-tenant customer (cari).
+    /// `assigned_to`/`lead_id` are `None` so the NotFound is uniquely from the
+    /// `customer_id` parent-ownership precheck.
+    #[tokio::test]
+    async fn test_create_opportunity_rejects_foreign_customer() {
+        let service = create_service().await;
+
+        let base = || CreateOpportunity {
+            tenant_id: 1,
+            lead_id: None,
+            name: "Op".to_string(),
+            customer_id: None,
+            value: dec!(50000),
+            probability: dec!(75),
+            expected_close_date: None,
+            assigned_to: None,
+            notes: None,
+        };
+
+        // Same-tenant customer (id=1) → ok.
+        let ok_create = CreateOpportunity {
+            customer_id: Some(1),
+            ..base()
+        };
+        assert!(service.create_opportunity(ok_create).await.is_ok());
+
+        // Foreign customer (id=2, belongs to tenant 2) → NotFound.
+        let foreign_create = CreateOpportunity {
+            customer_id: Some(2),
+            ..base()
+        };
+        let result = service.create_opportunity(foreign_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create an opportunity under a tenant-2 customer, got {:?}",
+            result
+        );
+
+        // Nonexistent customer → NotFound.
+        let ghost_create = CreateOpportunity {
+            customer_id: Some(999_999),
+            ..base()
+        };
+        let result = service.create_opportunity(ghost_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent customer must be NotFound, got {:?}",
+            result
+        );
+
+        // None customer → not rejected (opportunity with no linked customer).
+        assert!(service.create_opportunity(base()).await.is_ok());
+    }
+
+    /// Rejects a ticket stamped onto a foreign-tenant customer (cari).
+    /// `assigned_to` is `None` so the NotFound is uniquely from the
+    /// `customer_id` parent-ownership precheck.
+    #[tokio::test]
+    async fn test_create_ticket_rejects_foreign_customer() {
+        let service = create_service().await;
+
+        let base = || CreateTicket {
+            tenant_id: 1,
+            subject: "Subj".to_string(),
+            description: "Desc".to_string(),
+            customer_id: None,
+            assigned_to: None,
+            priority: TicketPriority::High,
+            category: None,
+        };
+
+        // Same-tenant customer (id=1) → ok.
+        let ok_create = CreateTicket {
+            customer_id: Some(1),
+            ..base()
+        };
+        assert!(service.create_ticket(ok_create).await.is_ok());
+
+        // Foreign customer (id=2, belongs to tenant 2) → NotFound.
+        let foreign_create = CreateTicket {
+            customer_id: Some(2),
+            ..base()
+        };
+        let result = service.create_ticket(foreign_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a ticket under a tenant-2 customer, got {:?}",
+            result
+        );
+
+        // Nonexistent customer → NotFound.
+        let ghost_create = CreateTicket {
+            customer_id: Some(999_999),
+            ..base()
+        };
+        let result = service.create_ticket(ghost_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent customer must be NotFound, got {:?}",
+            result
+        );
+
+        // None customer → not rejected (ticket with no linked customer).
+        assert!(service.create_ticket(base()).await.is_ok());
     }
 }
