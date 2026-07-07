@@ -52,7 +52,7 @@ pub mod app {
         BoxArchiveJobRepository, BoxArchivePolicyRepository, BoxArchiveRecordRepository,
     };
     use crate::domain::archive::service::ArchiveService;
-    use crate::domain::assets::repository::BoxAssetsRepository;
+    use crate::domain::assets::repository::{BoxAssetCategoryRepository, BoxAssetsRepository};
     use crate::domain::assets::service::AssetsService;
     use crate::domain::assets::AssetsRepository;
     use crate::domain::audit::repository::BoxAuditLogRepository;
@@ -153,7 +153,9 @@ pub mod app {
         InMemoryArchiveJobRepository, InMemoryArchivePolicyRepository,
         InMemoryArchiveRecordRepository,
     };
-    use crate::domain::assets::repository::InMemoryAssetsRepository;
+    use crate::domain::assets::repository::{
+        InMemoryAssetCategoryRepository, InMemoryAssetsRepository,
+    };
     use crate::domain::audit::repository::InMemoryAuditLogRepository;
     use crate::domain::bank::repository::InMemoryBankRepository;
     use crate::domain::barcode::repository::InMemoryBarcodeRepository;
@@ -755,8 +757,14 @@ pub mod app {
 
         // Assets
         let asset_repo = Arc::new(InMemoryAssetsRepository::new()) as BoxAssetsRepository;
-        let assets_service =
-            AssetsService::new(asset_repo, company_repo.clone(), user_repo.clone());
+        let asset_category_repo =
+            Arc::new(InMemoryAssetCategoryRepository::new()) as BoxAssetCategoryRepository;
+        let assets_service = AssetsService::new(
+            asset_repo,
+            asset_category_repo,
+            company_repo.clone(),
+            user_repo.clone(),
+        );
 
         // Feature Flags
         let feature_repo =
@@ -1474,9 +1482,11 @@ pub mod app {
 
         // Assets - PostgreSQL
         let asset_repo = PostgresAssetsRepository::new(pool.clone());
-        let _asset_category_repo = PostgresAssetCategoryRepository::new(pool.clone());
+        let asset_category_repo = Arc::new(PostgresAssetCategoryRepository::new(pool.clone()))
+            as BoxAssetCategoryRepository;
         let assets_service = AssetsService::new(
             Arc::new(asset_repo) as Arc<dyn AssetsRepository>,
+            asset_category_repo,
             company_repo.clone(),
             user_repo.clone(),
         );
