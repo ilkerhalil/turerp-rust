@@ -209,9 +209,11 @@ pub async fn create_ncr(
     let i18n = resolve(&i18n);
     // Force the auth-derived tenant onto the body so a tenant admin cannot
     // create an NCR attributed to another tenant via a client-supplied
-    // `tenant_id` field.
+    // `tenant_id` field. Likewise force `raised_by` to the caller so an NCR
+    // cannot be attributed to another user via a client-supplied value.
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
+    create.raised_by = admin_user.0.user_id()?;
     json_resp!(
         qc_service.create_ncr(create),
         HttpResponse::Created,

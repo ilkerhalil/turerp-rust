@@ -35,6 +35,9 @@ pub async fn create_cari(
     let i18n = resolve(&i18n);
     let mut create = payload.into_inner();
     create.tenant_id = admin_user.0.tenant_id;
+    // Force the auth-derived caller onto `created_by` so a tenant admin cannot
+    // attribute a cari create to another user via a client-supplied value.
+    create.created_by = admin_user.0.user_id()?;
     json_resp!(
         cari_service.create_cari(create),
         HttpResponse::Created,
