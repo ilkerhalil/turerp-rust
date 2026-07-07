@@ -565,6 +565,8 @@ use turerp::domain::accounting::service::AccountingService;
 use turerp::domain::chart_of_accounts::model::AccountGroup;
 use turerp::domain::chart_of_accounts::repository::InMemoryChartAccountRepository;
 use turerp::domain::chart_of_accounts::service::ChartOfAccountsService;
+use turerp::domain::company::repository::InMemoryCompanyRepository;
+use turerp::domain::company::BoxCompanyRepository;
 
 #[tokio::test]
 async fn test_chart_of_accounts_to_accounting_flow() {
@@ -612,7 +614,9 @@ async fn test_chart_of_accounts_to_accounting_flow() {
     let account_repo = Arc::new(InMemoryAccountRepository::new()) as BoxAccountRepository;
     let entry_repo = Arc::new(InMemoryJournalEntryRepository::new()) as BoxJournalEntryRepository;
     let line_repo = Arc::new(InMemoryJournalLineRepository::new()) as BoxJournalLineRepository;
-    let accounting_service = AccountingService::new(account_repo, entry_repo, line_repo);
+    let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+    let accounting_service =
+        AccountingService::new(account_repo, entry_repo, line_repo, company_repo);
 
     // Create accounts in the accounting system matching the chart
     accounting_service
