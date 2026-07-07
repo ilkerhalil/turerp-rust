@@ -106,6 +106,12 @@ impl SubscriptionService {
             tracing::warn!(tenant_id = create.tenant_id, error = %e, "Plan validation failed");
             ApiError::Validation(e.to_string())
         })?;
+        // Parent-ownership precheck: the referenced plan must belong to the
+        // caller's tenant (plan_id is a required FK).
+        self.repo
+            .find_plan_by_id(create.plan_id, create.tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Plan {} not found", create.plan_id)))?;
         let tenant_id = create.tenant_id;
         let sub = self.repo.create_subscription(create).await?;
         tracing::info!(tenant_id, "Created subscription");
@@ -1100,6 +1106,73 @@ mod tests {
         assert_eq!(
             entry.status,
             crate::domain::subscription::model::DunningStatus::Failed
+        );
+    }
+
+    fn base_plan(tenant: i64, name: &str) -> CreatePlan {
+        CreatePlan {
+            name: name.to_string(),
+            description: None,
+            billing_cycle: BillingCycle::Monthly,
+            base_amount: Decimal::new(5000, 2),
+            currency: "TRY".to_string(),
+            features: None,
+            is_active: true,
+            included_quantity: None,
+            overage_rate: None,
+            tenant_id: tenant,
+        }
+    }
+
+    fn base_sub(plan_id: i64, tenant: i64) -> CreateSubscription {
+        CreateSubscription {
+            customer_id: 1,
+            plan_id,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: None,
+            status: SubscriptionStatus::Active,
+            auto_renew: true,
+            next_billing_date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            trial_start_date: None,
+            trial_end_date: None,
+            tenant_id: tenant,
+        }
+    }
+
+    /// Rejects a subscription stamped onto a foreign-tenant plan.
+    #[tokio::test]
+    async fn test_create_subscription_rejects_foreign_plan() {
+        let service = create_service();
+        // Seed a tenant-1 plan (auto-id 1) and a tenant-2 plan (auto-id 2).
+        // customer_id is NOT prechecked here (separate cari_repo sub-class),
+        // so customer_id=1 isolates the plan_id precheck.
+        let owned_plan = service.create_plan(base_plan(1, "T1")).await.unwrap().id;
+        let foreign_plan = service.create_plan(base_plan(2, "T2")).await.unwrap().id;
+        assert_ne!(owned_plan, foreign_plan);
+
+        // Same-tenant plan → ok.
+        assert!(
+            service
+                .create_subscription(base_sub(owned_plan, 1))
+                .await
+                .is_ok(),
+            "same-tenant plan must succeed"
+        );
+
+        // Foreign plan → NotFound.
+        let result = service.create_subscription(base_sub(foreign_plan, 1)).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT subscribe to a tenant-2 plan, got {:?}",
+            result
+        );
+
+        // Nonexistent plan → NotFound.
+        let result = service.create_subscription(base_sub(999_999, 1)).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent plan must be NotFound, got {:?}",
+            result
         );
     }
 }
