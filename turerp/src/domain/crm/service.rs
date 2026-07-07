@@ -162,6 +162,15 @@ impl CrmService {
         if let Some(id) = create.assigned_to {
             ensure_user_owned(&self.user_repo, id, create.tenant_id).await?;
         }
+        // Parent-ownership precheck: an optional originating `lead_id` must
+        // belong to the caller's tenant. `None` = direct opportunity (no lead),
+        // never rejected.
+        if let Some(lead_id) = create.lead_id {
+            self.lead_repo
+                .find_by_id(lead_id, create.tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound(format!("Lead {} not found", lead_id)))?;
+        }
         self.opportunity_repo.create(create).await
     }
 
@@ -745,5 +754,89 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(matches!(err, ApiError::NotFound(_)));
+    }
+
+    /// Rejects an opportunity stamped onto a foreign-tenant originating lead.
+    #[tokio::test]
+    async fn test_create_opportunity_rejects_foreign_lead() {
+        let service = create_service().await;
+
+        // Seed a tenant-1 lead (auto-id 1) and a tenant-2 lead (auto-id 2).
+        // Seeded via the service with `assigned_to: None` (no user precheck).
+        let owned_lead = service
+            .create_lead(CreateLead {
+                tenant_id: 1,
+                name: "T1 Lead".to_string(),
+                company: None,
+                email: None,
+                phone: None,
+                source: "Website".to_string(),
+                assigned_to: None,
+                notes: None,
+            })
+            .await
+            .expect("seed tenant-1 lead")
+            .id;
+        let foreign_lead = service
+            .create_lead(CreateLead {
+                tenant_id: 2,
+                name: "T2 Lead".to_string(),
+                company: None,
+                email: None,
+                phone: None,
+                source: "Website".to_string(),
+                assigned_to: None,
+                notes: None,
+            })
+            .await
+            .expect("seed tenant-2 lead")
+            .id;
+        assert_ne!(owned_lead, foreign_lead);
+
+        let base = || CreateOpportunity {
+            tenant_id: 1,
+            lead_id: None,
+            name: "Op".to_string(),
+            customer_id: None,
+            value: dec!(50000),
+            probability: dec!(75),
+            expected_close_date: None,
+            assigned_to: None,
+            notes: None,
+        };
+
+        // Same-tenant lead → ok.
+        let ok_create = CreateOpportunity {
+            lead_id: Some(owned_lead),
+            ..base()
+        };
+        assert!(service.create_opportunity(ok_create).await.is_ok());
+
+        // Foreign lead → NotFound.
+        let foreign_create = CreateOpportunity {
+            lead_id: Some(foreign_lead),
+            ..base()
+        };
+        let result = service.create_opportunity(foreign_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create an opportunity under a tenant-2 lead, got {:?}",
+            result
+        );
+
+        // Nonexistent lead → NotFound.
+        let ghost_create = CreateOpportunity {
+            lead_id: Some(999_999),
+            ..base()
+        };
+        let result = service.create_opportunity(ghost_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent lead must be NotFound, got {:?}",
+            result
+        );
+
+        // None lead → not rejected (direct opportunity, no originating lead).
+        assert!(service.create_opportunity(base()).await.is_ok());
     }
 }
