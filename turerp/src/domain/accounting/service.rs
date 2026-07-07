@@ -56,6 +56,18 @@ impl AccountingService {
         // Parent-ownership precheck: body company_id must belong to the caller's
         // tenant (legacy `1` sentinel skipped for backward compat).
         ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
+
+        // Parent-ownership precheck: optional parent account must belong to the
+        // caller's tenant. `None` = legitimate root account, never rejected.
+        if let Some(parent_id) = create.parent_id {
+            self.account_repo
+                .find_by_id(parent_id, create.tenant_id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!("Parent account {} not found", parent_id))
+                })?;
+        }
+
         self.account_repo.create(create).await
     }
 
@@ -478,5 +490,96 @@ mod tests {
             "expected NotFound for foreign company_id, got {:?}",
             result
         );
+    }
+
+    /// Seed an account for `tenant_id` directly via the repo (bypassing service
+    /// prechecks) and return its id. InMemory auto-id is a global counter from 1.
+    async fn seed_account(service: &AccountingService, tenant_id: i64, code: &str) -> i64 {
+        service
+            .account_repo
+            .create(CreateAccount {
+                tenant_id,
+                company_id: LEGACY_COMPANY_ID,
+                code: code.to_string(),
+                name: format!("Acct-{}", code),
+                account_type: AccountType::Asset,
+                sub_type: AccountSubType::CurrentAsset,
+                parent_id: None,
+                allow_transaction: true,
+            })
+            .await
+            .map(|a| a.id)
+            .expect("seed account")
+    }
+
+    /// Rejects a chart-of-accounts node stamped onto a foreign-tenant parent.
+    #[tokio::test]
+    async fn test_create_account_rejects_foreign_parent() {
+        let service = create_service().await;
+        let owned_parent = seed_account(&service, 1, "1100").await;
+        let foreign_parent = seed_account(&service, 2, "2100").await;
+        assert_ne!(owned_parent, foreign_parent);
+
+        // Same-tenant parent → ok.
+        let ok_create = CreateAccount {
+            tenant_id: 1,
+            company_id: LEGACY_COMPANY_ID,
+            code: "1110".to_string(),
+            name: "Child of owned".to_string(),
+            account_type: AccountType::Asset,
+            sub_type: AccountSubType::CurrentAsset,
+            parent_id: Some(owned_parent),
+            allow_transaction: true,
+        };
+        assert!(service.create_account(ok_create).await.is_ok());
+
+        // Foreign parent → NotFound.
+        let foreign_create = CreateAccount {
+            tenant_id: 1,
+            company_id: LEGACY_COMPANY_ID,
+            code: "1120".to_string(),
+            name: "Child of foreign".to_string(),
+            account_type: AccountType::Asset,
+            sub_type: AccountSubType::CurrentAsset,
+            parent_id: Some(foreign_parent),
+            allow_transaction: true,
+        };
+        let result = service.create_account(foreign_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create an account under a tenant-2 parent, got {:?}",
+            result
+        );
+
+        // Nonexistent parent → NotFound.
+        let ghost_create = CreateAccount {
+            tenant_id: 1,
+            company_id: LEGACY_COMPANY_ID,
+            code: "1130".to_string(),
+            name: "Child of ghost".to_string(),
+            account_type: AccountType::Asset,
+            sub_type: AccountSubType::CurrentAsset,
+            parent_id: Some(999_999),
+            allow_transaction: true,
+        };
+        let result = service.create_account(ghost_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent parent account must be NotFound, got {:?}",
+            result
+        );
+
+        // None parent → not rejected (legitimate root account).
+        let none_create = CreateAccount {
+            tenant_id: 1,
+            company_id: LEGACY_COMPANY_ID,
+            code: "1140".to_string(),
+            name: "New root".to_string(),
+            account_type: AccountType::Asset,
+            sub_type: AccountSubType::CurrentAsset,
+            parent_id: None,
+            allow_transaction: true,
+        };
+        assert!(service.create_account(none_create).await.is_ok());
     }
 }
