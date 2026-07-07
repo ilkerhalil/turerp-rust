@@ -413,6 +413,7 @@ mod tests {
         InMemoryEmployeeBonusRepository, InMemorySgkConfigRepository,
         InMemorySgkEmployeeRegistrationRepository,
     };
+    use crate::domain::user::repository::InMemoryUserRepository;
     use chrono::Utc;
     use rust_decimal::Decimal;
     use std::sync::Arc;
@@ -426,6 +427,9 @@ mod tests {
         // Tests stamp company_id=1 (LEGACY sentinel); the precheck skips it, so an
         // empty company_repo suffices (no seeding needed).
         let company_repo = Arc::new(InMemoryCompanyRepository::new()) as _;
+        // Tests stamp `user_id: None` (no linked login account), so the
+        // precheck is skipped and an empty user_repo suffices.
+        let user_repo = Arc::new(InMemoryUserRepository::new()) as _;
 
         let hr_service = HrService::new(
             employee_repo,
@@ -434,6 +438,7 @@ mod tests {
             leave_type_repo,
             payroll_repo,
             company_repo,
+            user_repo,
         );
 
         let sgk_reg_repo = Arc::new(InMemorySgkEmployeeRegistrationRepository::new()) as _;
