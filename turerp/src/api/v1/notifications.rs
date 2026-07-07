@@ -92,6 +92,7 @@ pub async fn send_notification(
     admin_user: AdminUser,
     body: web::Json<SendNotificationRequest>,
     service: web::Data<dyn NotificationService>,
+    user_service: web::Data<crate::domain::user::service::UserService>,
 ) -> Result<HttpResponse, ApiError> {
     let channel = match body.channel.to_lowercase().as_str() {
         "email" => NotificationChannel::Email,
@@ -109,6 +110,18 @@ pub async fn send_notification(
         Some("urgent") => NotificationPriority::Urgent,
         _ => NotificationPriority::Normal,
     };
+    // Parent-ownership precheck: the body-controlled `user_id` (the user the
+    // notification is attributed to, REFERENCES users(id)) must belong to the
+    // caller's tenant. An admin may send a notification to any user in their
+    // OWN tenant, but not to a foreign tenant's user — otherwise the
+    // notification row is orphaned onto a foreign tenant's user and the
+    // preference lookup silently no-ops (cross-tenant IDOR). `None` is a
+    // legitimate "no linked user / broadcast" and is skipped, never rejected.
+    if let Some(id) = body.user_id {
+        user_service
+            .ensure_user_owned(id, admin_user.0.tenant_id)
+            .await?;
+    }
     let request = NotificationRequest {
         tenant_id: admin_user.0.tenant_id,
         user_id: body.user_id,
