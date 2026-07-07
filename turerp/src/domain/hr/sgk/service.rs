@@ -403,6 +403,7 @@ impl SgkPayrollService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
     use crate::domain::hr::model::CreateEmployee;
     use crate::domain::hr::repository::{
         InMemoryAttendanceRepository, InMemoryEmployeeRepository, InMemoryLeaveRequestRepository,
@@ -422,6 +423,9 @@ mod tests {
         let leave_request_repo = Arc::new(InMemoryLeaveRequestRepository::new()) as _;
         let leave_type_repo = Arc::new(InMemoryLeaveTypeRepository::new()) as _;
         let payroll_repo = Arc::new(InMemoryPayrollRepository::new()) as _;
+        // Tests stamp company_id=1 (LEGACY sentinel); the precheck skips it, so an
+        // empty company_repo suffices (no seeding needed).
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as _;
 
         let hr_service = HrService::new(
             employee_repo,
@@ -429,6 +433,7 @@ mod tests {
             leave_request_repo,
             leave_type_repo,
             payroll_repo,
+            company_repo,
         );
 
         let sgk_reg_repo = Arc::new(InMemorySgkEmployeeRegistrationRepository::new()) as _;

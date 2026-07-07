@@ -3,6 +3,8 @@ use chrono::Utc;
 use rust_decimal::Decimal;
 
 use crate::common::pagination::PaginatedResult;
+use crate::domain::company::service::ensure_company_owned;
+use crate::domain::company::BoxCompanyRepository;
 use crate::domain::hr::model::{
     Attendance, CreateAttendance, CreateEmployee, CreateLeaveRequest, Employee, EmployeeResponse,
     EmployeeStatus, LeaveRequest, LeaveRequestStatus, LeaveType, Payroll, PayrollStatus,
@@ -24,6 +26,7 @@ pub struct HrService {
     leave_request_repo: BoxLeaveRequestRepository,
     leave_type_repo: BoxLeaveTypeRepository,
     payroll_repo: BoxPayrollRepository,
+    company_repo: BoxCompanyRepository,
 }
 
 impl HrService {
@@ -33,6 +36,7 @@ impl HrService {
         leave_request_repo: BoxLeaveRequestRepository,
         leave_type_repo: BoxLeaveTypeRepository,
         payroll_repo: BoxPayrollRepository,
+        company_repo: BoxCompanyRepository,
     ) -> Self {
         Self {
             employee_repo,
@@ -40,6 +44,7 @@ impl HrService {
             leave_request_repo,
             leave_type_repo,
             payroll_repo,
+            company_repo,
         }
     }
 
@@ -60,6 +65,9 @@ impl HrService {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
+        // Parent-ownership precheck: body company_id must belong to the caller's
+        // tenant (legacy `1` sentinel skipped for backward compat).
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
         let employee = self.employee_repo.create(create).await?;
         Ok(EmployeeResponse::from(employee))
     }
@@ -504,13 +512,16 @@ impl HrService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
+    use crate::domain::company::service::LEGACY_COMPANY_ID;
+    use crate::domain::company::CreateCompany;
     use crate::domain::hr::repository::{
         InMemoryAttendanceRepository, InMemoryEmployeeRepository, InMemoryLeaveRequestRepository,
         InMemoryLeaveTypeRepository, InMemoryPayrollRepository,
     };
     use std::sync::Arc;
 
-    fn create_service() -> HrService {
+    async fn create_service() -> HrService {
         let employee_repo = Arc::new(InMemoryEmployeeRepository::new()) as BoxEmployeeRepository;
         let attendance_repo =
             Arc::new(InMemoryAttendanceRepository::new()) as BoxAttendanceRepository;
@@ -519,13 +530,50 @@ mod tests {
         let leave_type_repo =
             Arc::new(InMemoryLeaveTypeRepository::new()) as BoxLeaveTypeRepository;
         let payroll_repo = Arc::new(InMemoryPayrollRepository::new()) as BoxPayrollRepository;
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        // Seed a company per tenant so the InMemory auto-id counter yields id=1
+        // for tenant-1 (the LEGACY_COMPANY_ID sentinel, skipped by the precheck)
+        // and id=2 for tenant-2 (a non-sentinel foreign company the reject test
+        // targets).
+        for tenant in [1, 2] {
+            company_repo
+                .create(CreateCompany {
+                    code: format!("CO{}", tenant),
+                    name: format!("Tenant {} Co", tenant),
+                    tax_number: None,
+                    address: None,
+                    city: None,
+                    country: None,
+                    currency: "TRY".to_string(),
+                    tenant_id: tenant,
+                })
+                .await
+                .expect("seed company");
+        }
         HrService::new(
             employee_repo,
             attendance_repo,
             leave_request_repo,
             leave_type_repo,
             payroll_repo,
+            company_repo,
         )
+    }
+
+    /// Returns the tenant-2 company id (a non-sentinel foreign company) for the
+    /// reject test, guarding that the seeded id is not the LEGACY sentinel.
+    async fn foreign_company_id(service: &HrService) -> i64 {
+        let id = service
+            .company_repo
+            .find_by_tenant(2)
+            .await
+            .expect("list tenant-2 companies")
+            .into_iter()
+            .map(|c| c.id)
+            .next()
+            .expect("tenant-2 company seeded");
+        assert_ne!(id, LEGACY_COMPANY_ID);
+        id
     }
 
     /// Seed an employee on `tenant_id` and return its id. The InMemory repo
@@ -579,7 +627,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_employee() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateEmployee {
             tenant_id: 1,
             company_id: 1,
@@ -603,7 +651,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_attendance() {
-        let service = create_service();
+        let service = create_service().await;
         let employee_id = seed_employee(&service, 1).await;
         let result = service.record_attendance(attendance(employee_id, 1)).await;
         assert!(result.is_ok());
@@ -611,7 +659,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_attendance_rejects_foreign_employee() {
-        let service = create_service();
+        let service = create_service().await;
         // employee_id 1 exists only on tenant 1; tenant 2 has no such row.
         let employee_id = seed_employee(&service, 1).await;
         let result = service.record_attendance(attendance(employee_id, 2)).await;
@@ -620,7 +668,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_leave_request() {
-        let service = create_service();
+        let service = create_service().await;
         let employee_id = seed_employee(&service, 1).await;
         // Default leave types are seeded on tenant 1 (ids 1-3).
         let result = service
@@ -631,7 +679,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_leave_request_rejects_foreign_employee() {
-        let service = create_service();
+        let service = create_service().await;
         let employee_id = seed_employee(&service, 1).await;
         // employee belongs to tenant 1; tenant 2 caller cannot reference it.
         let result = service
@@ -642,7 +690,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_leave_request_rejects_foreign_leave_type() {
-        let service = create_service();
+        let service = create_service().await;
         let employee_id = seed_employee(&service, 2).await;
         // leave_type_id 1 is seeded on tenant 1 only; tenant 2 has no leave
         // types, so the precheck must reject before INSERT.
@@ -654,8 +702,38 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_leave_types() {
-        let service = create_service();
+        let service = create_service().await;
         let result = service.get_leave_types(1).await.unwrap();
         assert!(!result.is_empty());
+    }
+
+    /// Rejects an employee stamped onto a foreign-tenant company.
+    #[tokio::test]
+    async fn test_create_employee_rejects_foreign_company() {
+        let service = create_service().await;
+        let foreign = foreign_company_id(&service).await;
+        let result = service
+            .create_employee(CreateEmployee {
+                tenant_id: 1,
+                company_id: foreign,
+                user_id: None,
+                employee_number: "EMP-FOR".to_string(),
+                first_name: "Foreign".to_string(),
+                last_name: "Stamp".to_string(),
+                email: "foreign@test.com".to_string(),
+                phone: None,
+                department: None,
+                position: None,
+                hire_date: chrono::Utc::now(),
+                salary: Decimal::ZERO,
+                tc_kimlik_no: "10000000009".to_string(),
+                children_count: 0,
+            })
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "expected NotFound for foreign company_id, got {:?}",
+            result
+        );
     }
 }

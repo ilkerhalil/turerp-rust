@@ -671,6 +671,7 @@ pub mod app {
             leave_request_repo,
             leave_type_repo,
             payroll_repo,
+            company_repo.clone(),
         );
 
         // SGK Payroll
@@ -1324,6 +1325,7 @@ pub mod app {
             leave_request_repo,
             leave_type_repo,
             payroll_repo,
+            company_repo.clone(),
         );
 
         // SGK Payroll - PostgreSQL
