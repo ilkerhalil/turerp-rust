@@ -238,12 +238,12 @@ pub async fn import_file_async(
     security(("bearer_auth" = []))
 )]
 pub async fn import_status(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     path: web::Path<i64>,
     import_service: web::Data<dyn ImportService>,
 ) -> ApiResult<HttpResponse> {
     let job_id = path.into_inner();
-    match import_service.get_result(job_id) {
+    match import_service.get_result(job_id, admin_user.0.tenant_id) {
         Some(result) => Ok(HttpResponse::Ok().json(result)),
         None => Err(ApiError::NotFound(format!(
             "Import job {} not found",
@@ -266,12 +266,12 @@ pub async fn import_status(
     security(("bearer_auth" = []))
 )]
 pub async fn import_errors(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     path: web::Path<i64>,
     import_service: web::Data<dyn ImportService>,
 ) -> ApiResult<HttpResponse> {
     let job_id = path.into_inner();
-    match import_service.get_result(job_id) {
+    match import_service.get_result(job_id, admin_user.0.tenant_id) {
         Some(result) => Ok(HttpResponse::Ok().json(result.errors)),
         None => Err(ApiError::NotFound(format!(
             "Import job {} not found",
