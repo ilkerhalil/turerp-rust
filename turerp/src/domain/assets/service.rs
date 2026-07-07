@@ -11,6 +11,8 @@ use super::repository::{AssetCategoryRepository, AssetsRepository};
 use crate::common::pagination::PaginatedResult;
 use crate::domain::company::service::ensure_company_owned;
 use crate::domain::company::BoxCompanyRepository;
+use crate::domain::user::repository::BoxUserRepository;
+use crate::domain::user::service::ensure_user_owned;
 use crate::error::ApiError;
 
 /// Assets service
@@ -19,15 +21,21 @@ pub struct AssetsService {
     asset_repo: Arc<dyn AssetsRepository>,
     category_repo: Option<Arc<dyn AssetCategoryRepository>>,
     company_repo: BoxCompanyRepository,
+    user_repo: BoxUserRepository,
 }
 
 impl AssetsService {
     /// Create a new assets service
-    pub fn new(asset_repo: Arc<dyn AssetsRepository>, company_repo: BoxCompanyRepository) -> Self {
+    pub fn new(
+        asset_repo: Arc<dyn AssetsRepository>,
+        company_repo: BoxCompanyRepository,
+        user_repo: BoxUserRepository,
+    ) -> Self {
         Self {
             asset_repo,
             category_repo: None,
             company_repo,
+            user_repo,
         }
     }
 
@@ -37,6 +45,12 @@ impl AssetsService {
         // Parent-ownership precheck: body company_id must belong to the caller's
         // tenant (legacy `1` sentinel skipped for backward compat).
         ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
+        // Parent-ownership precheck: body responsible_person_id (when set) must
+        // belong to the caller's tenant (REFERENCES users(id)). `None` is a
+        // legitimate "unassigned" value and is NOT rejected.
+        if let Some(id) = create.responsible_person_id {
+            ensure_user_owned(&self.user_repo, id, create.tenant_id).await?;
+        }
         self.asset_repo.create(create).await
     }
 
@@ -98,6 +112,13 @@ impl AssetsService {
         tenant_id: i64,
         update: UpdateAsset,
     ) -> Result<Asset, ApiError> {
+        // Parent-ownership precheck (update path): the repo UPDATE persists
+        // responsible_person_id via COALESCE, so a foreign / fabricated user id
+        // could be re-stamped onto an asset. `None` leaves the stored value
+        // untouched and is NOT rejected.
+        if let Some(id) = update.responsible_person_id {
+            ensure_user_owned(&self.user_repo, id, tenant_id).await?;
+        }
         self.asset_repo.update(id, tenant_id, update).await
     }
 
@@ -283,6 +304,8 @@ mod tests {
     use crate::domain::company::repository::InMemoryCompanyRepository;
     use crate::domain::company::service::LEGACY_COMPANY_ID;
     use crate::domain::company::CreateCompany;
+    use crate::domain::user::model::{CreateUser, Role};
+    use crate::domain::user::repository::{BoxUserRepository, InMemoryUserRepository};
 
     async fn create_service() -> AssetsService {
         let asset_repo = Arc::new(InMemoryAssetsRepository::new());
@@ -304,7 +327,27 @@ mod tests {
                 .await
                 .unwrap();
         }
-        AssetsService::new(asset_repo, company_repo)
+        let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
+        // Seed a user per tenant: auto-id 1 for tenant-1 and auto-id 2 for
+        // tenant-2 (the foreign referent the `responsible_person_id` reject
+        // tests target).
+        for tenant in [1, 2] {
+            user_repo
+                .create(
+                    CreateUser {
+                        username: format!("t{}asset", tenant),
+                        email: format!("t{}asset@example.com", tenant),
+                        full_name: format!("Tenant {} asset user", tenant),
+                        password: "password123456".to_string(),
+                        tenant_id: tenant,
+                        role: Some(Role::User),
+                    },
+                    "hash".to_string(),
+                )
+                .await
+                .expect("seed user");
+        }
+        AssetsService::new(asset_repo, company_repo, user_repo)
     }
 
     /// Resolve tenant-2's company id (guaranteed non-sentinel by seeding order).
@@ -320,6 +363,20 @@ mod tests {
             .id;
         assert_ne!(id, LEGACY_COMPANY_ID);
         id
+    }
+
+    /// Returns the tenant-2 user id (a foreign user) for the
+    /// `responsible_person_id` reject tests.
+    async fn foreign_user_id(service: &AssetsService) -> i64 {
+        service
+            .user_repo
+            .find_all(2)
+            .await
+            .expect("list tenant-2 users")
+            .into_iter()
+            .map(|u| u.id)
+            .next()
+            .expect("tenant-2 user seeded")
     }
 
     #[actix_web::test]
@@ -499,6 +556,65 @@ mod tests {
                 responsible_person_id: None,
                 notes: None,
             })
+            .await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    /// Build a minimal `CreateAsset` for the user-precheck reject tests, varying
+    /// only `company_id` (LEGACY `1` sentinel → skipped) and `responsible_person_id`.
+    fn make_create(tenant_id: i64, company_id: i64, person: Option<i64>) -> CreateAsset {
+        CreateAsset {
+            tenant_id,
+            company_id,
+            name: "Reject Asset".to_string(),
+            category_id: None,
+            description: None,
+            serial_number: None,
+            location: None,
+            acquisition_date: chrono::Utc::now(),
+            acquisition_cost: Decimal::from(1000),
+            salvage_value: Decimal::from(100),
+            useful_life_years: 5,
+            depreciation_method: Some(DepreciationMethod::StraightLine),
+            warranty_expiry: None,
+            insurance_number: None,
+            insurance_expiry: None,
+            responsible_person_id: person,
+            notes: None,
+        }
+    }
+
+    #[actix_web::test]
+    async fn test_create_asset_rejects_foreign_responsible_person() {
+        let service = create_service().await;
+        let foreign = foreign_user_id(&service).await;
+        // company_id=1 is the LEGACY sentinel (skipped), isolating the user gate.
+        let result = service.create_asset(make_create(1, 1, Some(foreign))).await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    #[actix_web::test]
+    async fn test_update_asset_rejects_foreign_responsible_person() {
+        let service = create_service().await;
+        // Create a tenant-1 asset with no responsible person (precheck skipped).
+        let asset = service.create_asset(make_create(1, 1, None)).await.unwrap();
+        let foreign = foreign_user_id(&service).await;
+        let result = service
+            .update_asset(
+                asset.id,
+                1,
+                UpdateAsset {
+                    name: None,
+                    description: None,
+                    serial_number: None,
+                    location: None,
+                    status: None,
+                    location_id: None,
+                    responsible_person_id: Some(foreign),
+                    notes: None,
+                    company_id: None,
+                },
+            )
             .await;
         assert!(matches!(result, Err(ApiError::NotFound(_))));
     }
