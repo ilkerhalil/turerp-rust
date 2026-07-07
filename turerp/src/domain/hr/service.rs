@@ -16,6 +16,8 @@ use crate::domain::hr::repository::{
 use crate::domain::hr::sgk::calculator::{
     default_income_tax_brackets_2026, default_sgk_config_2026, PayrollCalculator,
 };
+use crate::domain::user::repository::BoxUserRepository;
+use crate::domain::user::service::ensure_user_owned;
 use crate::error::ApiError;
 
 /// HR service
@@ -27,6 +29,7 @@ pub struct HrService {
     leave_type_repo: BoxLeaveTypeRepository,
     payroll_repo: BoxPayrollRepository,
     company_repo: BoxCompanyRepository,
+    user_repo: BoxUserRepository,
 }
 
 impl HrService {
@@ -37,6 +40,7 @@ impl HrService {
         leave_type_repo: BoxLeaveTypeRepository,
         payroll_repo: BoxPayrollRepository,
         company_repo: BoxCompanyRepository,
+        user_repo: BoxUserRepository,
     ) -> Self {
         Self {
             employee_repo,
@@ -45,6 +49,7 @@ impl HrService {
             leave_type_repo,
             payroll_repo,
             company_repo,
+            user_repo,
         }
     }
 
@@ -68,6 +73,12 @@ impl HrService {
         // Parent-ownership precheck: body company_id must belong to the caller's
         // tenant (legacy `1` sentinel skipped for backward compat).
         ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
+        // Parent-ownership precheck: a body-supplied `user_id` (the linked
+        // portal/login account) must belong to the caller's tenant. `None` is a
+        // legitimate "no linked user" employee and is NOT rejected.
+        if let Some(id) = create.user_id {
+            ensure_user_owned(&self.user_repo, id, create.tenant_id).await?;
+        }
         let employee = self.employee_repo.create(create).await?;
         Ok(EmployeeResponse::from(employee))
     }
@@ -519,6 +530,8 @@ mod tests {
         InMemoryAttendanceRepository, InMemoryEmployeeRepository, InMemoryLeaveRequestRepository,
         InMemoryLeaveTypeRepository, InMemoryPayrollRepository,
     };
+    use crate::domain::user::model::{CreateUser, Role};
+    use crate::domain::user::repository::InMemoryUserRepository;
     use std::sync::Arc;
 
     async fn create_service() -> HrService {
@@ -531,6 +544,7 @@ mod tests {
             Arc::new(InMemoryLeaveTypeRepository::new()) as BoxLeaveTypeRepository;
         let payroll_repo = Arc::new(InMemoryPayrollRepository::new()) as BoxPayrollRepository;
         let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
         // Seed a company per tenant so the InMemory auto-id counter yields id=1
         // for tenant-1 (the LEGACY_COMPANY_ID sentinel, skipped by the precheck)
         // and id=2 for tenant-2 (a non-sentinel foreign company the reject test
@@ -550,6 +564,25 @@ mod tests {
                 .await
                 .expect("seed company");
         }
+        // Seed a user per tenant: auto-id 1 for tenant-1 (resolves any happy
+        // path that links an employee to user id 1) and auto-id 2 for tenant-2
+        // (the foreign referent the reject test targets).
+        for tenant in [1, 2] {
+            user_repo
+                .create(
+                    CreateUser {
+                        username: format!("t{}user", tenant),
+                        email: format!("t{}@example.com", tenant),
+                        full_name: format!("Tenant {} user", tenant),
+                        password: "password123456".to_string(),
+                        tenant_id: tenant,
+                        role: Some(Role::User),
+                    },
+                    "hash".to_string(),
+                )
+                .await
+                .expect("seed user");
+        }
         HrService::new(
             employee_repo,
             attendance_repo,
@@ -557,6 +590,7 @@ mod tests {
             leave_type_repo,
             payroll_repo,
             company_repo,
+            user_repo,
         )
     }
 
@@ -574,6 +608,20 @@ mod tests {
             .expect("tenant-2 company seeded");
         assert_ne!(id, LEGACY_COMPANY_ID);
         id
+    }
+
+    /// Returns the tenant-2 user id (a foreign user) for the `user_id` reject
+    /// test. `find_all(2)` lists the tenant-2 users seeded by `create_service`.
+    async fn foreign_user_id(service: &HrService) -> i64 {
+        service
+            .user_repo
+            .find_all(2)
+            .await
+            .expect("list tenant-2 users")
+            .into_iter()
+            .map(|u| u.id)
+            .next()
+            .expect("tenant-2 user seeded")
     }
 
     /// Seed an employee on `tenant_id` and return its id. The InMemory repo
@@ -733,6 +781,38 @@ mod tests {
         assert!(
             matches!(result, Err(ApiError::NotFound(_))),
             "expected NotFound for foreign company_id, got {:?}",
+            result
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_employee_rejects_foreign_user() {
+        // A tenant-1 caller must not be able to link an employee to a tenant-2
+        // user via a client-supplied `user_id`. company_id is the tenant-1
+        // sentinel (skipped by its precheck) so the user_id precheck is the gate.
+        let service = create_service().await;
+        let foreign = foreign_user_id(&service).await;
+        let result = service
+            .create_employee(CreateEmployee {
+                tenant_id: 1,
+                company_id: 1,
+                user_id: Some(foreign),
+                employee_number: "EMP-UFOR".to_string(),
+                first_name: "Foreign".to_string(),
+                last_name: "User".to_string(),
+                email: "foreignuser@test.com".to_string(),
+                phone: None,
+                department: None,
+                position: None,
+                hire_date: chrono::Utc::now(),
+                salary: Decimal::ZERO,
+                tc_kimlik_no: "10000000010".to_string(),
+                children_count: 0,
+            })
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "expected NotFound for foreign user_id, got {:?}",
             result
         );
     }
