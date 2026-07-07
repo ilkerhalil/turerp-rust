@@ -3,6 +3,7 @@
 use chrono::{NaiveDate, Utc};
 use validator::Validate;
 
+use crate::domain::cari::repository::BoxCariRepository;
 use crate::domain::subscription::model::{
     CancelSubscriptionRequest, CancellationResult, CreatePlan, CreateSubscription,
     DunningEntryResponse, ProrationDirection, ProrationResult, RecordUsageRequest,
@@ -16,12 +17,13 @@ use crate::error::ApiError;
 #[derive(Clone)]
 pub struct SubscriptionService {
     repo: BoxSubscriptionRepository,
+    cari_repo: BoxCariRepository,
 }
 
 impl SubscriptionService {
     /// Create a new subscription service
-    pub fn new(repo: BoxSubscriptionRepository) -> Self {
-        Self { repo }
+    pub fn new(repo: BoxSubscriptionRepository, cari_repo: BoxCariRepository) -> Self {
+        Self { repo, cari_repo }
     }
 
     // --- Plans ---
@@ -112,6 +114,16 @@ impl SubscriptionService {
             .find_plan_by_id(create.plan_id, create.tenant_id)
             .await?
             .ok_or_else(|| ApiError::NotFound(format!("Plan {} not found", create.plan_id)))?;
+        // Parent-ownership precheck: the referenced customer (cari FK,
+        // 026:22 NOT NULL REFERENCES cari(id)) must belong to the caller's
+        // tenant. customer_id is a required FK, so the precheck is
+        // unconditional (no None path).
+        self.cari_repo
+            .find_by_id(create.customer_id, create.tenant_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Customer {} not found", create.customer_id))
+            })?;
         let tenant_id = create.tenant_id;
         let sub = self.repo.create_subscription(create).await?;
         tracing::info!(tenant_id, "Created subscription");
@@ -696,19 +708,47 @@ impl SubscriptionService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::cari::model::CreateCari;
+    use crate::domain::cari::repository::InMemoryCariRepository;
     use crate::domain::subscription::model::{BillingCycle, SubscriptionStatus};
     use crate::domain::subscription::repository::InMemorySubscriptionRepository;
     use rust_decimal::Decimal;
     use std::sync::Arc;
 
-    fn create_service() -> SubscriptionService {
+    async fn create_service() -> SubscriptionService {
         let repo = Arc::new(InMemorySubscriptionRepository::new()) as BoxSubscriptionRepository;
-        SubscriptionService::new(repo)
+        // Seed the parent cari (customer) entities the create_subscription
+        // customer_id precheck validates against. InMemory auto-id starts at 1,
+        // matching the `customer_id: 1` happy-path tests below; a tenant-2 cari
+        // (auto-id 2) is the foreign referent for the cross-tenant IDOR
+        // rejection test.
+        let cari_repo = Arc::new(InMemoryCariRepository::new()) as BoxCariRepository;
+        cari_repo
+            .create(CreateCari {
+                code: "C1".to_string(),
+                name: "Test Cari T1".to_string(),
+                tenant_id: 1,
+                created_by: 1,
+                ..Default::default()
+            })
+            .await
+            .expect("seed cari t1");
+        cari_repo
+            .create(CreateCari {
+                code: "C2".to_string(),
+                name: "Test Cari T2".to_string(),
+                tenant_id: 2,
+                created_by: 1,
+                ..Default::default()
+            })
+            .await
+            .expect("seed cari t2");
+        SubscriptionService::new(repo, cari_repo)
     }
 
     #[tokio::test]
     async fn test_create_plan() {
-        let service = create_service();
+        let service = create_service().await;
 
         let create = CreatePlan {
             name: "Pro".to_string(),
@@ -732,7 +772,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_subscription() {
-        let service = create_service();
+        let service = create_service().await;
 
         // Create plan first
         let plan_create = CreatePlan {
@@ -771,7 +811,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_renew_subscription() {
-        let service = create_service();
+        let service = create_service().await;
 
         let plan_create = CreatePlan {
             name: "Basic".to_string(),
@@ -809,7 +849,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_due_for_billing() {
-        let service = create_service();
+        let service = create_service().await;
 
         let plan_create = CreatePlan {
             name: "Basic".to_string(),
@@ -848,7 +888,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_calculate_proration_upgrade() {
-        let service = create_service();
+        let service = create_service().await;
 
         let basic_plan = CreatePlan {
             name: "Basic".to_string(),
@@ -909,7 +949,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_trial_conversion() {
-        let service = create_service();
+        let service = create_service().await;
 
         let plan_create = CreatePlan {
             name: "Pro".to_string(),
@@ -948,7 +988,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cancel_subscription_immediate() {
-        let service = create_service();
+        let service = create_service().await;
 
         let plan_create = CreatePlan {
             name: "Basic".to_string(),
@@ -991,7 +1031,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_record_usage() {
-        let service = create_service();
+        let service = create_service().await;
 
         let plan_create = CreatePlan {
             name: "Metered".to_string(),
@@ -1036,7 +1076,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handle_dunning() {
-        let service = create_service();
+        let service = create_service().await;
 
         let plan_create = CreatePlan {
             name: "Basic".to_string(),
@@ -1139,13 +1179,30 @@ mod tests {
         }
     }
 
+    /// Like `base_sub` but with an explicit `customer_id` (for the
+    /// customer_id precheck tests that vary the cari referent).
+    fn base_sub_customer(plan_id: i64, customer_id: i64, tenant: i64) -> CreateSubscription {
+        CreateSubscription {
+            customer_id,
+            plan_id,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: None,
+            status: SubscriptionStatus::Active,
+            auto_renew: true,
+            next_billing_date: Some(NaiveDate::from_ymd_opt(2024, 2, 1).unwrap()),
+            trial_start_date: None,
+            trial_end_date: None,
+            tenant_id: tenant,
+        }
+    }
+
     /// Rejects a subscription stamped onto a foreign-tenant plan.
     #[tokio::test]
     async fn test_create_subscription_rejects_foreign_plan() {
-        let service = create_service();
+        let service = create_service().await;
         // Seed a tenant-1 plan (auto-id 1) and a tenant-2 plan (auto-id 2).
-        // customer_id is NOT prechecked here (separate cari_repo sub-class),
-        // so customer_id=1 isolates the plan_id precheck.
+        // customer_id=1 is a valid own-tenant cari (seeded in create_service),
+        // so it isolates the plan_id precheck.
         let owned_plan = service.create_plan(base_plan(1, "T1")).await.unwrap().id;
         let foreign_plan = service.create_plan(base_plan(2, "T2")).await.unwrap().id;
         assert_ne!(owned_plan, foreign_plan);
@@ -1172,6 +1229,45 @@ mod tests {
         assert!(
             matches!(result, Err(ApiError::NotFound(_))),
             "nonexistent plan must be NotFound, got {:?}",
+            result
+        );
+    }
+
+    /// Rejects a subscription stamped onto a foreign-tenant customer (cari).
+    /// The plan is a valid own-tenant plan, so the NotFound is uniquely from
+    /// the `customer_id` parent-ownership precheck.
+    #[tokio::test]
+    async fn test_create_subscription_rejects_foreign_customer() {
+        let service = create_service().await;
+        // Valid own-tenant plan (auto-id 1).
+        let owned_plan = service.create_plan(base_plan(1, "T1")).await.unwrap().id;
+
+        // Same-tenant customer (id=1) → ok.
+        assert!(
+            service
+                .create_subscription(base_sub_customer(owned_plan, 1, 1))
+                .await
+                .is_ok(),
+            "same-tenant customer must succeed"
+        );
+
+        // Foreign customer (id=2, belongs to tenant 2) → NotFound.
+        let result = service
+            .create_subscription(base_sub_customer(owned_plan, 2, 1))
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a subscription for a tenant-2 customer, got {:?}",
+            result
+        );
+
+        // Nonexistent customer → NotFound.
+        let result = service
+            .create_subscription(base_sub_customer(owned_plan, 999_999, 1))
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent customer must be NotFound, got {:?}",
             result
         );
     }
