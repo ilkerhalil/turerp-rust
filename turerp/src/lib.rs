@@ -832,6 +832,7 @@ pub mod app {
             ncr_repo,
             product_repo.clone(),
             work_order_repo,
+            user_repo.clone(),
         );
 
         // Settings
@@ -1459,6 +1460,7 @@ pub mod app {
             ncr_repo,
             product_repo.clone(),
             work_order_repo,
+            user_repo.clone(),
         );
 
         // Assets - PostgreSQL

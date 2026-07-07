@@ -200,6 +200,30 @@ pub async fn register_admin(state: &turerp::app::AppState, tenant_id: i64) -> (S
     (tokens.access_token, user.id)
 }
 
+/// Register a non-admin user in `tenant_id` and return its id (no token — the
+/// caller only needs the user to exist as a valid FK referent, e.g. an
+/// `inspector_id` / `assigned_to` / `responsible_person_id` precheck target).
+/// The InMemory user repo auto-assigns ids from 1, so the first user in a fresh
+/// app state is id 1; calling this after `register_admin` yields id 2.
+pub async fn register_user(state: &turerp::app::AppState, tenant_id: i64) -> i64 {
+    let username = format!("user_{}", uuid::Uuid::new_v4());
+    let user = state
+        .auth
+        .user_service
+        .get_ref()
+        .create_user(turerp::CreateUser {
+            username: username.clone(),
+            email: format!("{}@test.com", username),
+            full_name: "Test User".to_string(),
+            password: "Password123!".to_string(),
+            tenant_id,
+            role: Some(turerp::Role::User),
+        })
+        .await
+        .unwrap();
+    user.id
+}
+
 /// Helper macro to register a normal (non-admin) user via the API
 /// Usage: `let (token, user_id) = register_user!(&app, 1);`
 #[macro_export]
