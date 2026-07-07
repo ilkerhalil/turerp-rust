@@ -41,6 +41,16 @@ impl DocumentService {
         if create.hash.trim().is_empty() {
             return Err(ApiError::Validation("File hash is required".to_string()));
         }
+        // Parent-ownership precheck: optional category must belong to the
+        // caller's tenant. `None` = legitimate uncategorized doc, never rejected.
+        if let Some(category_id) = create.category_id {
+            self.repo
+                .find_category_by_id(category_id, create.tenant_id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!("Document category {} not found", category_id))
+                })?;
+        }
         self.repo.create(create).await
     }
 
@@ -71,6 +81,16 @@ impl DocumentService {
         tenant_id: i64,
         update: UpdateDocument,
     ) -> Result<Document, ApiError> {
+        // Parent-ownership precheck: optional category must belong to the
+        // caller's tenant. Single-Option `None` = unchanged, never rejected.
+        if let Some(category_id) = update.category_id {
+            self.repo
+                .find_category_by_id(category_id, tenant_id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!("Document category {} not found", category_id))
+                })?;
+        }
         self.repo.update(id, tenant_id, update).await
     }
 
@@ -150,6 +170,14 @@ impl DocumentService {
         if version.hash.trim().is_empty() {
             return Err(ApiError::Validation("File hash is required".to_string()));
         }
+        // Parent-ownership precheck: the parent document must belong to the
+        // caller's tenant (document_id is a required FK).
+        self.repo
+            .find_by_id(version.document_id, version.tenant_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Document {} not found", version.document_id))
+            })?;
         self.repo.create_version(version).await
     }
 
@@ -189,6 +217,16 @@ impl DocumentService {
                 "Category name is required".to_string(),
             ));
         }
+        // Parent-ownership precheck: optional parent category must belong to the
+        // caller's tenant. `None` = legitimate root category, never rejected.
+        if let Some(parent_id) = category.parent_id {
+            self.repo
+                .find_category_by_id(parent_id, category.tenant_id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!("Parent category {} not found", parent_id))
+                })?;
+        }
         self.repo.create_category(category).await
     }
 
@@ -219,6 +257,16 @@ impl DocumentService {
         tenant_id: i64,
         update: UpdateDocumentCategory,
     ) -> Result<DocumentCategory, ApiError> {
+        // Parent-ownership precheck: optional parent category must belong to the
+        // caller's tenant. Single-Option `None` = unchanged, never rejected.
+        if let Some(parent_id) = update.parent_id {
+            self.repo
+                .find_category_by_id(parent_id, tenant_id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!("Parent category {} not found", parent_id))
+                })?;
+        }
         self.repo.update_category(id, tenant_id, update).await
     }
 
@@ -241,6 +289,15 @@ impl DocumentService {
                 "Entity ID must be positive".to_string(),
             ));
         }
+        // Parent-ownership precheck: the linked document must belong to the
+        // caller's tenant (document_id is a required FK). The polymorphic
+        // entity_type/entity_id referent is a separate, harder follow-up.
+        self.repo
+            .find_by_id(link.document_id, link.tenant_id)
+            .await?
+            .ok_or_else(|| {
+                ApiError::NotFound(format!("Document {} not found", link.document_id))
+            })?;
         self.repo.create_link(link).await
     }
 
@@ -514,5 +571,353 @@ mod tests {
         };
         let result = svc.search_documents(1, params).await.unwrap();
         assert_eq!(result.items.len(), 3);
+    }
+
+    // --- FK parent-ownership rejection tests ---
+
+    fn base_doc(tenant: i64, tag: &str) -> CreateDocument {
+        CreateDocument {
+            tenant_id: tenant,
+            name: format!("Doc-{}", tag),
+            filename: format!("{}.pdf", tag),
+            size_bytes: 100,
+            mime_type: "application/pdf".to_string(),
+            hash: format!("sha256:{}", tag),
+            storage_path: format!("/{}.pdf", tag),
+            uploaded_by: None,
+            category_id: None,
+            tags: None,
+            description: None,
+        }
+    }
+
+    fn base_version(doc_id: i64, tenant: i64, tag: &str) -> CreateDocumentVersion {
+        CreateDocumentVersion {
+            document_id: doc_id,
+            tenant_id: tenant,
+            filename: format!("{}-v.pdf", tag),
+            size_bytes: 100,
+            hash: format!("sha256:{}-v", tag),
+            storage_path: format!("/{}-v.pdf", tag),
+            created_by: None,
+            comment: None,
+        }
+    }
+
+    fn base_category(tenant: i64, tag: &str) -> CreateDocumentCategory {
+        CreateDocumentCategory {
+            tenant_id: tenant,
+            name: format!("Cat-{}", tag),
+            description: None,
+            color: None,
+            parent_id: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_create_document_rejects_foreign_category() {
+        let svc = make_service();
+        let owned_cat = svc
+            .create_category(base_category(1, "T1C"))
+            .await
+            .unwrap()
+            .id;
+        let foreign_cat = svc
+            .create_category(base_category(2, "T2C"))
+            .await
+            .unwrap()
+            .id;
+        assert_ne!(owned_cat, foreign_cat);
+
+        // Same-tenant category → ok.
+        let ok = svc
+            .create_document(CreateDocument {
+                category_id: Some(owned_cat),
+                ..base_doc(1, "ok")
+            })
+            .await;
+        assert!(ok.is_ok());
+
+        // Foreign category → NotFound.
+        let r = svc
+            .create_document(CreateDocument {
+                category_id: Some(foreign_cat),
+                ..base_doc(1, "for")
+            })
+            .await;
+        assert!(
+            matches!(r, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT file a doc under a tenant-2 category, got {:?}",
+            r
+        );
+
+        // Nonexistent category → NotFound.
+        let r = svc
+            .create_document(CreateDocument {
+                category_id: Some(999_999),
+                ..base_doc(1, "gh")
+            })
+            .await;
+        assert!(
+            matches!(r, Err(ApiError::NotFound(_))),
+            "nonexistent category must be NotFound, got {:?}",
+            r
+        );
+
+        // None category → not rejected.
+        assert!(svc.create_document(base_doc(1, "none")).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_update_document_rejects_foreign_category() {
+        let svc = make_service();
+        let owned_cat = svc
+            .create_category(base_category(1, "T1C"))
+            .await
+            .unwrap()
+            .id;
+        let foreign_cat = svc
+            .create_category(base_category(2, "T2C"))
+            .await
+            .unwrap()
+            .id;
+        let doc = svc.create_document(base_doc(1, "seed")).await.unwrap();
+
+        // Same-tenant category → ok.
+        assert!(svc
+            .update_document(
+                doc.id,
+                1,
+                UpdateDocument {
+                    name: None,
+                    category_id: Some(owned_cat),
+                    tags: None,
+                    description: None,
+                },
+            )
+            .await
+            .is_ok());
+
+        // Foreign category → NotFound.
+        let r = svc
+            .update_document(
+                doc.id,
+                1,
+                UpdateDocument {
+                    name: None,
+                    category_id: Some(foreign_cat),
+                    tags: None,
+                    description: None,
+                },
+            )
+            .await;
+        assert!(
+            matches!(r, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT update a doc to a tenant-2 category, got {:?}",
+            r
+        );
+
+        // None category → not rejected.
+        assert!(svc
+            .update_document(
+                doc.id,
+                1,
+                UpdateDocument {
+                    name: None,
+                    category_id: None,
+                    tags: None,
+                    description: None,
+                },
+            )
+            .await
+            .is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_create_version_rejects_foreign_document() {
+        let svc = make_service();
+        let owned_doc = svc.create_document(base_doc(1, "T1D")).await.unwrap().id;
+        let foreign_doc = svc.create_document(base_doc(2, "T2D")).await.unwrap().id;
+        assert_ne!(owned_doc, foreign_doc);
+
+        // Same-tenant parent doc → ok.
+        assert!(svc
+            .create_version(base_version(owned_doc, 1, "ok"))
+            .await
+            .is_ok());
+
+        // Foreign parent doc → NotFound.
+        let r = svc
+            .create_version(base_version(foreign_doc, 1, "for"))
+            .await;
+        assert!(
+            matches!(r, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT version a tenant-2 document, got {:?}",
+            r
+        );
+
+        // Nonexistent parent doc → NotFound.
+        let r = svc.create_version(base_version(999_999, 1, "gh")).await;
+        assert!(
+            matches!(r, Err(ApiError::NotFound(_))),
+            "nonexistent parent document must be NotFound, got {:?}",
+            r
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_category_rejects_foreign_parent() {
+        let svc = make_service();
+        let owned_parent = svc
+            .create_category(base_category(1, "T1P"))
+            .await
+            .unwrap()
+            .id;
+        let foreign_parent = svc
+            .create_category(base_category(2, "T2P"))
+            .await
+            .unwrap()
+            .id;
+        assert_ne!(owned_parent, foreign_parent);
+
+        // Same-tenant parent → ok.
+        assert!(svc
+            .create_category(CreateDocumentCategory {
+                parent_id: Some(owned_parent),
+                ..base_category(1, "child")
+            })
+            .await
+            .is_ok());
+
+        // Foreign parent → NotFound.
+        let r = svc
+            .create_category(CreateDocumentCategory {
+                parent_id: Some(foreign_parent),
+                ..base_category(1, "forchild")
+            })
+            .await;
+        assert!(
+            matches!(r, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a category under a tenant-2 parent, got {:?}",
+            r
+        );
+
+        // Nonexistent parent → NotFound.
+        let r = svc
+            .create_category(CreateDocumentCategory {
+                parent_id: Some(999_999),
+                ..base_category(1, "ghchild")
+            })
+            .await;
+        assert!(
+            matches!(r, Err(ApiError::NotFound(_))),
+            "nonexistent parent category must be NotFound, got {:?}",
+            r
+        );
+
+        // None parent → not rejected (root category).
+        assert!(svc.create_category(base_category(1, "root")).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_update_category_rejects_foreign_parent() {
+        let svc = make_service();
+        let owned_parent = svc
+            .create_category(base_category(1, "T1P"))
+            .await
+            .unwrap()
+            .id;
+        let foreign_parent = svc
+            .create_category(base_category(2, "T2P"))
+            .await
+            .unwrap()
+            .id;
+        let cat = svc
+            .create_category(base_category(1, "toUpdate"))
+            .await
+            .unwrap();
+
+        // Same-tenant re-parent → ok.
+        assert!(svc
+            .update_category(
+                cat.id,
+                1,
+                UpdateDocumentCategory {
+                    name: None,
+                    description: None,
+                    color: None,
+                    parent_id: Some(owned_parent),
+                },
+            )
+            .await
+            .is_ok());
+
+        // Foreign parent → NotFound.
+        let r = svc
+            .update_category(
+                cat.id,
+                1,
+                UpdateDocumentCategory {
+                    name: None,
+                    description: None,
+                    color: None,
+                    parent_id: Some(foreign_parent),
+                },
+            )
+            .await;
+        assert!(
+            matches!(r, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT re-parent a category to a tenant-2 parent, got {:?}",
+            r
+        );
+
+        // None parent → not rejected.
+        assert!(svc
+            .update_category(
+                cat.id,
+                1,
+                UpdateDocumentCategory {
+                    name: None,
+                    description: None,
+                    color: None,
+                    parent_id: None,
+                },
+            )
+            .await
+            .is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_link_document_rejects_foreign_document() {
+        let svc = make_service();
+        let owned_doc = svc.create_document(base_doc(1, "T1D")).await.unwrap().id;
+        let foreign_doc = svc.create_document(base_doc(2, "T2D")).await.unwrap().id;
+        assert_ne!(owned_doc, foreign_doc);
+
+        let link = |doc_id: i64, tenant: i64| CreateDocumentLink {
+            document_id: doc_id,
+            tenant_id: tenant,
+            entity_type: "invoice".to_string(),
+            entity_id: 42,
+        };
+
+        // Same-tenant parent doc → ok.
+        assert!(svc.link_document(link(owned_doc, 1)).await.is_ok());
+
+        // Foreign parent doc → NotFound.
+        let r = svc.link_document(link(foreign_doc, 1)).await;
+        assert!(
+            matches!(r, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT link to a tenant-2 document, got {:?}",
+            r
+        );
+
+        // Nonexistent parent doc → NotFound.
+        let r = svc.link_document(link(999_999, 1)).await;
+        assert!(
+            matches!(r, Err(ApiError::NotFound(_))),
+            "nonexistent parent document must be NotFound, got {:?}",
+            r
+        );
     }
 }
