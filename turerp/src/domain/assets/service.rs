@@ -9,6 +9,8 @@ use super::model::{
 };
 use super::repository::{AssetCategoryRepository, AssetsRepository};
 use crate::common::pagination::PaginatedResult;
+use crate::domain::company::service::ensure_company_owned;
+use crate::domain::company::BoxCompanyRepository;
 use crate::error::ApiError;
 
 /// Assets service
@@ -16,20 +18,25 @@ use crate::error::ApiError;
 pub struct AssetsService {
     asset_repo: Arc<dyn AssetsRepository>,
     category_repo: Option<Arc<dyn AssetCategoryRepository>>,
+    company_repo: BoxCompanyRepository,
 }
 
 impl AssetsService {
     /// Create a new assets service
-    pub fn new(asset_repo: Arc<dyn AssetsRepository>) -> Self {
+    pub fn new(asset_repo: Arc<dyn AssetsRepository>, company_repo: BoxCompanyRepository) -> Self {
         Self {
             asset_repo,
             category_repo: None,
+            company_repo,
         }
     }
 
     /// Create a new asset
     #[tracing::instrument(skip(self))]
     pub async fn create_asset(&self, create: CreateAsset) -> Result<Asset, ApiError> {
+        // Parent-ownership precheck: body company_id must belong to the caller's
+        // tenant (legacy `1` sentinel skipped for backward compat).
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
         self.asset_repo.create(create).await
     }
 
@@ -273,11 +280,51 @@ mod tests {
     use super::*;
     use crate::domain::assets::model::DepreciationMethod;
     use crate::domain::assets::repository::InMemoryAssetsRepository;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
+    use crate::domain::company::service::LEGACY_COMPANY_ID;
+    use crate::domain::company::CreateCompany;
+
+    async fn create_service() -> AssetsService {
+        let asset_repo = Arc::new(InMemoryAssetsRepository::new());
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        // Seed tenant-1 (id=1 = LEGACY sentinel, skipped by the precheck) then
+        // tenant-2 (id=2 non-sentinel) so reject tests hit the real find_by_id.
+        for tenant in [1i64, 2] {
+            company_repo
+                .create(CreateCompany {
+                    code: format!("CO{}", tenant),
+                    name: format!("Tenant {} Co", tenant),
+                    tax_number: None,
+                    address: None,
+                    city: None,
+                    country: None,
+                    currency: "TRY".to_string(),
+                    tenant_id: tenant,
+                })
+                .await
+                .unwrap();
+        }
+        AssetsService::new(asset_repo, company_repo)
+    }
+
+    /// Resolve tenant-2's company id (guaranteed non-sentinel by seeding order).
+    async fn foreign_company_id(service: &AssetsService) -> i64 {
+        let id = service
+            .company_repo
+            .find_by_tenant(2)
+            .await
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap()
+            .id;
+        assert_ne!(id, LEGACY_COMPANY_ID);
+        id
+    }
 
     #[actix_web::test]
     async fn test_create_and_get_asset() {
-        let repo = Arc::new(InMemoryAssetsRepository::new());
-        let service = AssetsService::new(repo);
+        let service = create_service().await;
 
         let asset = service
             .create_asset(CreateAsset {
@@ -308,8 +355,7 @@ mod tests {
 
     #[actix_web::test]
     async fn test_depreciation_calculation() {
-        let repo = Arc::new(InMemoryAssetsRepository::new());
-        let service = AssetsService::new(repo);
+        let service = create_service().await;
 
         let asset = service
             .create_asset(CreateAsset {
@@ -342,8 +388,7 @@ mod tests {
 
     #[actix_web::test]
     async fn test_asset_status_changes() {
-        let repo = Arc::new(InMemoryAssetsRepository::new());
-        let service = AssetsService::new(repo);
+        let service = create_service().await;
 
         let asset = service
             .create_asset(CreateAsset {
@@ -382,8 +427,7 @@ mod tests {
 
     #[actix_web::test]
     async fn test_maintenance_record() {
-        let repo = Arc::new(InMemoryAssetsRepository::new());
-        let service = AssetsService::new(repo);
+        let service = create_service().await;
 
         let asset = service
             .create_asset(CreateAsset {
@@ -428,5 +472,34 @@ mod tests {
 
         let records = service.get_maintenance_records(asset.id, 1).await.unwrap();
         assert_eq!(records.len(), 1);
+    }
+
+    #[actix_web::test]
+    async fn test_create_asset_rejects_foreign_company() {
+        let service = create_service().await;
+        let foreign = foreign_company_id(&service).await;
+
+        let result = service
+            .create_asset(CreateAsset {
+                tenant_id: 1,
+                company_id: foreign,
+                name: "Foreign Co Asset".to_string(),
+                category_id: None,
+                description: None,
+                serial_number: None,
+                location: None,
+                acquisition_date: chrono::Utc::now(),
+                acquisition_cost: Decimal::from(1000),
+                salvage_value: Decimal::from(100),
+                useful_life_years: 5,
+                depreciation_method: Some(DepreciationMethod::StraightLine),
+                warranty_expiry: None,
+                insurance_number: None,
+                insurance_expiry: None,
+                responsible_person_id: None,
+                notes: None,
+            })
+            .await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
     }
 }
