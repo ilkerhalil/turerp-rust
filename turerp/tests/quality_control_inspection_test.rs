@@ -203,6 +203,9 @@ async fn test_update_inspection_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
+    // Seed a second tenant-1 user (auto-id 2) so the `inspector_id: 2` update
+    // below resolves the parent-ownership precheck (ensure_user_owned).
+    let _inspector_user_id = register_user(&state, 1).await;
     let product_id = seed_product!(&app, &token, 1);
 
     let create_req = auth_request(

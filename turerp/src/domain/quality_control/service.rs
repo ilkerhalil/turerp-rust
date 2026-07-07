@@ -7,6 +7,8 @@ use crate::domain::quality_control::model::{
     UpdateInspection, UpdateNonConformanceReport,
 };
 use crate::domain::quality_control::repository::{BoxInspectionRepository, BoxNcrRepository};
+use crate::domain::user::repository::BoxUserRepository;
+use crate::domain::user::service::ensure_user_owned;
 use crate::error::ApiError;
 
 #[derive(Clone)]
@@ -15,6 +17,7 @@ pub struct QualityControlService {
     ncr_repo: BoxNcrRepository,
     product_repo: BoxProductRepository,
     work_order_repo: BoxWorkOrderRepository,
+    user_repo: BoxUserRepository,
 }
 
 impl QualityControlService {
@@ -23,12 +26,14 @@ impl QualityControlService {
         ncr_repo: BoxNcrRepository,
         product_repo: BoxProductRepository,
         work_order_repo: BoxWorkOrderRepository,
+        user_repo: BoxUserRepository,
     ) -> Self {
         Self {
             inspection_repo,
             ncr_repo,
             product_repo,
             work_order_repo,
+            user_repo,
         }
     }
 
@@ -61,6 +66,12 @@ impl QualityControlService {
                 .find_by_id(work_order_id, tenant_id)
                 .await?
                 .ok_or_else(|| ApiError::NotFound("Work order not found".to_string()))?;
+        }
+        // Parent-ownership precheck: a body-supplied `inspector_id` (the user
+        // who performed the inspection) must belong to the caller's tenant.
+        // `None` is a legitimate "unassigned" inspection and is NOT rejected.
+        if let Some(id) = create.inspector_id {
+            ensure_user_owned(&self.user_repo, id, tenant_id).await?;
         }
         self.inspection_repo.create(create).await
     }
@@ -96,6 +107,14 @@ impl QualityControlService {
         tenant_id: i64,
         update: UpdateInspection,
     ) -> Result<Inspection, ApiError> {
+        // Parent-ownership precheck: a body-supplied `inspector_id` on update
+        // must belong to the caller's tenant. The repo UPDATE persists
+        // `inspector_id` via COALESCE, so without this gate a tenant-A admin
+        // could re-stamp a tenant-B user id onto an existing inspection.
+        // `None` leaves the stored value untouched and is NOT rejected.
+        if let Some(id) = update.inspector_id {
+            ensure_user_owned(&self.user_repo, id, tenant_id).await?;
+        }
         self.inspection_repo.update(id, tenant_id, update).await
     }
 
@@ -250,14 +269,17 @@ mod qc_tests {
     use crate::domain::quality_control::repository::{
         InMemoryInspectionRepository, InMemoryNcrRepository,
     };
+    use crate::domain::user::model::{CreateUser, Role};
+    use crate::domain::user::repository::{BoxUserRepository, InMemoryUserRepository};
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
-    fn create_qc_service() -> (
+    async fn create_qc_service() -> (
         QualityControlService,
         BoxProductRepository,
         BoxWorkOrderRepository,
+        BoxUserRepository,
     ) {
         let inspection_repo =
             Arc::new(InMemoryInspectionRepository::new()) as BoxInspectionRepository;
@@ -265,13 +287,47 @@ mod qc_tests {
         let product_repo = Arc::new(InMemoryProductRepository::new()) as BoxProductRepository;
         let work_order_repo =
             Arc::new(InMemoryWorkOrderRepository::new()) as BoxWorkOrderRepository;
+        let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
+        // Seed a user per tenant: auto-id 1 for tenant-1 (resolves the happy-path
+        // tests that stamp `inspector_id: Some(1)`) and auto-id 2 for tenant-2
+        // (the foreign referent the reject tests target).
+        for tenant in [1, 2] {
+            user_repo
+                .create(
+                    CreateUser {
+                        username: format!("t{}qc", tenant),
+                        email: format!("t{}qc@example.com", tenant),
+                        full_name: format!("Tenant {} qc user", tenant),
+                        password: "password123456".to_string(),
+                        tenant_id: tenant,
+                        role: Some(Role::User),
+                    },
+                    "hash".to_string(),
+                )
+                .await
+                .expect("seed user");
+        }
         let service = QualityControlService::new(
             inspection_repo,
             ncr_repo,
             product_repo.clone(),
             work_order_repo.clone(),
+            user_repo.clone(),
         );
-        (service, product_repo, work_order_repo)
+        (service, product_repo, work_order_repo, user_repo)
+    }
+
+    /// Returns the tenant-2 user id (a foreign user) for the `inspector_id`
+    /// reject tests.
+    async fn foreign_inspector_id(user_repo: &BoxUserRepository) -> i64 {
+        user_repo
+            .find_all(2)
+            .await
+            .expect("list tenant-2 users")
+            .into_iter()
+            .map(|u| u.id)
+            .next()
+            .expect("tenant-2 user seeded")
     }
 
     /// Seed a product on `tenant_id` and return its id. The InMemory repo uses a
@@ -325,7 +381,7 @@ mod qc_tests {
 
     #[tokio::test]
     async fn test_create_inspection() {
-        let (service, product_repo, work_order_repo) = create_qc_service();
+        let (service, product_repo, work_order_repo, _user_repo) = create_qc_service().await;
         let product_id = seed_product(&product_repo, 1).await;
         let work_order_id = seed_work_order(&work_order_repo, 1, product_id).await;
         let create = CreateInspection {
@@ -350,7 +406,7 @@ mod qc_tests {
     #[tokio::test]
     async fn test_create_inspection_rejects_foreign_product() {
         // Tenant-1 product; tenant-2 caller references it -> NotFound.
-        let (service, product_repo, _work_order_repo) = create_qc_service();
+        let (service, product_repo, _work_order_repo, _user_repo) = create_qc_service().await;
         let foreign_product_id = seed_product(&product_repo, 1).await;
         let create = CreateInspection {
             tenant_id: 2,
@@ -376,7 +432,7 @@ mod qc_tests {
     async fn test_create_inspection_rejects_foreign_work_order() {
         // Tenant-2 product (passes the product precheck) + tenant-1 work order ->
         // NotFound on the work order, isolating the work-order precheck.
-        let (service, product_repo, work_order_repo) = create_qc_service();
+        let (service, product_repo, work_order_repo, _user_repo) = create_qc_service().await;
         let product_id = seed_product(&product_repo, 2).await;
         let foreign_work_order_id = seed_work_order(&work_order_repo, 1, product_id).await;
         let create = CreateInspection {
@@ -401,7 +457,7 @@ mod qc_tests {
 
     #[tokio::test]
     async fn test_create_ncr() {
-        let (service, product_repo, _work_order_repo) = create_qc_service();
+        let (service, product_repo, _work_order_repo, _user_repo) = create_qc_service().await;
         let product_id = seed_product(&product_repo, 1).await;
         // Seed an inspection on tenant 1 so the optional inspection_id is owned.
         let inspection = service
@@ -438,7 +494,7 @@ mod qc_tests {
     #[tokio::test]
     async fn test_create_ncr_rejects_foreign_product() {
         // Tenant-1 product; tenant-2 caller references it -> NotFound.
-        let (service, product_repo, _work_order_repo) = create_qc_service();
+        let (service, product_repo, _work_order_repo, _user_repo) = create_qc_service().await;
         let foreign_product_id = seed_product(&product_repo, 1).await;
         let create = CreateNonConformanceReport {
             tenant_id: 2,
@@ -462,7 +518,7 @@ mod qc_tests {
     async fn test_create_ncr_rejects_foreign_inspection() {
         // Tenant-2 product (passes the product precheck) + tenant-1 inspection ->
         // NotFound on the inspection, isolating the inspection precheck.
-        let (service, product_repo, _work_order_repo) = create_qc_service();
+        let (service, product_repo, _work_order_repo, _user_repo) = create_qc_service().await;
         let product_id = seed_product(&product_repo, 2).await;
         let foreign_inspection = service
             .create_inspection(CreateInspection {
@@ -495,5 +551,66 @@ mod qc_tests {
             result.unwrap_err(),
             ApiError::NotFound(msg) if msg == "Inspection not found"
         ));
+    }
+
+    #[tokio::test]
+    async fn test_create_inspection_rejects_foreign_inspector() {
+        // Tenant-1 product (passes the product precheck) + tenant-2 inspector ->
+        // NotFound on the inspector, isolating the inspector_id precheck.
+        let (service, product_repo, _work_order_repo, user_repo) = create_qc_service().await;
+        let foreign = foreign_inspector_id(&user_repo).await;
+        let create = CreateInspection {
+            tenant_id: 1,
+            work_order_id: None,
+            product_id: seed_product(&product_repo, 1).await,
+            inspection_type: "Visual".to_string(),
+            quantity_inspected: dec!(100),
+            quantity_passed: dec!(95),
+            quantity_failed: dec!(5),
+            status: InspectionStatus::Passed,
+            inspector_id: Some(foreign),
+            notes: None,
+        };
+        let result = service.create_inspection(create).await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn test_update_inspection_rejects_foreign_inspector() {
+        // The UPDATE path persists `inspector_id` via COALESCE, so re-stamping a
+        // foreign user id onto an existing tenant-1 inspection must be rejected.
+        let (service, product_repo, _work_order_repo, user_repo) = create_qc_service().await;
+        let foreign = foreign_inspector_id(&user_repo).await;
+        let inspection = service
+            .create_inspection(CreateInspection {
+                tenant_id: 1,
+                work_order_id: None,
+                product_id: seed_product(&product_repo, 1).await,
+                inspection_type: "Visual".to_string(),
+                quantity_inspected: dec!(100),
+                quantity_passed: dec!(95),
+                quantity_failed: dec!(5),
+                status: InspectionStatus::Passed,
+                inspector_id: Some(1),
+                notes: None,
+            })
+            .await
+            .expect("seed inspection");
+        let result = service
+            .update_inspection(
+                inspection.id,
+                1,
+                UpdateInspection {
+                    status: None,
+                    quantity_passed: None,
+                    quantity_failed: None,
+                    inspector_id: Some(foreign),
+                    notes: None,
+                },
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), ApiError::NotFound(_)));
     }
 }
