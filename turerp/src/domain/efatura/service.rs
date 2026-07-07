@@ -12,6 +12,7 @@ use crate::domain::efatura::model::{
     AddressInfo, EFatura, EFaturaProfile, EFaturaStatus, MonetaryTotal, PartyInfo,
 };
 use crate::domain::efatura::repository::BoxEFaturaRepository;
+use crate::domain::invoice::repository::BoxInvoiceRepository;
 use crate::error::ApiError;
 
 /// Service for managing e-Fatura documents and GIB integration
@@ -19,11 +20,20 @@ use crate::error::ApiError;
 pub struct EFaturaService {
     repo: BoxEFaturaRepository,
     gib_gateway: BoxGibGateway,
+    invoice_repo: BoxInvoiceRepository,
 }
 
 impl EFaturaService {
-    pub fn new(repo: BoxEFaturaRepository, gib_gateway: BoxGibGateway) -> Self {
-        Self { repo, gib_gateway }
+    pub fn new(
+        repo: BoxEFaturaRepository,
+        gib_gateway: BoxGibGateway,
+        invoice_repo: BoxInvoiceRepository,
+    ) -> Self {
+        Self {
+            repo,
+            gib_gateway,
+            invoice_repo,
+        }
     }
 
     /// Create an e-Fatura from an invoice.
@@ -37,6 +47,14 @@ impl EFaturaService {
         profile: EFaturaProfile,
         tenant_id: i64,
     ) -> Result<EFatura, ApiError> {
+        // Parent-ownership precheck: the source invoice must belong to the
+        // caller's tenant (cross-tenant orphan-FK IDOR, issue #300). The
+        // invoice is not otherwise loaded — this gate prevents a tenant from
+        // stamping an e-Fatura onto a foreign-tenant invoice id.
+        self.invoice_repo
+            .find_by_id(invoice_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", invoice_id)))?;
         let uuid = uuid::Uuid::new_v4().to_string();
         let now = Utc::now();
         let document_number = format!("EF{}", now.timestamp_millis());
@@ -295,25 +313,62 @@ mod tests {
     use super::*;
     use crate::domain::efatura::model::EFaturaProfile;
     use crate::domain::efatura::repository::InMemoryEFaturaRepository;
+    use crate::domain::invoice::model::{CreateInvoice, CreateInvoiceLine, InvoiceType};
+    use crate::domain::invoice::repository::InMemoryInvoiceRepository;
+    use chrono::Utc;
+    use rust_decimal::Decimal;
     use std::sync::Arc;
 
-    fn make_service() -> EFaturaService {
+    /// Minimal owned-tenant invoice for seeding the parent-FK precheck.
+    fn seed_invoice(tenant_id: i64) -> CreateInvoice {
+        CreateInvoice {
+            tenant_id,
+            company_id: 1,
+            invoice_type: InvoiceType::SalesInvoice,
+            cari_id: 1,
+            issue_date: Utc::now(),
+            due_date: Utc::now() + chrono::Duration::days(7),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            notes: None,
+            cost_center_id: None,
+            lines: vec![CreateInvoiceLine {
+                product_id: None,
+                description: "Seed line".to_string(),
+                quantity: Decimal::new(1, 0),
+                unit_price: Decimal::new(10, 0),
+                tax_rate: Decimal::ZERO,
+                discount_rate: Decimal::ZERO,
+            }],
+        }
+    }
+
+    /// Build a service with a seeded invoice repo: tenant-1 invoices auto-id
+    /// to 1 and 2, a tenant-2 invoice auto-ids to 3 (the foreign referent for
+    /// the cross-tenant IDOR rejection test). The `create_from_invoice`
+    /// invoice_id precheck (#300) resolves for own-tenant ids 1/2 and 404s
+    /// for the foreign id 3.
+    async fn make_service() -> EFaturaService {
         let repo = Arc::new(InMemoryEFaturaRepository::new()) as BoxEFaturaRepository;
         let gateway = Arc::new(crate::common::gov::InMemoryGibGateway::new()) as BoxGibGateway;
-        EFaturaService::new(repo, gateway)
+        let invoice_repo = Arc::new(InMemoryInvoiceRepository::new()) as BoxInvoiceRepository;
+        invoice_repo.create(seed_invoice(1)).await.unwrap(); // id 1 (tenant 1)
+        invoice_repo.create(seed_invoice(1)).await.unwrap(); // id 2 (tenant 1)
+        invoice_repo.create(seed_invoice(2)).await.unwrap(); // id 3 (tenant 2)
+        EFaturaService::new(repo, gateway, invoice_repo)
     }
 
     #[tokio::test]
     async fn test_create_from_invoice() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         let fatura = svc
-            .create_from_invoice(42, EFaturaProfile::TemelFatura, 1)
+            .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
             .unwrap();
 
         assert_eq!(fatura.tenant_id, 1);
-        assert_eq!(fatura.invoice_id, Some(42));
+        assert_eq!(fatura.invoice_id, Some(1));
         assert_eq!(fatura.profile_id, EFaturaProfile::TemelFatura);
         assert_eq!(fatura.status, EFaturaStatus::Draft);
         assert!(!fatura.uuid.is_empty());
@@ -322,7 +377,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_efatura() {
-        let svc = make_service();
+        let svc = make_service().await;
         let fatura = svc
             .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
@@ -337,7 +392,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_by_uuid() {
-        let svc = make_service();
+        let svc = make_service().await;
         let fatura = svc
             .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
@@ -352,7 +407,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_efaturas() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         svc.create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
@@ -382,7 +437,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_send_to_gib() {
-        let svc = make_service();
+        let svc = make_service().await;
         let fatura = svc
             .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
@@ -395,7 +450,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_send_non_draft_fails() {
-        let svc = make_service();
+        let svc = make_service().await;
         let fatura = svc
             .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
@@ -411,7 +466,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cancel_efatura() {
-        let svc = make_service();
+        let svc = make_service().await;
         let fatura = svc
             .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
@@ -430,7 +485,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cancel_already_cancelled_fails() {
-        let svc = make_service();
+        let svc = make_service().await;
         let fatura = svc
             .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
@@ -448,7 +503,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_xml_placeholder() {
-        let svc = make_service();
+        let svc = make_service().await;
         let fatura = svc
             .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
@@ -461,7 +516,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_check_status() {
-        let svc = make_service();
+        let svc = make_service().await;
         let fatura = svc
             .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
@@ -476,7 +531,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tenant_isolation() {
-        let svc = make_service();
+        let svc = make_service().await;
         let fatura = svc
             .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
             .await
@@ -484,5 +539,41 @@ mod tests {
 
         let result = svc.get_efatura(fatura.id, 999).await;
         assert!(result.is_err());
+    }
+
+    /// Rejects an e-Fatura stamped onto a foreign-tenant invoice (orphan-FK
+    /// IDOR, issue #300). Own-tenant invoice id 1 succeeds; the tenant-2
+    /// invoice id 3 and a nonexistent id 999 both 404.
+    #[tokio::test]
+    async fn test_create_from_invoice_rejects_foreign_invoice() {
+        let svc = make_service().await;
+
+        // Own-tenant invoice (id 1, tenant 1) → ok.
+        assert!(
+            svc.create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
+                .await
+                .is_ok(),
+            "own-tenant invoice must succeed"
+        );
+
+        // Foreign-tenant invoice (id 3, belongs to tenant 2) → NotFound.
+        let result = svc
+            .create_from_invoice(3, EFaturaProfile::TemelFatura, 1)
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create an e-Fatura for a tenant-2 invoice, got {:?}",
+            result
+        );
+
+        // Nonexistent invoice → NotFound.
+        let result = svc
+            .create_from_invoice(999, EFaturaProfile::TemelFatura, 1)
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent invoice must be NotFound, got {:?}",
+            result
+        );
     }
 }

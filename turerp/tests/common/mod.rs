@@ -309,6 +309,47 @@ macro_rules! seed_cari {
     }};
 }
 
+/// Helper macro to create an invoice (seeding an owned cari first) and return
+/// its id, for integration tests whose create-endpoint prechecks require an
+/// owned parent `invoice_id` FK (e-Fatura / e-Archive). Mirrors the inline
+/// invoice-creation pattern in `invoice_crud_test.rs`. The invoice create body
+/// omits `company_id` (defaults to the legacy `1` sentinel, skipped by
+/// `ensure_company_owned`) and line `product_id` (null → skipped), so only the
+/// cari parent-FK precheck applies. `tenant_id` is auth-overwritten by the
+/// handler. Usage: `let invoice_id = seed_invoice!(&app, &token, user_id, 1);`
+#[macro_export]
+macro_rules! seed_invoice {
+    ($app:expr, $token:expr, $user_id:expr, $tenant_id:expr) => {{
+        let cari_id = seed_cari!($app, $token, $user_id, $tenant_id);
+        let req = auth_request(
+            actix_web::http::Method::POST,
+            "/api/v1/invoices",
+            $token,
+        )
+        .set_json(json!({
+            "invoice_type": "SalesInvoice",
+            "cari_id": cari_id,
+            "issue_date": "2024-01-01T00:00:00Z",
+            "due_date": "2024-02-01T00:00:00Z",
+            "currency": "TRY",
+            "tenant_id": $tenant_id,
+            "lines": [{
+                "description": "Seed invoice line",
+                "quantity": 1.0,
+                "unit_price": 10.0,
+                "tax_rate": 0.0,
+                "discount_rate": 0.0
+            }]
+        }))
+        .to_request();
+        let resp = test::call_service($app, req).await;
+        assert_eq!(resp.status(), StatusCode::CREATED, "Invoice creation failed");
+        let body = to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        json["id"].as_i64().unwrap()
+    }};
+}
+
 /// Helper macro to create a product and return its id, for integration tests
 /// whose create-endpoint prechecks require an owned parent `product_id` FK
 /// (stock movements, work orders, BOMs, routings, inspections, NCRs). Mirrors

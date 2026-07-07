@@ -631,7 +631,7 @@ pub mod app {
             Arc::new(InMemoryInvoiceLineRepository::new()) as BoxInvoiceLineRepository;
         let payment_repo = Arc::new(InMemoryPaymentRepository::new()) as BoxPaymentRepository;
         let invoice_service = InvoiceService::new(
-            invoice_repo,
+            invoice_repo.clone(),
             invoice_line_repo,
             payment_repo,
             cari_repo.clone(),
@@ -908,8 +908,11 @@ pub mod app {
             as crate::domain::efatura::BoxEFaturaRepository;
         let gib_gateway =
             Arc::new(crate::common::InMemoryGibGateway::new()) as crate::common::BoxGibGateway;
-        let efatura_service =
-            crate::domain::efatura::EFaturaService::new(efatura_repo, gib_gateway);
+        let efatura_service = crate::domain::efatura::EFaturaService::new(
+            efatura_repo,
+            gib_gateway,
+            invoice_repo.clone(),
+        );
 
         // e-Archive
         let earchive_repo = Arc::new(crate::domain::earchive::InMemoryEarchiveRepository::new())
@@ -1304,7 +1307,7 @@ pub mod app {
         let invoice_line_repo = PostgresInvoiceLineRepository::new(pool.clone()).into_boxed();
         let payment_repo = PostgresPaymentRepository::new(pool.clone()).into_boxed();
         let invoice_service = InvoiceService::new(
-            invoice_repo,
+            invoice_repo.clone(),
             invoice_line_repo,
             payment_repo,
             cari_repo.clone(),
@@ -1614,8 +1617,11 @@ pub mod app {
         let efatura_repo = PostgresEFaturaRepository::new(pool.clone()).into_boxed();
         let gib_gateway =
             Arc::new(crate::common::InMemoryGibGateway::new()) as crate::common::BoxGibGateway;
-        let efatura_service =
-            crate::domain::efatura::EFaturaService::new(efatura_repo, gib_gateway);
+        let efatura_service = crate::domain::efatura::EFaturaService::new(
+            efatura_repo,
+            gib_gateway,
+            invoice_repo.clone(),
+        );
 
         // e-Archive - PostgreSQL
         let earchive_repo = PostgresEarchiveRepository::new(pool.clone()).into_boxed();
