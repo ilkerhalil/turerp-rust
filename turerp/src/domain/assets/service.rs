@@ -7,7 +7,7 @@ use super::model::{
     Asset, AssetCategory, AssetStatus, CreateAsset, CreateMaintenanceRecord, MaintenanceRecord,
     UpdateAsset,
 };
-use super::repository::{AssetCategoryRepository, AssetsRepository};
+use super::repository::{AssetsRepository, BoxAssetCategoryRepository};
 use crate::common::pagination::PaginatedResult;
 use crate::domain::company::service::ensure_company_owned;
 use crate::domain::company::BoxCompanyRepository;
@@ -19,7 +19,7 @@ use crate::error::ApiError;
 #[derive(Clone)]
 pub struct AssetsService {
     asset_repo: Arc<dyn AssetsRepository>,
-    category_repo: Option<Arc<dyn AssetCategoryRepository>>,
+    category_repo: BoxAssetCategoryRepository,
     company_repo: BoxCompanyRepository,
     user_repo: BoxUserRepository,
 }
@@ -28,12 +28,13 @@ impl AssetsService {
     /// Create a new assets service
     pub fn new(
         asset_repo: Arc<dyn AssetsRepository>,
+        category_repo: BoxAssetCategoryRepository,
         company_repo: BoxCompanyRepository,
         user_repo: BoxUserRepository,
     ) -> Self {
         Self {
             asset_repo,
-            category_repo: None,
+            category_repo,
             company_repo,
             user_repo,
         }
@@ -50,6 +51,16 @@ impl AssetsService {
         // legitimate "unassigned" value and is NOT rejected.
         if let Some(id) = create.responsible_person_id {
             ensure_user_owned(&self.user_repo, id, create.tenant_id).await?;
+        }
+        // Parent-ownership precheck: body category_id (when set) must belong to
+        // the caller's tenant (REFERENCES asset_categories(id)). `None` is a
+        // legitimate "uncategorized" value and is NOT rejected (orphan-FK
+        // IDOR, issue #302).
+        if let Some(id) = create.category_id {
+            self.category_repo
+                .find_by_id(id, create.tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound(format!("Asset category {} not found", id)))?;
         }
         self.asset_repo.create(create).await
     }
@@ -268,39 +279,29 @@ impl AssetsService {
         &self,
         category: super::model::AssetCategory,
     ) -> Result<AssetCategory, ApiError> {
-        let repo = self
-            .category_repo
-            .as_ref()
-            .ok_or_else(|| ApiError::Internal("Category repository not configured".to_string()))?;
-        repo.create(category).await
+        self.category_repo.create(category).await
     }
 
     /// Get all categories for a tenant
     #[tracing::instrument(skip(self))]
     pub async fn get_categories(&self, tenant_id: i64) -> Result<Vec<AssetCategory>, ApiError> {
-        let repo = self
-            .category_repo
-            .as_ref()
-            .ok_or_else(|| ApiError::Internal("Category repository not configured".to_string()))?;
-        repo.find_by_tenant(tenant_id).await
+        self.category_repo.find_by_tenant(tenant_id).await
     }
 
     /// Delete a category
     #[tracing::instrument(skip(self))]
     pub async fn delete_category(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
-        let repo = self
-            .category_repo
-            .as_ref()
-            .ok_or_else(|| ApiError::Internal("Category repository not configured".to_string()))?;
-        repo.delete(id, tenant_id).await
+        self.category_repo.delete(id, tenant_id).await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::assets::model::DepreciationMethod;
-    use crate::domain::assets::repository::InMemoryAssetsRepository;
+    use crate::domain::assets::model::{AssetCategory, DepreciationMethod};
+    use crate::domain::assets::repository::{
+        BoxAssetCategoryRepository, InMemoryAssetCategoryRepository, InMemoryAssetsRepository,
+    };
     use crate::domain::company::repository::InMemoryCompanyRepository;
     use crate::domain::company::service::LEGACY_COMPANY_ID;
     use crate::domain::company::CreateCompany;
@@ -309,6 +310,8 @@ mod tests {
 
     async fn create_service() -> AssetsService {
         let asset_repo = Arc::new(InMemoryAssetsRepository::new());
+        let category_repo =
+            Arc::new(InMemoryAssetCategoryRepository::new()) as BoxAssetCategoryRepository;
         let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
         // Seed tenant-1 (id=1 = LEGACY sentinel, skipped by the precheck) then
         // tenant-2 (id=2 non-sentinel) so reject tests hit the real find_by_id.
@@ -347,7 +350,7 @@ mod tests {
                 .await
                 .expect("seed user");
         }
-        AssetsService::new(asset_repo, company_repo, user_repo)
+        AssetsService::new(asset_repo, category_repo, company_repo, user_repo)
     }
 
     /// Resolve tenant-2's company id (guaranteed non-sentinel by seeding order).
@@ -591,6 +594,75 @@ mod tests {
         // company_id=1 is the LEGACY sentinel (skipped), isolating the user gate.
         let result = service.create_asset(make_create(1, 1, Some(foreign))).await;
         assert!(matches!(result, Err(ApiError::NotFound(_))));
+    }
+
+    /// Rejects an asset stamped onto a foreign-tenant category (orphan-FK
+    /// IDOR, issue #302). Own-tenant category succeeds; a foreign-tenant
+    /// category id and a nonexistent id both 404; `None` (uncategorized) is
+    /// accepted. `company_id=1` (LEGACY sentinel) + `responsible_person_id`
+    /// None isolate the category gate.
+    #[actix_web::test]
+    async fn test_create_asset_rejects_foreign_category() {
+        let service = create_service().await;
+        let own_cat = service
+            .create_category(AssetCategory {
+                id: 0,
+                tenant_id: 1,
+                name: "Own Cat".to_string(),
+                description: None,
+                default_useful_life_years: 5,
+                default_depreciation_method: DepreciationMethod::StraightLine,
+                created_at: chrono::Utc::now(),
+            })
+            .await
+            .unwrap();
+        let foreign_cat = service
+            .create_category(AssetCategory {
+                id: 0,
+                tenant_id: 2,
+                name: "Foreign Cat".to_string(),
+                description: None,
+                default_useful_life_years: 5,
+                default_depreciation_method: DepreciationMethod::StraightLine,
+                created_at: chrono::Utc::now(),
+            })
+            .await
+            .unwrap();
+
+        // Own-tenant category → ok.
+        let mut req = make_create(1, 1, None);
+        req.category_id = Some(own_cat.id);
+        assert!(
+            service.create_asset(req).await.is_ok(),
+            "own-tenant category must succeed"
+        );
+
+        // Foreign-tenant category → NotFound.
+        let mut req = make_create(1, 1, None);
+        req.category_id = Some(foreign_cat.id);
+        let result = service.create_asset(req).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create an asset for a tenant-2 category, got {:?}",
+            result
+        );
+
+        // Nonexistent category → NotFound.
+        let mut req = make_create(1, 1, None);
+        req.category_id = Some(999);
+        let result = service.create_asset(req).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent category must be NotFound, got {:?}",
+            result
+        );
+
+        // None (uncategorized) → ok (legitimate, never rejected).
+        let req = make_create(1, 1, None);
+        assert!(
+            service.create_asset(req).await.is_ok(),
+            "uncategorized asset (category_id None) must succeed"
+        );
     }
 
     #[actix_web::test]

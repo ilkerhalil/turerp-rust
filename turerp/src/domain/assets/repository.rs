@@ -523,6 +523,90 @@ impl AssetsRepository for InMemoryAssetsRepository {
     }
 }
 
+// ============================================================================ //
+// In-memory asset category repository                                           //
+// ============================================================================ //
+
+/// Internal state for InMemoryAssetCategoryRepository
+struct InMemoryAssetCategoryInner {
+    categories: std::collections::HashMap<i64, AssetCategory>,
+    next_id: i64,
+}
+
+/// In-memory asset category repository with thread-safe single mutex.
+///
+/// Mirrors `PostgresAssetCategoryRepository` so the `AssetsService`
+/// category-FK precheck (issue #302) is exercisable in CI (no DB). The
+/// asset-category CRUD endpoints are unrouted, so this exists primarily to
+/// satisfy the `create_asset` `category_id` parent-ownership precheck.
+pub struct InMemoryAssetCategoryRepository {
+    inner: Mutex<InMemoryAssetCategoryInner>,
+}
+
+impl InMemoryAssetCategoryRepository {
+    pub fn new() -> Self {
+        Self {
+            inner: Mutex::new(InMemoryAssetCategoryInner {
+                categories: std::collections::HashMap::new(),
+                next_id: 1,
+            }),
+        }
+    }
+}
+
+impl Default for InMemoryAssetCategoryRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[async_trait]
+impl AssetCategoryRepository for InMemoryAssetCategoryRepository {
+    async fn create(&self, category: AssetCategory) -> Result<AssetCategory, ApiError> {
+        let mut inner = self.inner.lock();
+        let id = inner.next_id;
+        inner.next_id += 1;
+        let mut category = category;
+        category.id = id;
+        inner.categories.insert(id, category.clone());
+        Ok(category)
+    }
+
+    async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<AssetCategory>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .categories
+            .get(&id)
+            .filter(|c| c.tenant_id == tenant_id)
+            .cloned())
+    }
+
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<AssetCategory>, ApiError> {
+        let inner = self.inner.lock();
+        Ok(inner
+            .categories
+            .values()
+            .filter(|c| c.tenant_id == tenant_id)
+            .cloned()
+            .collect())
+    }
+
+    async fn delete(&self, id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        let mut inner = self.inner.lock();
+        let exists = inner
+            .categories
+            .get(&id)
+            .filter(|c| c.tenant_id == tenant_id)
+            .is_some();
+        if exists {
+            inner.categories.remove(&id);
+            Ok(())
+        } else {
+            Err(ApiError::NotFound("AssetCategory not found".to_string()))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
