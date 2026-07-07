@@ -691,7 +691,8 @@ pub mod app {
         let entry_repo =
             Arc::new(InMemoryJournalEntryRepository::new()) as BoxJournalEntryRepository;
         let line_repo = Arc::new(InMemoryJournalLineRepository::new()) as BoxJournalLineRepository;
-        let accounting_service = AccountingService::new(account_repo, entry_repo, line_repo);
+        let accounting_service =
+            AccountingService::new(account_repo, entry_repo, line_repo, company_repo.clone());
 
         // Project
         let project_repo = Arc::new(InMemoryProjectRepository::new()) as BoxProjectRepository;
@@ -1339,7 +1340,8 @@ pub mod app {
         let account_repo = PostgresAccountRepository::new(pool.clone()).into_boxed();
         let entry_repo = PostgresJournalEntryRepository::new(pool.clone()).into_boxed();
         let line_repo = PostgresJournalLineRepository::new(pool.clone()).into_boxed();
-        let accounting_service = AccountingService::new(account_repo, entry_repo, line_repo);
+        let accounting_service =
+            AccountingService::new(account_repo, entry_repo, line_repo, company_repo.clone());
 
         // Project - PostgreSQL
         let project_repo = PostgresProjectRepository::new(pool.clone()).into_boxed();
