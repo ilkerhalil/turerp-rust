@@ -844,7 +844,8 @@ pub mod app {
         // API Keys
         let api_key_repo = Arc::new(crate::domain::api_key::InMemoryApiKeyRepository::new())
             as crate::domain::api_key::BoxApiKeyRepository;
-        let api_key_service = crate::domain::api_key::ApiKeyService::new(api_key_repo);
+        let api_key_service =
+            crate::domain::api_key::ApiKeyService::new(api_key_repo, user_repo.clone());
 
         // IP Whitelist
         let ip_whitelist_repo =
@@ -1544,7 +1545,8 @@ pub mod app {
 
         // API Keys - PostgreSQL
         let api_key_repo = PostgresApiKeyRepository::new(pool.clone()).into_boxed();
-        let api_key_service = crate::domain::api_key::ApiKeyService::new(api_key_repo);
+        let api_key_service =
+            crate::domain::api_key::ApiKeyService::new(api_key_repo, user_repo.clone());
 
         // IP Whitelist - PostgreSQL
         let ip_whitelist_repo = PostgresIpWhitelistRepository::new(pool.clone()).into_boxed();

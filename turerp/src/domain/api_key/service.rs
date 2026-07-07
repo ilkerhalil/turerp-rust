@@ -6,17 +6,20 @@ use crate::domain::api_key::model::{
     CreateApiKey, UpdateApiKey,
 };
 use crate::domain::api_key::repository::BoxApiKeyRepository;
+use crate::domain::user::repository::BoxUserRepository;
+use crate::domain::user::service::ensure_user_owned;
 use crate::error::ApiError;
 
 /// API Key service
 #[derive(Clone)]
 pub struct ApiKeyService {
     repo: BoxApiKeyRepository,
+    user_repo: BoxUserRepository,
 }
 
 impl ApiKeyService {
-    pub fn new(repo: BoxApiKeyRepository) -> Self {
-        Self { repo }
+    pub fn new(repo: BoxApiKeyRepository, user_repo: BoxUserRepository) -> Self {
+        Self { repo, user_repo }
     }
 
     /// Create a new API key — returns the plain key only once
@@ -28,6 +31,12 @@ impl ApiKeyService {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
+
+        // Parent-ownership precheck: the body-controlled `user_id` (the user the
+        // API key is attributed to, REFERENCES users(id)) must belong to the
+        // caller's tenant. An admin may provision a key for any user in their
+        // OWN tenant, but not for a foreign tenant's user (cross-tenant IDOR).
+        ensure_user_owned(&self.user_repo, create.user_id, create.tenant_id).await?;
 
         let plain_key = crate::domain::api_key::model::generate_api_key();
         let key_hash = hash_api_key(&plain_key);
@@ -189,16 +198,51 @@ impl ApiKeyService {
 mod tests {
     use super::*;
     use crate::domain::api_key::repository::InMemoryApiKeyRepository;
+    use crate::domain::user::model::{CreateUser, Role};
+    use crate::domain::user::repository::{BoxUserRepository, InMemoryUserRepository};
     use std::sync::Arc;
 
-    fn create_service() -> ApiKeyService {
+    async fn create_service() -> ApiKeyService {
         let repo = Arc::new(InMemoryApiKeyRepository::new()) as BoxApiKeyRepository;
-        ApiKeyService::new(repo)
+        let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
+        // Seed a user per tenant: auto-id 1 for tenant-1 (resolves the happy-path
+        // tests that stamp `user_id: 1`) and auto-id 2 for tenant-2 (the foreign
+        // referent the reject test targets).
+        for tenant in [1, 2] {
+            user_repo
+                .create(
+                    CreateUser {
+                        username: format!("t{}apikey", tenant),
+                        email: format!("t{}apikey@example.com", tenant),
+                        full_name: format!("Tenant {} api-key user", tenant),
+                        password: "password123456".to_string(),
+                        tenant_id: tenant,
+                        role: Some(Role::User),
+                    },
+                    "hash".to_string(),
+                )
+                .await
+                .expect("seed user");
+        }
+        ApiKeyService::new(repo, user_repo)
+    }
+
+    /// Returns the tenant-2 user id (a foreign user) for the `user_id` reject test.
+    async fn foreign_user_id(service: &ApiKeyService) -> i64 {
+        service
+            .user_repo
+            .find_all(2)
+            .await
+            .expect("list tenant-2 users")
+            .into_iter()
+            .map(|u| u.id)
+            .next()
+            .expect("tenant-2 user seeded")
     }
 
     #[tokio::test]
     async fn test_create_api_key() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateApiKey {
             name: "Test Key".to_string(),
             tenant_id: 1,
@@ -216,7 +260,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_authenticate_api_key() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateApiKey {
             name: "Auth Test".to_string(),
             tenant_id: 1,
@@ -234,14 +278,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_authenticate_invalid_key() {
-        let service = create_service();
+        let service = create_service().await;
         let result = service.authenticate("tuk_invalid_key_value").await;
         assert!(result.is_err());
     }
 
     #[tokio::test]
     async fn test_has_scope() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateApiKey {
             name: "Scoped Key".to_string(),
             tenant_id: 1,
@@ -260,7 +304,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_has_scope_all() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateApiKey {
             name: "Super Key".to_string(),
             tenant_id: 1,
@@ -278,7 +322,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_api_keys() {
-        let service = create_service();
+        let service = create_service().await;
         for i in 0..3 {
             let create = CreateApiKey {
                 name: format!("Key {}", i),
@@ -296,7 +340,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_api_key() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateApiKey {
             name: "Delete Me".to_string(),
             tenant_id: 1,
@@ -315,7 +359,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_api_key() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateApiKey {
             name: "Original".to_string(),
             tenant_id: 1,
@@ -337,5 +381,22 @@ mod tests {
         let updated = service.update_api_key(id, 1, update).await.unwrap();
         assert_eq!(updated.name, "Updated");
         assert!(!updated.is_active);
+    }
+
+    #[tokio::test]
+    async fn test_create_api_key_rejects_foreign_user() {
+        let service = create_service().await;
+        let foreign = foreign_user_id(&service).await;
+        // tenant-1 admin may NOT provision a key attributed to a tenant-2 user.
+        let result = service
+            .create_api_key(CreateApiKey {
+                name: "Foreign User Key".to_string(),
+                tenant_id: 1,
+                user_id: foreign,
+                scopes: vec![ApiKeyScope::CariRead],
+                expires_at: None,
+            })
+            .await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
     }
 }
