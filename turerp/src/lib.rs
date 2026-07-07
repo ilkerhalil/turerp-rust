@@ -1023,6 +1023,7 @@ pub mod app {
             workflow_repo,
             notification_service.clone(),
             job_scheduler.clone(),
+            user_repo.clone(),
         );
 
         // File Storage
@@ -1581,6 +1582,7 @@ pub mod app {
             workflow_repo,
             notification_service.clone(),
             job_scheduler.clone(),
+            user_repo.clone(),
         );
 
         // Report Engine - in-memory

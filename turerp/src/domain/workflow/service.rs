@@ -4,6 +4,8 @@ use crate::common::{
     BoxJobScheduler, BoxNotificationService, CreateJob, JobPriority, JobType, NotificationChannel,
     NotificationPriority, NotificationRequest,
 };
+use crate::domain::user::repository::BoxUserRepository;
+use crate::domain::user::service::ensure_user_owned;
 use crate::domain::workflow::model::{
     Condition, CreateWorkflowTemplate, EscalationRule, ParallelConfig, ParallelMode,
     WorkflowAuditLog, WorkflowEntityType, WorkflowInstance, WorkflowInstanceDetailResponse,
@@ -18,6 +20,7 @@ pub struct WorkflowService {
     repo: BoxWorkflowRepository,
     notification_service: BoxNotificationService,
     job_scheduler: BoxJobScheduler,
+    user_repo: BoxUserRepository,
 }
 
 impl WorkflowService {
@@ -25,12 +28,36 @@ impl WorkflowService {
         repo: BoxWorkflowRepository,
         notification_service: BoxNotificationService,
         job_scheduler: BoxJobScheduler,
+        user_repo: BoxUserRepository,
     ) -> Self {
         Self {
             repo,
             notification_service,
             job_scheduler,
+            user_repo,
         }
+    }
+
+    /// Parent-ownership precheck: every `approver_user_id` embedded in a
+    /// template's `config_json` step config (REFERENCES users(id)) must belong
+    /// to the caller's tenant. A tenant-A admin could otherwise author a
+    /// template that routes approval steps (and sends notifications) to a
+    /// tenant-B user — cross-tenant IDOR. Steps without an explicit
+    /// `approver_user_id` (role-based assignment, resolved tenant-locally at
+    /// instance start) are skipped; `None`/non-integer values are legitimate.
+    async fn validate_template_approvers(
+        &self,
+        config_json: &serde_json::Value,
+        tenant_id: i64,
+    ) -> Result<(), ApiError> {
+        if let Some(steps) = config_json.get("steps").and_then(|s| s.as_array()) {
+            for step_def in steps {
+                if let Some(id) = step_def.get("approver_user_id").and_then(|v| v.as_i64()) {
+                    ensure_user_owned(&self.user_repo, id, tenant_id).await?;
+                }
+            }
+        }
+        Ok(())
     }
 
     // ---- Pre-built templates ----
@@ -141,6 +168,10 @@ impl WorkflowService {
         create: CreateWorkflowTemplate,
         tenant_id: i64,
     ) -> Result<WorkflowTemplate, ApiError> {
+        // Parent-ownership precheck: gate every body-controlled
+        // `approver_user_id` in the template's step config before persisting it.
+        self.validate_template_approvers(&create.config_json, tenant_id)
+            .await?;
         self.repo.create_template(create, tenant_id).await
     }
 
@@ -1084,19 +1115,56 @@ impl WorkflowService {
 mod tests {
     use super::*;
     use crate::common::{InMemoryJobScheduler, InMemoryNotificationService};
+    use crate::domain::user::model::{CreateUser, Role};
+    use crate::domain::user::repository::{BoxUserRepository, InMemoryUserRepository};
     use crate::domain::workflow::repository::InMemoryWorkflowRepository;
     use std::sync::Arc;
 
-    fn make_service() -> WorkflowService {
+    async fn make_service() -> WorkflowService {
         let repo = Arc::new(InMemoryWorkflowRepository::new());
         let notif = Arc::new(InMemoryNotificationService::new()) as BoxNotificationService;
         let jobs = Arc::new(InMemoryJobScheduler::new()) as BoxJobScheduler;
-        WorkflowService::new(repo, notif, jobs)
+        let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
+        // Seed a user per tenant: auto-id 1 for tenant-1 and auto-id 2 for
+        // tenant-2 (the foreign referent the approver_user_id reject test
+        // targets). Existing template-helper tests use `approver_role` only
+        // (no explicit approver_user_id), so the precheck never triggers for
+        // them — the seeding is solely for the reject test.
+        for tenant in [1, 2] {
+            user_repo
+                .create(
+                    CreateUser {
+                        username: format!("t{}wf", tenant),
+                        email: format!("t{}wf@example.com", tenant),
+                        full_name: format!("Tenant {} workflow user", tenant),
+                        password: "password123456".to_string(),
+                        tenant_id: tenant,
+                        role: Some(Role::User),
+                    },
+                    "hash".to_string(),
+                )
+                .await
+                .expect("seed user");
+        }
+        WorkflowService::new(repo, notif, jobs, user_repo)
+    }
+
+    /// Returns the tenant-2 user id (a foreign user) for the approver_user_id
+    /// reject test.
+    async fn foreign_approver_id(svc: &WorkflowService) -> i64 {
+        svc.user_repo
+            .find_all(2)
+            .await
+            .expect("list tenant-2 users")
+            .into_iter()
+            .map(|u| u.id)
+            .next()
+            .expect("tenant-2 user seeded")
     }
 
     #[tokio::test]
     async fn test_start_and_approve_workflow() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         // Create template
         let template = svc
@@ -1141,7 +1209,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_start_reject_resubmit() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         let template = svc.create_expense_approval_template(1).await.unwrap();
         let instance = svc
@@ -1179,7 +1247,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_pending_approvals() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         let template = svc.create_invoice_verification_template(1).await.unwrap();
         let instance = svc
@@ -1202,7 +1270,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_prebuilt_templates() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         let po = svc
             .create_purchase_order_approval_template(1)
@@ -1310,7 +1378,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parallel_approval_all_required() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         let config = serde_json::json!({
             "steps": [
@@ -1370,7 +1438,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_parallel_approval_any_one() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         let config = serde_json::json!({
             "steps": [
@@ -1417,7 +1485,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pending_approvals_by_role() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         let template = svc
             .create_purchase_order_approval_template(1)
@@ -1439,7 +1507,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_escalation_rule() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         let rule = EscalationRule {
             timeout_hours: 24,
@@ -1478,5 +1546,29 @@ mod tests {
         // Should not error even though repo stubs return empty
         let result = svc.check_escalation(&instance, &step, &rule).await;
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_create_template_rejects_foreign_approver() {
+        let svc = make_service().await;
+        let foreign = foreign_approver_id(&svc).await;
+        // A tenant-1 admin may NOT author a template whose step routes approval
+        // to a tenant-2 user.
+        let result = svc
+            .create_template(
+                CreateWorkflowTemplate {
+                    name: "Foreign Approver".to_string(),
+                    description: "Template with a foreign approver".to_string(),
+                    entity_type: WorkflowEntityType::PurchaseOrder,
+                    config_json: serde_json::json!({
+                        "steps": [
+                            {"step_number": 1, "step_name": "Review", "approver_user_id": foreign},
+                        ]
+                    }),
+                },
+                1,
+            )
+            .await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
     }
 }
