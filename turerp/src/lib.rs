@@ -731,6 +731,7 @@ pub mod app {
             campaign_repo,
             ticket_repo,
             user_repo.clone(),
+            cari_repo.clone(),
         );
 
         // Chart of Accounts
@@ -1392,6 +1393,7 @@ pub mod app {
             campaign_repo,
             ticket_repo,
             user_repo.clone(),
+            cari_repo.clone(),
         );
 
         // Customer Portal - PostgreSQL
