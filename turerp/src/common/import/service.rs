@@ -69,8 +69,10 @@ pub trait ImportService: Send + Sync {
         created_by: i64,
     ) -> Result<ImportResult, ApiError>;
 
-    /// Get import result by job ID
-    fn get_result(&self, job_id: i64) -> Option<ImportResult>;
+    /// Get import result by job ID, scoped to the caller's tenant.
+    /// Returns `None` if the job does not exist OR belongs to another tenant
+    /// (no cross-tenant read, no existence oracle beyond the caller's own 404).
+    fn get_result(&self, job_id: i64, tenant_id: i64) -> Option<ImportResult>;
 
     /// Generate a template for an entity type
     fn generate_template(
@@ -111,6 +113,11 @@ pub struct CsvImportService {
     stock_movement_repo: BoxStockMovementRepository,
     job_scheduler: Arc<dyn JobScheduler>,
     results: Mutex<HashMap<i64, ImportResult>>,
+    /// Owning tenant per import job, keyed by job_id. Populated alongside
+    /// `results` so `get_result` can scope by the caller's tenant and prevent a
+    /// cross-tenant read of another tenant's import result / row-level errors
+    /// by enumerating the timestamp-based job_id.
+    job_tenants: Mutex<HashMap<i64, i64>>,
 }
 
 impl CsvImportService {
@@ -128,6 +135,7 @@ impl CsvImportService {
             stock_movement_repo,
             job_scheduler,
             results: Mutex::new(HashMap::new()),
+            job_tenants: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -393,10 +401,17 @@ impl ImportService for CsvImportService {
         result.status = ImportStatus::Completed;
         result.completed_at = Some(Utc::now());
         self.results.lock().insert(job_id, result.clone());
+        // Record the owning tenant so get_result can scope by caller tenant.
+        self.job_tenants.lock().insert(job_id, tenant_id);
         Ok(result)
     }
 
-    fn get_result(&self, job_id: i64) -> Option<ImportResult> {
+    fn get_result(&self, job_id: i64, tenant_id: i64) -> Option<ImportResult> {
+        // Reject before lookup if the job belongs to another tenant — a
+        // foreign job_id yields None (404) with no data read and no oracle.
+        if self.job_tenants.lock().get(&job_id) != Some(&tenant_id) {
+            return None;
+        }
         self.results.lock().get(&job_id).cloned()
     }
 
@@ -699,8 +714,35 @@ mod tests {
             )
             .await
             .unwrap();
-        let fetched = svc.get_result(result.job_id);
+        let fetched = svc.get_result(result.job_id, 1);
         assert!(fetched.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_get_result_rejects_foreign_tenant() {
+        // Cross-tenant IDOR guard: a job imported by tenant 1 must not be
+        // readable by tenant 2 via get_result — the job_id is timestamp-based
+        // and enumerable, so without the tenant scope a caller could read
+        // another tenant's import counts and row-level validation errors.
+        let svc = create_test_service();
+        let data = b"code,name,unit_price\nP001,Product 1,100.00";
+        let result = svc
+            .import(
+                1,
+                1,
+                EntityType::Product,
+                ImportFormat::Csv,
+                data.to_vec(),
+                1,
+            )
+            .await
+            .unwrap();
+        // Same tenant can read.
+        assert!(svc.get_result(result.job_id, 1).is_some());
+        // Foreign tenant cannot.
+        assert!(svc.get_result(result.job_id, 2).is_none());
+        // Unknown job_id yields None regardless of tenant.
+        assert!(svc.get_result(9999999999, 1).is_none());
     }
 
     #[tokio::test]
