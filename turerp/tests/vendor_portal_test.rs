@@ -237,12 +237,19 @@ async fn test_vendor_delivery_notes_crud() {
     let login_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let vendor_token = login_json["access_token"].as_str().unwrap();
 
+    // Create a purchase order issued to this vendor's cari. The delivery-note
+    // create precheck (issue #298) verifies the PO belongs to the caller's
+    // tenant AND is issued to the calling vendor's cari, so a real owned PO is
+    // required (the prior hardcoded `purchase_order_id: 1` referenced a
+    // nonexistent PO and now correctly 404s).
+    let po_id = create_purchase_order_for_cari(&state, 1, cari_id).await;
+
     // Create a delivery note
     let req = test::TestRequest::post()
         .uri("/api/v1/vendor-portal/delivery-notes")
         .insert_header(("Authorization", format!("Bearer {}", vendor_token)))
         .set_json(json!({
-            "purchase_order_id": 1,
+            "purchase_order_id": po_id,
             "description": "Test delivery note"
         }))
         .to_request();
