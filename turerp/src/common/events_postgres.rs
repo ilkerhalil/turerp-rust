@@ -328,10 +328,11 @@ impl EventBus for PostgresEventBus {
         Ok(processed)
     }
 
-    async fn get_pending(&self, limit: u32) -> Result<Vec<OutboxEvent>, String> {
+    async fn get_pending(&self, tenant_id: i64, limit: u32) -> Result<Vec<OutboxEvent>, String> {
         let rows = sqlx::query_as::<_, OutboxEventRow>(
-            "SELECT * FROM outbox_events WHERE status = 'pending' ORDER BY created_at ASC LIMIT $1",
+            "SELECT * FROM outbox_events WHERE status = 'pending' AND tenant_id = $1 ORDER BY created_at ASC LIMIT $2",
         )
+        .bind(tenant_id)
         .bind(limit as i64)
         .fetch_all(&*self.pool)
         .await
@@ -420,25 +421,36 @@ impl EventBus for PostgresEventBus {
             .collect::<Result<Vec<_>, _>>()
     }
 
-    async fn retry_dead_letter(&self, entry_id: i64) -> Result<(), String> {
-        let row =
-            sqlx::query_as::<_, DeadLetterRow>("SELECT * FROM dead_letter_queue WHERE id = $1")
-                .bind(entry_id)
-                .fetch_optional(&*self.pool)
-                .await
-                .map_err(|e| Self::map_err(map_sqlx_error(e, "DeadLetterQueue")))?;
+    async fn retry_dead_letter(&self, tenant_id: i64, entry_id: i64) -> Result<(), String> {
+        let row = sqlx::query_as::<_, DeadLetterRow>(
+            "SELECT * FROM dead_letter_queue WHERE id = $1 AND tenant_id = $2",
+        )
+        .bind(entry_id)
+        .bind(tenant_id)
+        .fetch_optional(&*self.pool)
+        .await
+        .map_err(|e| Self::map_err(map_sqlx_error(e, "DeadLetterQueue")))?;
 
         let row = row.ok_or_else(|| format!("DLQ entry {} not found", entry_id))?;
 
         let event: DomainEvent = serde_json::from_value(row.original_event.0)
             .map_err(|e| format!("Failed to deserialize dead letter event: {}", e))?;
 
+        // Defense-in-depth: the DLQ row's tenant_id was verified by the SELECT,
+        // but the re-published event's tenant_id is taken from the stored event
+        // JSON. They are kept in lockstep by publish/mark_failed; assert equality
+        // so a future desync fails closed instead of writing a cross-tenant row.
+        if event.tenant_id() != tenant_id {
+            return Err(format!("DLQ entry {} not found", entry_id));
+        }
+
         // Re-publish as a new outbox event
         self.publish(event).await?;
 
-        // Remove from DLQ
-        sqlx::query("DELETE FROM dead_letter_queue WHERE id = $1")
+        // Remove from DLQ (tenant-scoped defensively — the row was already confirmed above)
+        sqlx::query("DELETE FROM dead_letter_queue WHERE id = $1 AND tenant_id = $2")
             .bind(entry_id)
+            .bind(tenant_id)
             .execute(&*self.pool)
             .await
             .map_err(|e| Self::map_err(map_sqlx_error(e, "DeadLetterQueue")))?;
@@ -446,11 +458,12 @@ impl EventBus for PostgresEventBus {
         Ok(())
     }
 
-    async fn retry_outbox(&self, event_id: i64) -> Result<(), String> {
+    async fn retry_outbox(&self, tenant_id: i64, event_id: i64) -> Result<(), String> {
         let updated = sqlx::query(
-            "UPDATE outbox_events SET status = 'pending', attempts = 0, last_error = NULL, updated_at = NOW() WHERE id = $1 AND status IN ('failed', 'dead_lettered')",
+            "UPDATE outbox_events SET status = 'pending', attempts = 0, last_error = NULL, updated_at = NOW() WHERE id = $1 AND tenant_id = $2 AND status IN ('failed', 'dead_lettered')",
         )
         .bind(event_id)
+        .bind(tenant_id)
         .execute(&*self.pool)
         .await
         .map_err(|e| Self::map_err(map_sqlx_error(e, "OutboxEvent")))?;
