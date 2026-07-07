@@ -3,6 +3,8 @@ use std::collections::HashSet;
 
 use crate::common::pagination::PaginatedResult;
 use crate::domain::cari::repository::BoxCariRepository;
+use crate::domain::company::service::ensure_company_owned;
+use crate::domain::company::BoxCompanyRepository;
 use crate::domain::cost_center::repository::BoxCostCenterRepository;
 use crate::domain::invoice::model::{
     CreateInvoice, CreatePayment, Invoice, InvoiceResponse, InvoiceStatus, Payment,
@@ -23,6 +25,7 @@ pub struct InvoiceService {
     cari_repo: BoxCariRepository,
     cost_center_repo: BoxCostCenterRepository,
     product_repo: BoxProductRepository,
+    company_repo: BoxCompanyRepository,
 }
 
 impl InvoiceService {
@@ -33,6 +36,7 @@ impl InvoiceService {
         cari_repo: BoxCariRepository,
         cost_center_repo: BoxCostCenterRepository,
         product_repo: BoxProductRepository,
+        company_repo: BoxCompanyRepository,
     ) -> Self {
         Self {
             invoice_repo,
@@ -41,6 +45,7 @@ impl InvoiceService {
             cari_repo,
             cost_center_repo,
             product_repo,
+            company_repo,
         }
     }
 
@@ -124,6 +129,11 @@ impl InvoiceService {
             .await?;
         self.ensure_line_products_owned(&create.lines, create.tenant_id)
             .await?;
+
+        // Parent-ownership precheck: the body-controlled company_id must belong
+        // to the caller's tenant (the legacy `1` sentinel is skipped for backward
+        // compat). Prevents stamping an invoice onto a foreign-tenant company.
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
 
         // Create invoice
         let invoice = self.invoice_repo.create(create.clone()).await?;
@@ -309,6 +319,11 @@ impl InvoiceService {
             )));
         }
 
+        // Parent-ownership precheck: the body-controlled company_id must belong
+        // to the caller's tenant (the legacy `1` sentinel is skipped for backward
+        // compat). Prevents stamping a payment onto a foreign-tenant company.
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
+
         // Create payment
         let payment = self.payment_repo.create(create).await?;
 
@@ -425,6 +440,9 @@ mod tests {
     use super::*;
     use crate::domain::cari::model::CreateCari;
     use crate::domain::cari::repository::InMemoryCariRepository;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
+    use crate::domain::company::service::LEGACY_COMPANY_ID;
+    use crate::domain::company::CreateCompany;
     use crate::domain::cost_center::model::{CostCenterType, CreateCostCenter};
     use crate::domain::cost_center::repository::InMemoryCostCenterRepository;
     use crate::domain::invoice::model::{CreateInvoiceLine, InvoiceType};
@@ -528,6 +546,27 @@ mod tests {
             .await
             .expect("seed cost center t2");
 
+        // Company repo for the company_id parent-ownership precheck. The
+        // InMemory auto-id starts at 1 (= LEGACY_COMPANY_ID sentinel, skipped by
+        // the precheck), so seeding a tenant-1 company first consumes id=1 and
+        // the tenant-2 company gets a non-sentinel id (id=2) for the reject test.
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        for tenant in [1, 2] {
+            company_repo
+                .create(CreateCompany {
+                    code: format!("CO{}", tenant),
+                    name: format!("Company T{}", tenant),
+                    tax_number: None,
+                    address: None,
+                    city: None,
+                    country: None,
+                    currency: "TRY".to_string(),
+                    tenant_id: tenant,
+                })
+                .await
+                .expect("seed company");
+        }
+
         InvoiceService::new(
             invoice_repo,
             line_repo,
@@ -535,6 +574,7 @@ mod tests {
             cari_repo,
             cost_center_repo,
             product_repo,
+            company_repo,
         )
     }
 
@@ -732,5 +772,78 @@ mod tests {
         create.lines[0].product_id = None;
         let result = service.create_invoice(create).await;
         assert!(result.is_ok(), "got {:?}", result.err());
+    }
+
+    // ---- company_id parent-ownership precheck (cross-tenant IDOR) ----
+
+    // Resolve the tenant-2 (foreign) company id seeded by create_service. It is
+    // non-sentinel (the tenant-1 company consumed id=1 = LEGACY_COMPANY_ID).
+    async fn foreign_company_id(service: &InvoiceService) -> i64 {
+        let id = service
+            .company_repo
+            .find_by_tenant(2)
+            .await
+            .expect("list tenant-2 companies")
+            .into_iter()
+            .map(|c| c.id)
+            .next()
+            .expect("tenant-2 company seeded");
+        assert_ne!(id, LEGACY_COMPANY_ID);
+        id
+    }
+
+    // Cross-tenant IDOR rejection (company_id sub-class): a tenant-1 caller
+    // must NOT be able to create an invoice stamped onto a tenant-2 company.
+    // cari=1 / product=Some(1) are own-tenant and cost_center_id=None skips the
+    // cost-center precheck, so the FK prechecks pass and the NotFound is
+    // uniquely from the company_id precheck.
+    #[tokio::test]
+    async fn test_create_invoice_rejects_foreign_company() {
+        let service = create_service().await;
+        let foreign_company_id = foreign_company_id(&service).await;
+        let mut create = base_invoice(1, 1);
+        create.company_id = foreign_company_id;
+        let err = service.create_invoice(create).await.unwrap_err();
+        assert!(
+            matches!(err, ApiError::NotFound(_)),
+            "tenant-1 must NOT create an invoice under a tenant-2 company, got {:?}",
+            err
+        );
+    }
+
+    // Cross-tenant IDOR rejection (company_id sub-class): a tenant-1 caller
+    // must NOT be able to create a payment stamped onto a tenant-2 company.
+    // A valid tenant-1 invoice (company_id=1 sentinel -> invoice company
+    // precheck passes) is created first; the payment's invoice_id/amount/
+    // status prechecks all pass, so the NotFound is uniquely from the
+    // company_id precheck.
+    #[tokio::test]
+    async fn test_create_payment_rejects_foreign_company() {
+        let service = create_service().await;
+        let foreign_company_id = foreign_company_id(&service).await;
+        let now = Utc::now();
+
+        let invoice = service
+            .create_invoice(base_invoice(1, 1))
+            .await
+            .expect("create tenant-1 invoice");
+
+        let payment_create = CreatePayment {
+            tenant_id: 1,
+            company_id: foreign_company_id,
+            invoice_id: invoice.id,
+            amount: dec!(50),
+            payment_date: now,
+            currency: "TRY".to_string(),
+            payment_method: "Bank Transfer".to_string(),
+            reference_number: Some("TRF001".to_string()),
+            notes: None,
+        };
+        let result = service.create_payment(payment_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a payment under a tenant-2 company, got {:?}",
+            result
+        );
     }
 }
