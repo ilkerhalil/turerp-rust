@@ -917,7 +917,8 @@ pub mod app {
         // e-Archive
         let earchive_repo = Arc::new(crate::domain::earchive::InMemoryEarchiveRepository::new())
             as crate::domain::earchive::BoxEarchiveRepository;
-        let earchive_service = crate::domain::earchive::EarchiveService::new(earchive_repo);
+        let earchive_service =
+            crate::domain::earchive::EarchiveService::new(earchive_repo, invoice_repo.clone());
 
         // e-Defter
         let edefter_repo = Arc::new(crate::domain::edefter::InMemoryEDefterRepository::new())
@@ -1625,7 +1626,8 @@ pub mod app {
 
         // e-Archive - PostgreSQL
         let earchive_repo = PostgresEarchiveRepository::new(pool.clone()).into_boxed();
-        let earchive_service = crate::domain::earchive::EarchiveService::new(earchive_repo);
+        let earchive_service =
+            crate::domain::earchive::EarchiveService::new(earchive_repo, invoice_repo.clone());
 
         // e-Defter - PostgreSQL
         let edefter_repo = PostgresEDefterRepository::new(pool.clone()).into_boxed();

@@ -10,17 +10,19 @@ use crate::domain::earchive::model::{
     CreateEarchiveDocument, EarchiveDocument, EarchiveStatus, EarchiveType,
 };
 use crate::domain::earchive::repository::BoxEarchiveRepository;
+use crate::domain::invoice::repository::BoxInvoiceRepository;
 use crate::error::ApiError;
 
 /// Service for managing E-Archive documents and GİB integration
 #[derive(Clone)]
 pub struct EarchiveService {
     repo: BoxEarchiveRepository,
+    invoice_repo: BoxInvoiceRepository,
 }
 
 impl EarchiveService {
-    pub fn new(repo: BoxEarchiveRepository) -> Self {
-        Self { repo }
+    pub fn new(repo: BoxEarchiveRepository, invoice_repo: BoxInvoiceRepository) -> Self {
+        Self { repo, invoice_repo }
     }
 
     /// Generate an E-Archive document from an invoice.
@@ -31,6 +33,15 @@ impl EarchiveService {
         invoice_id: i64,
         document_type: EarchiveType,
     ) -> Result<EarchiveDocument, ApiError> {
+        // Parent-ownership precheck: the source invoice must belong to the
+        // caller's tenant (cross-tenant orphan-FK IDOR, issue #301). The
+        // invoice is not otherwise loaded — this gate prevents a tenant from
+        // stamping an E-Archive (and embedding an invoice id in the UBL-TR
+        // XML) onto a foreign-tenant invoice id.
+        self.invoice_repo
+            .find_by_id(invoice_id, tenant_id)
+            .await?
+            .ok_or_else(|| ApiError::NotFound(format!("Invoice {} not found", invoice_id)))?;
         let uuid = uuid::Uuid::new_v4().to_string();
         let now = Utc::now();
 
@@ -301,24 +312,62 @@ impl EarchiveService {
 mod tests {
     use super::*;
     use crate::domain::earchive::repository::InMemoryEarchiveRepository;
+    use crate::domain::invoice::model::{CreateInvoice, CreateInvoiceLine, InvoiceType};
+    use crate::domain::invoice::repository::InMemoryInvoiceRepository;
+    use chrono::Utc;
+    use rust_decimal::Decimal;
     use std::sync::Arc;
 
-    fn make_service() -> EarchiveService {
+    /// Minimal owned-tenant invoice for seeding the parent-FK precheck.
+    fn seed_invoice(tenant_id: i64) -> CreateInvoice {
+        CreateInvoice {
+            tenant_id,
+            company_id: 1,
+            invoice_type: InvoiceType::SalesInvoice,
+            cari_id: 1,
+            issue_date: Utc::now(),
+            due_date: Utc::now() + chrono::Duration::days(7),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            notes: None,
+            cost_center_id: None,
+            lines: vec![CreateInvoiceLine {
+                product_id: None,
+                description: "Seed line".to_string(),
+                quantity: Decimal::new(1, 0),
+                unit_price: Decimal::new(10, 0),
+                tax_rate: Decimal::ZERO,
+                discount_rate: Decimal::ZERO,
+            }],
+        }
+    }
+
+    /// Build a service with a seeded invoice repo: tenant-1 invoices auto-id
+    /// to 1 and 2 (the own-tenant referents the existing tests pass to
+    /// `generate_earchive`), plus a tenant-2 invoice auto-id to 3 (the foreign
+    /// referent for the cross-tenant IDOR rejection test). The
+    /// `generate_earchive` invoice_id precheck (#301) resolves for own-tenant
+    /// ids 1/2 and 404s for the foreign id 3.
+    async fn make_service() -> EarchiveService {
         let repo = Arc::new(InMemoryEarchiveRepository::new()) as BoxEarchiveRepository;
-        EarchiveService::new(repo)
+        let invoice_repo = Arc::new(InMemoryInvoiceRepository::new()) as BoxInvoiceRepository;
+        invoice_repo.create(seed_invoice(1)).await.unwrap(); // id 1 (tenant 1)
+        invoice_repo.create(seed_invoice(1)).await.unwrap(); // id 2 (tenant 1)
+        invoice_repo.create(seed_invoice(2)).await.unwrap(); // id 3 (tenant 2)
+        EarchiveService::new(repo, invoice_repo)
     }
 
     #[tokio::test]
     async fn test_generate_earchive_invoice() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         let doc = svc
-            .generate_earchive(1, 42, EarchiveType::EArchiveInvoice)
+            .generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
             .await
             .unwrap();
 
         assert_eq!(doc.tenant_id, 1);
-        assert_eq!(doc.related_invoice_id, Some(42));
+        assert_eq!(doc.related_invoice_id, Some(1));
         assert_eq!(doc.document_type, EarchiveType::EArchiveInvoice);
         assert_eq!(doc.status, EarchiveStatus::Generated);
         assert!(!doc.uuid.is_empty());
@@ -328,10 +377,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_generate_smm() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         let doc = svc
-            .generate_earchive(1, 42, EarchiveType::ESerbestMeslekMakbuzu)
+            .generate_earchive(1, 1, EarchiveType::ESerbestMeslekMakbuzu)
             .await
             .unwrap();
 
@@ -342,7 +391,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_document() {
-        let svc = make_service();
+        let svc = make_service().await;
         let doc = svc
             .generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
             .await
@@ -357,7 +406,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_list_documents() {
-        let svc = make_service();
+        let svc = make_service().await;
 
         svc.generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
             .await
@@ -384,7 +433,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sign_document() {
-        let svc = make_service();
+        let svc = make_service().await;
         let doc = svc
             .generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
             .await
@@ -398,7 +447,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sign_non_generated_fails() {
-        let svc = make_service();
+        let svc = make_service().await;
         let doc = svc
             .generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
             .await
@@ -414,7 +463,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_send_to_gib() {
-        let svc = make_service();
+        let svc = make_service().await;
         let doc = svc
             .generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
             .await
@@ -431,7 +480,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_send_without_sign_fails() {
-        let svc = make_service();
+        let svc = make_service().await;
         let doc = svc
             .generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
             .await
@@ -443,7 +492,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cancel_document() {
-        let svc = make_service();
+        let svc = make_service().await;
         let doc = svc
             .generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
             .await
@@ -455,7 +504,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_cancel_already_cancelled_fails() {
-        let svc = make_service();
+        let svc = make_service().await;
         let doc = svc
             .generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
             .await
@@ -469,7 +518,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_tenant_isolation() {
-        let svc = make_service();
+        let svc = make_service().await;
         let doc = svc
             .generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
             .await
@@ -481,7 +530,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_xml_generation_ubl_tr() {
-        let svc = make_service();
+        let svc = make_service().await;
         let now = Utc::now();
         let xml = svc.generate_ubl_tr_xml(42, "test-uuid", now);
 
@@ -494,12 +543,48 @@ mod tests {
 
     #[tokio::test]
     async fn test_xml_generation_smm() {
-        let svc = make_service();
+        let svc = make_service().await;
         let now = Utc::now();
         let xml = svc.generate_smm_xml(42, "test-uuid", now);
 
         assert!(xml.contains("SerbestMeslekMakbuzu"));
         assert!(xml.contains("test-uuid"));
         assert!(xml.contains("42"));
+    }
+
+    /// Rejects an E-Archive stamped onto a foreign-tenant invoice (orphan-FK
+    /// IDOR, issue #301). Own-tenant invoice id 1 succeeds; the tenant-2
+    /// invoice id 3 and a nonexistent id 999 both 404.
+    #[tokio::test]
+    async fn test_generate_earchive_rejects_foreign_invoice() {
+        let svc = make_service().await;
+
+        // Own-tenant invoice (id 1, tenant 1) → ok.
+        assert!(
+            svc.generate_earchive(1, 1, EarchiveType::EArchiveInvoice)
+                .await
+                .is_ok(),
+            "own-tenant invoice must succeed"
+        );
+
+        // Foreign-tenant invoice (id 3, belongs to tenant 2) → NotFound.
+        let result = svc
+            .generate_earchive(1, 3, EarchiveType::EArchiveInvoice)
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT generate an E-Archive for a tenant-2 invoice, got {:?}",
+            result
+        );
+
+        // Nonexistent invoice → NotFound.
+        let result = svc
+            .generate_earchive(1, 999, EarchiveType::EArchiveInvoice)
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent invoice must be NotFound, got {:?}",
+            result
+        );
     }
 }
