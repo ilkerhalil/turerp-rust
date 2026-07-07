@@ -94,10 +94,13 @@ pub async fn process_outbox(
     security(("bearer_auth" = []))
 )]
 pub async fn get_pending_events(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     bus: web::Data<dyn EventBus>,
 ) -> Result<HttpResponse, ApiError> {
-    let events = bus.get_pending(50).await.map_err(ApiError::Internal)?;
+    let events = bus
+        .get_pending(admin_user.0.tenant_id, 50)
+        .await
+        .map_err(ApiError::Internal)?;
     let responses: Vec<OutboxEventResponse> = events
         .iter()
         .map(|e| OutboxEventResponse {
@@ -156,12 +159,12 @@ pub async fn get_dead_letters(
     security(("bearer_auth" = []))
 )]
 pub async fn retry_dead_letter(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     path: web::Path<i64>,
     bus: web::Data<dyn EventBus>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
-    bus.retry_dead_letter(id)
+    bus.retry_dead_letter(admin_user.0.tenant_id, id)
         .await
         .map_err(ApiError::Internal)?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Event queued for retry"})))
@@ -180,12 +183,14 @@ pub async fn retry_dead_letter(
     security(("bearer_auth" = []))
 )]
 pub async fn retry_outbox_event(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     path: web::Path<i64>,
     bus: web::Data<dyn EventBus>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
-    bus.retry_outbox(id).await.map_err(ApiError::Internal)?;
+    bus.retry_outbox(admin_user.0.tenant_id, id)
+        .await
+        .map_err(ApiError::Internal)?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Event queued for retry"})))
 }
 
@@ -233,12 +238,12 @@ pub async fn get_dlq(
     security(("bearer_auth" = []))
 )]
 pub async fn retry_dlq(
-    _admin_user: AdminUser,
+    admin_user: AdminUser,
     path: web::Path<i64>,
     bus: web::Data<dyn EventBus>,
 ) -> Result<HttpResponse, ApiError> {
     let id = path.into_inner();
-    bus.retry_dead_letter(id)
+    bus.retry_dead_letter(admin_user.0.tenant_id, id)
         .await
         .map_err(ApiError::Internal)?;
     Ok(HttpResponse::Ok().json(serde_json::json!({"message": "Event queued for retry"})))

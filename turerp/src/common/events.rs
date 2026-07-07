@@ -212,23 +212,23 @@ pub trait EventBus: Send + Sync {
     /// Process pending outbox events (called by background worker)
     async fn process_outbox(&self, batch_size: u32) -> Result<u64, String>;
 
-    /// Get pending outbox events
-    async fn get_pending(&self, limit: u32) -> Result<Vec<OutboxEvent>, String>;
+    /// Get pending outbox events for a tenant (handler-reachable — must scope by tenant)
+    async fn get_pending(&self, tenant_id: i64, limit: u32) -> Result<Vec<OutboxEvent>, String>;
 
-    /// Mark an outbox event as published
+    /// Mark an outbox event as published (background worker — operates across all tenants)
     async fn mark_published(&self, event_id: i64) -> Result<(), String>;
 
-    /// Mark an outbox event as failed (moves to DLQ after max attempts)
+    /// Mark an outbox event as failed (moves to DLQ after max attempts; background worker)
     async fn mark_failed(&self, event_id: i64, error: &str) -> Result<(), String>;
 
     /// Get dead lettered events for a tenant
     async fn get_dead_letters(&self, tenant_id: i64) -> Result<Vec<DeadLetterEntry>, String>;
 
-    /// Retry a dead-lettered event
-    async fn retry_dead_letter(&self, entry_id: i64) -> Result<(), String>;
+    /// Retry a dead-lettered event (handler-reachable — must scope by tenant)
+    async fn retry_dead_letter(&self, tenant_id: i64, entry_id: i64) -> Result<(), String>;
 
-    /// Retry a failed or dead-lettered outbox event
-    async fn retry_outbox(&self, event_id: i64) -> Result<(), String>;
+    /// Retry a failed or dead-lettered outbox event (handler-reachable — must scope by tenant)
+    async fn retry_outbox(&self, tenant_id: i64, event_id: i64) -> Result<(), String>;
 }
 
 /// Type alias for boxed event bus
@@ -390,11 +390,11 @@ impl EventBus for InMemoryEventBus {
         Ok(processed)
     }
 
-    async fn get_pending(&self, limit: u32) -> Result<Vec<OutboxEvent>, String> {
+    async fn get_pending(&self, tenant_id: i64, limit: u32) -> Result<Vec<OutboxEvent>, String> {
         let outbox = self.outbox.read();
         Ok(outbox
             .iter()
-            .filter(|e| e.status == EventStatus::Pending)
+            .filter(|e| e.tenant_id == tenant_id && e.status == EventStatus::Pending)
             .take(limit as usize)
             .cloned()
             .collect())
@@ -452,14 +452,22 @@ impl EventBus for InMemoryEventBus {
             .collect())
     }
 
-    async fn retry_dead_letter(&self, entry_id: i64) -> Result<(), String> {
+    async fn retry_dead_letter(&self, tenant_id: i64, entry_id: i64) -> Result<(), String> {
         let entry = {
             let dlq = self.dead_letters.read();
             dlq.iter()
-                .find(|e| e.id == entry_id)
+                .find(|e| e.id == entry_id && e.tenant_id == tenant_id)
                 .cloned()
                 .ok_or_else(|| format!("DLQ entry {} not found", entry_id))?
         };
+
+        // Defense-in-depth: the DLQ row's tenant_id was verified above, but the
+        // re-published event's own tenant_id is taken from the stored event JSON.
+        // They are kept in lockstep by publish/mark_failed, but assert equality
+        // so a future desync fails closed instead of writing a cross-tenant row.
+        if entry.original_event.tenant_id() != tenant_id {
+            return Err(format!("DLQ entry {} not found", entry_id));
+        }
 
         // Re-publish the event
         self.publish(entry.original_event.clone()).await?;
@@ -470,12 +478,13 @@ impl EventBus for InMemoryEventBus {
         Ok(())
     }
 
-    async fn retry_outbox(&self, event_id: i64) -> Result<(), String> {
+    async fn retry_outbox(&self, tenant_id: i64, event_id: i64) -> Result<(), String> {
         let mut outbox = self.outbox.write();
         let event = outbox
             .iter_mut()
             .find(|e| {
                 e.id == event_id
+                    && e.tenant_id == tenant_id
                     && (e.status == EventStatus::Failed || e.status == EventStatus::DeadLettered)
             })
             .ok_or_else(|| format!("Retryable outbox event {} not found", event_id))?;
@@ -900,7 +909,7 @@ mod tests {
         let dlq_id = dlq[0].id;
 
         // Retry from DLQ
-        bus.retry_dead_letter(dlq_id).await.unwrap();
+        bus.retry_dead_letter(1, dlq_id).await.unwrap();
 
         // DLQ should be empty, new event in outbox
         let dlq = bus.get_dead_letters(1).await.unwrap();
@@ -949,7 +958,7 @@ mod tests {
         assert_eq!(processed, 3);
 
         // 2 remaining
-        let pending = bus.get_pending(10).await.unwrap();
+        let pending = bus.get_pending(1, 10).await.unwrap();
         assert_eq!(pending.len(), 2);
     }
 
@@ -1159,5 +1168,123 @@ mod tests {
         let outbox = bus.outbox.read();
         assert_eq!(outbox.len(), 1);
         assert_eq!(outbox[0].status, EventStatus::Published);
+    }
+
+    // Cross-tenant IDOR guard: get_pending must scope by tenant_id so a caller
+    // cannot enumerate other tenants' pending outbox events.
+    #[tokio::test]
+    async fn test_get_pending_tenant_scoped() {
+        let bus = InMemoryEventBus::new();
+        let id1 = bus.allocate_id();
+        let id2 = bus.allocate_id();
+        {
+            let mut outbox = bus.outbox.write();
+            for (id, tenant) in [(id1, 1i64), (id2, 2i64)] {
+                outbox.push(OutboxEvent {
+                    id,
+                    event: DomainEvent::Custom {
+                        name: format!("t{}", tenant),
+                        tenant_id: tenant,
+                        payload: "{}".to_string(),
+                    },
+                    aggregate_type: "test".to_string(),
+                    aggregate_id: id,
+                    tenant_id: tenant,
+                    created_at: Utc::now(),
+                    published_at: None,
+                    status: EventStatus::Pending,
+                    attempts: 0,
+                    last_error: None,
+                });
+            }
+        }
+
+        let t1 = bus.get_pending(1, 10).await.unwrap();
+        assert_eq!(t1.len(), 1);
+        assert_eq!(t1[0].tenant_id, 1);
+        let t2 = bus.get_pending(2, 10).await.unwrap();
+        assert_eq!(t2.len(), 1);
+        assert_eq!(t2[0].tenant_id, 2);
+        // Foreign tenant sees nothing.
+        assert!(bus.get_pending(999, 10).await.unwrap().is_empty());
+    }
+
+    // Cross-tenant IDOR guard: retry_outbox must reject a foreign-tenant event id.
+    #[tokio::test]
+    async fn test_retry_outbox_tenant_scoped() {
+        let bus = InMemoryEventBus::new();
+        let id = bus.allocate_id();
+        {
+            let mut outbox = bus.outbox.write();
+            outbox.push(OutboxEvent {
+                id,
+                event: DomainEvent::Custom {
+                    name: "failed".to_string(),
+                    tenant_id: 1,
+                    payload: "{}".to_string(),
+                },
+                aggregate_type: "test".to_string(),
+                aggregate_id: id,
+                tenant_id: 1,
+                created_at: Utc::now(),
+                published_at: None,
+                status: EventStatus::Failed,
+                attempts: 1,
+                last_error: None,
+            });
+        }
+
+        // Foreign tenant cannot retry tenant-1's event.
+        let err = bus.retry_outbox(2, id).await;
+        assert!(err.is_err());
+        // Status unchanged.
+        {
+            let outbox = bus.outbox.read();
+            assert_eq!(outbox[0].status, EventStatus::Failed);
+        }
+        // Same tenant can retry.
+        bus.retry_outbox(1, id).await.unwrap();
+        let outbox = bus.outbox.read();
+        assert_eq!(outbox[0].status, EventStatus::Pending);
+    }
+
+    // Cross-tenant IDOR guard: retry_dead_letter must reject a foreign-tenant DLQ id.
+    #[tokio::test]
+    async fn test_retry_dead_letter_tenant_scoped() {
+        let bus = InMemoryEventBus::with_max_attempts(1);
+        let id = bus.allocate_id();
+        {
+            let mut outbox = bus.outbox.write();
+            outbox.push(OutboxEvent {
+                id,
+                event: DomainEvent::Custom {
+                    name: "dlq".to_string(),
+                    tenant_id: 1,
+                    payload: "{}".to_string(),
+                },
+                aggregate_type: "test".to_string(),
+                aggregate_id: id,
+                tenant_id: 1,
+                created_at: Utc::now(),
+                published_at: None,
+                status: EventStatus::Pending,
+                attempts: 0,
+                last_error: None,
+            });
+        }
+        bus.mark_failed(id, "Fatal").await.unwrap();
+        let dlq = bus.get_dead_letters(1).await.unwrap();
+        assert_eq!(dlq.len(), 1);
+        let dlq_id = dlq[0].id;
+
+        // Foreign tenant cannot retry tenant-1's DLQ entry.
+        let err = bus.retry_dead_letter(2, dlq_id).await;
+        assert!(err.is_err());
+        // DLQ entry still present.
+        assert_eq!(bus.get_dead_letters(1).await.unwrap().len(), 1);
+
+        // Same tenant can retry, which removes the entry.
+        bus.retry_dead_letter(1, dlq_id).await.unwrap();
+        assert!(bus.get_dead_letters(1).await.unwrap().is_empty());
     }
 }
