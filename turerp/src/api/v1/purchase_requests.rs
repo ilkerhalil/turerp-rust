@@ -75,6 +75,9 @@ pub async fn create_request(
     let tenant_id = auth_user.0.tenant_id;
     let mut create = payload.into_inner();
     create.tenant_id = tenant_id;
+    // Force the auth-derived caller onto `requested_by` so a user cannot
+    // attribute a purchase request to another user via a client-supplied value.
+    create.requested_by = auth_user.0.user_id()?;
 
     json_resp!(
         service.create_purchase_request(create),
