@@ -115,7 +115,10 @@ async fn test_plan_crud_admin() {
 async fn test_subscription_crud() {
     let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
-    let (token, _) = register_admin(&app_state, 1).await;
+    let (token, user_id) = register_admin(&app_state, 1).await;
+    // Seed a cari so the create-subscription customer_id precheck (cari FK,
+    // issue #296) resolves — the InMemory cari repo starts empty.
+    let customer_id = seed_cari!(&app, &token, user_id, 1);
 
     // Create a plan first
     let plan_req = auth_request(
@@ -145,7 +148,7 @@ async fn test_subscription_crud() {
         &token,
     )
     .set_json(json!({
-        "customer_id": 1,
+        "customer_id": customer_id,
         "plan_id": plan_id,
         "start_date": "2024-01-01",
         "status": "active",
@@ -159,7 +162,7 @@ async fn test_subscription_crud() {
     let body = to_bytes(resp.into_body()).await.unwrap();
     let sub: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let sub_id = sub["id"].as_i64().unwrap();
-    assert_eq!(sub["customer_id"], 1);
+    assert_eq!(sub["customer_id"], customer_id);
     assert_eq!(sub["plan_id"], plan_id);
     assert_eq!(sub["status"], "active");
 
