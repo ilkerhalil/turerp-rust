@@ -1,41 +1,10 @@
 //! E-Archive Integration Tests
 
-use actix_web::{body::to_bytes, http::StatusCode, test, web, App};
+use actix_web::{body::to_bytes, http::StatusCode, test};
 use serde_json::json;
 
 mod common;
 use common::*;
-
-use turerp::api::{auth_configure, v1_earchive_configure};
-
-fn build_test_app_with_earchive(
-    state: &turerp::app::AppState,
-) -> App<
-    impl actix_web::dev::ServiceFactory<
-        actix_web::dev::ServiceRequest,
-        Config = (),
-        Response = actix_web::dev::ServiceResponse<
-            actix_web::body::EitherBody<actix_web::body::BoxBody>,
-        >,
-        Error = actix_web::Error,
-        InitError = (),
-    >,
-> {
-    let jwt = create_test_jwt_service();
-    App::new()
-        .wrap(turerp::middleware::JwtAuthMiddleware::new(jwt))
-        .app_data(web::Data::new(state.clone()))
-        .app_data(state.auth.auth_service.clone())
-        .app_data(state.auth.user_service.clone())
-        .app_data(state.auth.jwt_service.clone())
-        .app_data(state.i18n.clone())
-        .app_data(state.integration.earchive_service.clone())
-        .service(
-            web::scope("/api")
-                .configure(auth_configure)
-                .configure(v1_earchive_configure),
-        )
-}
 
 // ============================================================================
 // CRUD Tests
@@ -44,8 +13,11 @@ fn build_test_app_with_earchive(
 #[actix_web::test]
 async fn test_generate_earchive_success() {
     let state = create_test_app_state().await;
-    let app = test::init_service(build_test_app_with_earchive(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    // Seed an owned invoice so the generate_earchive invoice_id precheck
+    // (#301) resolves — the InMemory invoice repo starts empty.
+    let invoice_id = seed_invoice!(&app, &token, user_id, 1);
 
     let req = auth_request(
         actix_web::http::Method::POST,
@@ -53,7 +25,7 @@ async fn test_generate_earchive_success() {
         &token,
     )
     .set_json(json!({
-        "invoice_id": 42,
+        "invoice_id": invoice_id,
         "document_type": "EArchiveInvoice"
     }))
     .to_request();
@@ -72,8 +44,9 @@ async fn test_generate_earchive_success() {
 #[actix_web::test]
 async fn test_get_earchive_success() {
     let state = create_test_app_state().await;
-    let app = test::init_service(build_test_app_with_earchive(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let invoice_id = seed_invoice!(&app, &token, user_id, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -81,7 +54,7 @@ async fn test_get_earchive_success() {
         &token,
     )
     .set_json(json!({
-        "invoice_id": 1,
+        "invoice_id": invoice_id,
         "document_type": "EArchiveInvoice"
     }))
     .to_request();
@@ -108,7 +81,7 @@ async fn test_get_earchive_success() {
 #[actix_web::test]
 async fn test_get_earchive_not_found() {
     let state = create_test_app_state().await;
-    let app = test::init_service(build_test_app_with_earchive(&state)).await;
+    let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_admin(&state, 1).await;
 
     let req = auth_request(
@@ -124,8 +97,9 @@ async fn test_get_earchive_not_found() {
 #[actix_web::test]
 async fn test_generate_earchive_smm() {
     let state = create_test_app_state().await;
-    let app = test::init_service(build_test_app_with_earchive(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let invoice_id = seed_invoice!(&app, &token, user_id, 1);
 
     let req = auth_request(
         actix_web::http::Method::POST,
@@ -133,7 +107,7 @@ async fn test_generate_earchive_smm() {
         &token,
     )
     .set_json(json!({
-        "invoice_id": 99,
+        "invoice_id": invoice_id,
         "document_type": "ESerbestMeslekMakbuzu"
     }))
     .to_request();
@@ -152,8 +126,9 @@ async fn test_generate_earchive_smm() {
 #[actix_web::test]
 async fn test_sign_earchive() {
     let state = create_test_app_state().await;
-    let app = test::init_service(build_test_app_with_earchive(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let invoice_id = seed_invoice!(&app, &token, user_id, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -161,7 +136,7 @@ async fn test_sign_earchive() {
         &token,
     )
     .set_json(json!({
-        "invoice_id": 10,
+        "invoice_id": invoice_id,
         "document_type": "EArchiveInvoice"
     }))
     .to_request();
@@ -188,8 +163,9 @@ async fn test_sign_earchive() {
 #[actix_web::test]
 async fn test_send_earchive() {
     let state = create_test_app_state().await;
-    let app = test::init_service(build_test_app_with_earchive(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let invoice_id = seed_invoice!(&app, &token, user_id, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -197,7 +173,7 @@ async fn test_send_earchive() {
         &token,
     )
     .set_json(json!({
-        "invoice_id": 11,
+        "invoice_id": invoice_id,
         "document_type": "EArchiveInvoice"
     }))
     .to_request();
@@ -234,8 +210,9 @@ async fn test_send_earchive() {
 #[actix_web::test]
 async fn test_cancel_earchive() {
     let state = create_test_app_state().await;
-    let app = test::init_service(build_test_app_with_earchive(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let invoice_id = seed_invoice!(&app, &token, user_id, 1);
 
     let create_req = auth_request(
         actix_web::http::Method::POST,
@@ -243,7 +220,7 @@ async fn test_cancel_earchive() {
         &token,
     )
     .set_json(json!({
-        "invoice_id": 12,
+        "invoice_id": invoice_id,
         "document_type": "EArchiveInvoice"
     }))
     .to_request();
@@ -274,7 +251,7 @@ async fn test_cancel_earchive() {
 #[actix_web::test]
 async fn test_earchive_unauthorized() {
     let state = create_test_app_state().await;
-    let app = test::init_service(build_test_app_with_earchive(&state)).await;
+    let app = test::init_service(build_test_app(&state)).await;
 
     let req = test::TestRequest::post()
         .uri("/api/v1/earchive/generate")
@@ -290,7 +267,7 @@ async fn test_earchive_unauthorized() {
 #[actix_web::test]
 async fn test_earchive_normal_user_forbidden() {
     let state = create_test_app_state().await;
-    let app = test::init_service(build_test_app_with_earchive(&state)).await;
+    let app = test::init_service(build_test_app(&state)).await;
     let (token, _user_id) = register_user!(&app, 1);
 
     let req = auth_request(
