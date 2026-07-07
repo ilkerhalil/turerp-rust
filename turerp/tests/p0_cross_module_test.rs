@@ -425,27 +425,56 @@ async fn test_edefter_populate_invalid_period() {
 
 // ---- e-Fatura -> Tax Engine integration test ----
 
+use chrono::Utc;
 use turerp::common::gov::InMemoryGibGateway;
 use turerp::domain::efatura::model::EFaturaProfile;
 use turerp::domain::efatura::repository::InMemoryEFaturaRepository;
 use turerp::domain::efatura::service::EFaturaService;
+use turerp::domain::invoice::model::{CreateInvoice, CreateInvoiceLine, InvoiceType};
+use turerp::domain::invoice::repository::{BoxInvoiceRepository, InMemoryInvoiceRepository};
 
-fn make_efatura_service() -> EFaturaService {
+async fn make_efatura_service() -> EFaturaService {
     let repo = Arc::new(InMemoryEFaturaRepository::new());
     let gateway = Arc::new(InMemoryGibGateway::new());
-    EFaturaService::new(repo, gateway)
+    // Seed an owned tenant-1 invoice (auto-id 1) so the create_from_invoice
+    // invoice_id precheck (#300) resolves.
+    let invoice_repo = Arc::new(InMemoryInvoiceRepository::new()) as BoxInvoiceRepository;
+    invoice_repo
+        .create(CreateInvoice {
+            tenant_id: 1,
+            company_id: 1,
+            invoice_type: InvoiceType::SalesInvoice,
+            cari_id: 1,
+            issue_date: Utc::now(),
+            due_date: Utc::now() + chrono::Duration::days(7),
+            currency: "TRY".to_string(),
+            exchange_rate: Decimal::ONE,
+            notes: None,
+            cost_center_id: None,
+            lines: vec![CreateInvoiceLine {
+                product_id: None,
+                description: "Seed line".to_string(),
+                quantity: Decimal::new(1, 0),
+                unit_price: Decimal::new(10, 0),
+                tax_rate: Decimal::ZERO,
+                discount_rate: Decimal::ZERO,
+            }],
+        })
+        .await
+        .unwrap();
+    EFaturaService::new(repo, gateway, invoice_repo)
 }
 
 #[tokio::test]
 async fn test_efatura_create_from_invoice_and_send() {
-    let svc = make_efatura_service();
+    let svc = make_efatura_service().await;
 
     // Create an e-Fatura draft from an invoice (cross-module: Invoice -> e-Fatura)
     let fatura = svc
-        .create_from_invoice(42, EFaturaProfile::TemelFatura, 1)
+        .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)
         .await
         .unwrap();
-    assert_eq!(fatura.invoice_id, Some(42));
+    assert_eq!(fatura.invoice_id, Some(1));
     assert_eq!(fatura.status, EFaturaStatus::Draft);
 
     // Send to GIB
@@ -459,7 +488,7 @@ async fn test_efatura_create_from_invoice_and_send() {
 
 #[tokio::test]
 async fn test_efatura_cancel_flow() {
-    let svc = make_efatura_service();
+    let svc = make_efatura_service().await;
 
     let fatura = svc
         .create_from_invoice(1, EFaturaProfile::TemelFatura, 1)

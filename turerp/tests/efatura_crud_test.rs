@@ -14,11 +14,14 @@ use common::*;
 async fn test_create_efatura_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    // Seed an owned invoice so the create_efatura invoice_id precheck (#300)
+    // resolves — the InMemory invoice repo starts empty.
+    let invoice_id = seed_invoice!(&app, &token, user_id, 1);
 
     let req = auth_request(actix_web::http::Method::POST, "/api/v1/efatura", &token)
         .set_json(json!({
-            "invoice_id": 42,
+            "invoice_id": invoice_id,
             "profile_id": "TemelFatura"
         }))
         .to_request();
@@ -28,7 +31,7 @@ async fn test_create_efatura_success() {
 
     let body = to_bytes(resp.into_body()).await.unwrap();
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(json["invoice_id"], 42);
+    assert_eq!(json["invoice_id"], invoice_id);
     assert_eq!(json["profile_id"], "TemelFatura");
     assert_eq!(json["status"], "Draft");
     assert!(json["id"].is_number());
@@ -39,11 +42,12 @@ async fn test_create_efatura_success() {
 async fn test_get_efatura_success() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let invoice_id = seed_invoice!(&app, &token, user_id, 1);
 
     let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/efatura", &token)
         .set_json(json!({
-            "invoice_id": 1,
+            "invoice_id": invoice_id,
             "profile_id": "Ihracat"
         }))
         .to_request();
@@ -87,11 +91,12 @@ async fn test_get_efatura_not_found() {
 async fn test_send_efatura() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let invoice_id = seed_invoice!(&app, &token, user_id, 1);
 
     let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/efatura", &token)
         .set_json(json!({
-            "invoice_id": 2,
+            "invoice_id": invoice_id,
             "profile_id": "TemelFatura"
         }))
         .to_request();
@@ -119,11 +124,12 @@ async fn test_send_efatura() {
 async fn test_cancel_efatura() {
     let state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&state)).await;
-    let (token, _user_id) = register_admin(&state, 1).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+    let invoice_id = seed_invoice!(&app, &token, user_id, 1);
 
     let create_req = auth_request(actix_web::http::Method::POST, "/api/v1/efatura", &token)
         .set_json(json!({
-            "invoice_id": 3,
+            "invoice_id": invoice_id,
             "profile_id": "TemelFatura"
         }))
         .to_request();
