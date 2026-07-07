@@ -570,7 +570,9 @@ pub mod app {
 
         // Auth & User
         let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
-        let user_service = UserService::new(user_repo).with_cache(cache_service.clone());
+        // Clone before moving into UserService: the same `user_repo` instance is
+        // shared by the CRM `assigned_to` parent-ownership precheck below.
+        let user_service = UserService::new(user_repo.clone()).with_cache(cache_service.clone());
         let jwt_service = JwtService::new(
             config.jwt.secret.clone(),
             config.jwt.access_token_expiration,
@@ -722,7 +724,13 @@ pub mod app {
             Arc::new(InMemoryOpportunityRepository::new()) as BoxOpportunityRepository;
         let campaign_repo = Arc::new(InMemoryCampaignRepository::new()) as BoxCampaignRepository;
         let ticket_repo = Arc::new(InMemoryTicketRepository::new()) as BoxTicketRepository;
-        let crm_service = CrmService::new(lead_repo, opportunity_repo, campaign_repo, ticket_repo);
+        let crm_service = CrmService::new(
+            lead_repo,
+            opportunity_repo,
+            campaign_repo,
+            ticket_repo,
+            user_repo.clone(),
+        );
 
         // Chart of Accounts
         let chart_account_repo =
@@ -1232,7 +1240,9 @@ pub mod app {
 
         // Auth & User - PostgreSQL
         let user_repo = PostgresUserRepository::new(pool.clone()).into_boxed();
-        let user_service = UserService::new(user_repo).with_cache(cache_service.clone());
+        // Clone before moving into UserService: the same `user_repo` instance is
+        // shared by the CRM `assigned_to` parent-ownership precheck below.
+        let user_service = UserService::new(user_repo.clone()).with_cache(cache_service.clone());
         let jwt_service = JwtService::new(
             config.jwt.secret.clone(),
             config.jwt.access_token_expiration,
@@ -1370,7 +1380,13 @@ pub mod app {
         let opportunity_repo = PostgresOpportunityRepository::new(pool.clone()).into_boxed();
         let campaign_repo = PostgresCampaignRepository::new(pool.clone()).into_boxed();
         let ticket_repo = PostgresTicketRepository::new(pool.clone()).into_boxed();
-        let crm_service = CrmService::new(lead_repo, opportunity_repo, campaign_repo, ticket_repo);
+        let crm_service = CrmService::new(
+            lead_repo,
+            opportunity_repo,
+            campaign_repo,
+            ticket_repo,
+            user_repo.clone(),
+        );
 
         // Customer Portal - PostgreSQL
         let portal_user_repo = PostgresPortalUserRepository::new(pool.clone()).into_boxed();
