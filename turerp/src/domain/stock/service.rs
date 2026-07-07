@@ -2,6 +2,8 @@
 use rust_decimal::Decimal;
 
 use crate::common::pagination::PaginatedResult;
+use crate::domain::company::service::ensure_company_owned;
+use crate::domain::company::BoxCompanyRepository;
 use crate::domain::product::repository::BoxProductRepository;
 use crate::domain::stock::model::{
     CreateStockMovement, CreateWarehouse, MovementType, StockLevel, StockLevelResponse,
@@ -19,6 +21,7 @@ pub struct StockService {
     stock_level_repo: BoxStockLevelRepository,
     stock_movement_repo: BoxStockMovementRepository,
     product_repo: BoxProductRepository,
+    company_repo: BoxCompanyRepository,
 }
 
 impl StockService {
@@ -27,12 +30,14 @@ impl StockService {
         stock_level_repo: BoxStockLevelRepository,
         stock_movement_repo: BoxStockMovementRepository,
         product_repo: BoxProductRepository,
+        company_repo: BoxCompanyRepository,
     ) -> Self {
         Self {
             warehouse_repo,
             stock_level_repo,
             stock_movement_repo,
             product_repo,
+            company_repo,
         }
     }
 
@@ -45,6 +50,9 @@ impl StockService {
         create
             .validate()
             .map_err(|e| ApiError::Validation(e.join(", ")))?;
+        // Parent-ownership precheck: body company_id must belong to the caller's
+        // tenant (legacy `1` sentinel skipped for backward compat).
+        ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
         let warehouse = self.warehouse_repo.create(create).await?;
         Ok(warehouse.into())
     }
@@ -311,6 +319,11 @@ impl StockService {
                 ApiError::NotFound(format!("Product {} not found", create.product_id))
             })?;
 
+        // Parent-ownership precheck: body company_id must belong to the caller's
+        // tenant (legacy `1` sentinel skipped for backward compat). `tenant_id`
+        // is the auth-overwritten service param (same as the product precheck).
+        ensure_company_owned(&self.company_repo, create.company_id, tenant_id).await?;
+
         // Get current stock level
         let current_level = self
             .stock_level_repo
@@ -469,6 +482,9 @@ impl StockService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::company::repository::InMemoryCompanyRepository;
+    use crate::domain::company::service::LEGACY_COMPANY_ID;
+    use crate::domain::company::CreateCompany;
     use crate::domain::product::model::CreateProduct;
     use crate::domain::product::repository::InMemoryProductRepository;
     use crate::domain::stock::model::MovementType;
@@ -517,12 +533,50 @@ mod tests {
             .await
             .expect("seed product t2");
 
+        // Seed a company per tenant so the InMemory auto-id counter yields id=1
+        // for tenant-1 (the LEGACY_COMPANY_ID sentinel, skipped by the precheck)
+        // and id=2 for tenant-2 (a non-sentinel foreign company the reject tests
+        // target).
+        let company_repo = Arc::new(InMemoryCompanyRepository::new()) as BoxCompanyRepository;
+        for tenant in [1, 2] {
+            company_repo
+                .create(CreateCompany {
+                    code: format!("CO{}", tenant),
+                    name: format!("Tenant {} Co", tenant),
+                    tax_number: None,
+                    address: None,
+                    city: None,
+                    country: None,
+                    currency: "TRY".to_string(),
+                    tenant_id: tenant,
+                })
+                .await
+                .expect("seed company");
+        }
+
         StockService::new(
             warehouse_repo,
             stock_level_repo,
             stock_movement_repo,
             product_repo,
+            company_repo,
         )
+    }
+
+    /// Returns the tenant-2 company id (a non-sentinel foreign company) for the
+    /// reject tests, guarding that the seeded id is not the LEGACY sentinel.
+    async fn foreign_company_id(service: &StockService) -> i64 {
+        let id = service
+            .company_repo
+            .find_by_tenant(2)
+            .await
+            .expect("list tenant-2 companies")
+            .into_iter()
+            .map(|c| c.id)
+            .next()
+            .expect("tenant-2 company seeded");
+        assert_ne!(id, LEGACY_COMPANY_ID);
+        id
     }
 
     #[tokio::test]
@@ -717,5 +771,67 @@ mod tests {
             .await
             .unwrap_err();
         assert!(matches!(err, ApiError::NotFound(_)), "got {:?}", err);
+    }
+
+    /// Rejects a warehouse stamped onto a foreign-tenant company.
+    #[tokio::test]
+    async fn test_create_warehouse_rejects_foreign_company() {
+        let service = create_service().await;
+        let foreign = foreign_company_id(&service).await;
+        let create = CreateWarehouse {
+            tenant_id: 1,
+            company_id: foreign,
+            code: "WH-FOR".to_string(),
+            name: "Foreign-stamped warehouse".to_string(),
+            address: None,
+        };
+        let result = service.create_warehouse(create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "expected NotFound for foreign company_id, got {:?}",
+            result
+        );
+    }
+
+    /// Rejects a stock movement stamped onto a foreign-tenant company. Uses an
+    /// own-tenant warehouse + product (id=1) so the warehouse + product
+    /// prechecks pass; the foreign company_id is the sole rejection source.
+    #[tokio::test]
+    async fn test_create_stock_movement_rejects_foreign_company() {
+        let service = create_service().await;
+        let foreign = foreign_company_id(&service).await;
+        let warehouse = service
+            .create_warehouse(CreateWarehouse {
+                tenant_id: 1,
+                company_id: 1,
+                code: "WH001".to_string(),
+                name: "Main".to_string(),
+                address: None,
+            })
+            .await
+            .unwrap();
+        let err = service
+            .create_stock_movement(
+                CreateStockMovement {
+                    tenant_id: 1,
+                    company_id: foreign,
+                    warehouse_id: warehouse.id,
+                    product_id: 1,
+                    movement_type: MovementType::Purchase,
+                    quantity: dec!(100),
+                    reference_type: None,
+                    reference_id: None,
+                    notes: None,
+                    created_by: 1,
+                },
+                1,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, ApiError::NotFound(_)),
+            "expected NotFound for foreign company_id, got {:?}",
+            err
+        );
     }
 }

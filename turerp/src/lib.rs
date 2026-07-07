@@ -620,6 +620,7 @@ pub mod app {
             stock_level_repo,
             stock_movement_repo,
             product_repo.clone(),
+            company_repo.clone(),
         );
 
         // Invoice
@@ -1277,6 +1278,7 @@ pub mod app {
             stock_level_repo,
             stock_movement_repo,
             product_repo.clone(),
+            company_repo.clone(),
         );
 
         // Invoice - PostgreSQL
