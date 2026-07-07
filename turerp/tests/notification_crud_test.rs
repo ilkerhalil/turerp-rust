@@ -339,3 +339,55 @@ async fn test_notification_unauthorized() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
+
+#[actix_web::test]
+async fn test_send_notification_rejects_foreign_user() {
+    // Cross-tenant IDOR guard: a tenant-1 admin may NOT attribute a
+    // notification to a tenant-2 user (`user_id` REFERENCES users(id)). The
+    // parent-ownership precheck returns NotFound before the notification row
+    // is written — no cross-tenant orphan write.
+    let state = create_test_app_state().await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token, _user_id) = register_admin(&state, 1).await;
+    let foreign_user_id = register_user(&state, 2).await;
+
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/notifications/send",
+        &token,
+    )
+    .set_json(json!({
+        "user_id": foreign_user_id,
+        "channel": "email",
+        "template_key": "invoice_created",
+        "template_vars": {"invoice_number": "INV-FOREIGN"},
+        "recipient": "foreign@example.com"
+    }))
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+}
+
+#[actix_web::test]
+async fn test_send_notification_accepts_none_user() {
+    // `user_id: None` is a legitimate "no linked user / broadcast" — the
+    // precheck must skip it (never reject), and the notification is sent.
+    let state = create_test_app_state().await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token, _user_id) = register_admin(&state, 1).await;
+
+    let req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/notifications/send",
+        &token,
+    )
+    .set_json(json!({
+        "channel": "email",
+        "template_key": "invoice_created",
+        "template_vars": {"invoice_number": "INV-NONE"},
+        "recipient": "none@example.com"
+    }))
+    .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::CREATED);
+}

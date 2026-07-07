@@ -84,6 +84,15 @@ impl UserService {
         self
     }
 
+    /// Parent-ownership precheck for a body-controlled user FK — thin wrapper
+    /// over the free `ensure_user_owned` (this module) for handlers that hold
+    /// a `UserService` via `AppState.auth.user_service` and need to gate a user
+    /// id against the caller's tenant before persisting. `None` is gated at the
+    /// call site (`if let Some(id) = …`); this method always validates the id.
+    pub async fn ensure_user_owned(&self, user_id: i64, tenant_id: i64) -> Result<(), ApiError> {
+        ensure_user_owned(&self.repo, user_id, tenant_id).await
+    }
+
     /// Invalidate cached permissions for a user
     async fn invalidate_permissions_cache(&self, tenant_id: i64, user_id: i64) {
         if let Some(ref cache) = self.cache {
