@@ -10,6 +10,8 @@ use crate::domain::crm::model::{
 use crate::domain::crm::repository::{
     BoxCampaignRepository, BoxLeadRepository, BoxOpportunityRepository, BoxTicketRepository,
 };
+use crate::domain::user::repository::BoxUserRepository;
+use crate::domain::user::service::ensure_user_owned;
 use crate::error::ApiError;
 
 #[derive(Clone)]
@@ -18,6 +20,7 @@ pub struct CrmService {
     opportunity_repo: BoxOpportunityRepository,
     campaign_repo: BoxCampaignRepository,
     ticket_repo: BoxTicketRepository,
+    user_repo: BoxUserRepository,
 }
 
 impl CrmService {
@@ -26,18 +29,26 @@ impl CrmService {
         opportunity_repo: BoxOpportunityRepository,
         campaign_repo: BoxCampaignRepository,
         ticket_repo: BoxTicketRepository,
+        user_repo: BoxUserRepository,
     ) -> Self {
         Self {
             lead_repo,
             opportunity_repo,
             campaign_repo,
             ticket_repo,
+            user_repo,
         }
     }
 
     // Lead methods
     #[tracing::instrument(skip(self))]
     pub async fn create_lead(&self, create: CreateLead) -> Result<Lead, ApiError> {
+        // Parent-ownership precheck: a body-supplied `assigned_to` user id
+        // must belong to the caller's tenant. `None` is a legitimate
+        // "unassigned" lead and is NOT rejected.
+        if let Some(id) = create.assigned_to {
+            ensure_user_owned(&self.user_repo, id, create.tenant_id).await?;
+        }
         self.lead_repo.create(create).await
     }
 
@@ -145,6 +156,12 @@ impl CrmService {
         &self,
         create: CreateOpportunity,
     ) -> Result<Opportunity, ApiError> {
+        // Parent-ownership precheck: a body-supplied `assigned_to` user id
+        // must belong to the caller's tenant. `None` is a legitimate
+        // "unassigned" opportunity and is NOT rejected.
+        if let Some(id) = create.assigned_to {
+            ensure_user_owned(&self.user_repo, id, create.tenant_id).await?;
+        }
         self.opportunity_repo.create(create).await
     }
 
@@ -357,6 +374,12 @@ impl CrmService {
     // Ticket methods
     #[tracing::instrument(skip(self))]
     pub async fn create_ticket(&self, create: CreateTicket) -> Result<Ticket, ApiError> {
+        // Parent-ownership precheck: a body-supplied `assigned_to` user id
+        // must belong to the caller's tenant. `None` is a legitimate
+        // "unassigned" ticket and is NOT rejected.
+        if let Some(id) = create.assigned_to {
+            ensure_user_owned(&self.user_repo, id, create.tenant_id).await?;
+        }
         self.ticket_repo.create(create).await
     }
 
@@ -503,20 +526,55 @@ mod tests {
         InMemoryCampaignRepository, InMemoryLeadRepository, InMemoryOpportunityRepository,
         InMemoryTicketRepository,
     };
+    use crate::domain::user::model::{CreateUser, Role};
+    use crate::domain::user::repository::InMemoryUserRepository;
     use rust_decimal_macros::dec;
     use std::sync::Arc;
 
-    fn create_service() -> CrmService {
+    async fn create_service() -> CrmService {
         let lead_repo = Arc::new(InMemoryLeadRepository::new()) as BoxLeadRepository;
         let opp_repo = Arc::new(InMemoryOpportunityRepository::new()) as BoxOpportunityRepository;
         let campaign_repo = Arc::new(InMemoryCampaignRepository::new()) as BoxCampaignRepository;
         let ticket_repo = Arc::new(InMemoryTicketRepository::new()) as BoxTicketRepository;
-        CrmService::new(lead_repo, opp_repo, campaign_repo, ticket_repo)
+        let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
+        // Seed a tenant-1 user (auto-id 1) so the existing happy-path tests that
+        // stamp `assigned_to: Some(1)` resolve against the caller's tenant.
+        user_repo
+            .create(
+                CreateUser {
+                    username: "t1user".to_string(),
+                    email: "t1@example.com".to_string(),
+                    full_name: "Tenant 1 user".to_string(),
+                    password: "password123456".to_string(),
+                    tenant_id: 1,
+                    role: Some(Role::User),
+                },
+                "hash".to_string(),
+            )
+            .await
+            .unwrap();
+        // Seed a tenant-2 user (auto-id 2) used as the foreign referent by the
+        // reject tests below.
+        user_repo
+            .create(
+                CreateUser {
+                    username: "t2user".to_string(),
+                    email: "t2@example.com".to_string(),
+                    full_name: "Tenant 2 user".to_string(),
+                    password: "password123456".to_string(),
+                    tenant_id: 2,
+                    role: Some(Role::User),
+                },
+                "hash".to_string(),
+            )
+            .await
+            .unwrap();
+        CrmService::new(lead_repo, opp_repo, campaign_repo, ticket_repo, user_repo)
     }
 
     #[tokio::test]
     async fn test_create_lead() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateLead {
             tenant_id: 1,
             name: "John Doe".to_string(),
@@ -534,7 +592,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_opportunity() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateOpportunity {
             tenant_id: 1,
             lead_id: None,
@@ -552,7 +610,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_campaign() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateCampaign {
             tenant_id: 1,
             name: "Summer Sale".to_string(),
@@ -568,7 +626,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_ticket() {
-        let service = create_service();
+        let service = create_service().await;
         let create = CreateTicket {
             tenant_id: 1,
             subject: "Login issue".to_string(),
@@ -585,7 +643,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sales_pipeline_value() {
-        let service = create_service();
+        let service = create_service().await;
 
         // Create opportunity with 50% probability and $100,000 value
         service
@@ -609,7 +667,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_resolve_ticket() {
-        let service = create_service();
+        let service = create_service().await;
         let ticket = service
             .create_ticket(CreateTicket {
                 tenant_id: 1,
@@ -626,5 +684,66 @@ mod tests {
         let resolved = service.resolve_ticket(ticket.id, 1).await.unwrap();
         assert_eq!(resolved.status, TicketStatus::Resolved);
         assert!(resolved.resolved_at.is_some());
+    }
+
+    // Cross-tenant IDOR guard: a tenant-1 caller must not be able to attribute
+    // a lead/opportunity/ticket to a tenant-2 user via a client-supplied
+    // `assigned_to`. The tenant-2 user is seeded with auto-id 2 (see
+    // `create_service`); the caller's tenant is 1.
+    #[tokio::test]
+    async fn test_create_lead_rejects_foreign_assigned_to() {
+        let service = create_service().await;
+        let create = CreateLead {
+            tenant_id: 1,
+            name: "Foreign assignee".to_string(),
+            company: None,
+            email: None,
+            phone: None,
+            source: "Website".to_string(),
+            assigned_to: Some(2),
+            notes: None,
+        };
+        let result = service.create_lead(create).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ApiError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn test_create_opportunity_rejects_foreign_assigned_to() {
+        let service = create_service().await;
+        let create = CreateOpportunity {
+            tenant_id: 1,
+            lead_id: None,
+            name: "Foreign assignee".to_string(),
+            customer_id: None,
+            value: dec!(50000),
+            probability: dec!(75),
+            expected_close_date: None,
+            assigned_to: Some(2),
+            notes: None,
+        };
+        let result = service.create_opportunity(create).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ApiError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn test_create_ticket_rejects_foreign_assigned_to() {
+        let service = create_service().await;
+        let create = CreateTicket {
+            tenant_id: 1,
+            subject: "Foreign assignee".to_string(),
+            description: "Problem".to_string(),
+            customer_id: None,
+            assigned_to: Some(2),
+            priority: TicketPriority::High,
+            category: None,
+        };
+        let result = service.create_ticket(create).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(matches!(err, ApiError::NotFound(_)));
     }
 }
