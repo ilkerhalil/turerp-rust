@@ -104,6 +104,21 @@ impl ProductService {
         // caller's tenant (the legacy `1` sentinel is skipped for backward compat).
         ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
 
+        // Parent-ownership precheck: optional category/unit must belong to the
+        // caller's tenant. `None` = legitimate "no category/unit", never rejected.
+        if let Some(category_id) = create.category_id {
+            self.category_repo
+                .find_by_id(category_id, create.tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", category_id)))?;
+        }
+        if let Some(unit_id) = create.unit_id {
+            self.unit_repo
+                .find_by_id(unit_id, create.tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", unit_id)))?;
+        }
+
         // Check if code exists for this tenant
         if self
             .product_repo
@@ -230,6 +245,22 @@ impl ProductService {
         tenant_id: i64,
         update: UpdateProduct,
     ) -> Result<Product, ApiError> {
+        // Parent-ownership precheck: optional category/unit must belong to the
+        // caller's tenant. Single-Option `None` = unchanged (repo only applies
+        // `Some`), so we precheck only the set value.
+        if let Some(category_id) = update.category_id {
+            self.category_repo
+                .find_by_id(category_id, tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound(format!("Category {} not found", category_id)))?;
+        }
+        if let Some(unit_id) = update.unit_id {
+            self.unit_repo
+                .find_by_id(unit_id, tenant_id)
+                .await?
+                .ok_or_else(|| ApiError::NotFound(format!("Unit {} not found", unit_id)))?;
+        }
+
         let product = self.product_repo.update(id, tenant_id, update).await?;
         self.invalidate_product_cache(tenant_id).await;
         Ok(product)
@@ -288,6 +319,18 @@ impl ProductService {
         // Parent-ownership precheck: body-controlled company_id must belong to the
         // caller's tenant (the legacy `1` sentinel is skipped for backward compat).
         ensure_company_owned(&self.company_repo, create.company_id, create.tenant_id).await?;
+
+        // Parent-ownership precheck: optional parent category must belong to the
+        // caller's tenant. `None` = legitimate root category, never rejected.
+        if let Some(parent_id) = create.parent_id {
+            self.category_repo
+                .find_by_id(parent_id, create.tenant_id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!("Parent category {} not found", parent_id))
+                })?;
+        }
+
         let category = self.category_repo.create(create).await?;
         self.invalidate_category_cache(category.tenant_id).await;
         Ok(category)
@@ -385,6 +428,18 @@ impl ProductService {
         tenant_id: i64,
         update: UpdateCategory,
     ) -> Result<Category, ApiError> {
+        // Parent-ownership precheck: optional parent category must belong to the
+        // caller's tenant. Single-Option `None` = unchanged (repo only applies
+        // `Some`), so we precheck only the set value.
+        if let Some(parent_id) = update.parent_id {
+            self.category_repo
+                .find_by_id(parent_id, tenant_id)
+                .await?
+                .ok_or_else(|| {
+                    ApiError::NotFound(format!("Parent category {} not found", parent_id))
+                })?;
+        }
+
         let category = self.category_repo.update(id, tenant_id, update).await?;
         self.invalidate_category_cache(tenant_id).await;
         Ok(category)
@@ -1366,5 +1421,336 @@ mod tests {
             "tenant-1 must NOT create a unit under a tenant-2 company, got {:?}",
             result
         );
+    }
+
+    /// Seed a category for `tenant_id` directly via the repo (bypassing service
+    /// prechecks) and return its id. InMemory auto-id is a global counter from 1.
+    async fn seed_category(repo: &BoxCategoryRepository, tenant_id: i64, name: &str) -> i64 {
+        repo.create(CreateCategory {
+            tenant_id,
+            company_id: LEGACY_COMPANY_ID,
+            name: name.to_string(),
+            parent_id: None,
+        })
+        .await
+        .map(|c| c.id)
+        .expect("seed category")
+    }
+
+    /// Seed a unit for `tenant_id` directly via the repo and return its id.
+    async fn seed_unit(repo: &BoxUnitRepository, tenant_id: i64, code: &str) -> i64 {
+        repo.create(CreateUnit {
+            tenant_id,
+            company_id: LEGACY_COMPANY_ID,
+            code: code.to_string(),
+            name: format!("Unit-{}", code),
+            is_integer: false,
+        })
+        .await
+        .map(|u| u.id)
+        .expect("seed unit")
+    }
+
+    #[tokio::test]
+    async fn test_create_product_rejects_foreign_category_and_unit() {
+        let service = create_service();
+        let category_repo = service.category_repo.clone();
+        let unit_repo = service.unit_repo.clone();
+
+        // Seed owned (tenant-1) and foreign (tenant-2) parents. company_id=1 is
+        // the legacy sentinel (skipped by ensure_company_owned), isolating the
+        // category/unit precheck.
+        let owned_cat = seed_category(&category_repo, 1, "T1-Cat").await;
+        let foreign_cat = seed_category(&category_repo, 2, "T2-Cat").await;
+        let owned_unit = seed_unit(&unit_repo, 1, "T1U").await;
+        let foreign_unit = seed_unit(&unit_repo, 2, "T2U").await;
+        assert_ne!(owned_cat, foreign_cat);
+        assert_ne!(owned_unit, foreign_unit);
+
+        // Same-tenant parents → ok.
+        let ok_create = CreateProduct {
+            tenant_id: 1,
+            company_id: LEGACY_COMPANY_ID,
+            code: "P-OK".to_string(),
+            name: "Owned".to_string(),
+            description: None,
+            category_id: Some(owned_cat),
+            unit_id: Some(owned_unit),
+            barcode: None,
+            purchase_price: dec!(10.0),
+            sale_price: dec!(20.0),
+            tax_rate: dec!(18.0),
+        };
+        assert!(service.create_product(ok_create).await.is_ok());
+
+        // Foreign category → NotFound.
+        let foreign_cat_create = CreateProduct {
+            code: "P-FC".to_string(),
+            category_id: Some(foreign_cat),
+            ..base_product_create(LEGACY_COMPANY_ID)
+        };
+        let result = service.create_product(foreign_cat_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a product under a tenant-2 category, got {:?}",
+            result
+        );
+
+        // Foreign unit (with owned category) → NotFound.
+        let foreign_unit_create = CreateProduct {
+            code: "P-FU".to_string(),
+            category_id: Some(owned_cat),
+            unit_id: Some(foreign_unit),
+            ..base_product_create(LEGACY_COMPANY_ID)
+        };
+        let result = service.create_product(foreign_unit_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a product under a tenant-2 unit, got {:?}",
+            result
+        );
+
+        // Nonexistent category → NotFound.
+        let ghost_create = CreateProduct {
+            code: "P-GH".to_string(),
+            category_id: Some(999_999),
+            ..base_product_create(LEGACY_COMPANY_ID)
+        };
+        let result = service.create_product(ghost_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent category must be NotFound, got {:?}",
+            result
+        );
+
+        // None parents → not rejected (legitimate no-category/no-unit product).
+        let none_create = CreateProduct {
+            code: "P-NO".to_string(),
+            category_id: None,
+            unit_id: None,
+            ..base_product_create(LEGACY_COMPANY_ID)
+        };
+        assert!(service.create_product(none_create).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_update_product_rejects_foreign_category_and_unit() {
+        let service = create_service();
+        let category_repo = service.category_repo.clone();
+        let unit_repo = service.unit_repo.clone();
+
+        let owned_cat = seed_category(&category_repo, 1, "T1-Cat").await;
+        let foreign_cat = seed_category(&category_repo, 2, "T2-Cat").await;
+        let owned_unit = seed_unit(&unit_repo, 1, "T1U").await;
+        let foreign_unit = seed_unit(&unit_repo, 2, "T2U").await;
+
+        // Create a tenant-1 product with no category/unit to update later.
+        let product = service
+            .create_product(base_product_create(LEGACY_COMPANY_ID))
+            .await
+            .expect("create product");
+
+        // Same-tenant re-assignment → ok.
+        let ok_update = UpdateProduct {
+            category_id: Some(owned_cat),
+            unit_id: Some(owned_unit),
+            ..Default::default()
+        };
+        assert!(
+            service
+                .update_product(product.id, 1, ok_update)
+                .await
+                .is_ok(),
+            "same-tenant category/unit update must succeed"
+        );
+
+        // Foreign category → NotFound.
+        let result = service
+            .update_product(
+                product.id,
+                1,
+                UpdateProduct {
+                    category_id: Some(foreign_cat),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT update a product to a tenant-2 category, got {:?}",
+            result
+        );
+
+        // Foreign unit (with owned category) → NotFound.
+        let result = service
+            .update_product(
+                product.id,
+                1,
+                UpdateProduct {
+                    category_id: Some(owned_cat),
+                    unit_id: Some(foreign_unit),
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT update a product to a tenant-2 unit, got {:?}",
+            result
+        );
+
+        // None (unchanged) → not rejected.
+        let none_update = UpdateProduct {
+            category_id: None,
+            unit_id: None,
+            ..Default::default()
+        };
+        assert!(
+            service
+                .update_product(product.id, 1, none_update)
+                .await
+                .is_ok(),
+            "None category/unit update must succeed (no precheck)"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_create_category_rejects_foreign_parent() {
+        let service = create_service();
+        let category_repo = service.category_repo.clone();
+
+        let owned_parent = seed_category(&category_repo, 1, "T1-Root").await;
+        let foreign_parent = seed_category(&category_repo, 2, "T2-Root").await;
+        assert_ne!(owned_parent, foreign_parent);
+
+        // Same-tenant parent → ok.
+        let ok_create = CreateCategory {
+            tenant_id: 1,
+            company_id: LEGACY_COMPANY_ID,
+            name: "T1-Child".to_string(),
+            parent_id: Some(owned_parent),
+        };
+        assert!(service.create_category(ok_create).await.is_ok());
+
+        // Foreign parent → NotFound.
+        let foreign_create = CreateCategory {
+            tenant_id: 1,
+            company_id: LEGACY_COMPANY_ID,
+            name: "T1-UnderForeign".to_string(),
+            parent_id: Some(foreign_parent),
+        };
+        let result = service.create_category(foreign_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT create a category under a tenant-2 parent, got {:?}",
+            result
+        );
+
+        // Nonexistent parent → NotFound.
+        let ghost_create = CreateCategory {
+            tenant_id: 1,
+            company_id: LEGACY_COMPANY_ID,
+            name: "T1-UnderGhost".to_string(),
+            parent_id: Some(999_999),
+        };
+        let result = service.create_category(ghost_create).await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "nonexistent parent category must be NotFound, got {:?}",
+            result
+        );
+
+        // None parent → not rejected (legitimate root category).
+        let none_create = CreateCategory {
+            tenant_id: 1,
+            company_id: LEGACY_COMPANY_ID,
+            name: "T1-NewRoot".to_string(),
+            parent_id: None,
+        };
+        assert!(service.create_category(none_create).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_update_category_rejects_foreign_parent() {
+        let service = create_service();
+        let category_repo = service.category_repo.clone();
+
+        let owned_parent = seed_category(&category_repo, 1, "T1-Root").await;
+        let foreign_parent = seed_category(&category_repo, 2, "T2-Root").await;
+
+        // Create a tenant-1 root category to update later.
+        let category = service
+            .create_category(CreateCategory {
+                tenant_id: 1,
+                company_id: LEGACY_COMPANY_ID,
+                name: "T1-ToUpdate".to_string(),
+                parent_id: None,
+            })
+            .await
+            .expect("create category");
+
+        // Same-tenant re-parent → ok.
+        let ok_update = UpdateCategory {
+            name: None,
+            parent_id: Some(owned_parent),
+            company_id: LEGACY_COMPANY_ID,
+        };
+        assert!(
+            service
+                .update_category(category.id, 1, ok_update)
+                .await
+                .is_ok(),
+            "same-tenant re-parent must succeed"
+        );
+
+        // Foreign parent → NotFound.
+        let result = service
+            .update_category(
+                category.id,
+                1,
+                UpdateCategory {
+                    name: None,
+                    parent_id: Some(foreign_parent),
+                    company_id: LEGACY_COMPANY_ID,
+                },
+            )
+            .await;
+        assert!(
+            matches!(result, Err(ApiError::NotFound(_))),
+            "tenant-1 must NOT re-parent a category to a tenant-2 parent, got {:?}",
+            result
+        );
+
+        // None (unchanged) → not rejected.
+        let none_update = UpdateCategory {
+            name: None,
+            parent_id: None,
+            company_id: LEGACY_COMPANY_ID,
+        };
+        assert!(
+            service
+                .update_category(category.id, 1, none_update)
+                .await
+                .is_ok(),
+            "None parent update must succeed (no precheck)"
+        );
+    }
+
+    /// Minimal tenant-1 `CreateProduct` with no category/unit, for update-test
+    /// seeding and as a base for struct-update syntax in the rejection tests.
+    fn base_product_create(company_id: i64) -> CreateProduct {
+        CreateProduct {
+            tenant_id: 1,
+            company_id,
+            code: "P-BASE".to_string(),
+            name: "Base Product".to_string(),
+            description: None,
+            category_id: None,
+            unit_id: None,
+            barcode: None,
+            purchase_price: dec!(10.0),
+            sale_price: dec!(20.0),
+            tax_rate: dec!(18.0),
+        }
     }
 }
