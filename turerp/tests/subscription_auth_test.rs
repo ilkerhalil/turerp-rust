@@ -58,7 +58,11 @@ async fn test_subscription_endpoints_require_auth() {
 async fn test_update_subscription() {
     let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
-    let (token, _) = register_admin(&app_state, 1).await;
+    let (token, user_id) = register_admin(&app_state, 1).await;
+
+    // Seed a cari so the create-subscription customer_id precheck (cari FK,
+    // issue #296) resolves — the InMemory cari repo starts empty.
+    let customer_id = seed_cari!(&app, &token, user_id, 1);
 
     // Create initial plan
     let plan_req = auth_request(
@@ -109,7 +113,7 @@ async fn test_update_subscription() {
         &token,
     )
     .set_json(json!({
-        "customer_id": 1,
+        "customer_id": customer_id,
         "plan_id": plan_id,
         "start_date": "2024-01-01",
         "status": "active",

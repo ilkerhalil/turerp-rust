@@ -1003,7 +1003,7 @@ pub mod app {
         // Subscriptions
         let subscription_repo =
             Arc::new(InMemorySubscriptionRepository::new()) as BoxSubscriptionRepository;
-        let subscription_service = SubscriptionService::new(subscription_repo);
+        let subscription_service = SubscriptionService::new(subscription_repo, cari_repo.clone());
 
         // Forecasting
         let forecasting_repo =
@@ -1531,7 +1531,7 @@ pub mod app {
 
         // Subscriptions - PostgreSQL
         let subscription_repo = PostgresSubscriptionRepository::new(pool.clone()).into_boxed();
-        let subscription_service = SubscriptionService::new(subscription_repo);
+        let subscription_service = SubscriptionService::new(subscription_repo, cari_repo.clone());
 
         // Forecasting - PostgreSQL
         let forecasting_repo = PostgresForecastingRepository::new(pool.clone()).into_boxed();

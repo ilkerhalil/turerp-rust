@@ -12,9 +12,13 @@ async fn test_subscription_tenant_isolation() {
     let app = test::init_service(build_test_app(&app_state)).await;
 
     // Admin in tenant 1
-    let (token_t1, _) = register_admin(&app_state, 1).await;
+    let (token_t1, user_id_t1) = register_admin(&app_state, 1).await;
     // Admin in tenant 2
     let (token_t2, _) = register_admin(&app_state, 2).await;
+
+    // Seed a tenant-1 cari so the create-subscription customer_id precheck
+    // (cari FK, issue #296) resolves — the InMemory cari repo starts empty.
+    let customer_id = seed_cari!(&app, &token_t1, user_id_t1, 1);
 
     // Create plan in tenant 1
     let plan_req = auth_request(
@@ -53,7 +57,7 @@ async fn test_subscription_tenant_isolation() {
         &token_t1,
     )
     .set_json(json!({
-        "customer_id": 1,
+        "customer_id": customer_id,
         "plan_id": plan_id,
         "start_date": "2024-01-01",
         "status": "active",
@@ -100,7 +104,8 @@ async fn test_subscription_tenant_isolation() {
 async fn test_renew_subscription() {
     let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
-    let (token, _) = register_admin(&app_state, 1).await;
+    let (token, user_id) = register_admin(&app_state, 1).await;
+    let customer_id = seed_cari!(&app, &token, user_id, 1);
 
     // Create plan
     let plan_req = auth_request(
@@ -128,7 +133,7 @@ async fn test_renew_subscription() {
         &token,
     )
     .set_json(json!({
-        "customer_id": 1,
+        "customer_id": customer_id,
         "plan_id": plan_id,
         "start_date": "2024-01-01",
         "end_date": "2024-02-01",
@@ -175,7 +180,8 @@ async fn test_renew_subscription() {
 async fn test_due_for_billing() {
     let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
-    let (token, _) = register_admin(&app_state, 1).await;
+    let (token, user_id) = register_admin(&app_state, 1).await;
+    let customer_id = seed_cari!(&app, &token, user_id, 1);
 
     // Create plan
     let plan_req = auth_request(
@@ -203,7 +209,7 @@ async fn test_due_for_billing() {
         &token,
     )
     .set_json(json!({
-        "customer_id": 1,
+        "customer_id": customer_id,
         "plan_id": plan_id,
         "start_date": "2024-01-01",
         "status": "active",
@@ -358,7 +364,8 @@ async fn test_plan_soft_delete() {
 async fn test_subscription_soft_delete() {
     let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
-    let (token, _) = register_admin(&app_state, 1).await;
+    let (token, user_id) = register_admin(&app_state, 1).await;
+    let customer_id = seed_cari!(&app, &token, user_id, 1);
 
     // Create plan first
     let req = auth_request(
@@ -386,7 +393,7 @@ async fn test_subscription_soft_delete() {
         &token,
     )
     .set_json(json!({
-        "customer_id": 1,
+        "customer_id": customer_id,
         "plan_id": plan_id,
         "start_date": "2024-01-01",
         "status": "active",
@@ -448,7 +455,8 @@ async fn test_subscription_soft_delete() {
 async fn test_delete_plan_with_active_subscriptions_fails() {
     let app_state = create_test_app_state().await;
     let app = test::init_service(build_test_app(&app_state)).await;
-    let (token, _) = register_admin(&app_state, 1).await;
+    let (token, user_id) = register_admin(&app_state, 1).await;
+    let customer_id = seed_cari!(&app, &token, user_id, 1);
 
     // Create plan
     let req = auth_request(
@@ -476,7 +484,7 @@ async fn test_delete_plan_with_active_subscriptions_fails() {
         &token,
     )
     .set_json(json!({
-        "customer_id": 1,
+        "customer_id": customer_id,
         "plan_id": plan_id,
         "start_date": "2024-01-01",
         "status": "active",
