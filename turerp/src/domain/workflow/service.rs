@@ -38,13 +38,19 @@ impl WorkflowService {
         }
     }
 
-    /// Parent-ownership precheck: every `approver_user_id` embedded in a
-    /// template's `config_json` step config (REFERENCES users(id)) must belong
-    /// to the caller's tenant. A tenant-A admin could otherwise author a
-    /// template that routes approval steps (and sends notifications) to a
-    /// tenant-B user — cross-tenant IDOR. Steps without an explicit
-    /// `approver_user_id` (role-based assignment, resolved tenant-locally at
-    /// instance start) are skipped; `None`/non-integer values are legitimate.
+    /// Parent-ownership precheck: every user FK embedded in a template's
+    /// `config_json` step config (REFERENCES users(id)) must belong to the
+    /// caller's tenant. A tenant-A admin could otherwise author a template
+    /// that routes approval steps (and sends notifications) to a tenant-B
+    /// user — cross-tenant IDOR. Two shapes are gated, both parsed exactly as
+    /// the runtime parses them at instance start (service.rs:399) so a
+    /// value the precheck skips is one the runtime would also ignore — no
+    /// bypass:
+    ///   - `steps[].approver_user_id` (scalar, Option) — skipped when absent /
+    ///     null / non-integer (role-based assignment, resolved tenant-locally).
+    ///   - `steps[].parallel.assignee_user_ids` (Vec\<i64\>) — deserialized via
+    ///     `ParallelConfig`; a malformed/absent `parallel` block yields None and
+    ///     is skipped (role-based step). Every id is prechecked.
     async fn validate_template_approvers(
         &self,
         config_json: &serde_json::Value,
@@ -54,6 +60,13 @@ impl WorkflowService {
             for step_def in steps {
                 if let Some(id) = step_def.get("approver_user_id").and_then(|v| v.as_i64()) {
                     ensure_user_owned(&self.user_repo, id, tenant_id).await?;
+                }
+                if let Some(parallel) = step_def.get("parallel") {
+                    if let Ok(config) = serde_json::from_value::<ParallelConfig>(parallel.clone()) {
+                        for id in &config.assignee_user_ids {
+                            ensure_user_owned(&self.user_repo, *id, tenant_id).await?;
+                        }
+                    }
                 }
             }
         }
@@ -1125,17 +1138,19 @@ mod tests {
         let notif = Arc::new(InMemoryNotificationService::new()) as BoxNotificationService;
         let jobs = Arc::new(InMemoryJobScheduler::new()) as BoxJobScheduler;
         let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
-        // Seed a user per tenant: auto-id 1 for tenant-1 and auto-id 2 for
-        // tenant-2 (the foreign referent the approver_user_id reject test
-        // targets). Existing template-helper tests use `approver_role` only
-        // (no explicit approver_user_id), so the precheck never triggers for
-        // them — the seeding is solely for the reject test.
-        for tenant in [1, 2] {
+        // Seed two tenant-1 users (auto-ids 1, 2) — the parallel-approval tests
+        // need two distinct same-tenant assignees (the `all_required` step has
+        // each approve once, and a repeated user hits the "already responded"
+        // guard). Seed one tenant-2 user (auto-id 3) as the foreign referent the
+        // reject tests target. The template-helper tests use `approver_role`
+        // only (no explicit user FK), so the precheck never triggers for them.
+        let seed_specs: [(i64, &str); 3] = [(1, "a"), (1, "b"), (2, "c")];
+        for (tenant, suffix) in seed_specs {
             user_repo
                 .create(
                     CreateUser {
-                        username: format!("t{}wf", tenant),
-                        email: format!("t{}wf@example.com", tenant),
+                        username: format!("t{}wf{}", tenant, suffix),
+                        email: format!("t{}wf{}@example.com", tenant, suffix),
                         full_name: format!("Tenant {} workflow user", tenant),
                         password: "password123456".to_string(),
                         tenant_id: tenant,
@@ -1149,8 +1164,9 @@ mod tests {
         WorkflowService::new(repo, notif, jobs, user_repo)
     }
 
-    /// Returns the tenant-2 user id (a foreign user) for the approver_user_id
-    /// reject test.
+    /// Returns the tenant-2 user id (a foreign user) for the reject tests.
+    /// Uses `find_all(2)` (filters by tenant_id == 2) so it stays correct
+    /// regardless of how many tenant-1 users are seeded.
     async fn foreign_approver_id(svc: &WorkflowService) -> i64 {
         svc.user_repo
             .find_all(2)
@@ -1160,6 +1176,21 @@ mod tests {
             .map(|u| u.id)
             .next()
             .expect("tenant-2 user seeded")
+    }
+
+    /// Returns the sorted tenant-1 user ids — the parallel-approval assignees
+    /// the precheck must accept (same-tenant FKs).
+    async fn tenant1_user_ids(svc: &WorkflowService) -> Vec<i64> {
+        let mut ids: Vec<i64> = svc
+            .user_repo
+            .find_all(1)
+            .await
+            .expect("list tenant-1 users")
+            .into_iter()
+            .map(|u| u.id)
+            .collect();
+        ids.sort();
+        ids
     }
 
     #[tokio::test]
@@ -1379,6 +1410,11 @@ mod tests {
     #[tokio::test]
     async fn test_parallel_approval_all_required() {
         let svc = make_service().await;
+        // Use the two seeded tenant-1 users as assignees — the precheck gates
+        // every assignee_user_id against the caller's tenant (1), so these
+        // same-tenant ids must resolve.
+        let assignees = tenant1_user_ids(&svc).await;
+        assert_eq!(assignees.len(), 2);
 
         let config = serde_json::json!({
             "steps": [
@@ -1387,7 +1423,7 @@ mod tests {
                     "step_name": "Dual Approval",
                     "parallel": {
                         "mode": "all_required",
-                        "assignee_user_ids": [10, 20],
+                        "assignee_user_ids": assignees,
                         "assignee_roles": []
                     }
                 }
@@ -1417,7 +1453,13 @@ mod tests {
 
         // First approval should not complete the step
         let inst = svc
-            .approve_step(instance.id, step.id, 10, Some("OK from 10".to_string()), 1)
+            .approve_step(
+                instance.id,
+                step.id,
+                assignees[0],
+                Some("OK from 0".to_string()),
+                1,
+            )
             .await
             .unwrap();
         assert_eq!(inst.status, WorkflowStatus::Pending);
@@ -1430,7 +1472,13 @@ mod tests {
 
         // Second approval should complete the step and workflow
         let inst = svc
-            .approve_step(instance.id, step.id, 20, Some("OK from 20".to_string()), 1)
+            .approve_step(
+                instance.id,
+                step.id,
+                assignees[1],
+                Some("OK from 1".to_string()),
+                1,
+            )
             .await
             .unwrap();
         assert_eq!(inst.status, WorkflowStatus::Completed);
@@ -1439,6 +1487,8 @@ mod tests {
     #[tokio::test]
     async fn test_parallel_approval_any_one() {
         let svc = make_service().await;
+        let assignees = tenant1_user_ids(&svc).await;
+        assert_eq!(assignees.len(), 2);
 
         let config = serde_json::json!({
             "steps": [
@@ -1447,7 +1497,7 @@ mod tests {
                     "step_name": "Any Approval",
                     "parallel": {
                         "mode": "any_one",
-                        "assignee_user_ids": [30, 40],
+                        "assignee_user_ids": assignees,
                         "assignee_roles": []
                     }
                 }
@@ -1477,10 +1527,42 @@ mod tests {
 
         // First approval should complete the step
         let inst = svc
-            .approve_step(instance.id, step.id, 30, None, 1)
+            .approve_step(instance.id, step.id, assignees[0], None, 1)
             .await
             .unwrap();
         assert_eq!(inst.status, WorkflowStatus::Completed);
+    }
+
+    #[tokio::test]
+    async fn test_create_template_rejects_foreign_assignee() {
+        let svc = make_service().await;
+        let foreign = foreign_approver_id(&svc).await;
+        // A tenant-1 admin may NOT author a parallel step whose assignees
+        // include a tenant-2 user (cross-tenant IDOR via assignee_user_ids).
+        let result = svc
+            .create_template(
+                CreateWorkflowTemplate {
+                    name: "Foreign Assignee".to_string(),
+                    description: "Template with a foreign parallel assignee".to_string(),
+                    entity_type: WorkflowEntityType::PurchaseOrder,
+                    config_json: serde_json::json!({
+                        "steps": [
+                            {
+                                "step_number": 1,
+                                "step_name": "Parallel Review",
+                                "parallel": {
+                                    "mode": "all_required",
+                                    "assignee_user_ids": [foreign],
+                                    "assignee_roles": []
+                                }
+                            }
+                        ]
+                    }),
+                },
+                1,
+            )
+            .await;
+        assert!(matches!(result, Err(ApiError::NotFound(_))));
     }
 
     #[tokio::test]
