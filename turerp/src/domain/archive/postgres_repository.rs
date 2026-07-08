@@ -117,7 +117,7 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
             archive_policy_columns!(),
             r#", 0::bigint as total_count
             FROM archive_policies
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#
         ))
         .bind(id)
@@ -144,7 +144,7 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
             r#",
                    COUNT(*) OVER() as total_count
             FROM archive_policies
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
             "#
@@ -173,7 +173,7 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
             archive_policy_columns!(),
             r#", 0::bigint as total_count
             FROM archive_policies
-            WHERE tenant_id = $1 AND is_active = true
+            WHERE tenant_id = $1 AND is_active = true AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#
         ))
@@ -351,7 +351,7 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
             archive_job_columns!(),
             r#", 0::bigint as total_count
             FROM archive_jobs
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#
         ))
         .bind(id)
@@ -378,7 +378,7 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
             r#",
                    COUNT(*) OVER() as total_count
             FROM archive_jobs
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT $2 OFFSET $3
             "#
@@ -416,7 +416,7 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
             r#",
                    COUNT(*) OVER() as total_count
             FROM archive_jobs
-            WHERE tenant_id = $1 AND policy_id = $2
+            WHERE tenant_id = $1 AND policy_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT $3 OFFSET $4
             "#
@@ -618,7 +618,7 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
             archive_record_columns!(),
             r#", 0::bigint as total_count
             FROM archive_records
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#
         ))
         .bind(id)
@@ -649,7 +649,7 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
                     r#",
                            COUNT(*) OVER() as total_count
                     FROM archive_records
-                    WHERE tenant_id = $1 AND source_table = $2 AND source_id = $3
+                    WHERE tenant_id = $1 AND source_table = $2 AND source_id = $3 AND deleted_at IS NULL
                     ORDER BY archived_at DESC
                     LIMIT $4 OFFSET $5
                     "#
@@ -680,7 +680,7 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
                     r#",
                            COUNT(*) OVER() as total_count
                     FROM archive_records
-                    WHERE tenant_id = $1 AND source_table = $2
+                    WHERE tenant_id = $1 AND source_table = $2 AND deleted_at IS NULL
                     ORDER BY archived_at DESC
                     LIMIT $3 OFFSET $4
                     "#
@@ -710,7 +710,7 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
                     r#",
                            COUNT(*) OVER() as total_count
                     FROM archive_records
-                    WHERE tenant_id = $1 AND source_id = $2
+                    WHERE tenant_id = $1 AND source_id = $2 AND deleted_at IS NULL
                     ORDER BY archived_at DESC
                     LIMIT $3 OFFSET $4
                     "#
@@ -740,7 +740,7 @@ impl ArchiveRecordRepository for PostgresArchiveRecordRepository {
                     r#",
                            COUNT(*) OVER() as total_count
                     FROM archive_records
-                    WHERE tenant_id = $1
+                    WHERE tenant_id = $1 AND deleted_at IS NULL
                     ORDER BY archived_at DESC
                     LIMIT $2 OFFSET $3
                     "#

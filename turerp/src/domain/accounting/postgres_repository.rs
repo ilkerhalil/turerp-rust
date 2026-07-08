@@ -815,7 +815,7 @@ impl JournalLineRepository for PostgresJournalLineRepository {
             r#"
             SELECT id, tenant_id, entry_id, account_id, debit, credit, description, reference
             FROM journal_lines
-            WHERE entry_id = $1 AND tenant_id = $2
+            WHERE entry_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY id ASC
             "#,
         )

@@ -580,7 +580,7 @@ impl DocumentRepository for PostgresDocumentRepository {
         tenant_id: i64,
     ) -> Result<Option<DocumentCategory>, ApiError> {
         let row = sqlx::query_as::<_, DocumentCategoryRow>(
-            "SELECT id, tenant_id, name, description, color, parent_id, created_at, updated_at FROM document_categories WHERE id = $1 AND tenant_id = $2",
+            "SELECT id, tenant_id, name, description, color, parent_id, created_at, updated_at FROM document_categories WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL",
         )
         .bind(id)
         .bind(tenant_id)
@@ -593,7 +593,7 @@ impl DocumentRepository for PostgresDocumentRepository {
 
     async fn list_categories(&self, tenant_id: i64) -> Result<Vec<DocumentCategory>, ApiError> {
         let rows = sqlx::query_as::<_, DocumentCategoryRow>(
-            "SELECT id, tenant_id, name, description, color, parent_id, created_at, updated_at FROM document_categories WHERE tenant_id = $1 ORDER BY name",
+            "SELECT id, tenant_id, name, description, color, parent_id, created_at, updated_at FROM document_categories WHERE tenant_id = $1 AND deleted_at IS NULL ORDER BY name",
         )
         .bind(tenant_id)
         .fetch_all(&*self.pool)
