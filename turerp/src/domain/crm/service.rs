@@ -247,8 +247,11 @@ impl CrmService {
     pub async fn get_opportunities_by_customer(
         &self,
         customer_id: i64,
+        tenant_id: i64,
     ) -> Result<Vec<Opportunity>, ApiError> {
-        self.opportunity_repo.find_by_customer(customer_id).await
+        self.opportunity_repo
+            .find_by_customer(customer_id, tenant_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
@@ -477,8 +480,14 @@ impl CrmService {
     }
 
     #[tracing::instrument(skip(self))]
-    pub async fn get_tickets_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError> {
-        self.ticket_repo.find_by_assignee(assignee_id).await
+    pub async fn get_tickets_by_assignee(
+        &self,
+        assignee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Ticket>, ApiError> {
+        self.ticket_repo
+            .find_by_assignee(assignee_id, tenant_id)
+            .await
     }
 
     #[tracing::instrument(skip(self))]
