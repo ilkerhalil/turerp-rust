@@ -267,7 +267,7 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
                    status, priority, planned_start, planned_end,
                    actual_start, actual_end, created_at, updated_at
             FROM work_orders
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -294,7 +294,7 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
                    actual_start, actual_end, created_at, updated_at,
                    COUNT(*) OVER() as total_count
             FROM work_orders
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -330,7 +330,7 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
                    status, priority, planned_start, planned_end,
                    actual_start, actual_end, created_at, updated_at
             FROM work_orders
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -690,7 +690,7 @@ impl BillOfMaterialsRepository for PostgresBillOfMaterialsRepository {
             SELECT id, tenant_id, product_id, version, is_active, is_primary,
                    valid_from, valid_to, created_at, updated_at
             FROM bills_of_materials
-            WHERE product_id = $1 AND tenant_id = $2
+            WHERE product_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -718,7 +718,7 @@ impl BillOfMaterialsRepository for PostgresBillOfMaterialsRepository {
             SELECT id, tenant_id, product_id, version, is_active, is_primary,
                    valid_from, valid_to, created_at, updated_at
             FROM bills_of_materials
-            WHERE product_id = $1 AND is_primary = true AND is_active = true AND tenant_id = $2
+            WHERE product_id = $1 AND is_primary = true AND is_active = true AND tenant_id = $2 AND deleted_at IS NULL
             LIMIT 1
             "#,
         )
@@ -774,7 +774,7 @@ impl BillOfMaterialsRepository for PostgresBillOfMaterialsRepository {
             SELECT id, tenant_id, bom_id, component_product_id, quantity, unit_id,
                    scrap_percentage, is_optional, notes
             FROM bom_lines
-            WHERE bom_id = $1 AND tenant_id = $2
+            WHERE bom_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY id
             "#,
         )
@@ -1002,7 +1002,7 @@ impl RoutingRepository for PostgresRoutingRepository {
             SELECT id, tenant_id, product_id, version, is_active, is_primary,
                    created_at, updated_at
             FROM routings
-            WHERE product_id = $1 AND tenant_id = $2
+            WHERE product_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -1025,7 +1025,7 @@ impl RoutingRepository for PostgresRoutingRepository {
             SELECT id, tenant_id, product_id, version, is_active, is_primary,
                    created_at, updated_at
             FROM routings
-            WHERE product_id = $1 AND is_primary = true AND is_active = true AND tenant_id = $2
+            WHERE product_id = $1 AND is_primary = true AND is_active = true AND tenant_id = $2 AND deleted_at IS NULL
             LIMIT 1
             "#,
         )
@@ -1078,7 +1078,7 @@ impl RoutingRepository for PostgresRoutingRepository {
             SELECT id, tenant_id, routing_id, sequence, operation_name, work_center_id,
                    setup_hours, run_hours, description
             FROM routing_operations
-            WHERE routing_id = $1 AND tenant_id = $2
+            WHERE routing_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY sequence
             "#,
         )

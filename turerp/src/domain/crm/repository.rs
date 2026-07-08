@@ -78,7 +78,11 @@ pub trait OpportunityRepository: Send + Sync {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<Opportunity>, ApiError>;
-    async fn find_by_customer(&self, customer_id: i64) -> Result<Vec<Opportunity>, ApiError>;
+    async fn find_by_customer(
+        &self,
+        customer_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Opportunity>, ApiError>;
     async fn update_status(
         &self,
         id: i64,
@@ -154,7 +158,11 @@ pub trait TicketRepository: Send + Sync {
         page: u32,
         per_page: u32,
     ) -> Result<PaginatedResult<Ticket>, ApiError>;
-    async fn find_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError>;
+    async fn find_by_assignee(
+        &self,
+        assignee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Ticket>, ApiError>;
     async fn update_status(
         &self,
         id: i64,
@@ -530,12 +538,18 @@ impl OpportunityRepository for InMemoryOpportunityRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn find_by_customer(&self, customer_id: i64) -> Result<Vec<Opportunity>, ApiError> {
+    async fn find_by_customer(
+        &self,
+        customer_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Opportunity>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .opportunities
             .values()
-            .filter(|x| x.customer_id == Some(customer_id) && !x.is_deleted())
+            .filter(|x| {
+                x.customer_id == Some(customer_id) && x.tenant_id == tenant_id && !x.is_deleted()
+            })
             .cloned()
             .collect())
     }
@@ -963,12 +977,18 @@ impl TicketRepository for InMemoryTicketRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn find_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError> {
+    async fn find_by_assignee(
+        &self,
+        assignee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Ticket>, ApiError> {
         let inner = self.inner.lock();
         Ok(inner
             .tickets
             .values()
-            .filter(|x| x.assigned_to == Some(assignee_id) && !x.is_deleted())
+            .filter(|x| {
+                x.assigned_to == Some(assignee_id) && x.tenant_id == tenant_id && !x.is_deleted()
+            })
             .cloned()
             .collect())
     }
@@ -1050,5 +1070,110 @@ impl TicketRepository for InMemoryTicketRepository {
         }
         inner.tickets.remove(&id);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::crm::model::{CreateOpportunity, CreateTicket, TicketPriority};
+
+    fn make_opportunity(tenant_id: i64, customer_id: Option<i64>, name: &str) -> CreateOpportunity {
+        CreateOpportunity {
+            tenant_id,
+            lead_id: None,
+            name: name.to_string(),
+            customer_id,
+            value: Decimal::new(100, 0),
+            probability: Decimal::new(50, 0),
+            expected_close_date: None,
+            assigned_to: None,
+            notes: None,
+        }
+    }
+
+    fn make_ticket(tenant_id: i64, assigned_to: Option<i64>, subject: &str) -> CreateTicket {
+        CreateTicket {
+            tenant_id,
+            subject: subject.to_string(),
+            description: "desc".to_string(),
+            customer_id: None,
+            assigned_to,
+            priority: TicketPriority::Medium,
+            category: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn find_by_customer_is_tenant_scoped_and_excludes_deleted() {
+        let repo = InMemoryOpportunityRepository::new();
+        // Same customer_id (100) across two tenants + a soft-deleted tenant-1 row.
+        let own = repo
+            .create(make_opportunity(1, Some(100), "own"))
+            .await
+            .unwrap();
+        let foreign = repo
+            .create(make_opportunity(2, Some(100), "foreign"))
+            .await
+            .unwrap();
+        let deleted = repo
+            .create(make_opportunity(1, Some(100), "deleted"))
+            .await
+            .unwrap();
+        repo.create(make_opportunity(1, Some(999), "other-customer"))
+            .await
+            .unwrap();
+        repo.soft_delete(deleted.id, 1, 1).await.unwrap();
+
+        // Tenant 1 sees only its own, non-deleted, customer=100 opportunity.
+        let t1 = repo.find_by_customer(100, 1).await.unwrap();
+        assert_eq!(t1.len(), 1);
+        assert_eq!(t1[0].id, own.id);
+
+        // Tenant 2 sees only its own — cross-tenant isolation (the bug being fixed).
+        let t2 = repo.find_by_customer(100, 2).await.unwrap();
+        assert_eq!(t2.len(), 1);
+        assert_eq!(t2[0].id, foreign.id);
+
+        // Unknown tenant sees nothing.
+        assert!(repo.find_by_customer(100, 999).await.unwrap().is_empty());
+        // Different customer_id on tenant 1 is not returned by customer=100.
+        assert!(repo
+            .find_by_customer(999, 1)
+            .await
+            .unwrap()
+            .iter()
+            .all(|o| o.customer_id == Some(999)));
+    }
+
+    #[tokio::test]
+    async fn find_by_assignee_is_tenant_scoped_and_excludes_deleted() {
+        let repo = InMemoryTicketRepository::new();
+        // Same assignee (5) across two tenants + a soft-deleted tenant-1 row.
+        let own = repo.create(make_ticket(1, Some(5), "own")).await.unwrap();
+        let foreign = repo
+            .create(make_ticket(2, Some(5), "foreign"))
+            .await
+            .unwrap();
+        let deleted = repo
+            .create(make_ticket(1, Some(5), "deleted"))
+            .await
+            .unwrap();
+        repo.soft_delete(deleted.id, 1, 1).await.unwrap();
+
+        let t1 = repo.find_by_assignee(5, 1).await.unwrap();
+        assert_eq!(t1.len(), 1);
+        assert_eq!(t1[0].id, own.id);
+
+        let t2 = repo.find_by_assignee(5, 2).await.unwrap();
+        assert_eq!(t2.len(), 1);
+        assert_eq!(t2[0].id, foreign.id);
+
+        assert!(repo.find_by_assignee(5, 999).await.unwrap().is_empty());
+        // Unassigned tickets are never matched by an assignee lookup.
+        repo.create(make_ticket(1, None, "unassigned"))
+            .await
+            .unwrap();
+        assert_eq!(repo.find_by_assignee(5, 1).await.unwrap().len(), 1);
     }
 }

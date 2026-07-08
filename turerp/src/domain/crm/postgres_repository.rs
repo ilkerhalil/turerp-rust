@@ -141,7 +141,7 @@ impl LeadRepository for PostgresLeadRepository {
             SELECT id, tenant_id, name, company, email, phone, source,
                    status, assigned_to, converted_to_customer_id, notes, created_at, updated_at
             FROM leads
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -166,7 +166,7 @@ impl LeadRepository for PostgresLeadRepository {
                    status, assigned_to, converted_to_customer_id, notes, created_at, updated_at,
                    COUNT(*) OVER() as total_count
             FROM leads
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -195,7 +195,7 @@ impl LeadRepository for PostgresLeadRepository {
             SELECT id, tenant_id, name, company, email, phone, source,
                    status, assigned_to, converted_to_customer_id, notes, created_at, updated_at
             FROM leads
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -223,7 +223,7 @@ impl LeadRepository for PostgresLeadRepository {
                    status, assigned_to, converted_to_customer_id, notes, created_at, updated_at,
                    COUNT(*) OVER() as total_count
             FROM leads
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -503,7 +503,7 @@ impl OpportunityRepository for PostgresOpportunityRepository {
             SELECT id, tenant_id, lead_id, name, customer_id, value, probability,
                    expected_close_date, status, assigned_to, notes, created_at, updated_at
             FROM opportunities
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -528,7 +528,7 @@ impl OpportunityRepository for PostgresOpportunityRepository {
                    expected_close_date, status, assigned_to, notes, created_at, updated_at,
                    COUNT(*) OVER() as total_count
             FROM opportunities
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -557,7 +557,7 @@ impl OpportunityRepository for PostgresOpportunityRepository {
             SELECT id, tenant_id, lead_id, name, customer_id, value, probability,
                    expected_close_date, status, assigned_to, notes, created_at, updated_at
             FROM opportunities
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -585,7 +585,7 @@ impl OpportunityRepository for PostgresOpportunityRepository {
                    expected_close_date, status, assigned_to, notes, created_at, updated_at,
                    COUNT(*) OVER() as total_count
             FROM opportunities
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -603,17 +603,22 @@ impl OpportunityRepository for PostgresOpportunityRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn find_by_customer(&self, customer_id: i64) -> Result<Vec<Opportunity>, ApiError> {
+    async fn find_by_customer(
+        &self,
+        customer_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Opportunity>, ApiError> {
         let rows: Vec<OpportunityRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, lead_id, name, customer_id, value, probability,
                    expected_close_date, status, assigned_to, notes, created_at, updated_at
             FROM opportunities
-            WHERE customer_id = $1
+            WHERE customer_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(customer_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| {
@@ -857,7 +862,7 @@ impl CampaignRepository for PostgresCampaignRepository {
             SELECT id, tenant_id, name, description, campaign_type, status,
                    budget, actual_cost, start_date, end_date, created_at, updated_at
             FROM campaigns
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -882,7 +887,7 @@ impl CampaignRepository for PostgresCampaignRepository {
                    budget, actual_cost, start_date, end_date, created_at, updated_at,
                    COUNT(*) OVER() as total_count
             FROM campaigns
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -911,7 +916,7 @@ impl CampaignRepository for PostgresCampaignRepository {
             SELECT id, tenant_id, name, description, campaign_type, status,
                    budget, actual_cost, start_date, end_date, created_at, updated_at
             FROM campaigns
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -939,7 +944,7 @@ impl CampaignRepository for PostgresCampaignRepository {
                    budget, actual_cost, start_date, end_date, created_at, updated_at,
                    COUNT(*) OVER() as total_count
             FROM campaigns
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -1208,7 +1213,7 @@ impl TicketRepository for PostgresTicketRepository {
                    customer_id, assigned_to, status, priority, category,
                    resolved_at, created_at, updated_at
             FROM tickets
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -1233,7 +1238,7 @@ impl TicketRepository for PostgresTicketRepository {
                    customer_id, assigned_to, status, priority, category,
                    resolved_at, created_at, updated_at, COUNT(*) OVER() as total_count
             FROM tickets
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $2 OFFSET $3
             "#,
@@ -1261,7 +1266,7 @@ impl TicketRepository for PostgresTicketRepository {
                    customer_id, assigned_to, status, priority, category,
                    resolved_at, created_at, updated_at
             FROM tickets
-            WHERE tenant_id = $1 AND ticket_number = $2
+            WHERE tenant_id = $1 AND ticket_number = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(tenant_id)
@@ -1286,7 +1291,7 @@ impl TicketRepository for PostgresTicketRepository {
                    customer_id, assigned_to, status, priority, category,
                    resolved_at, created_at, updated_at
             FROM tickets
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -1314,7 +1319,7 @@ impl TicketRepository for PostgresTicketRepository {
                    customer_id, assigned_to, status, priority, category,
                    resolved_at, created_at, updated_at, COUNT(*) OVER() as total_count
             FROM tickets
-            WHERE tenant_id = $1 AND status = $2
+            WHERE tenant_id = $1 AND status = $2 AND deleted_at IS NULL
             ORDER BY id DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -1332,18 +1337,23 @@ impl TicketRepository for PostgresTicketRepository {
         Ok(PaginatedResult::new(items, page, per_page, total))
     }
 
-    async fn find_by_assignee(&self, assignee_id: i64) -> Result<Vec<Ticket>, ApiError> {
+    async fn find_by_assignee(
+        &self,
+        assignee_id: i64,
+        tenant_id: i64,
+    ) -> Result<Vec<Ticket>, ApiError> {
         let rows: Vec<TicketRow> = sqlx::query_as(
             r#"
             SELECT id, tenant_id, ticket_number, subject, description,
                    customer_id, assigned_to, status, priority, category,
                    resolved_at, created_at, updated_at
             FROM tickets
-            WHERE assigned_to = $1
+            WHERE assigned_to = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
         .bind(assignee_id)
+        .bind(tenant_id)
         .fetch_all(&*self.pool)
         .await
         .map_err(|e| ApiError::Database(format!("Failed to find tickets by assignee: {}", e)))?;
