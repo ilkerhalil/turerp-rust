@@ -250,7 +250,7 @@ impl EmployeeRepository for PostgresEmployeeRepository {
             SET status = $1,
                 termination_date = COALESCE($2, termination_date),
                 updated_at = NOW()
-            WHERE id = $3 AND tenant_id = $4
+            WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, user_id, employee_number, first_name, last_name,
                       email, phone, department, position, hire_date, termination_date,
                       status, salary, created_at, updated_at, deleted_at, deleted_by
@@ -1028,7 +1028,7 @@ impl LeaveRequestRepository for PostgresLeaveRequestRepository {
             SET status = $1,
                 approved_by = COALESCE($2, approved_by),
                 approved_at = CASE WHEN $2 IS NOT NULL THEN NOW() ELSE approved_at END
-            WHERE id = $3 AND tenant_id = $4
+            WHERE id = $3 AND tenant_id = $4 AND deleted_at IS NULL
             RETURNING id, tenant_id, employee_id, leave_type_id, status, start_date, end_date,
                       total_days, reason, approved_by, approved_at, created_at,
                       deleted_at, deleted_by
@@ -1390,7 +1390,7 @@ impl PayrollRepository for PostgresPayrollRepository {
             r#"
             UPDATE payrolls
             SET status = $1
-            WHERE id = $2 AND tenant_id = $3
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, employee_id, period_start, period_end,
                       basic_salary, overtime_hours, overtime_pay, bonuses,
                       deductions, net_salary, status, paid_at, created_at,
@@ -1413,7 +1413,7 @@ impl PayrollRepository for PostgresPayrollRepository {
             UPDATE payrolls
             SET status = 'Paid',
                 paid_at = NOW()
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, employee_id, period_start, period_end,
                       basic_salary, overtime_hours, overtime_pay, bonuses,
                       deductions, net_salary, status, paid_at, created_at,

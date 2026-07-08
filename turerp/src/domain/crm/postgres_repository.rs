@@ -253,7 +253,7 @@ impl LeadRepository for PostgresLeadRepository {
             r#"
             UPDATE leads
             SET status = $1, updated_at = NOW()
-            WHERE id = $2 AND tenant_id = $3
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, name, company, email, phone, source,
                       status, assigned_to, converted_to_customer_id, notes, created_at, updated_at
             "#,
@@ -278,7 +278,7 @@ impl LeadRepository for PostgresLeadRepository {
             r#"
             UPDATE leads
             SET status = 'Converted', converted_to_customer_id = $1, updated_at = NOW()
-            WHERE id = $2 AND tenant_id = $3
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, name, company, email, phone, source,
                       status, assigned_to, converted_to_customer_id, notes, created_at, updated_at
             "#,
@@ -640,7 +640,7 @@ impl OpportunityRepository for PostgresOpportunityRepository {
             r#"
             UPDATE opportunities
             SET status = $1, updated_at = NOW()
-            WHERE id = $2 AND tenant_id = $3
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, lead_id, name, customer_id, value, probability,
                       expected_close_date, status, assigned_to, notes, created_at, updated_at
             "#,
@@ -974,7 +974,7 @@ impl CampaignRepository for PostgresCampaignRepository {
             r#"
             UPDATE campaigns
             SET status = $1, updated_at = NOW()
-            WHERE id = $2 AND tenant_id = $3
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, name, description, campaign_type, status,
                       budget, actual_cost, start_date, end_date, created_at, updated_at
             "#,
@@ -1373,7 +1373,7 @@ impl TicketRepository for PostgresTicketRepository {
             r#"
             UPDATE tickets
             SET status = $1, updated_at = NOW()
-            WHERE id = $2 AND tenant_id = $3
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, ticket_number, subject, description,
                       customer_id, assigned_to, status, priority, category,
                       resolved_at, created_at, updated_at
@@ -1394,7 +1394,7 @@ impl TicketRepository for PostgresTicketRepository {
             r#"
             UPDATE tickets
             SET status = 'Resolved', resolved_at = NOW(), updated_at = NOW()
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, ticket_number, subject, description,
                       customer_id, assigned_to, status, priority, category,
                       resolved_at, created_at, updated_at

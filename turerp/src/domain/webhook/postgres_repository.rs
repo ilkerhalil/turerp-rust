@@ -618,7 +618,7 @@ impl WebhookDeliveryRepository for PostgresWebhookDeliveryRepository {
             UPDATE webhook_deliveries
             SET status = $3, http_status = $4, response_body = $5,
                 error_message = $6, delivered_at = COALESCE($7, delivered_at)
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -645,7 +645,7 @@ impl WebhookDeliveryRepository for PostgresWebhookDeliveryRepository {
             r#"
             UPDATE webhook_deliveries
             SET attempt_count = attempt_count + 1, scheduled_at = $3, status = 'retrying'
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)

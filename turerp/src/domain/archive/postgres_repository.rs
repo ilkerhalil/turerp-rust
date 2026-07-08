@@ -203,7 +203,7 @@ impl ArchivePolicyRepository for PostgresArchivePolicyRepository {
                 conditions = COALESCE($4, conditions),
                 is_active = COALESCE($5, is_active),
                 updated_at = NOW()
-            WHERE id = $6 AND tenant_id = $7
+            WHERE id = $6 AND tenant_id = $7 AND deleted_at IS NULL
             RETURNING "#,
             archive_policy_columns!(),
             r#", 0::bigint as total_count
@@ -458,7 +458,7 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
                 records_failed = $3,
                 error_message = $4,
                 completed_at = CASE WHEN $1 IN ('Completed', 'Failed') THEN NOW() ELSE completed_at END
-            WHERE id = $5 AND tenant_id = $6
+            WHERE id = $5 AND tenant_id = $6 AND deleted_at IS NULL
             RETURNING "#,
             archive_job_columns!(),
             r#", 0::bigint as total_count
@@ -482,7 +482,7 @@ impl ArchiveJobRepository for PostgresArchiveJobRepository {
             r#"
             UPDATE archive_jobs
             SET status = 'Running', started_at = NOW()
-            WHERE id = $1 AND tenant_id = $2 AND status = 'Pending'
+            WHERE id = $1 AND tenant_id = $2 AND status = 'Pending' AND deleted_at IS NULL
             RETURNING "#,
             archive_job_columns!(),
             r#", 0::bigint as total_count

@@ -199,7 +199,7 @@ impl super::JobRepository for PostgresJobRepository {
             Some(r) => {
                 let job: Job = r.try_into()?;
                 sqlx::query(
-                    "UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1",
+                    "UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
                 )
                 .bind(job.id)
                 .execute(&mut *tx)
@@ -256,7 +256,7 @@ impl super::JobRepository for PostgresJobRepository {
             Some(r) => {
                 let job: Job = r.try_into()?;
                 sqlx::query(
-                    "UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1",
+                    "UPDATE jobs SET status = 'running', started_at = NOW(), attempts = attempts + 1, updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
                 )
                 .bind(job.id)
                 .execute(&mut *tx)

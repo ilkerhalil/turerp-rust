@@ -618,7 +618,7 @@ impl DocumentRepository for PostgresDocumentRepository {
                 color = COALESCE($5, color),
                 parent_id = COALESCE($6, parent_id),
                 updated_at = NOW()
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, name, description, color, parent_id, created_at, updated_at
             "#,
         )

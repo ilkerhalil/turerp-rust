@@ -610,7 +610,7 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
             r#"
             UPDATE journal_entries
             SET status = 'Posted', posted_at = NOW()
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at, deleted_at, deleted_by
             "#,
         )
@@ -628,7 +628,7 @@ impl JournalEntryRepository for PostgresJournalEntryRepository {
             r#"
             UPDATE journal_entries
             SET status = 'Voided'
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, entry_number, date, description, reference, status, total_debit, total_credit, created_by, created_at, posted_at, deleted_at, deleted_by
             "#,
         )

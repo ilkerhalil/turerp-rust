@@ -355,7 +355,7 @@ impl WorkOrderRepository for PostgresWorkOrderRepository {
             r#"
             UPDATE work_orders
             SET status = $1, updated_at = NOW()
-            WHERE id = $2 AND tenant_id = $3
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, name, product_id, quantity, bom_id, routing_id,
                       status, priority, planned_start, planned_end,
                       actual_start, actual_end, created_at, updated_at

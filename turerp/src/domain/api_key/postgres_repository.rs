@@ -344,7 +344,7 @@ impl ApiKeyRepository for PostgresApiKeyRepository {
             r#"
             UPDATE api_keys
             SET last_used_at = NOW()
-            WHERE id = $1
+            WHERE id = $1 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
