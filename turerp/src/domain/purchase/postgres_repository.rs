@@ -428,7 +428,7 @@ impl PurchaseOrderRepository for PostgresPurchaseOrderRepository {
             r#"
             UPDATE purchase_order_lines
             SET received_quantity = $1
-            WHERE id = $2
+            WHERE id = $2 AND deleted_at IS NULL
             RETURNING id, tenant_id, order_id, product_id, description, quantity, received_quantity,
                       unit_price, tax_rate, discount_rate, line_total, sort_order,
                       deleted_at, deleted_by

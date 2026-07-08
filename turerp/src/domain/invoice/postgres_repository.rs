@@ -544,7 +544,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             UPDATE invoices
             SET status = $1, updated_at = NOW()
-            WHERE id = $2 AND tenant_id = $3
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
                       total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,
@@ -571,7 +571,7 @@ impl InvoiceRepository for PostgresInvoiceRepository {
             r#"
             UPDATE invoices
             SET paid_amount = $1, updated_at = NOW()
-            WHERE id = $2 AND tenant_id = $3
+            WHERE id = $2 AND tenant_id = $3 AND deleted_at IS NULL
             RETURNING id, tenant_id, company_id, invoice_number, invoice_type, status, cari_id,
                       issue_date, due_date, subtotal, tax_amount, discount_amount,
                       total_amount, paid_amount, currency, exchange_rate, notes, created_at, updated_at,

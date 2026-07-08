@@ -723,7 +723,7 @@ impl AttendanceRecordRepository for PostgresAttendanceRecordRepository {
             SET clock_out = $1,
                 hours_worked = $2,
                 notes = COALESCE($3, notes)
-            WHERE id = $4 AND tenant_id = $5
+            WHERE id = $4 AND tenant_id = $5 AND deleted_at IS NULL
             RETURNING id, tenant_id, employee_id, shift_id, date, clock_in, clock_out,
                       hours_worked, overtime_hours, status, notes, deleted_at, deleted_by
             "#,

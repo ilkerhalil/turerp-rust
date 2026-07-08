@@ -510,7 +510,7 @@ impl StockLevelRepository for PostgresStockLevelRepository {
                 r#"
                 UPDATE stock_levels
                 SET reserved_quantity = reserved_quantity - $1, updated_at = NOW()
-                WHERE warehouse_id = $2 AND product_id = $3 AND tenant_id = $4
+                WHERE warehouse_id = $2 AND product_id = $3 AND tenant_id = $4 AND deleted_at IS NULL
                 "#,
             )
             .bind(quantity)

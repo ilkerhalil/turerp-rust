@@ -579,6 +579,7 @@ impl WbsItemRepository for PostgresWbsItemRepository {
             FROM projects p
             WHERE w.id = $3 AND w.project_id = p.id
               AND p.tenant_id = $4 AND p.deleted_at IS NULL
+              AND w.deleted_at IS NULL
             RETURNING w.id, w.project_id, w.parent_id, w.name, w.code,
                       w.planned_hours, w.actual_hours, w.progress, w.sort_order
             "#,
