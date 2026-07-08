@@ -504,7 +504,7 @@ impl WebhookDeliveryRepository for PostgresWebhookDeliveryRepository {
             SELECT id, webhook_id, tenant_id, event_type, payload, status, http_status,
                 response_body, error_message, attempt_count, scheduled_at, created_at, delivered_at
             FROM webhook_deliveries
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -531,7 +531,7 @@ impl WebhookDeliveryRepository for PostgresWebhookDeliveryRepository {
                 response_body, error_message, attempt_count, scheduled_at, created_at, delivered_at,
                 COUNT(*) OVER() as total_count
             FROM webhook_deliveries
-            WHERE webhook_id = $1 AND tenant_id = $2
+            WHERE webhook_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY created_at DESC
             LIMIT $3 OFFSET $4
             "#,
@@ -584,6 +584,7 @@ impl WebhookDeliveryRepository for PostgresWebhookDeliveryRepository {
             FROM webhook_deliveries
             WHERE status IN ('pending', 'retrying')
                 AND (scheduled_at IS NULL OR scheduled_at <= $1)
+                AND deleted_at IS NULL
             ORDER BY created_at ASC
             LIMIT $2
             "#,

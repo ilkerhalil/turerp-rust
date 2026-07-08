@@ -132,7 +132,7 @@ impl AssetCategoryRepository for PostgresAssetCategoryRepository {
             r#"
             SELECT id, tenant_id, company_id, name, description, default_useful_life_years, default_depreciation_method, created_at
             FROM asset_categories
-            WHERE id = $1 AND tenant_id = $2
+            WHERE id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             "#,
         )
         .bind(id)
@@ -149,7 +149,7 @@ impl AssetCategoryRepository for PostgresAssetCategoryRepository {
             r#"
             SELECT id, tenant_id, company_id, name, description, default_useful_life_years, default_depreciation_method, created_at
             FROM asset_categories
-            WHERE tenant_id = $1
+            WHERE tenant_id = $1 AND deleted_at IS NULL
             ORDER BY created_at DESC
             "#,
         )
@@ -785,7 +785,7 @@ impl AssetsRepository for PostgresAssetsRepository {
             SELECT id, tenant_id, asset_id, maintenance_date, maintenance_type,
                    description, cost, performed_by, next_maintenance_date, created_at
             FROM maintenance_records
-            WHERE asset_id = $1 AND tenant_id = $2
+            WHERE asset_id = $1 AND tenant_id = $2 AND deleted_at IS NULL
             ORDER BY maintenance_date DESC
             "#,
         )
