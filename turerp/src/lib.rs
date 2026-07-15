@@ -1250,11 +1250,16 @@ pub mod app {
             Arc::new(crate::cache::NoopCacheService) as Arc<dyn crate::cache::CacheService>
         };
 
-        // Run migrations
-        db::run_migrations(&pool).await.map_err(|e| {
-            tracing::error!("Failed to run migrations: {}", e);
-            ApiError::Database(format!("Failed to run migrations: {}", e))
-        })?;
+        // Run migrations. In production `config.migration_tolerance` is false,
+        // so any failure aborts boot; in dev/test it can be enabled with
+        // TURERP_MIGRATION_TOLERANCE=1 when the migration snapshot contains
+        // cross-file references that do not yet resolve.
+        db::run_migrations(&pool, config.migration_tolerance)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to run migrations: {}", e);
+                ApiError::Database(format!("Failed to run migrations: {}", e))
+            })?;
 
         // Auth & User - PostgreSQL
         let user_repo = PostgresUserRepository::new(pool.clone()).into_boxed();

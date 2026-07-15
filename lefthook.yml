@@ -49,7 +49,8 @@ pre-push:
         Tests failed. Fix them before pushing.
     security:
       # RUSTSEC-2023-0071: rsa Marvin Attack - only affects sqlx-mysql which we don't use
-      run: cargo audit --ignore RUSTSEC-2023-0071
+      # RUSTSEC-2026-0194/0195: quick-xml 0.32 transitive via rust-s3/aws-creds; S3FileStorage is not wired
+      run: cargo audit --ignore RUSTSEC-2023-0071 --ignore RUSTSEC-2026-0194 --ignore RUSTSEC-2026-0195
       root: turerp/
       fail_text: |
         Security vulnerabilities found. Run 'cargo audit' for details.
