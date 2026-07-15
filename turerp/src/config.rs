@@ -598,6 +598,8 @@ impl Config {
     /// - TURERP_CORS_ORIGINS: Comma-separated allowed origins (default: *)
     /// - TURERP_CORS_METHODS: Comma-separated allowed methods (default: GET,POST,PUT,DELETE,OPTIONS)
     /// - TURERP_CORS_HEADERS: Comma-separated allowed headers (default: Content-Type,Authorization)
+    /// - TURERP_MIGRATION_TOLERANCE: Set to `1` or `true` to allow migration failures to be logged and
+    ///   skipped in dev/test (default: false; not allowed in production)
     pub fn new() -> Result<Self, ConfigError> {
         let environment = std::env::var("TURERP_ENV")
             .ok()
@@ -735,6 +737,15 @@ impl Config {
                 return Err(ConfigError::Message(
                     "CORS is configured to allow all origins (*) in production mode. \
                      Set TURERP_CORS_ORIGINS to specific domains."
+                        .to_string(),
+                ));
+            }
+
+            // Migration tolerance defeats the production fail-hard intent
+            if self.migration_tolerance {
+                return Err(ConfigError::Message(
+                    "migration_tolerance is not allowed in production. \
+                     Remove TURERP_MIGRATION_TOLERANCE or run in development mode."
                         .to_string(),
                 ));
             }
@@ -1026,6 +1037,84 @@ mod tests {
     fn test_migration_tolerance_default_false() {
         let config = Config::default();
         assert!(!config.migration_tolerance);
+    }
+
+    #[test]
+    fn test_migration_tolerance_env_parsing() {
+        // These environment variables are process-global; save and restore them.
+        let original_tolerance = std::env::var("TURERP_MIGRATION_TOLERANCE").ok();
+        let original_db_url = std::env::var("TURERP_DATABASE_URL").ok();
+        let original_jwt_secret = std::env::var("TURERP_JWT_SECRET").ok();
+        std::env::set_var("TURERP_MIGRATION_TOLERANCE", "1");
+        std::env::set_var("TURERP_DATABASE_URL", "postgres://user:pass@host:5432/db");
+        std::env::set_var(
+            "TURERP_JWT_SECRET",
+            "this-is-a-very-long-and-secure-secret-key-32-plus",
+        );
+        let config = Config::new().expect("config loads with migration tolerance env set");
+        assert!(config.migration_tolerance);
+
+        std::env::set_var("TURERP_MIGRATION_TOLERANCE", "true");
+        let config = Config::new().expect("config loads with migration tolerance env set");
+        assert!(config.migration_tolerance);
+
+        std::env::set_var("TURERP_MIGRATION_TOLERANCE", "TRUE");
+        let config = Config::new().expect("config loads with migration tolerance env set");
+        assert!(config.migration_tolerance);
+
+        match original_tolerance {
+            Some(v) => std::env::set_var("TURERP_MIGRATION_TOLERANCE", v),
+            None => std::env::remove_var("TURERP_MIGRATION_TOLERANCE"),
+        }
+        match original_db_url {
+            Some(v) => std::env::set_var("TURERP_DATABASE_URL", v),
+            None => std::env::remove_var("TURERP_DATABASE_URL"),
+        }
+        match original_jwt_secret {
+            Some(v) => std::env::set_var("TURERP_JWT_SECRET", v),
+            None => std::env::remove_var("TURERP_JWT_SECRET"),
+        }
+    }
+
+    #[test]
+    fn test_migration_tolerance_rejected_in_production() {
+        let config = Config {
+            environment: Environment::Production,
+            database: DatabaseConfig {
+                url: "postgres://user:pass@host/db".to_string(),
+                max_connections: 10,
+                min_connections: 5,
+                acquire_timeout_secs: 30,
+                idle_timeout_secs: 600,
+                max_lifetime_secs: 1800,
+            },
+            jwt: JwtConfig {
+                secret: "Th1s-1s-4-v3ry-l0ng-4nd-s3cur3-s3cr3t-k3y-32-plus".to_string(),
+                access_token_expiration: 3600,
+                refresh_token_expiration: 604800,
+            },
+            encryption_key: "dGhpcy1pcy0zMi1ieXRlcy1sb25nLXNlY3JldC1rZXk=".to_string(),
+            cors: CorsConfig {
+                allowed_origins: vec!["https://example.com".to_string()],
+                ..CorsConfig::default()
+            },
+            rate_limit: RateLimitConfig {
+                requests_per_minute: 60,
+                burst_size: 10,
+                ..Default::default()
+            },
+            migration_tolerance: true,
+            ..Default::default()
+        };
+        let err = config
+            .validate()
+            .expect_err("migration_tolerance must be rejected in production");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("migration_tolerance") || msg.contains("Migration tolerance"),
+            "expected error to mention migration_tolerance, got: {}",
+            msg
+        );
     }
 
     #[test]
