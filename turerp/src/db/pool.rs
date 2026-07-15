@@ -35,7 +35,13 @@ struct Migration {
 }
 
 /// Run database migrations inside a transaction with idempotency tracking.
-pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
+///
+/// By default (`tolerate = false`) the first migration failure aborts boot
+/// and returns an error. Set `tolerate = true` only in dev/test environments
+/// where the migration snapshot may contain cross-file references that do not
+/// yet resolve; in that case failed migrations are rolled back, logged, and
+/// retried on the next boot.
+pub async fn run_migrations(pool: &PgPool, tolerate: bool) -> Result<(), ApiError> {
     const MIGRATIONS: &[Migration] = &[
         Migration {
             version: "001_initial_schema",
@@ -354,11 +360,14 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
         // multiple DDL statements separated by semicolons, which Postgres
         // rejects as a single prepared statement.
         //
-        // Tolerance policy: the migration set is a snapshot of partial work in
-        // progress and some files reference tables created in later migrations.
-        // When a statement fails because a referenced object is missing, log
-        // and continue so the application can boot. The failed migration is NOT
-        // recorded in __migrations, so it retries on the next boot.
+        // Tolerance policy (only when `tolerate = true`): the migration set is
+        // a snapshot of partial work in progress and some files reference tables
+        // created in later migrations. When a statement fails because a referenced
+        // object is missing, log and continue so the application can boot. The
+        // failed migration is NOT recorded in __migrations, so it retries on the
+        // next boot. In production `tolerate` is false: a failed migration aborts
+        // boot so the operator is forced to fix the schema rather than running
+        // with an incomplete database.
         match sqlx::raw_sql(mig.sql).execute(&mut *tx).await {
             Ok(_) => {
                 // Record in the SAME tx as the DDL so the record and the schema
@@ -385,21 +394,34 @@ pub async fn run_migrations(pool: &PgPool) -> Result<(), ApiError> {
                 } else {
                     ""
                 };
-                tracing::warn!(
-                    "Migration {} partially failed ({}). Continuing — schema may be \
-                     incomplete. Statement head: {}{}. This is tolerated because the \
-                     migration set contains cross-file references that may not yet \
-                     resolve in dev environments.",
+                // Roll back ONLY this migration's partial work; prior
+                // migrations are already committed in their own txs.
+                let _ = tx.rollback().await;
+
+                if tolerate {
+                    tracing::warn!(
+                        "Migration {} partially failed ({}). Continuing — schema may be \
+                         incomplete. Statement head: {}{}. Tolerance is enabled; the \
+                         migration will retry on the next boot.",
+                        mig.version,
+                        e,
+                        snippet,
+                        more
+                    );
+                    continue;
+                }
+
+                tracing::error!(
+                    "Migration {} failed ({}). Boot aborted. Statement head: {}{}.",
                     mig.version,
                     e,
                     snippet,
                     more
                 );
-                // Roll back ONLY this migration's partial work; prior
-                // migrations are already committed in their own txs. Skip
-                // recording so the failed migration retries on the next boot.
-                let _ = tx.rollback().await;
-                continue;
+                return Err(ApiError::Database(format!(
+                    "Migration {} failed: {}. Statement head: {}{}",
+                    mig.version, e, snippet, more
+                )));
             }
         }
     }

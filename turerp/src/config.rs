@@ -473,6 +473,11 @@ pub struct Config {
     pub secrets: SecretsConfig,
     pub encryption_key: String,
     pub graphql_introspection: bool,
+    /// If true, a failed migration is logged and boot continues.
+    /// Default is false in every environment; set `TURERP_MIGRATION_TOLERANCE=1`
+    /// only in dev/test environments where the migration snapshot may contain
+    /// cross-file references that do not yet resolve.
+    pub migration_tolerance: bool,
 }
 
 impl Default for Config {
@@ -503,6 +508,7 @@ impl Default for Config {
             secrets: SecretsConfig::default(),
             encryption_key: String::new(),
             graphql_introspection: true,
+            migration_tolerance: false,
         }
     }
 }
@@ -624,6 +630,10 @@ impl Config {
             .ok()
             .map(|v| v.to_lowercase() == "true" || v == "1")
             .unwrap_or_else(|| !matches!(environment, Environment::Production));
+        let migration_tolerance = std::env::var("TURERP_MIGRATION_TOLERANCE")
+            .ok()
+            .map(|v| v == "1" || v.to_lowercase() == "true")
+            .unwrap_or(false);
 
         Ok(Self {
             environment,
@@ -640,6 +650,7 @@ impl Config {
             secrets,
             encryption_key,
             graphql_introspection,
+            migration_tolerance,
         })
     }
 
@@ -1009,6 +1020,12 @@ mod tests {
     fn test_graphql_introspection_default() {
         let config = Config::default();
         assert!(config.graphql_introspection);
+    }
+
+    #[test]
+    fn test_migration_tolerance_default_false() {
+        let config = Config::default();
+        assert!(!config.migration_tolerance);
     }
 
     #[test]
