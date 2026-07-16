@@ -371,3 +371,92 @@ async fn test_mfa_regenerate_without_mfa_enabled() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
+
+/// Regression test for issue #318: MFA-pending token must NOT be accepted as a
+/// full access token by the authentication middleware.
+///
+/// Before the fix, `generate_mfa_token` produced a standard `AuthClaims` with
+/// `aud: "turerp-api"` — the same audience, issuer, and HS256 signature as real
+/// access tokens. `JwtAuthMiddleware` accepted it, granting full User-role
+/// access for 5 minutes without the TOTP code ever being supplied.
+///
+/// After the fix, the MFA-pending token uses `aud: "turerp-mfa"`, which
+/// `decode_token` (the middleware's validation path) rejects. Only the MFA
+/// verification endpoint can decode it via `decode_mfa_token`.
+#[actix_web::test]
+async fn test_mfa_pending_token_rejected_by_middleware() {
+    let state = create_test_app_state().await;
+    let app = test::init_service(build_test_app_with_mfa(&state)).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+
+    // Setup and verify MFA so it's enabled for the user
+    let setup_req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/auth/mfa/setup",
+        &token,
+    )
+    .to_request();
+    let setup_resp = test::call_service(&app, setup_req).await;
+    let body = to_bytes(setup_resp.into_body()).await.unwrap();
+    let setup_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let secret = setup_json["secret"].as_str().unwrap().to_string();
+    let code = generate_totp_code(&secret);
+
+    let verify_req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/auth/mfa/verify-setup",
+        &token,
+    )
+    .set_json(json!({ "code": code }))
+    .to_request();
+    let verify_resp = test::call_service(&app, verify_req).await;
+    assert_eq!(verify_resp.status(), StatusCode::OK);
+
+    // Fetch the username for the login request
+    let user = state
+        .auth
+        .user_service
+        .get_ref()
+        .get_user(user_id, 1)
+        .await
+        .unwrap();
+    let username = user.username.clone();
+
+    // Login with correct password but NO mfa_code — should get 403 with mfa_token
+    let login_req = test::TestRequest::post()
+        .uri("/api/v1/auth/login?tenant_id=1")
+        .set_json(json!({
+            "username": username,
+            "password": "Password123!",
+        }))
+        .to_request();
+    let login_resp = test::call_service(&app, login_req).await;
+    assert_eq!(
+        login_resp.status(),
+        StatusCode::FORBIDDEN,
+        "login with MFA enabled and no code must return 403 MfaRequired"
+    );
+
+    let body = to_bytes(login_resp.into_body()).await.unwrap();
+    let login_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let mfa_token = login_json["mfa_token"]
+        .as_str()
+        .expect("mfa_token must be present in the 403 response")
+        .to_string();
+    assert!(!mfa_token.is_empty());
+
+    // CRITICAL: the mfa_token must NOT be accepted as a Bearer token on a
+    // protected endpoint. Before the fix, this returned 200 (full access).
+    let protected_req = auth_request(
+        actix_web::http::Method::GET,
+        "/api/v1/auth/mfa/status",
+        &mfa_token,
+    )
+    .to_request();
+    let protected_resp = test::call_service(&app, protected_req).await;
+    assert_eq!(
+        protected_resp.status(),
+        StatusCode::UNAUTHORIZED,
+        "MFA-pending token must be rejected by the auth middleware (issue #318)"
+    );
+}
