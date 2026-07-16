@@ -34,7 +34,7 @@ const ENV_VARS: &[&str] = &[
 /// with test B's capture-and-restore. The lock is held only for the
 /// env-mutating sections (not the asserts), so it does not add
 /// wall-clock latency.
-static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+use crate::common::ENV_LOCK;
 
 struct EnvGuard {
     saved: Vec<(&'static str, Option<String>)>,

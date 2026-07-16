@@ -17,8 +17,7 @@ use turerp::middleware::{
 };
 use turerp::utils::jwt::JwtService;
 
-mod common;
-use common::*;
+use crate::common::*;
 
 /// Benchmark: hit the liveness endpoint with sequential requests
 #[actix_web::test]

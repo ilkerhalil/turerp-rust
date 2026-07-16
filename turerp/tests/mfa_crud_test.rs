@@ -3,8 +3,7 @@
 use actix_web::{body::to_bytes, http::StatusCode, test, web, App};
 use serde_json::json;
 
-mod common;
-use common::*;
+use crate::common::*;
 
 use turerp::middleware::JwtAuthMiddleware;
 
@@ -32,8 +31,8 @@ fn build_test_app_with_mfa(
         .app_data(state.auth.mfa_service.clone())
         .service(
             web::scope("/api")
-                .configure(common::configure_all_routes)
-                .configure(common::configure_v1_routes),
+                .configure(crate::common::configure_all_routes)
+                .configure(crate::common::configure_v1_routes),
         )
 }
 

@@ -14,7 +14,7 @@ use turerp::config::RateLimitConfig;
 /// failures. The lock is held only for the duration of the
 /// env-mutating sections (not the asserts), so it does not add
 /// wall-clock latency.
-static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+use crate::common::ENV_LOCK;
 
 /// Names of every env var the test mutates. Centralized so the cleanup
 /// teardown at the bottom cannot miss one.

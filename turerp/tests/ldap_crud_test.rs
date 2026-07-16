@@ -5,8 +5,7 @@ use async_trait::async_trait;
 use serde_json::json;
 use std::sync::Arc;
 
-mod common;
-use common::*;
+use crate::common::*;
 
 use turerp::api::v1_ldap_configure;
 use turerp::domain::ldap::model::{LdapSyncResult, LdapUser};
