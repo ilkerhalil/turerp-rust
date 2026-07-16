@@ -274,29 +274,29 @@ impl MfaService {
         Ok(false)
     }
 
-    /// Generate a short-lived MFA token (temporary JWT)
+    /// Generate a short-lived MFA-pending token.
+    ///
+    /// This token uses a **distinct audience** (`turerp-mfa`) so the main
+    /// authentication middleware rejects it — it can only be exchanged for
+    /// real access tokens via the MFA verification endpoint after the TOTP
+    /// code is validated. See issue #318.
     pub fn generate_mfa_token(
         &self,
         user_id: i64,
         tenant_id: i64,
         username: String,
     ) -> Result<String, ApiError> {
-        // Generate a token with 5 minute expiration using existing JWT service
-        // We encode a special MFA claims using the standard auth claims with a short expiry
-        let claims = crate::utils::jwt::AuthClaims::new(
-            user_id,
-            tenant_id,
-            username,
-            crate::domain::user::model::Role::User,
-            300, // 5 minutes
-        );
+        let claims = crate::utils::jwt::MfaAuthClaims::new(user_id, tenant_id, username, 300);
 
-        self.jwt_service.encode_token(&claims)
+        self.jwt_service.encode_mfa_token(&claims)
     }
 
-    /// Decode an MFA token
-    pub fn decode_mfa_token(&self, token: &str) -> Result<crate::utils::jwt::AuthClaims, ApiError> {
-        self.jwt_service.decode_token(token)
+    /// Decode an MFA-pending token (audience `turerp-mfa`).
+    pub fn decode_mfa_token(
+        &self,
+        token: &str,
+    ) -> Result<crate::utils::jwt::MfaAuthClaims, ApiError> {
+        self.jwt_service.decode_mfa_token(token)
     }
 }
 
@@ -556,5 +556,6 @@ mod tests {
         let claims = service.decode_mfa_token(&token).unwrap();
         assert_eq!(claims.sub, "1");
         assert_eq!(claims.tenant_id, 1);
+        assert_eq!(claims.aud, "turerp-mfa");
     }
 }

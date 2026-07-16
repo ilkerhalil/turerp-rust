@@ -143,12 +143,9 @@ pub async fn mfa_verify(
     user_service: web::Data<UserService>,
     body: web::Json<VerifyMfaRequest>,
 ) -> Result<HttpResponse, ApiError> {
-    // Decode the MFA token to get user identity
+    // Decode the MFA-pending token (audience `turerp-mfa`, not a full access token)
     let claims = mfa_service.decode_mfa_token(&body.mfa_token)?;
-    let user_id = claims
-        .sub
-        .parse::<i64>()
-        .map_err(|_| ApiError::InvalidToken("Invalid user ID in MFA token".to_string()))?;
+    let user_id = claims.user_id()?;
     let tenant_id = claims.tenant_id;
 
     // Validate the MFA code
@@ -160,33 +157,17 @@ pub async fn mfa_verify(
         return Err(ApiError::Unauthorized("Invalid MFA code".to_string()));
     }
 
-    // Get user and generate tokens
+    // Get user and generate real access tokens
     let user = user_service
         .get_user_by_username(&claims.username, tenant_id)
         .await?;
 
-    let tokens = auth_service
-        .validate_token(&body.mfa_token)
-        .ok()
-        .and_then(|_| {
-            auth_service
-                .jwt_service
-                .generate_tokens(user.id, tenant_id, user.username.clone(), user.role)
-                .ok()
-        });
-
-    let tokens = match tokens {
-        Some(t) => t,
-        None => {
-            // Generate fresh tokens if MFA token can't be used directly
-            auth_service.jwt_service.generate_tokens(
-                user.id,
-                tenant_id,
-                user.username.clone(),
-                user.role,
-            )?
-        }
-    };
+    let tokens = auth_service.jwt_service.generate_tokens(
+        user.id,
+        tenant_id,
+        user.username.clone(),
+        user.role,
+    )?;
 
     let user_response: crate::domain::user::model::UserResponse = user.into();
 
