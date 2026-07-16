@@ -958,6 +958,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
+            tenant_repo.clone(),
         ));
 
         // Vendor Portal
@@ -973,6 +974,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
+            tenant_repo.clone(),
         ));
 
         // Webhooks
@@ -1431,6 +1433,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
+            tenant_repo.clone(),
         ));
 
         // Purchase - PostgreSQL
@@ -1464,6 +1467,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
+            tenant_repo.clone(),
         ));
 
         // Chart of Accounts - PostgreSQL

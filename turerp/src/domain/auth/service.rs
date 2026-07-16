@@ -20,6 +20,11 @@ use crate::domain::user::service::UserService;
 use crate::error::ApiError;
 use crate::utils::jwt::{JwtService, TokenPair};
 
+/// Generic error message for all tenant-validation failures on the public
+/// registration endpoint. Deliberately non-revealing to prevent tenant
+/// enumeration (issue #319 security review).
+const REGISTRATION_UNAVAILABLE: &str = "Registration is not available for this tenant";
+
 /// Auth service
 #[derive(Clone)]
 pub struct AuthService {
@@ -76,16 +81,18 @@ impl AuthService {
         // user. Without this check, an unauthenticated attacker could supply
         // an arbitrary tenant_id and register into any tenant — a cross-tenant
         // data breach with no credentials (issue #319).
-        let tenant = self
+        // SECURITY: Use a single generic error for all tenant-validation failures
+        // (non-existent, inactive, soft-deleted) to avoid creating a tenant
+        // enumeration oracle on this public, unauthenticated endpoint.
+        let valid = self
             .tenant_repo
             .find_by_id(tenant_id)
-            .await?
-            .ok_or_else(|| ApiError::NotFound(format!("Tenant {} not found", tenant_id)))?;
+            .await
+            .map_err(|_| ApiError::BadRequest(REGISTRATION_UNAVAILABLE.to_string()))?
+            .is_some_and(|t| t.is_active && !t.is_deleted());
 
-        if !tenant.is_active || tenant.is_deleted() {
-            return Err(ApiError::BadRequest(
-                "Tenant is not active or has been deleted".to_string(),
-            ));
+        if !valid {
+            return Err(ApiError::BadRequest(REGISTRATION_UNAVAILABLE.to_string()));
         }
 
         // SECURITY: Only admins can create admin accounts.

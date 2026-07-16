@@ -31,8 +31,9 @@ async fn test_register_nonexistent_tenant_rejected() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(
         resp.status(),
-        actix_web::http::StatusCode::NOT_FOUND,
-        "Registration into non-existent tenant must return 404, not 201"
+        actix_web::http::StatusCode::BAD_REQUEST,
+        "Registration into non-existent tenant must return 400 (not 201), \
+         without revealing whether the tenant exists",
     );
 }
 
@@ -120,11 +121,10 @@ async fn test_register_deleted_tenant_rejected() {
         .to_request();
 
     let resp = test::call_service(&app, req).await;
-    // Soft-deleted tenant: find_by_id returns None (filtered out) → 404
+    // Soft-deleted tenant: find_by_id returns None (filtered out) → 400
     assert!(
-        resp.status() == actix_web::http::StatusCode::NOT_FOUND
-            || resp.status() == actix_web::http::StatusCode::BAD_REQUEST,
-        "Registration into deleted tenant must be rejected, got {}",
+        resp.status() == actix_web::http::StatusCode::BAD_REQUEST,
+        "Registration into deleted tenant must be rejected with 400, got {}",
         resp.status()
     );
 }
