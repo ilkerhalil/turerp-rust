@@ -35,6 +35,7 @@ mod cors_env_loading_test;
 mod cost_center_allocation_test;
 mod cost_center_crud_test;
 mod crm_crud_test;
+mod cross_tenant_register_test;
 mod currency_crud_test;
 mod custom_field_crud_test;
 mod customer_portal_test;
