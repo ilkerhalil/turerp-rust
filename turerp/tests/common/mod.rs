@@ -2,6 +2,14 @@
 
 use actix_web::{test, web, App};
 
+/// Shared lock serializing tests that mutate process-global environment
+/// variables (`std::env::set_var`/`remove_var`). When integration tests ran as
+/// separate binaries each had its own process, so env mutations were isolated.
+/// Now that all integration tests share one binary (`tests/integration.rs`),
+/// env-mutating tests (`cors_env_loading`, `db_pool_max_conns_env`,
+/// `rate_limit_env_loading`) must hold this lock to avoid racing on shared env.
+pub static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 use turerp::api::{
     auth_configure, users_configure, v1_accounting_configure, v1_api_keys_configure,
     v1_assets_configure, v1_audit_configure, v1_bank_configure, v1_barcode_configure,

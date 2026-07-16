@@ -3,8 +3,7 @@
 use actix_web::{body::to_bytes, http::StatusCode, test, web, App};
 use serde_json::json;
 
-mod common;
-use common::*;
+use crate::common::*;
 
 use turerp::api::v1_shifts_configure;
 use turerp::middleware::JwtAuthMiddleware;

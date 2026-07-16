@@ -3,8 +3,7 @@
 use actix_web::{body::to_bytes, http::StatusCode, test};
 use chrono::Utc;
 
-mod common;
-use common::*;
+use crate::common::*;
 
 // ============================================================================
 // Audit Log Tests

@@ -6,10 +6,21 @@ authors = ["Turerp Team"]
 description = "Multi-tenant SaaS ERP system"
 license = "AGPL-3.0"
 repository = "https://github.com/ilkerhalil/turerp-rust"
+# All integration tests live in `tests/*.rs` and are aggregated into a single
+# binary (`tests/integration.rs`) via submodules. Disabling auto-discovery
+# avoids building ~80 separate test binaries, each of which re-linked the heavy
+# dependency tree (actix/sqlx/azure/otel) and dominated total compile time.
+autotests = false
 
 [lib]
 name = "turerp"
 path = "src/lib.rs"
+
+# The sole integration test target: every `tests/*.rs` file is declared as a
+# submodule of `tests/integration.rs`, so the whole suite links exactly once.
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
 
 [dependencies]
 # Web framework - use latest version

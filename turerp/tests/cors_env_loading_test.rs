@@ -32,7 +32,7 @@ const ENV_VARS: &[&str] = &[
     "TURERP_DB_MAX_CONNECTIONS",
 ];
 
-static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+use crate::common::ENV_LOCK;
 
 struct EnvGuard {
     saved: Vec<(&'static str, Option<String>)>,

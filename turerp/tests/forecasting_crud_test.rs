@@ -5,8 +5,7 @@ use rust_decimal_macros::dec;
 use serde_json::json;
 use std::sync::Arc;
 
-mod common;
-use common::*;
+use crate::common::*;
 
 use turerp::api::v1_forecasting_configure;
 use turerp::domain::forecasting::repository::InMemoryForecastingRepository;

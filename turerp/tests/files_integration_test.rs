@@ -6,8 +6,7 @@ use actix_web::{
     test,
 };
 
-mod common;
-use common::*;
+use crate::common::*;
 
 #[actix_web::test]
 async fn test_upload_and_list_files() {

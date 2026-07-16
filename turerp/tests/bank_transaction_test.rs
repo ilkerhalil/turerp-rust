@@ -3,8 +3,7 @@
 use actix_web::{body::to_bytes, http::StatusCode, test};
 use serde_json::json;
 
-mod common;
-use common::*;
+use crate::common::*;
 
 #[actix_web::test]
 async fn test_create_reconciliation_rule() {

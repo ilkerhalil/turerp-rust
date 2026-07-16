@@ -3,8 +3,7 @@
 use actix_web::{body::to_bytes, http::StatusCode, test};
 use serde_json::json;
 
-mod common;
-use common::*;
+use crate::common::*;
 
 macro_rules! create_company {
     ($app:expr, $token:expr, $name:expr) => {{

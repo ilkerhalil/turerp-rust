@@ -2,8 +2,7 @@
 
 use actix_web::{http::StatusCode, test, web, App};
 
-mod common;
-use common::*;
+use crate::common::*;
 
 /// Build a minimal app with only health endpoints (no auth middleware)
 fn build_health_app(
