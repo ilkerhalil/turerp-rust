@@ -54,13 +54,12 @@ pub struct DatabaseConfig {
 
 impl DatabaseConfig {
     pub fn from_env() -> Result<Self, ConfigError> {
-        let url = std::env::var("TURERP_DATABASE_URL").map_err(|_| {
-            ConfigError::Message(
-                "TURERP_DATABASE_URL must be set, e.g. \
-                 TURERP_DATABASE_URL=postgres://user:pass@host:5432/dbname"
-                    .to_string(),
-            )
-        })?;
+        // The URL is intentionally optional: when unset, the application runs
+        // in in-memory mode (see `create_app_state_unified`). Returning an
+        // error here would force `main.rs` to fall back to `Config::default()`,
+        // which has an empty `encryption_key` and causes app-state creation to
+        // fail. In production, `Config::validate()` enforces that the URL is set.
+        let url = std::env::var("TURERP_DATABASE_URL").unwrap_or_default();
 
         Ok(Self {
             url,

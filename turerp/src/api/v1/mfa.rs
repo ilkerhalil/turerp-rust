@@ -91,7 +91,11 @@ pub async fn mfa_disable(
         .get_user_by_username(&auth_user.0.username, tenant_id)
         .await?;
 
-    crate::utils::password::verify_password(&body.password, &user.hashed_password)
+    // Use `check_password` (not `verify_password`): verify_password returns
+    // Ok(false) on a mismatch, which a bare `?` silently drops, allowing MFA
+    // to be disabled with any password (same bug class as PR #147).
+    // check_password collapses Ok(false) into Err(InvalidCredentials).
+    crate::utils::password::check_password(&body.password, &user.hashed_password)
         .map_err(|_| ApiError::Forbidden("Invalid password".to_string()))?;
 
     let status = mfa_service.disable_mfa(user_id, tenant_id).await?;
