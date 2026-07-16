@@ -1,10 +1,20 @@
 # reviewer agent configuration
+# Full adversarial review prompt & verification matrix: see
+# agents/reviewer.md (canonical definition) and the "Pre-merge verification
+# matrix" + "Production failure-mode checklist" in AGENTS.md.
+# Run `bash scripts/review.sh` to execute the matrix.
 type: reviewer
-version: "3.0.0"
+version: "3.1.0"
 capabilities:
   - code-review
-  - quality-analysis
+  - adversarial-review
+  - security-review
+  - production-readiness
+  - tenant-isolation
+  - failure-mode-analysis
   - best-practices
 optimizations:
   - incremental-analysis
+  - parallel-lenses
+model_tier: 3
 createdAt: "2026-05-05T10:01:04.431Z"

@@ -178,6 +178,75 @@ async fn test_mfa_disable_success() {
     assert_eq!(json["method"], "none");
 }
 
+/// Regression test for the MFA disable password bypass (PR #147 / #314 class).
+/// `verify_password` returned `Ok(false)` on a wrong password, which a bare `?`
+/// silently dropped, allowing MFA to be disabled with ANY password. This test
+/// asserts that a wrong password is rejected with 403 AND that MFA remains
+/// enabled afterwards — guarding against a future revert to `verify_password`.
+#[actix_web::test]
+async fn test_mfa_disable_wrong_password_rejected_and_mfa_stays_enabled() {
+    let state = create_test_app_state().await;
+    let app = test::init_service(build_test_app_with_mfa(&state)).await;
+    let (token, user_id) = register_admin(&state, 1).await;
+
+    // Setup and verify MFA first
+    let setup_req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/auth/mfa/setup",
+        &token,
+    )
+    .to_request();
+    let setup_resp = test::call_service(&app, setup_req).await;
+    let body = to_bytes(setup_resp.into_body()).await.unwrap();
+    let setup_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let secret = setup_json["secret"].as_str().unwrap().to_string();
+    let code = generate_totp_code(&secret);
+
+    let verify_req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/auth/mfa/verify-setup",
+        &token,
+    )
+    .set_json(json!({ "code": code }))
+    .to_request();
+    let verify_resp = test::call_service(&app, verify_req).await;
+    assert_eq!(verify_resp.status(), StatusCode::OK);
+
+    // Attempt to disable MFA with a WRONG password — must be rejected (403)
+    let disable_req = auth_request(
+        actix_web::http::Method::POST,
+        "/api/v1/auth/mfa/disable",
+        &token,
+    )
+    .set_json(json!({ "password": "WrongPassword456!" }))
+    .to_request();
+    let disable_resp = test::call_service(&app, disable_req).await;
+    assert_eq!(
+        disable_resp.status(),
+        StatusCode::FORBIDDEN,
+        "wrong password must be rejected, not allow MFA disable"
+    );
+
+    // MFA must still be enabled — the disable did not take effect
+    let status_req = auth_request(
+        actix_web::http::Method::GET,
+        "/api/v1/auth/mfa/status",
+        &token,
+    )
+    .to_request();
+    let status_resp = test::call_service(&app, status_req).await;
+    assert_eq!(status_resp.status(), StatusCode::OK);
+
+    let body = to_bytes(status_resp.into_body()).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(json["user_id"], user_id);
+    assert_eq!(
+        json["mfa_enabled"], true,
+        "MFA must remain enabled after a wrong-password disable attempt"
+    );
+    assert_eq!(json["method"], "totp");
+}
+
 #[actix_web::test]
 async fn test_mfa_regenerate_backup_codes() {
     let state = create_test_app_state().await;
