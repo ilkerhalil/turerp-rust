@@ -102,6 +102,14 @@ where
         // Extract client IP using trusted proxy configuration
         let client_ip = Self::extract_client_ip(&req, &trusted_proxies);
 
+        // Clone the HttpRequest so we can build a 403 response WITHOUT
+        // awaiting the inner service future when the IP is blocked.
+        // The previous implementation awaited `fut` even on the blocked
+        // path (`fut.await?.into_response(response)`), which executed
+        // the handler's side effects before discarding the result.
+        // Now `fut` is dropped without being polled when blocked.
+        let req_clone = req.request().clone();
+
         let fut = self.service.call(req);
 
         Box::pin(async move {
@@ -109,12 +117,23 @@ where
             if let (Some(tenant_id), Some(ip)) = (tenant_id, client_ip) {
                 let allowed = whitelist_service.is_ip_allowed(tenant_id, &ip).await;
                 if !allowed {
+                    // Do NOT await `fut` — the inner service (handler) never
+                    // runs, so no side effects execute. Drop the future
+                    // without polling it.
+                    drop(fut);
+                    // Log the blocked attempt for security visibility, since
+                    // inner Audit/Tracing middlewares never run on this path.
+                    tracing::warn!(
+                        tenant_id,
+                        ip = %ip,
+                        "IP whitelist: access denied for tenant"
+                    );
                     let response = actix_web::HttpResponse::Forbidden()
                         .json(crate::error::ErrorResponse {
                             error: "Access denied: IP address not whitelisted".to_string(),
                         })
                         .map_into_right_body::<B>();
-                    return Ok(fut.await?.into_response(response));
+                    return Ok(ServiceResponse::new(req_clone, response));
                 }
             }
 

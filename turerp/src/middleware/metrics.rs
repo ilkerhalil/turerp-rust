@@ -92,15 +92,21 @@ where
         let method = req.method().to_string();
         let endpoint = normalize_endpoint(req.path());
 
-        // Increment in-flight gauge
-        gauge!("http_requests_in_flight", "method" => method.clone()).increment(1);
-
-        // Record start time
-        let start = Instant::now();
-
         let fut = self.service.call(req);
 
         Box::pin(async move {
+            // Increment in-flight gauge inside the async block so that
+            // dropped futures (e.g. IpWhitelistMiddleware dropping the
+            // service future on the blocked path without polling it)
+            // do not leak the gauge. The gauge is only incremented when
+            // the future is actually polled, and decremented when it
+            // completes — guaranteeing symmetric increment/decrement.
+            gauge!("http_requests_in_flight", "method" => method.clone()).increment(1);
+
+            // Record start time (inside async block — measures actual
+            // request processing, not middleware chain construction)
+            let start = Instant::now();
+
             let result = fut.await;
 
             // Decrement in-flight gauge

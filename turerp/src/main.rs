@@ -565,30 +565,37 @@ async fn main() -> std::io::Result<()> {
             $app
                 .configure(|cfg| app_state.register_services(cfg))
                 // Security middlewares (ORDER MATTERS!)
-                // In actix-web 4 the LAST `.wrap()` call is the OUTERMOST
-                // middleware (runs first on request, last on response). See
+                // In actix-web 4 the FIRST `.wrap()` call is the INNERMOST
+                // middleware (runs last on request, first on response).
+                // The LAST `.wrap()` call is the OUTERMOST middleware (runs
+                // first on request, last on response). See
                 // https://actix.rs/docs/middleware/ — "if you use `wrap()` or
                 // `wrap_fn()` multiple times, the last occurrence will be
                 // executed first".
                 //
-                // Therefore:
-                //   - `JwtAuthMiddleware` is registered LAST so it is the
-                //     outermost and runs first. It validates the token and
-                //     injects `AuthClaims` into the request extensions.
-                //   - `GlobalGate` is registered just before JwtAuth so it
-                //     is INSIDE JwtAuth. By the time a request reaches the
-                //     gate, `AuthClaims` is already set, so the gate can
-                //     resolve `tenant_id` and look up the per-tenant feature
-                //     flag. If the gate ran first it would fail-closed
-                //     (404) on every request because no claims would be
-                //     present yet.
-                .wrap(middleware::Compress::default()) // Response compression
-                .wrap(SecurityHeadersMiddleware::new(
-                    &security_headers_config,
-                    is_production,
-                )) // Security headers
-                .wrap(rate_limit_middleware.clone()) // Rate limiting: outer layer so unauthenticated requests count
-                .wrap(configure_cors(&config.cors)) // CORS handling
+                // Request path flows outermost → innermost:
+                //   RequestId → RateLimit → SecurityHeaders → CORS →
+                //   JwtAuth → IpWhitelist → Tenant → Audit → Metrics →
+                //   Idempotency → GlobalGate → Compress → Tracing
+                //
+                // Key ordering constraints (issue #323):
+                //   - JwtAuth must run BEFORE IpWhitelist, Tenant, Audit,
+                //     and GlobalGate so that `AuthClaims` is in request
+                //     extensions when those middlewares run. Previously
+                //     JwtAuth was at wrap #6 (inner) and IpWhitelist was at
+                //     wrap #11 (outer), so IpWhitelist ran before JwtAuth on
+                //     the request path — the IP allowlist was dead code.
+                //   - TracingMiddleware is innermost so it sees ALL
+                //     extensions (request_id, AuthClaims) set by upstream
+                //     middlewares when creating spans. Previously it was at
+                //     wrap #12 (nearly outermost), running before JwtAuth,
+                //     so spans lacked user/tenant context.
+                //   - RequestIdMiddleware is outermost so every downstream
+                //     middleware and log line has a request_id.
+                //   - RateLimit is just inside RequestId so all requests
+                //     (including rejected ones) are counted.
+                .wrap(TracingMiddleware) // 1. Innermost: sees all extensions (request_id, AuthClaims)
+                .wrap(middleware::Compress::default()) // 2. Response compression
                 .wrap(GlobalGate::new(
                     // Per-request gate rules. Each rule is (path_prefix, flag_name).
                     // Longest prefix wins. Add new gated routes here.
@@ -630,14 +637,11 @@ async fn main() -> std::io::Result<()> {
                         ("/api/v1/hr/leave-types".to_string(), "core.hr.leave_types".to_string()),
                     ],
                     app_state.feature_service.clone(),
-                )) // Feature-flag gate (off by default — see migrations/036_flag_seed_defaults.sql)
-                .wrap(JwtAuthMiddleware::new(
-                    app_state.auth.jwt_service.get_ref().clone(),
-                )) // JWT validation (outermost — must run before gate so AuthClaims is set)
-                .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // Audit logging
-                .wrap(idempotency_middleware.clone()) // Idempotency key caching
-                .wrap(MetricsMiddleware::new()) // Metrics collection
-                .wrap(TenantMiddleware) // Tenant context extraction (after auth)
+                )) // 3. Feature-flag gate (needs AuthClaims — inner of JwtAuth)
+                .wrap(idempotency_middleware.clone()) // 4. Idempotency key caching
+                .wrap(MetricsMiddleware::new()) // 5. Metrics collection
+                .wrap(AuditLoggingMiddleware::with_sender(audit_sender.clone())) // 6. Audit logging (needs AuthClaims)
+                .wrap(TenantMiddleware) // 7. Tenant context extraction (needs AuthClaims)
                 .wrap(
                     IpWhitelistMiddleware::new(app_state.admin.ip_whitelist_service.get_ref().clone())
                         .with_trusted_proxies(
@@ -648,9 +652,17 @@ async fn main() -> std::io::Result<()> {
                                 .filter_map(|s| s.parse().ok())
                                 .collect(),
                         ),
-                ) // IP whitelist check (after tenant context)
-                .wrap(TracingMiddleware) // Innermost: reads request_id/tenant_id/user_id from extensions set by upstream middlewares
-                .wrap(RequestIdMiddleware) // Request ID generation (must run before TracingMiddleware)
+                ) // 8. IP whitelist check (needs AuthClaims for tenant_id)
+                .wrap(JwtAuthMiddleware::new(
+                    app_state.auth.jwt_service.get_ref().clone(),
+                )) // 9. JWT validation (sets AuthClaims — inner middlewares above can read it)
+                .wrap(configure_cors(&config.cors)) // 10. CORS handling
+                .wrap(SecurityHeadersMiddleware::new(
+                    &security_headers_config,
+                    is_production,
+                )) // 11. Security headers
+                .wrap(rate_limit_middleware.clone()) // 12. Rate limiting (counts all requests including rejected)
+                .wrap(RequestIdMiddleware) // 13. Outermost: generates request_id first for all downstream logs
         }};
     }
 

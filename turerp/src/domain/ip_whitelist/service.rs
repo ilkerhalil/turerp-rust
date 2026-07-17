@@ -27,7 +27,20 @@ impl IpWhitelistService {
     pub async fn is_ip_allowed(&self, tenant_id: i64, ip: &str) -> bool {
         let entries = match self.repo.find_by_tenant(tenant_id).await {
             Ok(e) => e,
-            Err(_) => return true,
+            Err(e) => {
+                // Fail CLOSED on database errors. This middleware is now
+                // reachable on authenticated traffic (issue #323 fixed the
+                // ordering so JwtAuth runs before IpWhitelist). Failing open
+                // would silently allow every IP for tenants that explicitly
+                // configured an IP allowlist — the opposite of the security
+                // guarantee they opted into.
+                tracing::error!(
+                    "IP whitelist DB error for tenant {}: {}. Denying request (fail-closed).",
+                    tenant_id,
+                    e
+                );
+                return false;
+            }
         };
 
         // No whitelist entries = allow all (opt-in feature)
