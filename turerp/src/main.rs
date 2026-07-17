@@ -258,10 +258,16 @@ fn configure_cors(cors_config: &turerp::config::CorsConfig) -> Cors {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    // Load configuration first (needed for OTLP settings before subscriber init)
+    // Load configuration first (needed for OTLP settings before subscriber init).
+    // Fail hard on config errors — falling back to Config::default() would silently
+    // downgrade to development mode with an empty JWT secret and in-memory storage,
+    // bypassing all production validation (see issue #322).
     let mut config = Config::new().unwrap_or_else(|e| {
-        eprintln!("Failed to load config from env: {}, using defaults", e);
-        Config::default()
+        eprintln!("Failed to load configuration from environment: {e}");
+        eprintln!(
+            "Set required environment variables (TURERP_JWT_SECRET, etc.) or fix the error above."
+        );
+        std::process::exit(1);
     });
 
     // Build subscriber with optional OTLP layers.
