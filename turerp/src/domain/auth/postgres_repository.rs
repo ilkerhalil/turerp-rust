@@ -28,14 +28,31 @@ impl PostgresRevokedTokenStore {
 
 #[async_trait]
 impl RevokedTokenStore for PostgresRevokedTokenStore {
-    async fn is_revoked(&self, token_hash: &str) -> bool {
-        sqlx::query_scalar::<_, bool>(
+    async fn is_revoked(&self, token_hash: &str) -> Result<bool, ApiError> {
+        let result = sqlx::query_scalar::<_, bool>(
             "SELECT EXISTS(SELECT 1 FROM revoked_tokens WHERE token_hash = $1)",
         )
         .bind(token_hash)
         .fetch_one(&*self.pool)
-        .await
-        .unwrap_or(false)
+        .await;
+
+        match result {
+            Ok(is_revoked) => Ok(is_revoked),
+            Err(e) => {
+                // Fail CLOSED: on DB errors, treat the token as revoked
+                // so it is rejected. The previous implementation used
+                // `.unwrap_or(false)` which accepted revoked tokens during
+                // transient DB failures (issue #324).
+                tracing::error!(
+                    "Revoked token check DB error: {}. Denying token (fail-closed).",
+                    e
+                );
+                Err(ApiError::Database(format!(
+                    "Failed to check revoked token status: {}",
+                    e
+                )))
+            }
+        }
     }
 
     async fn revoke(&self, token_hash: &str, expires_at: DateTime<Utc>) -> Result<(), ApiError> {

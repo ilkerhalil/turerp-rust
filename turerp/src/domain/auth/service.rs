@@ -263,10 +263,20 @@ impl AuthService {
     #[tracing::instrument(skip(self))]
     pub async fn refresh_token(&self, request: RefreshTokenRequest) -> Result<TokenPair, ApiError> {
         let hash = Self::token_hash(&request.refresh_token);
-        if self.revoked_token_store.is_revoked(&hash).await {
-            return Err(ApiError::Unauthorized(
-                "Refresh token has been revoked".to_string(),
-            ));
+        match self.revoked_token_store.is_revoked(&hash).await {
+            Ok(true) => {
+                return Err(ApiError::Unauthorized(
+                    "Refresh token has been revoked".to_string(),
+                ));
+            }
+            Ok(false) => {}
+            Err(e) => {
+                // Fail closed on store errors — treat as revoked
+                tracing::error!("Token revocation check failed, denying refresh: {}", e);
+                return Err(ApiError::Unauthorized(
+                    "Unable to verify token status".to_string(),
+                ));
+            }
         }
         self.jwt_service.refresh_tokens(&request.refresh_token)
     }
