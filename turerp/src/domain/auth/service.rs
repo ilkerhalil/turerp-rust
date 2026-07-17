@@ -63,7 +63,7 @@ impl AuthService {
     }
 
     /// Register a new user
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, request))]
     pub async fn register(&self, request: RegisterRequest) -> Result<LoginResponse, ApiError> {
         // Validate input
         request
@@ -137,7 +137,7 @@ impl AuthService {
     }
 
     /// Login user
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, request))]
     pub async fn login(
         &self,
         request: LoginRequest,
@@ -260,7 +260,7 @@ impl AuthService {
     }
 
     /// Refresh access token
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, request))]
     pub async fn refresh_token(&self, request: RefreshTokenRequest) -> Result<TokenPair, ApiError> {
         let hash = Self::token_hash(&request.refresh_token);
         match self.revoked_token_store.is_revoked(&hash).await {
@@ -282,7 +282,7 @@ impl AuthService {
     }
 
     /// Revoke refresh token on logout
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, request))]
     pub async fn logout(&self, request: LogoutRequest) -> Result<(), ApiError> {
         let claims = self.jwt_service.decode_token(&request.refresh_token)?;
         let exp = DateTime::from_timestamp(claims.exp, 0).unwrap_or_else(Utc::now);
