@@ -3,9 +3,11 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
+use crate::common::soft_delete::SoftDeletable;
 use crate::domain::cari::service::CariService;
 use crate::domain::invoice::service::InvoiceService;
 use crate::domain::purchase::service::PurchaseService;
+use crate::domain::tenant::repository::BoxTenantRepository;
 use crate::domain::vendor_portal::model::{
     CreateDeliveryNote, CreateVendorUser, DeliveryNote, VendorAuthResponse, VendorInvoiceView,
     VendorLoginRequest, VendorOrderView, VendorPaginatedResponse, VendorPaginationParams,
@@ -84,9 +86,11 @@ pub struct VendorPortalService {
     invoice_service: Arc<InvoiceService>,
     jwt_service: Arc<JwtService>,
     jwt_expiry_hours: i64,
+    tenant_repo: BoxTenantRepository,
 }
 
 impl VendorPortalService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         vendor_user_repo: BoxVendorUserRepository,
         delivery_note_repo: BoxDeliveryNoteRepository,
@@ -95,6 +99,7 @@ impl VendorPortalService {
         invoice_service: Arc<InvoiceService>,
         jwt_service: Arc<JwtService>,
         jwt_expiry_hours: i64,
+        tenant_repo: BoxTenantRepository,
     ) -> Self {
         Self {
             vendor_user_repo,
@@ -104,6 +109,7 @@ impl VendorPortalService {
             invoice_service,
             jwt_service,
             jwt_expiry_hours,
+            tenant_repo,
         }
     }
 
@@ -120,6 +126,15 @@ impl VendorPortal for VendorPortalService {
         req: CreateVendorUser,
     ) -> Result<VendorUser, ApiError> {
         password::validate_password(&req.password).map_err(|e| ApiError::Validation(e.message))?;
+
+        // SECURITY: Validate tenant exists and is active before allowing portal
+        // self-registration (issue #319 — same fix as /api/v1/auth/register).
+        self.tenant_repo
+            .find_by_id(tenant_id)
+            .await
+            .map_err(|_| ApiError::BadRequest("Registration is not available".to_string()))?
+            .filter(|t| t.is_active && !t.is_deleted())
+            .ok_or_else(|| ApiError::BadRequest("Registration is not available".to_string()))?;
 
         let cari = self
             .cari_service
@@ -467,6 +482,7 @@ mod tests {
         InMemoryGoodsReceiptRepository, InMemoryPurchaseOrderLineRepository,
         InMemoryPurchaseOrderRepository,
     };
+    use crate::domain::tenant::repository::{BoxTenantRepository, InMemoryTenantRepository};
     use crate::domain::vendor_portal::repository::{
         InMemoryDeliveryNoteRepository, InMemoryVendorUserRepository,
     };
@@ -537,6 +553,7 @@ mod tests {
             Arc::new(InMemoryVendorUserRepository::new()) as BoxVendorUserRepository;
         let delivery_note_repo =
             Arc::new(InMemoryDeliveryNoteRepository::new()) as BoxDeliveryNoteRepository;
+        let tenant_repo = Arc::new(InMemoryTenantRepository::new()) as BoxTenantRepository;
 
         let service = VendorPortalService::new(
             vendor_user_repo,
@@ -546,6 +563,7 @@ mod tests {
             invoice_service,
             jwt_service,
             1,
+            tenant_repo,
         );
         (service, order_repo)
     }

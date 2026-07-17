@@ -3,6 +3,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
+use crate::common::soft_delete::SoftDeletable;
 use crate::domain::cari::service::CariService;
 use crate::domain::customer_portal::model::{
     CreatePortalUser, CreateSupportTicket, CustomerInvoiceView, CustomerOrderView,
@@ -14,6 +15,7 @@ use crate::domain::customer_portal::repository::{
 };
 use crate::domain::invoice::service::InvoiceService;
 use crate::domain::sales::service::SalesService;
+use crate::domain::tenant::repository::BoxTenantRepository;
 use crate::error::ApiError;
 use crate::utils::jwt::{JwtService, PortalAuthClaims};
 use crate::utils::password;
@@ -84,9 +86,11 @@ pub struct CustomerPortalService {
     invoice_service: Arc<InvoiceService>,
     jwt_service: Arc<JwtService>,
     jwt_expiry_hours: i64,
+    tenant_repo: BoxTenantRepository,
 }
 
 impl CustomerPortalService {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         portal_user_repo: BoxPortalUserRepository,
         ticket_repo: BoxSupportTicketRepository,
@@ -95,6 +99,7 @@ impl CustomerPortalService {
         invoice_service: Arc<InvoiceService>,
         jwt_service: Arc<JwtService>,
         jwt_expiry_hours: i64,
+        tenant_repo: BoxTenantRepository,
     ) -> Self {
         Self {
             portal_user_repo,
@@ -104,6 +109,7 @@ impl CustomerPortalService {
             invoice_service,
             jwt_service,
             jwt_expiry_hours,
+            tenant_repo,
         }
     }
 
@@ -120,6 +126,15 @@ impl CustomerPortal for CustomerPortalService {
         req: CreatePortalUser,
     ) -> Result<PortalUser, ApiError> {
         password::validate_password(&req.password).map_err(|e| ApiError::Validation(e.message))?;
+
+        // SECURITY: Validate tenant exists and is active before allowing portal
+        // self-registration (issue #319 — same fix as /api/v1/auth/register).
+        self.tenant_repo
+            .find_by_id(tenant_id)
+            .await
+            .map_err(|_| ApiError::BadRequest("Registration is not available".to_string()))?
+            .filter(|t| t.is_active && !t.is_deleted())
+            .ok_or_else(|| ApiError::BadRequest("Registration is not available".to_string()))?;
 
         let cari = self
             .cari_service

@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use validator::Validate;
 
+use crate::common::soft_delete::SoftDeletable;
 use crate::config::JwtConfig;
 use crate::db::error::map_sqlx_error;
 use crate::domain::auth::model::{
@@ -13,10 +14,16 @@ use crate::domain::auth::model::{
 };
 use crate::domain::auth::repository::BoxRevokedTokenStore;
 use crate::domain::mfa::service::MfaService;
+use crate::domain::tenant::repository::BoxTenantRepository;
 use crate::domain::user::model::{CreateUser, Role};
 use crate::domain::user::service::UserService;
 use crate::error::ApiError;
 use crate::utils::jwt::{JwtService, TokenPair};
+
+/// Generic error message for all tenant-validation failures on the public
+/// registration endpoint. Deliberately non-revealing to prevent tenant
+/// enumeration (issue #319 security review).
+const REGISTRATION_UNAVAILABLE: &str = "Registration is not available for this tenant";
 
 /// Auth service
 #[derive(Clone)]
@@ -26,6 +33,7 @@ pub struct AuthService {
     mfa_service: MfaService,
     pool: Option<Arc<PgPool>>,
     revoked_token_store: BoxRevokedTokenStore,
+    tenant_repo: BoxTenantRepository,
 }
 
 impl AuthService {
@@ -35,6 +43,7 @@ impl AuthService {
         mfa_service: MfaService,
         pool: Option<Arc<PgPool>>,
         revoked_token_store: BoxRevokedTokenStore,
+        tenant_repo: BoxTenantRepository,
     ) -> Self {
         Self {
             user_service,
@@ -42,6 +51,7 @@ impl AuthService {
             mfa_service,
             pool,
             revoked_token_store,
+            tenant_repo,
         }
     }
 
@@ -66,6 +76,24 @@ impl AuthService {
         // SECURITY: tenant_id is required and explicitly provided by the caller
         // No default is used to prevent accidental exposure of system tenant
         let tenant_id = request.tenant_id;
+
+        // SECURITY: Validate the tenant exists and is active before creating a
+        // user. Without this check, an unauthenticated attacker could supply
+        // an arbitrary tenant_id and register into any tenant — a cross-tenant
+        // data breach with no credentials (issue #319).
+        // SECURITY: Use a single generic error for all tenant-validation failures
+        // (non-existent, inactive, soft-deleted) to avoid creating a tenant
+        // enumeration oracle on this public, unauthenticated endpoint.
+        let valid = self
+            .tenant_repo
+            .find_by_id(tenant_id)
+            .await
+            .map_err(|_| ApiError::BadRequest(REGISTRATION_UNAVAILABLE.to_string()))?
+            .is_some_and(|t| t.is_active && !t.is_deleted());
+
+        if !valid {
+            return Err(ApiError::BadRequest(REGISTRATION_UNAVAILABLE.to_string()));
+        }
 
         // SECURITY: Only admins can create admin accounts.
         // Self-registration defaults to Role::User regardless of requested role.
@@ -266,6 +294,7 @@ pub fn create_auth_service(
     jwt_config: &JwtConfig,
     pool: Option<Arc<PgPool>>,
     revoked_token_store: BoxRevokedTokenStore,
+    tenant_repo: BoxTenantRepository,
 ) -> AuthService {
     let jwt_service = JwtService::new(
         jwt_config.secret.clone(),
@@ -279,6 +308,7 @@ pub fn create_auth_service(
         mfa_service,
         pool,
         revoked_token_store,
+        tenant_repo,
     )
 }
 
@@ -289,6 +319,7 @@ pub fn create_auth_service_dev(
     mfa_service: MfaService,
     pool: Option<Arc<PgPool>>,
     revoked_token_store: BoxRevokedTokenStore,
+    tenant_repo: BoxTenantRepository,
 ) -> AuthService {
     let jwt_config = JwtConfig::dev();
     create_auth_service(
@@ -297,6 +328,7 @@ pub fn create_auth_service_dev(
         &jwt_config,
         pool,
         revoked_token_store,
+        tenant_repo,
     )
 }
 
@@ -309,19 +341,34 @@ mod tests {
     use crate::domain::auth::repository::{BoxRevokedTokenStore, InMemoryRevokedTokenStore};
     use crate::domain::mfa::repository::{BoxMfaRepository, InMemoryMfaRepository};
     use crate::domain::mfa::service::MfaService;
+    use crate::domain::tenant::model::CreateTenant;
+    use crate::domain::tenant::repository::{BoxTenantRepository, InMemoryTenantRepository};
     use crate::domain::user::model::UserResponse;
     use crate::domain::user::repository::{BoxUserRepository, InMemoryUserRepository};
     use crate::domain::user::service::UserService;
     use crate::utils::jwt::JwtService;
 
-    fn create_test_auth_service() -> AuthService {
+    async fn create_test_auth_service() -> AuthService {
         let user_repo = Arc::new(InMemoryUserRepository::new()) as BoxUserRepository;
         let user_service = UserService::new(user_repo);
         let mfa_repo = Arc::new(InMemoryMfaRepository::new()) as BoxMfaRepository;
         let jwt_service = JwtService::new("test-secret".to_string(), 3600, 86400);
         let mfa_service = MfaService::new(mfa_repo, jwt_service);
         let revoked_store = Arc::new(InMemoryRevokedTokenStore::new()) as BoxRevokedTokenStore;
-        create_auth_service_dev(user_service, mfa_service, None, revoked_store)
+
+        // Seed a tenant with id=1 so registration tests that use tenant_id=1 pass
+        let tenant_repo = Arc::new(InMemoryTenantRepository::new()) as BoxTenantRepository;
+        tenant_repo
+            .create(CreateTenant {
+                name: "Test Tenant".to_string(),
+                subdomain: "test".to_string(),
+                base_currency: "TRY".to_string(),
+                supported_currencies: vec![],
+            })
+            .await
+            .unwrap();
+
+        create_auth_service_dev(user_service, mfa_service, None, revoked_store, tenant_repo)
     }
 
     #[test]
@@ -404,7 +451,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_self_registration_admin_forced_to_user() {
-        let auth_service = create_test_auth_service();
+        let auth_service = create_test_auth_service().await;
         let req = RegisterRequest {
             username: "adminuser".to_string(),
             email: "admin@example.com".to_string(),
@@ -419,7 +466,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_self_registration_user_stays_user() {
-        let auth_service = create_test_auth_service();
+        let auth_service = create_test_auth_service().await;
         let req = RegisterRequest {
             username: "normaluser".to_string(),
             email: "user@example.com".to_string(),
@@ -434,7 +481,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_self_registration_no_role_defaults_to_user() {
-        let auth_service = create_test_auth_service();
+        let auth_service = create_test_auth_service().await;
         let req = RegisterRequest {
             username: "defaultuser".to_string(),
             email: "default@example.com".to_string(),
@@ -469,9 +516,9 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_auth_service_creation() {
-        let _service = create_test_auth_service();
+    #[tokio::test]
+    async fn test_auth_service_creation() {
+        let _service = create_test_auth_service().await;
     }
 
     #[test]
@@ -528,7 +575,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_revoked_refresh_token_is_rejected() {
-        let auth_service = create_test_auth_service();
+        let auth_service = create_test_auth_service().await;
 
         // Generate valid tokens
         let tokens = auth_service
@@ -558,7 +605,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_refresh_token_still_valid_when_not_revoked() {
-        let auth_service = create_test_auth_service();
+        let auth_service = create_test_auth_service().await;
 
         let tokens = auth_service
             .jwt_service

@@ -585,12 +585,16 @@ pub mod app {
         let mfa_service = MfaService::new(mfa_repo, jwt_service.clone());
         let revoked_token_store = Arc::new(crate::domain::auth::InMemoryRevokedTokenStore::new())
             as crate::domain::auth::BoxRevokedTokenStore;
+        // Tenant repo hoisted early: AuthService needs it to validate tenant
+        // existence during self-registration (issue #319).
+        let tenant_repo = Arc::new(InMemoryTenantRepository::new()) as BoxTenantRepository;
         let auth_service = AuthService::new(
             user_service.clone(),
             jwt_service.clone(),
             mfa_service.clone(),
             None,
             revoked_token_store,
+            tenant_repo.clone(),
         );
 
         // Company (hoisted early: shared by the company_id parent-ownership
@@ -747,9 +751,8 @@ pub mod app {
             Arc::new(InMemoryCustomFieldRepository::new()) as BoxCustomFieldRepository;
         let custom_field_service = CustomFieldService::new(custom_field_repo);
 
-        // Tenant
-        let tenant_repo = Arc::new(InMemoryTenantRepository::new()) as BoxTenantRepository;
-        let tenant_service = TenantService::new(tenant_repo);
+        // Tenant (repo hoisted earlier for AuthService)
+        let tenant_service = TenantService::new(tenant_repo.clone());
         let tenant_config_repo =
             Arc::new(InMemoryTenantConfigRepository::new()) as BoxTenantConfigRepository;
         let tenant_config_service =
@@ -955,6 +958,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
+            tenant_repo.clone(),
         ));
 
         // Vendor Portal
@@ -970,6 +974,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
+            tenant_repo.clone(),
         ));
 
         // Webhooks
@@ -1275,12 +1280,16 @@ pub mod app {
         let mfa_service = MfaService::new(mfa_repo, jwt_service.clone());
         let revoked_token_store =
             crate::domain::auth::PostgresRevokedTokenStore::new(pool.clone()).into_boxed();
+        // Tenant repo hoisted early: AuthService needs it to validate tenant
+        // existence during self-registration (issue #319).
+        let tenant_repo = PostgresTenantRepository::new(pool.clone()).into_boxed();
         let auth_service = AuthService::new(
             user_service.clone(),
             jwt_service.clone(),
             mfa_service.clone(),
             Some(pool.clone()),
             revoked_token_store,
+            tenant_repo.clone(),
         );
 
         // Company - PostgreSQL (hoisted early: shared by the company_id
@@ -1424,6 +1433,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
+            tenant_repo.clone(),
         ));
 
         // Purchase - PostgreSQL
@@ -1457,6 +1467,7 @@ pub mod app {
             Arc::new(invoice_service.clone()),
             Arc::new(jwt_service.clone()),
             config.jwt.access_token_expiration / 3600,
+            tenant_repo.clone(),
         ));
 
         // Chart of Accounts - PostgreSQL
@@ -1468,9 +1479,8 @@ pub mod app {
         let custom_field_repo = PostgresCustomFieldRepository::new(pool.clone()).into_boxed();
         let custom_field_service = CustomFieldService::new(custom_field_repo);
 
-        // Tenant - PostgreSQL
-        let tenant_repo = PostgresTenantRepository::new(pool.clone()).into_boxed();
-        let tenant_service = TenantService::new(tenant_repo);
+        // Tenant - PostgreSQL (repo hoisted earlier for AuthService)
+        let tenant_service = TenantService::new(tenant_repo.clone());
         let tenant_config_repo = PostgresTenantConfigRepository::new(pool.clone()).into_boxed();
         let tenant_config_service =
             TenantConfigService::new(tenant_config_repo).with_cache(cache_service.clone());
