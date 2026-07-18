@@ -127,7 +127,7 @@ rust_decimal_macros = "1.36"
 num-traits = "0.2"
 
 # S3 / File storage
-rust-s3 = { version = "0.35", features = ["tokio"] }
+rust-s3 = { version = "0.37", features = ["tokio"] }
 
 # Multipart form data (file uploads)
 actix-multipart = "0.7"
