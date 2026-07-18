@@ -21940,7 +21940,7 @@
         "tags": [
           "Tenant"
         ],
-        "summary": "Get all tenants (requires authentication)",
+        "summary": "Get all tenants (requires admin role)",
         "operationId": "get_tenants",
         "parameters": [
           {
@@ -21969,6 +21969,9 @@
         "responses": {
           "200": {
             "description": "Paginated list of tenants"
+          },
+          "403": {
+            "description": "Forbidden"
           }
         },
         "security": [
@@ -22032,7 +22035,7 @@
         "tags": [
           "Tenant"
         ],
-        "summary": "Get tenant by ID (requires authentication)",
+        "summary": "Get tenant by ID (requires admin role)",
         "operationId": "get_tenant",
         "parameters": [
           {
@@ -22049,6 +22052,9 @@
         "responses": {
           "200": {
             "description": "Tenant found"
+          },
+          "403": {
+            "description": "Forbidden"
           },
           "404": {
             "description": "Not found"

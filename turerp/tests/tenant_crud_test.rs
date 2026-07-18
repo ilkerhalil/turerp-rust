@@ -433,3 +433,27 @@ async fn test_tenant_unauthorized() {
     let resp = test::call_service(&app, req).await;
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
+
+/// Non-admin users must not list tenants (issue #326 — tenant enumeration)
+#[actix_web::test]
+async fn test_list_tenants_forbidden_for_non_admin() {
+    let state = create_test_app_state().await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token, _user_id) = register_user!(&app, 1);
+
+    let req = auth_request(actix_web::http::Method::GET, "/api/v1/tenants", &token).to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+/// Non-admin users must not get a tenant by ID (issue #326 — tenant enumeration)
+#[actix_web::test]
+async fn test_get_tenant_forbidden_for_non_admin() {
+    let state = create_test_app_state().await;
+    let app = test::init_service(build_test_app(&state)).await;
+    let (token, _user_id) = register_user!(&app, 1);
+
+    let req = auth_request(actix_web::http::Method::GET, "/api/v1/tenants/1", &token).to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
