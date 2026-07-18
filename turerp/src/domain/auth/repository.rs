@@ -11,7 +11,13 @@ use crate::error::ApiError;
 /// Trait for revoked token storage backends
 #[async_trait]
 pub trait RevokedTokenStore: Send + Sync {
-    async fn is_revoked(&self, token_hash: &str) -> bool;
+    /// Check if a token is revoked.
+    ///
+    /// Returns `Ok(true)` if the token is revoked, `Ok(false)` if not.
+    /// Returns `Err` if the underlying store cannot be reached (e.g. DB
+    /// connection error). Callers MUST treat `Err` as "revoked" (deny the
+    /// request) to fail closed — see issue #324.
+    async fn is_revoked(&self, token_hash: &str) -> Result<bool, ApiError>;
     async fn revoke(&self, token_hash: &str, _expires_at: DateTime<Utc>) -> Result<(), ApiError>;
 }
 
@@ -36,8 +42,8 @@ impl InMemoryRevokedTokenStore {
 
 #[async_trait]
 impl RevokedTokenStore for InMemoryRevokedTokenStore {
-    async fn is_revoked(&self, token_hash: &str) -> bool {
-        self.revoked.lock().contains(token_hash)
+    async fn is_revoked(&self, token_hash: &str) -> Result<bool, ApiError> {
+        Ok(self.revoked.lock().contains(token_hash))
     }
 
     async fn revoke(&self, token_hash: &str, _expires_at: DateTime<Utc>) -> Result<(), ApiError> {
