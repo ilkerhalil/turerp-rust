@@ -19,6 +19,15 @@ pub trait RevokedTokenStore: Send + Sync {
     /// request) to fail closed — see issue #324.
     async fn is_revoked(&self, token_hash: &str) -> Result<bool, ApiError>;
     async fn revoke(&self, token_hash: &str, _expires_at: DateTime<Utc>) -> Result<(), ApiError>;
+
+    /// Delete all expired revoked-token entries (where `expires_at < now`).
+    /// Returns the number of rows removed. The default implementation is a
+    /// no-op, suitable for in-memory stores that don't track expiry.
+    /// Production backends (PostgreSQL) override this to prevent unbounded
+    /// table growth — see issue #329.
+    async fn purge_expired(&self) -> Result<u64, ApiError> {
+        Ok(0)
+    }
 }
 
 /// In-memory revoked token store (for development / single-instance deployment)

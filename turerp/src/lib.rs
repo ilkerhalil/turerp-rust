@@ -57,7 +57,29 @@ pub mod app {
     use crate::domain::assets::AssetsRepository;
     use crate::domain::audit::repository::BoxAuditLogRepository;
     use crate::domain::audit::service::AuditService;
+    use crate::domain::auth::repository::BoxRevokedTokenStore;
     use crate::domain::auth::AuthService;
+
+    /// Spawn a background task that purges expired revoked tokens every 24
+    /// hours. This prevents the `revoked_tokens` table from growing without
+    /// bound (issue #329). The in-memory store's `purge_expired` is a no-op,
+    /// so calling this is safe for dev mode too.
+    fn spawn_revoked_token_purge(store: BoxRevokedTokenStore) {
+        tokio::spawn(async move {
+            loop {
+                match store.purge_expired().await {
+                    Ok(n) if n > 0 => {
+                        tracing::info!("Revoked token purge: removed {} expired entries", n);
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::error!("Revoked token purge failed: {}", e);
+                    }
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(24 * 60 * 60)).await;
+            }
+        });
+    }
     use crate::domain::bank::repository::BoxBankRepository;
     use crate::domain::bank::service::BankService;
     use crate::domain::barcode::repository::BoxBarcodeRepository;
@@ -1280,6 +1302,9 @@ pub mod app {
         let mfa_service = MfaService::new(mfa_repo, jwt_service.clone());
         let revoked_token_store =
             crate::domain::auth::PostgresRevokedTokenStore::new(pool.clone()).into_boxed();
+        // Spawn background purge task for expired revoked tokens (issue #329).
+        // Runs every 24 hours to prevent unbounded table growth.
+        spawn_revoked_token_purge(revoked_token_store.clone());
         // Tenant repo hoisted early: AuthService needs it to validate tenant
         // existence during self-registration (issue #319).
         let tenant_repo = PostgresTenantRepository::new(pool.clone()).into_boxed();

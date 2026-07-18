@@ -68,4 +68,30 @@ impl RevokedTokenStore for PostgresRevokedTokenStore {
 
         Ok(())
     }
+
+    async fn purge_expired(&self) -> Result<u64, ApiError> {
+        // Use a 1-hour safety margin to tolerate clock skew between the
+        // application server (which sets `expires_at` from JWT `exp`) and
+        // the database server (whose `NOW()` we compare against). Without
+        // this margin, a DB clock running ahead could prematurely purge
+        // revocation rows for tokens the application still considers valid.
+        let result =
+            sqlx::query("DELETE FROM revoked_tokens WHERE expires_at < NOW() - INTERVAL '1 hour'")
+                .execute(&*self.pool)
+                .await;
+
+        match result {
+            Ok(r) => {
+                let rows = r.rows_affected();
+                if rows > 0 {
+                    tracing::info!("Purged {} expired revoked tokens", rows);
+                }
+                Ok(rows)
+            }
+            Err(e) => {
+                tracing::error!("Failed to purge expired revoked tokens: {}", e);
+                Err(map_sqlx_error(e, "RevokedToken"))
+            }
+        }
+    }
 }
