@@ -23,6 +23,11 @@ const DEFAULT_REQUESTS_PER_MINUTE: u32 = 10;
 /// Default burst size: 3 requests
 const DEFAULT_BURST_SIZE: u32 = 3;
 
+/// Maximum number of tracked client keys in the stats store. When this cap is
+/// exceeded, entries with the oldest `last_request_at` are evicted to bound
+/// memory usage. See issue #328.
+const MAX_STATS_ENTRIES: usize = 10_000;
+
 /// Keyed rate limiter type
 pub type KeyedRateLimiter = RateLimiter<String, DashMapStateStore<String>, DefaultClock>;
 
@@ -36,6 +41,27 @@ pub struct RateLimitStats {
 
 /// Shared store for rate limit statistics
 pub type RateLimitStatsStore = Arc<parking_lot::RwLock<HashMap<String, RateLimitStats>>>;
+
+/// Evict the oldest entries when the stats map exceeds `MAX_STATS_ENTRIES`.
+/// Must be called while holding a **write** lock on the store.
+fn evict_if_needed(map: &mut HashMap<String, RateLimitStats>) {
+    if map.len() <= MAX_STATS_ENTRIES {
+        return;
+    }
+
+    // Collect (key, last_request_at) pairs, sort ascending (oldest first).
+    // Entries with `last_request_at == None` are treated as oldest.
+    let mut keyed: Vec<(String, Option<std::time::SystemTime>)> = map
+        .iter()
+        .map(|(k, v)| (k.clone(), v.last_request_at))
+        .collect();
+    keyed.sort_by_key(|a| a.1);
+
+    let to_remove = map.len() - MAX_STATS_ENTRIES;
+    for (key, _) in keyed.into_iter().take(to_remove) {
+        map.remove(&key);
+    }
+}
 /// Rate limiting middleware
 #[derive(Clone)]
 pub struct RateLimitMiddleware {
@@ -179,6 +205,7 @@ where
                     let entry = map.entry(key.clone()).or_default();
                     entry.total_requests += 1;
                     entry.last_request_at = Some(std::time::SystemTime::now());
+                    evict_if_needed(&mut map);
                 }
                 // Request allowed
                 let fut = self.service.call(req);
@@ -195,6 +222,7 @@ where
                     entry.total_requests += 1;
                     entry.blocked_requests += 1;
                     entry.last_request_at = Some(std::time::SystemTime::now());
+                    evict_if_needed(&mut map);
                 }
                 // Rate limit exceeded
                 let response = actix_web::HttpResponse::TooManyRequests()
@@ -312,5 +340,66 @@ mod tests {
         assert!(!crate::common::ip_utils::is_in_trusted_proxies(
             "invalid", &proxies
         ));
+    }
+
+    #[test]
+    fn test_evict_if_needed_under_cap() {
+        let mut map = HashMap::new();
+        map.insert("a".to_string(), RateLimitStats::default());
+        map.insert("b".to_string(), RateLimitStats::default());
+        evict_if_needed(&mut map);
+        assert_eq!(map.len(), 2, "no eviction when under cap");
+    }
+
+    #[test]
+    fn test_evict_if_needed_over_cap() {
+        // Insert MAX + 5 entries with increasing timestamps; the 5 oldest
+        // should be evicted, keeping exactly MAX_STATS_ENTRIES.
+        let mut map = HashMap::new();
+        let base = std::time::SystemTime::UNIX_EPOCH;
+        for i in 0..(MAX_STATS_ENTRIES + 5) {
+            map.insert(
+                format!("client-{i}"),
+                RateLimitStats {
+                    total_requests: 1,
+                    blocked_requests: 0,
+                    last_request_at: Some(base + std::time::Duration::from_secs(i as u64)),
+                },
+            );
+        }
+        assert_eq!(map.len(), MAX_STATS_ENTRIES + 5);
+        evict_if_needed(&mut map);
+        assert_eq!(map.len(), MAX_STATS_ENTRIES);
+        // The 5 oldest (client-0..client-4) should be gone, client-5 retained
+        assert!(!map.contains_key("client-0"));
+        assert!(!map.contains_key("client-4"));
+        assert!(map.contains_key("client-5"));
+        assert!(map.contains_key(&format!("client-{}", MAX_STATS_ENTRIES + 4)));
+    }
+
+    #[test]
+    fn test_evict_if_needed_none_timestamps_oldest() {
+        // Entries with None timestamps should be evicted first (treated as oldest).
+        let mut map = HashMap::new();
+        for i in 0..(MAX_STATS_ENTRIES + 2) {
+            let ts = if i < 2 {
+                None // these two should be evicted first
+            } else {
+                Some(std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(i as u64))
+            };
+            map.insert(
+                format!("client-{i}"),
+                RateLimitStats {
+                    total_requests: 1,
+                    blocked_requests: 0,
+                    last_request_at: ts,
+                },
+            );
+        }
+        evict_if_needed(&mut map);
+        assert_eq!(map.len(), MAX_STATS_ENTRIES);
+        assert!(!map.contains_key("client-0"));
+        assert!(!map.contains_key("client-1"));
+        assert!(map.contains_key("client-2"));
     }
 }
