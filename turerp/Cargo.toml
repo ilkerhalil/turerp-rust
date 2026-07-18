@@ -147,7 +147,7 @@ handlebars = "6.0"
 quick-xml = { version = "0.41", features = ["serialize"] }
 
 # Barcode / QR code generation
-barcodes = { version = "0.1", features = ["image"] }
+barcodes = { version = "0.2", features = ["image"] }
 qrcode = "0.14"
 image = "0.25"
 

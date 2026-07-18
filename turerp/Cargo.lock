@@ -927,9 +927,9 @@ checksum = "8259ebd5ee48a37fd8931116405456fd67efbb5435b4789e45bdbccf5d7dea7e"
 
 [[package]]
 name = "barcodes"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea134bda6e43ca47108c072667cc9e14224c84c8320bb7af7a3e5209848513aa"
+checksum = "04b83ab34b129017e4413ec4991384e51e878c89b39ca82719362c14c787cce0"
 dependencies = [
  "image",
 ]
