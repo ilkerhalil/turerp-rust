@@ -9,7 +9,7 @@
 //! GET requests are naturally idempotent and are not cached.
 
 use crate::error::ApiError;
-use actix_web::body::{EitherBody, MessageBody};
+use actix_web::body::{to_bytes_limited, BodySize, EitherBody, MessageBody};
 use actix_web::http::header::HeaderName;
 use actix_web::http::StatusCode;
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
@@ -26,6 +26,15 @@ const IDEMPOTENCY_REPLAY_HEADER: &str = "x-idempotency-replayed";
 const DEFAULT_TTL: Duration = Duration::from_secs(24 * 60 * 60); // 24 hours
 const MAX_KEY_LENGTH: usize = 255;
 const MAX_CACHE_SIZE: usize = 10_000;
+/// Maximum response body size to cache (1 MiB). Larger responses are not cached.
+const MAX_CACHED_BODY_SIZE: usize = 1024 * 1024;
+/// Headers that should not be copied to the cached/replayed response.
+const SKIP_HEADERS: &[&str] = &[
+    "connection",
+    "transfer-encoding",
+    "upgrade",
+    "content-length",
+];
 
 /// A cached idempotent response
 #[derive(Clone, Serialize, Deserialize)]
@@ -360,30 +369,85 @@ where
             let res = service.call(req).await?;
             let status = res.status().as_u16();
 
-            // Only cache successful responses (2xx)
+            // Only cache successful responses (2xx) with a body within the size limit
             if (200..300).contains(&status) {
-                let headers: Vec<(String, String)> = res
-                    .headers()
-                    .iter()
-                    .filter(|(name, _)| {
-                        !matches!(
-                            name.as_str(),
-                            "connection" | "transfer-encoding" | "upgrade"
-                        )
-                    })
-                    .map(|(name, value)| {
-                        let v = value.to_str().unwrap_or("");
-                        (name.to_string(), v.to_string())
-                    })
-                    .collect();
-
-                let cached = CachedResponse {
-                    status,
-                    headers,
-                    body: Vec::new(), // Body capture requires consuming response
-                    expires_at: Instant::now() + ttl,
+                let body_size = res.response().body().size();
+                let can_cache = match body_size {
+                    BodySize::None | BodySize::Sized(0) => true,
+                    BodySize::Sized(size) => (size as usize) <= MAX_CACHED_BODY_SIZE,
+                    BodySize::Stream => false,
                 };
-                store.set(&key, cached).await;
+
+                if can_cache {
+                    let (req, response) = res.into_parts();
+                    let headers: Vec<(String, String)> = response
+                        .headers()
+                        .iter()
+                        .filter(|(name, _)| {
+                            let name_lower = name.as_str().to_lowercase();
+                            !SKIP_HEADERS.iter().any(|h| *h == name_lower)
+                        })
+                        .map(|(name, value)| {
+                            let v = value.to_str().unwrap_or("");
+                            (name.to_string(), v.to_string())
+                        })
+                        .collect();
+
+                    match to_bytes_limited(response.into_body(), MAX_CACHED_BODY_SIZE).await {
+                        Ok(Ok(body_bytes)) => {
+                            let cached = CachedResponse {
+                                status,
+                                headers: headers.clone(),
+                                body: body_bytes.to_vec(),
+                                expires_at: Instant::now() + ttl,
+                            };
+                            store.set(&key, cached).await;
+
+                            // Rebuild the response with the captured body
+                            let mut builder = actix_web::HttpResponse::build(
+                                StatusCode::from_u16(status)
+                                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                            );
+                            for (name, value) in &headers {
+                                if let Ok(header_name) = HeaderName::try_from(name.as_str()) {
+                                    if let Ok(header_value) =
+                                        actix_web::http::header::HeaderValue::from_bytes(
+                                            value.as_bytes(),
+                                        )
+                                    {
+                                        builder.insert_header((header_name, header_value));
+                                    }
+                                }
+                            }
+                            let resp = builder.body(body_bytes);
+                            let body = resp.map_into_right_body::<B>();
+                            return Ok(ServiceResponse::new(req, body));
+                        }
+                        Ok(Err(_)) => {
+                            tracing::warn!("Failed to read response body for idempotency cache");
+                            let resp = actix_web::HttpResponse::InternalServerError().body(
+                                serde_json::json!({"error": "Failed to read response body"})
+                                    .to_string(),
+                            );
+                            let body = resp.map_into_right_body::<B>();
+                            return Ok(ServiceResponse::new(req, body));
+                        }
+                        Err(_) => {
+                            // Body exceeded the size limit — don't cache, return 500
+                            // since the body has been partially consumed
+                            tracing::debug!(
+                                "Response body exceeded {} bytes, not caching idempotent response",
+                                MAX_CACHED_BODY_SIZE
+                            );
+                            let resp = actix_web::HttpResponse::InternalServerError().body(
+                                serde_json::json!({"error": "Response body too large for idempotency caching"})
+                                    .to_string(),
+                            );
+                            let body = resp.map_into_right_body::<B>();
+                            return Ok(ServiceResponse::new(req, body));
+                        }
+                    }
+                }
             }
 
             Ok(res.map_into_left_body())
