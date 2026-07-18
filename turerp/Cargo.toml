@@ -134,7 +134,7 @@ actix-multipart = "0.7"
 
 # Report generation
 rust_xlsxwriter = "0.94"
-printpdf = "0.9"
+printpdf = "0.12"
 csv = "1.4"
 
 # Email delivery
@@ -201,12 +201,3 @@ incremental = false
 [profile.dev.build-override]
 # Build scripts and proc-macros never need debug info; skip it entirely.
 debug = false
-# Vendored backport of lopdf 0.42's RUSTSEC-2026-0187 fix (stack overflow via
-# deeply nested PDF arrays/dictionaries) onto lopdf 0.39.0 — the version
-# printpdf 0.9.1 pins (^0.39.0), for which no upstream 0.42-compatible release
-# exists. The patch overrides the registry crate with the in-tree copy at
-# vendor/lopdf, which is byte-identical to lopdf 0.39.0 except for the
-# MAX_NESTING_DEPTH recursion bound in src/parser/mod.rs + src/reader.rs.
-# Full diff vs upstream lopdf 0.42 is documented in the backport PR body.
-[patch.crates-io]
-lopdf = { path = "vendor/lopdf" }
