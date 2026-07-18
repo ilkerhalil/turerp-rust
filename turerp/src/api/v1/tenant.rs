@@ -36,15 +36,15 @@ pub async fn create_tenant(
     )
 }
 
-/// Get all tenants (requires authentication)
+/// Get all tenants (requires admin role)
 #[utoipa::path(
     get, path = "/api/v1/tenants", tag = "Tenant",
     params(PaginationParams),
-    responses((status = 200, description = "Paginated list of tenants")),
+    responses((status = 200, description = "Paginated list of tenants"), (status = 403, description = "Forbidden")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_tenants(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     tenant_service: web::Data<TenantService>,
     pagination: web::Query<PaginationParams>,
     locale: Locale,
@@ -63,15 +63,15 @@ pub async fn get_tenants(
     )
 }
 
-/// Get tenant by ID (requires authentication)
+/// Get tenant by ID (requires admin role)
 #[utoipa::path(
     get, path = "/api/v1/tenants/{id}", tag = "Tenant",
     params(("id" = i64, Path, description = "Tenant ID")),
-    responses((status = 200, description = "Tenant found"), (status = 404, description = "Not found")),
+    responses((status = 200, description = "Tenant found"), (status = 403, description = "Forbidden"), (status = 404, description = "Not found")),
     security(("bearer_auth" = []))
 )]
 pub async fn get_tenant(
-    _auth_user: AuthUser,
+    _admin_user: AdminUser,
     tenant_service: web::Data<TenantService>,
     path: web::Path<i64>,
     locale: Locale,
