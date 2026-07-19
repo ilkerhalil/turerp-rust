@@ -12,7 +12,7 @@ use crate::error::ApiError;
 use actix_web::body::{to_bytes_limited, BodySize, EitherBody, MessageBody};
 use actix_web::http::header::HeaderName;
 use actix_web::http::StatusCode;
-use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error};
+use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, HttpMessage};
 use async_trait::async_trait;
 use futures::future::LocalBoxFuture;
 use moka::{future::Cache, Expiry};
@@ -286,6 +286,13 @@ pub struct IdempotencyMiddlewareService<S> {
     ttl: Duration,
 }
 
+/// Build a scoped cache key from tenant_id, method, path, and the raw
+/// idempotency key. Scoping prevents cross-tenant/cross-endpoint replay
+/// (issue #343).
+fn build_cache_key(tenant_id: i64, method: &str, path: &str, raw_key: &str) -> String {
+    format!("{}:{}:{}:{}", tenant_id, method, path, raw_key)
+}
+
 impl<S, B> actix_web::dev::Service<ServiceRequest> for IdempotencyMiddlewareService<S>
 where
     S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>
@@ -336,16 +343,28 @@ where
             });
         }
 
-        let key = idempotency_key.expect("guard ensures Some");
+        let raw_key = idempotency_key.expect("guard ensures Some");
         let service = self.service.clone();
         let store = self.store.clone();
         let ttl = self.ttl;
+
+        // Scope the cache key by tenant_id, HTTP method, and request path to
+        // prevent cross-tenant/cross-endpoint replay (issue #343). If
+        // AuthClaims is not present (unauthenticated route), fall back to
+        // a static sentinel so the key is still method+path-scoped.
+        let tenant_id = req
+            .extensions()
+            .get::<crate::utils::jwt::AuthClaims>()
+            .map(|c| c.tenant_id)
+            .unwrap_or(0);
+        let path = req.path().to_string();
+        let cache_key = build_cache_key(tenant_id, method.as_str(), &path, &raw_key);
 
         // Cache check and service call both happen inside the async block
         // because store access is now async.
         Box::pin(async move {
             // Check for cached response
-            if let Some(cached) = store.get(&key).await {
+            if let Some(cached) = store.get(&cache_key).await {
                 let mut builder = actix_web::HttpResponse::build(
                     StatusCode::from_u16(cached.status)
                         .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
@@ -401,7 +420,7 @@ where
                                 body: body_bytes.to_vec(),
                                 expires_at: Instant::now() + ttl,
                             };
-                            store.set(&key, cached).await;
+                            store.set(&cache_key, cached).await;
 
                             // Rebuild the response with the captured body
                             let mut builder = actix_web::HttpResponse::build(
@@ -519,5 +538,25 @@ mod tests {
         }
         store.cache.run_pending_tasks().await;
         assert!(store.cache.entry_count() <= MAX_CACHE_SIZE as u64);
+    }
+
+    #[test]
+    fn test_cache_key_scoped_by_tenant() {
+        // Same idempotency key, different tenants → different cache keys
+        let key_a = build_cache_key(1, "POST", "/api/v1/invoices", "abc-123");
+        let key_b = build_cache_key(2, "POST", "/api/v1/invoices", "abc-123");
+        assert_ne!(key_a, key_b, "cross-tenant cache keys must differ");
+
+        // Same tenant, different endpoints → different cache keys
+        let key_c = build_cache_key(1, "POST", "/api/v1/orders", "abc-123");
+        assert_ne!(key_a, key_c, "cross-endpoint cache keys must differ");
+
+        // Same tenant, different methods → different cache keys
+        let key_d = build_cache_key(1, "PUT", "/api/v1/invoices", "abc-123");
+        assert_ne!(key_a, key_d, "cross-method cache keys must differ");
+
+        // Identical inputs → same cache key (replay works within scope)
+        let key_e = build_cache_key(1, "POST", "/api/v1/invoices", "abc-123");
+        assert_eq!(key_a, key_e, "same-scope cache keys must match for replay");
     }
 }
