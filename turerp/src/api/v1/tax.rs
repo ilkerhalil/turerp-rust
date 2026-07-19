@@ -82,6 +82,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(periods::bulk_restore_tax_periods)),
     )
     .service(
+        web::resource("/v1/tax/periods/deleted")
+            .route(web::get().to(periods::list_deleted_tax_periods)),
+    )
+    .service(
         web::resource("/v1/tax/periods/{id}")
             .route(web::get().to(periods::get_tax_period))
             .route(web::delete().to(periods::delete_tax_period)),
@@ -96,10 +100,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/tax/periods/{id}/restore")
             .route(web::put().to(periods::restore_tax_period)),
-    )
-    .service(
-        web::resource("/v1/tax/periods/deleted")
-            .route(web::get().to(periods::list_deleted_tax_periods)),
     )
     .service(
         web::resource("/v1/tax/periods/{id}/destroy")

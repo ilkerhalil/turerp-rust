@@ -376,6 +376,11 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_project)),
     )
     .service(web::resource("/v1/projects/deleted").route(web::get().to(list_deleted_projects)))
+    .service(web::resource("/v1/projects/wbs").route(web::post().to(create_wbs_item)))
+    .service(
+        web::resource("/v1/projects/wbs/{id}/progress").route(web::put().to(update_wbs_progress)),
+    )
+    .service(web::resource("/v1/projects/costs").route(web::post().to(create_project_cost)))
     .service(
         web::resource("/v1/projects/{id}")
             .route(web::get().to(get_project))
@@ -393,10 +398,5 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/projects/{project_id}/profitability")
             .route(web::get().to(get_profitability)),
-    )
-    .service(web::resource("/v1/projects/wbs").route(web::post().to(create_wbs_item)))
-    .service(
-        web::resource("/v1/projects/wbs/{id}/progress").route(web::put().to(update_wbs_progress)),
-    )
-    .service(web::resource("/v1/projects/costs").route(web::post().to(create_project_cost)));
+    );
 }
