@@ -61,9 +61,9 @@ pub mod app {
     use crate::domain::auth::AuthService;
 
     /// Spawn a background task that purges expired revoked tokens every 24
-    /// hours. This prevents the `revoked_tokens` table from growing without
-    /// bound (issue #329). The in-memory store's `purge_expired` is a no-op,
-    /// so calling this is safe for dev mode too.
+    /// hours. This prevents the revoked-token store from growing without
+    /// bound (issues #329 and #346). Both the PostgreSQL and in-memory
+    /// backends implement `purge_expired`.
     fn spawn_revoked_token_purge(store: BoxRevokedTokenStore) {
         tokio::spawn(async move {
             loop {
@@ -607,6 +607,9 @@ pub mod app {
         let mfa_service = MfaService::new(mfa_repo, jwt_service.clone());
         let revoked_token_store = Arc::new(crate::domain::auth::InMemoryRevokedTokenStore::new())
             as crate::domain::auth::BoxRevokedTokenStore;
+        // Spawn background purge task for expired revoked tokens (issue #346).
+        // Runs every 24 hours to prevent unbounded HashSet growth in dev mode.
+        spawn_revoked_token_purge(revoked_token_store.clone());
         // Tenant repo hoisted early: AuthService needs it to validate tenant
         // existence during self-registration (issue #319).
         let tenant_repo = Arc::new(InMemoryTenantRepository::new()) as BoxTenantRepository;
