@@ -539,7 +539,10 @@ async fn main() -> std::io::Result<()> {
     let is_production = config.is_production();
     let security_headers_config = config.security_headers.clone();
 
-    // Build idempotency middleware: Redis in production if enabled, otherwise in-memory
+    // Build idempotency middleware: Redis in production if enabled, otherwise in-memory.
+    // When Redis is explicitly enabled, connection failure is a hard startup error —
+    // falling back to in-memory silently would break deduplication in multi-instance
+    // deployments (issue #344).
     let idempotency_middleware = if config.redis.enabled {
         match turerp::middleware::RedisIdempotencyStore::new(&config.redis.url).await {
             Ok(store) => {
@@ -547,11 +550,16 @@ async fn main() -> std::io::Result<()> {
                 IdempotencyMiddleware::new(Arc::new(store))
             }
             Err(e) => {
-                tracing::warn!(
-                    "Failed to initialize Redis idempotency store ({}), falling back to in-memory",
-                    e
-                );
-                IdempotencyMiddleware::in_memory()
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionRefused,
+                    format!(
+                        "Redis idempotency store is enabled (TURERP_REDIS_ENABLED=true) \
+                         but connection to {} failed: {}. \
+                         Refusing to start with in-memory fallback — in multi-instance \
+                         deployments this would silently break idempotency deduplication.",
+                        config.redis.url, e
+                    ),
+                ));
             }
         }
     } else {
