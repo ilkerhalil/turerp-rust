@@ -515,10 +515,14 @@ async fn main() -> std::io::Result<()> {
     };
     tracing::info!("Job service background tasks started (60s cron + 300s heartbeat)");
 
-    // Build rate-limit middleware with shared stats store so the dashboard can read them
+    // Build rate-limit middleware with shared stats store so the dashboard can read them.
+    // A background eviction task removes idle client keys from the governor's
+    // internal DashMap to prevent unbounded memory growth (issue #345).
     let rate_limit_middleware = {
         let stats_store = app_state.infra.rate_limit_stats.get_ref().clone();
-        RateLimitMiddleware::with_config(&config.rate_limit).with_stats_store(stats_store)
+        RateLimitMiddleware::with_config(&config.rate_limit)
+            .with_stats_store(stats_store)
+            .spawn_idle_eviction(std::time::Duration::from_secs(300))
     };
 
     // Set up audit log channel (bounded to prevent unbounded memory growth under load)

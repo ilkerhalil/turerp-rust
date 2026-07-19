@@ -141,6 +141,41 @@ impl RateLimitMiddleware {
         self.stats = stats;
         self
     }
+
+    /// Spawn a background task that periodically evicts idle entries from the
+    /// governor's internal `DashMapStateStore`.
+    ///
+    /// Without this, every new client IP permanently adds a rate-limit cell to
+    /// the governor state, allowing an attacker rotating source IPs to grow
+    /// memory without bound. `retain_recent()` removes keys whose
+    /// rate-limiting state is indistinguishable from a fresh key (i.e., keys
+    /// that haven't been seen for at least one bucket-fill period).
+    ///
+    /// See issue #345.
+    pub fn spawn_idle_eviction(self, interval: std::time::Duration) -> Self {
+        let limiter = self.limiter.clone();
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(interval);
+            // Skip the first immediate tick
+            ticker.tick().await;
+            loop {
+                ticker.tick().await;
+                let before = limiter.len();
+                limiter.retain_recent();
+                limiter.shrink_to_fit();
+                let after = limiter.len();
+                if before != after {
+                    tracing::info!(
+                        "Rate-limiter state evicted {} idle client keys ({} -> {})",
+                        before - after,
+                        before,
+                        after
+                    );
+                }
+            }
+        });
+        self
+    }
 }
 
 impl Default for RateLimitMiddleware {
@@ -401,5 +436,38 @@ mod tests {
         assert!(!map.contains_key("client-0"));
         assert!(!map.contains_key("client-1"));
         assert!(map.contains_key("client-2"));
+    }
+
+    #[test]
+    fn test_governor_retain_recent_is_callable() {
+        // Verify that governor's retain_recent() and shrink_to_fit() can be
+        // called on the limiter without panicking. The actual eviction of
+        // idle keys happens after the rate window expires (guaranteed by
+        // the governor library). See issue #345.
+        let limiter = RateLimitMiddleware::with_quota(
+            NonZeroU32::new(10).unwrap(),
+            NonZeroU32::new(2).unwrap(),
+        );
+
+        // Add some keys to the governor state
+        limiter.limiter.check_key(&"192.168.1.1".to_string()).ok();
+        limiter.limiter.check_key(&"192.168.1.2".to_string()).ok();
+        limiter.limiter.check_key(&"10.0.0.1".to_string()).ok();
+        assert_eq!(limiter.limiter.len(), 3);
+
+        // retain_recent() should not panic; freshly checked keys are retained
+        // because their theoretical arrival time is in the future.
+        limiter.limiter.retain_recent();
+        limiter.limiter.shrink_to_fit();
+        assert_eq!(limiter.limiter.len(), 3, "fresh keys are retained");
+    }
+
+    #[tokio::test]
+    async fn test_spawn_idle_eviction_returns_self() {
+        // The spawn_idle_eviction method should return the middleware so it
+        // can be chained. We use a short interval but don't await the task.
+        let middleware =
+            RateLimitMiddleware::new().spawn_idle_eviction(std::time::Duration::from_secs(3600));
+        assert!(Arc::strong_count(&middleware.limiter) > 0);
     }
 }
