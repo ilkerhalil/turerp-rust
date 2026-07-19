@@ -11,6 +11,7 @@ use actix_web::body::{EitherBody, MessageBody};
 use actix_web::{dev::ServiceRequest, dev::ServiceResponse, Error, HttpMessage};
 use futures::future::LocalBoxFuture;
 use std::net::IpAddr;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::domain::ip_whitelist::service::IpWhitelistService;
@@ -39,7 +40,8 @@ impl IpWhitelistMiddleware {
 
 impl<S, B> actix_web::dev::Transform<S, ServiceRequest> for IpWhitelistMiddleware
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>
+        + 'static,
     S::Future: 'static,
     B: MessageBody + 'static,
 {
@@ -51,7 +53,7 @@ where
 
     fn new_transform(&self, service: S) -> Self::Future {
         std::future::ready(Ok(IpWhitelistMiddlewareService {
-            service,
+            service: Arc::new(service),
             whitelist_service: self.service.clone(),
             trusted_proxies: self.trusted_proxies.clone(),
         }))
@@ -60,14 +62,15 @@ where
 
 /// The actual middleware service
 pub struct IpWhitelistMiddlewareService<S> {
-    service: S,
+    service: Arc<S>,
     whitelist_service: IpWhitelistService,
     trusted_proxies: Vec<IpAddr>,
 }
 
 impl<S, B> actix_web::dev::Service<ServiceRequest> for IpWhitelistMiddlewareService<S>
 where
-    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
+    S: actix_web::dev::Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>
+        + 'static,
     S::Future: 'static,
     B: MessageBody + 'static,
 {
@@ -76,12 +79,12 @@ where
     type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     fn poll_ready(&self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.service.poll_ready(ctx)
+        (*self.service).poll_ready(ctx)
     }
 
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let whitelist_service = self.whitelist_service.clone();
-        let trusted_proxies = self.trusted_proxies.clone();
+        let service = self.service.clone();
 
         // Tenant identification: read the JWT claims (set by JwtAuthMiddleware
         // on the request path BEFORE this middleware runs) rather than the
@@ -100,29 +103,17 @@ where
             .map(|c| c.tenant_id);
 
         // Extract client IP using trusted proxy configuration
-        let client_ip = Self::extract_client_ip(&req, &trusted_proxies);
-
-        // Clone the HttpRequest so we can build a 403 response WITHOUT
-        // awaiting the inner service future when the IP is blocked.
-        // The previous implementation awaited `fut` even on the blocked
-        // path (`fut.await?.into_response(response)`), which executed
-        // the handler's side effects before discarding the result.
-        // Now `fut` is dropped without being polled when blocked.
-        let req_clone = req.request().clone();
-
-        let fut = self.service.call(req);
+        let client_ip = Self::extract_client_ip(&req, &self.trusted_proxies);
 
         Box::pin(async move {
             // If we have a tenant_id and a client IP, check the whitelist
+            // BEFORE calling the inner service. This avoids cloning the
+            // HttpRequest (which would break actix-web's Rc-based request
+            // internals — see panic in request.rs match_info_mut) and
+            // prevents the handler from running on blocked IPs.
             if let (Some(tenant_id), Some(ip)) = (tenant_id, client_ip) {
                 let allowed = whitelist_service.is_ip_allowed(tenant_id, &ip).await;
                 if !allowed {
-                    // Do NOT await `fut` — the inner service (handler) never
-                    // runs, so no side effects execute. Drop the future
-                    // without polling it.
-                    drop(fut);
-                    // Log the blocked attempt for security visibility, since
-                    // inner Audit/Tracing middlewares never run on this path.
                     tracing::warn!(
                         tenant_id,
                         ip = %ip,
@@ -133,11 +124,11 @@ where
                             error: "Access denied: IP address not whitelisted".to_string(),
                         })
                         .map_into_right_body::<B>();
-                    return Ok(ServiceResponse::new(req_clone, response));
+                    return Ok(req.into_response(response));
                 }
             }
 
-            let res = fut.await?;
+            let res = service.call(req).await?;
             Ok(res.map_into_left_body())
         })
     }
