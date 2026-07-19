@@ -58,7 +58,13 @@ fn parse_date_range(
 /// Trait for import/export operations
 #[async_trait]
 pub trait ImportService: Send + Sync {
-    /// Import data for a given entity type
+    /// Import data for a given entity type.
+    ///
+    /// `job_id` is the scheduler's job ID for async imports (threaded through
+    /// from the job executor so results are keyed by the same ID the client
+    /// received). For synchronous imports, pass `None` and a timestamp-based
+    /// job_id will be generated.
+    #[allow(clippy::too_many_arguments)]
     async fn import(
         &self,
         tenant_id: i64,
@@ -67,6 +73,7 @@ pub trait ImportService: Send + Sync {
         format: ImportFormat,
         data: Vec<u8>,
         created_by: i64,
+        job_id: Option<i64>,
     ) -> Result<ImportResult, ApiError>;
 
     /// Get import result by job ID, scoped to the caller's tenant.
@@ -150,8 +157,9 @@ impl ImportService for CsvImportService {
         format: ImportFormat,
         data: Vec<u8>,
         created_by: i64,
+        job_id: Option<i64>,
     ) -> Result<ImportResult, ApiError> {
-        let job_id = chrono::Utc::now().timestamp_millis();
+        let job_id = job_id.unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
         let mut result = ImportResult::new(job_id, entity_type);
         result.status = ImportStatus::Processing;
 
@@ -650,6 +658,7 @@ mod tests {
                 ImportFormat::Csv,
                 data.to_vec(),
                 1,
+                None,
             )
             .await
             .unwrap();
@@ -669,6 +678,7 @@ mod tests {
             ImportFormat::Csv,
             data.to_vec(),
             1,
+            None,
         )
         .await
         .unwrap();
@@ -680,6 +690,7 @@ mod tests {
                 ImportFormat::Csv,
                 data.to_vec(),
                 1,
+                None,
             )
             .await
             .unwrap();
@@ -711,6 +722,7 @@ mod tests {
                 ImportFormat::Csv,
                 data.to_vec(),
                 1,
+                None,
             )
             .await
             .unwrap();
@@ -734,6 +746,7 @@ mod tests {
                 ImportFormat::Csv,
                 data.to_vec(),
                 1,
+                None,
             )
             .await
             .unwrap();
@@ -756,6 +769,7 @@ mod tests {
             ImportFormat::Csv,
             data.to_vec(),
             1,
+            None,
         )
         .await
         .unwrap();
@@ -767,5 +781,38 @@ mod tests {
             .unwrap()
             .expect("Product should exist");
         assert_eq!(product.company_id, 42);
+    }
+
+    /// Regression test for issue #281: when a scheduler job_id is provided
+    /// (async import path), the result must be stored under that job_id so
+    /// the client can poll status/errors with the ID it received.
+    #[tokio::test]
+    async fn test_async_import_keys_result_by_scheduler_job_id() {
+        let svc = create_test_service();
+        let data = b"code,name,unit_price\nP001,Product 1,100.00";
+        let scheduler_job_id: i64 = 42;
+
+        let result = svc
+            .import(
+                1,
+                1,
+                EntityType::Product,
+                ImportFormat::Csv,
+                data.to_vec(),
+                1,
+                Some(scheduler_job_id),
+            )
+            .await
+            .unwrap();
+
+        // The result's job_id must match the scheduler's job_id.
+        assert_eq!(result.job_id, scheduler_job_id);
+
+        // get_result must find it under the scheduler's job_id.
+        let fetched = svc.get_result(scheduler_job_id, 1);
+        assert!(
+            fetched.is_some(),
+            "async import result must be retrievable by the scheduler's job_id"
+        );
     }
 }
