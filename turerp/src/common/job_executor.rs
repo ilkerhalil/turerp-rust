@@ -162,7 +162,15 @@ impl JobExecutor {
                         .map_err(|e| format!("Invalid format: {}", e))?;
 
                     import_service
-                        .import(*tenant_id, *company_id, entity, fmt, data, SYSTEM_USER_ID)
+                        .import(
+                            *tenant_id,
+                            *company_id,
+                            entity,
+                            fmt,
+                            data,
+                            SYSTEM_USER_ID,
+                            Some(job.id),
+                        )
                         .await
                         .map_err(|e| format!("Import failed: {}", e))?;
 
