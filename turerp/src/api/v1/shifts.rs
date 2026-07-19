@@ -410,6 +410,12 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::post().to(create_shift)),
     )
     .service(web::resource("/v1/shifts/deleted").route(web::get().to(list_deleted_shifts)))
+    // Static 2-segment paths must be registered before the dynamic {id}
+    // route, otherwise actix-web matches {id} first and returns 405 for
+    // methods (POST) that {id} does not handle.
+    .service(web::resource("/v1/shifts/assignments").route(web::post().to(create_assignment)))
+    .service(web::resource("/v1/shifts/reports").route(web::post().to(generate_report)))
+    .service(web::resource("/v1/shifts/overtime").route(web::post().to(calculate_overtime)))
     .service(
         web::resource("/v1/shifts/{id}")
             .route(web::get().to(get_shift))
@@ -421,7 +427,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     )
     .service(web::resource("/v1/shifts/{id}/restore").route(web::put().to(restore_shift)))
     .service(web::resource("/v1/shifts/{id}/destroy").route(web::delete().to(destroy_shift)))
-    .service(web::resource("/v1/shifts/assignments").route(web::post().to(create_assignment)))
     .service(
         web::resource("/v1/shifts/assignments/employee/{employee_id}")
             .route(web::get().to(get_assignments_by_employee)),
@@ -438,7 +443,5 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/shifts/attendance/employee/{employee_id}")
             .route(web::get().to(get_attendance_by_employee)),
-    )
-    .service(web::resource("/v1/shifts/reports").route(web::post().to(generate_report)))
-    .service(web::resource("/v1/shifts/overtime").route(web::post().to(calculate_overtime)));
+    );
 }

@@ -19,6 +19,14 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(work_orders::list_deleted_work_orders)),
     )
     .service(
+        web::resource("/v1/manufacturing/work-orders/operations")
+            .route(web::post().to(work_orders::add_work_order_operation)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/work-orders/materials")
+            .route(web::post().to(work_orders::add_work_order_material)),
+    )
+    .service(
         web::resource("/v1/manufacturing/work-orders/{id}")
             .route(web::get().to(work_orders::get_work_order))
             .route(web::delete().to(work_orders::soft_delete_work_order)),
@@ -43,18 +51,13 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
         web::resource("/v1/manufacturing/work-orders/{work_order_id}/materials")
             .route(web::get().to(work_orders::get_work_order_materials)),
     )
-    .service(
-        web::resource("/v1/manufacturing/work-orders/operations")
-            .route(web::post().to(work_orders::add_work_order_operation)),
-    )
-    .service(
-        web::resource("/v1/manufacturing/work-orders/materials")
-            .route(web::post().to(work_orders::add_work_order_material)),
-    )
     .service(web::resource("/v1/manufacturing/boms").route(web::post().to(boms::create_bom)))
     .service(
         web::resource("/v1/manufacturing/boms/deleted")
             .route(web::get().to(boms::list_deleted_boms)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/boms/lines").route(web::post().to(boms::add_bom_line)),
     )
     .service(
         web::resource("/v1/manufacturing/boms/{id}")
@@ -74,9 +77,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .route(web::get().to(boms::get_bom_lines)),
     )
     .service(
-        web::resource("/v1/manufacturing/boms/lines").route(web::post().to(boms::add_bom_line)),
-    )
-    .service(
         web::resource("/v1/manufacturing/boms/product/{product_id}")
             .route(web::get().to(boms::get_boms_by_product)),
     )
@@ -86,6 +86,10 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/manufacturing/routings/deleted")
             .route(web::get().to(routings::list_deleted_routings)),
+    )
+    .service(
+        web::resource("/v1/manufacturing/routings/operations")
+            .route(web::post().to(routings::add_routing_operation)),
     )
     .service(
         web::resource("/v1/manufacturing/routings/{id}")
@@ -103,10 +107,6 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
     .service(
         web::resource("/v1/manufacturing/routings/product/{product_id}")
             .route(web::get().to(routings::get_routings_by_product)),
-    )
-    .service(
-        web::resource("/v1/manufacturing/routings/operations")
-            .route(web::post().to(routings::add_routing_operation)),
     )
     .service(
         web::resource("/v1/manufacturing/material-requirements/{product_id}")
