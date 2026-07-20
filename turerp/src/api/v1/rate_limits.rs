@@ -42,7 +42,7 @@ pub struct RateLimitDashboardResponse {
     ),
     tag = "Admin"
 )]
-#[get("/admin/rate-limits")]
+#[get("/v1/admin/rate-limits")]
 pub async fn get_rate_limit_stats(
     _admin: AdminUser,
     stats_store: web::Data<RateLimitStatsStore>,

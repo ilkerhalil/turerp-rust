@@ -59,7 +59,7 @@ pub struct ServicePath {
     ),
     security(("bearer_auth" = [])),
 )]
-#[get("/resilience/circuit-breakers")]
+#[get("/v1/resilience/circuit-breakers")]
 pub async fn list_circuit_breakers(
     _admin_user: AdminUser,
     registry: web::Data<CircuitBreakerRegistry>,
@@ -87,7 +87,7 @@ pub async fn list_circuit_breakers(
     ),
     security(("bearer_auth" = [])),
 )]
-#[post("/resilience/circuit-breakers/{service}/reset")]
+#[post("/v1/resilience/circuit-breakers/{service}/reset")]
 pub async fn reset_circuit_breaker(
     _admin_user: AdminUser,
     registry: web::Data<CircuitBreakerRegistry>,
@@ -120,7 +120,7 @@ pub async fn reset_circuit_breaker(
     ),
     security(("bearer_auth" = [])),
 )]
-#[get("/resilience/retry-stats")]
+#[get("/v1/resilience/retry-stats")]
 pub async fn get_retry_stats(
     _admin_user: AdminUser,
     retry_stats: web::Data<crate::common::retry::BoxRetryStats>,
