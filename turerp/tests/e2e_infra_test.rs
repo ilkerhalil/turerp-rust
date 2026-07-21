@@ -939,10 +939,10 @@ async fn e2e_admin_rate_limits() {
     let app = test::init_service(build_test_app_with_infra(&app_state)).await;
     let (token, _user_id) = register_admin(&app_state, 1).await;
 
-    // Rate-limits route is at /api/admin/rate-limits (NOT /api/v1/admin/rate-limits)
+    // Rate-limits route is at /api/v1/admin/rate-limits
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/admin/rate-limits",
+        "/api/v1/admin/rate-limits",
         &token,
     )
     .to_request();
@@ -1323,10 +1323,10 @@ async fn e2e_resilience_workflow() {
     let (token, _user_id) = register_admin(&app_state, 1).await;
 
     // 1. List circuit breakers
-    // Resilience routes are at /api/resilience/* (NOT /api/v1/resilience/*)
+    // Resilience routes are at /api/v1/resilience/*
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/resilience/circuit-breakers",
+        "/api/v1/resilience/circuit-breakers",
         &token,
     )
     .to_request();
@@ -1342,7 +1342,7 @@ async fn e2e_resilience_workflow() {
     // 2. Get retry stats
     let req = auth_request(
         actix_web::http::Method::GET,
-        "/api/resilience/retry-stats",
+        "/api/v1/resilience/retry-stats",
         &token,
     )
     .to_request();
@@ -1355,7 +1355,7 @@ async fn e2e_resilience_workflow() {
     // 3. Reset a circuit breaker
     let req = auth_request(
         actix_web::http::Method::POST,
-        "/api/resilience/circuit-breakers/email/reset",
+        "/api/v1/resilience/circuit-breakers/email/reset",
         &token,
     )
     .to_request();
