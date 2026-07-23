@@ -15824,6 +15824,657 @@
         ]
       }
     },
+    "/api/v1/pos/sales": {
+      "get": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "List POS sales (paginated)",
+        "operationId": "get_pos_sales",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of POS sales"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Record a POS sale",
+        "operationId": "create_pos_sale",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePosSale"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "POS sale recorded"
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/sales/{id}": {
+      "get": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Get POS sale by ID",
+        "operationId": "get_pos_sale",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Sale ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sale found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Delete (soft-delete) a POS sale",
+        "operationId": "delete_pos_sale",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Sale ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sale deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/sync": {
+      "post": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Enqueue an offline sync item",
+        "operationId": "enqueue_sync",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnqueueSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Sync item enqueued"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/sync/pending/{terminal_id}": {
+      "get": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Get pending sync count for a terminal",
+        "operationId": "pending_sync_count",
+        "parameters": [
+          {
+            "name": "terminal_id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending sync count"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/terminals": {
+      "get": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "List POS terminals (paginated)",
+        "operationId": "get_pos_terminals",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of POS terminals"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Create a POS terminal (admin only)",
+        "operationId": "create_pos_terminal",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePosTerminal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "POS terminal created"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/terminals/{id}": {
+      "get": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Get POS terminal by ID",
+        "operationId": "get_pos_terminal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Terminal found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Update POS terminal",
+        "operationId": "update_pos_terminal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePosTerminal"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Terminal updated"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Delete (soft-delete) a POS terminal",
+        "operationId": "delete_pos_terminal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Terminal deleted"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/terminals/{id}/sales": {
+      "get": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "List sales by terminal",
+        "operationId": "get_terminal_sales",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of sales for terminal"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/terminals/{id}/sync": {
+      "post": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Sync terminal (update last_sync_at)",
+        "operationId": "sync_pos_terminal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Terminal synced"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/terminals/{id}/z-reports": {
+      "get": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "List Z-reports by terminal",
+        "operationId": "get_terminal_z_reports",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Terminal ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of Z-reports for terminal"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/z-reports": {
+      "get": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "List Z-reports (paginated)",
+        "operationId": "get_z_reports",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page number (1-based, default: 1)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "Number of items per page (default: 20, max: 100)",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of Z-reports"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Create (open) a Z-report",
+        "operationId": "create_z_report",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateZReport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Z-report created"
+          },
+          "409": {
+            "description": "Conflict"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/z-reports/{id}": {
+      "get": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Get Z-report by ID",
+        "operationId": "get_z_report",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Z-report ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Z-report found"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/z-reports/{id}/close": {
+      "post": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Close a Z-report (compute totals from assigned sales)",
+        "operationId": "close_z_report",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Z-report ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Z-report closed"
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/pos/z-reports/{id}/reconcile": {
+      "post": {
+        "tags": [
+          "POS"
+        ],
+        "summary": "Reconcile a closed Z-report",
+        "operationId": "reconcile_z_report",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Z-report ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Z-report reconciled"
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        },
+        "security": [
+          {
+            "bearer_auth": []
+          }
+        ]
+      }
+    },
     "/api/v1/products": {
       "get": {
         "tags": [
@@ -27138,6 +27789,123 @@
           }
         }
       },
+      "CreatePosSale": {
+        "type": "object",
+        "description": "Create POS sale request",
+        "required": [
+          "tenant_id",
+          "terminal_id",
+          "sale_date",
+          "payment_method",
+          "lines"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "discount_amount": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatePosSaleLine"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
+          "sale_date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "terminal_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "CreatePosSaleLine": {
+        "type": "object",
+        "description": "Create POS sale line request",
+        "required": [
+          "description",
+          "quantity",
+          "unit_price",
+          "tax_rate"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "discount_amount": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Decimal"
+              }
+            ],
+            "nullable": true
+          },
+          "product_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tax_rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "CreatePosTerminal": {
+        "type": "object",
+        "description": "Create POS terminal request",
+        "required": [
+          "tenant_id",
+          "terminal_code",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "store_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "terminal_code": {
+            "type": "string"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
       "CreateReconciliationRule": {
         "type": "object",
         "description": "Data for creating a reconciliation rule",
@@ -27591,6 +28359,24 @@
           },
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "CreateZReport": {
+        "type": "object",
+        "description": "Create Z-report request",
+        "required": [
+          "tenant_id",
+          "terminal_id"
+        ],
+        "properties": {
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "terminal_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -28346,6 +29132,22 @@
           },
           "tax_type": {
             "type": "string"
+          }
+        }
+      },
+      "EnqueueSyncRequest": {
+        "type": "object",
+        "required": [
+          "terminal_id",
+          "payload"
+        ],
+        "properties": {
+          "payload": {
+            "type": "string"
+          },
+          "terminal_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -29847,6 +30649,18 @@
           }
         }
       },
+      "PaymentMethod": {
+        "type": "string",
+        "description": "Payment method for POS sales",
+        "enum": [
+          "Cash",
+          "CreditCard",
+          "DebitCard",
+          "MobilePayment",
+          "Voucher",
+          "Other"
+        ]
+      },
       "PortalAuthResponse": {
         "type": "object",
         "description": "Portal auth response",
@@ -30012,6 +30826,333 @@
           "active",
           "passive",
           "blocked"
+        ]
+      },
+      "PosSale": {
+        "type": "object",
+        "description": "POS sale entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "terminal_id",
+          "sale_number",
+          "sale_date",
+          "subtotal",
+          "tax_amount",
+          "discount_amount",
+          "total_amount",
+          "payment_method",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "discount_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
+          "sale_date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "sale_number": {
+            "type": "string"
+          },
+          "subtotal": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tax_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "terminal_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "z_report_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "PosSaleLineResponse": {
+        "type": "object",
+        "description": "POS sale line response",
+        "required": [
+          "id",
+          "description",
+          "quantity",
+          "unit_price",
+          "tax_rate",
+          "discount_amount",
+          "line_total"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "discount_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "line_total": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "product_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "quantity": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tax_rate": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "unit_price": {
+            "$ref": "#/components/schemas/Decimal"
+          }
+        }
+      },
+      "PosSaleResponse": {
+        "type": "object",
+        "description": "POS sale response",
+        "required": [
+          "id",
+          "terminal_id",
+          "sale_number",
+          "sale_date",
+          "subtotal",
+          "tax_amount",
+          "discount_amount",
+          "total_amount",
+          "payment_method",
+          "lines",
+          "created_at"
+        ],
+        "properties": {
+          "cari_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "discount_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PosSaleLineResponse"
+            }
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "payment_method": {
+            "type": "string"
+          },
+          "sale_date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "sale_number": {
+            "type": "string"
+          },
+          "subtotal": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "tax_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "terminal_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_amount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "z_report_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "PosTerminal": {
+        "type": "object",
+        "description": "POS terminal entity",
+        "required": [
+          "id",
+          "tenant_id",
+          "terminal_code",
+          "name",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "deleted_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "deleted_by": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_sync_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PosTerminalStatus"
+          },
+          "store_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "terminal_code": {
+            "type": "string"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "PosTerminalResponse": {
+        "type": "object",
+        "description": "POS terminal response",
+        "required": [
+          "id",
+          "terminal_code",
+          "name",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_sync_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "store_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "terminal_code": {
+            "type": "string"
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        }
+      },
+      "PosTerminalStatus": {
+        "type": "string",
+        "description": "POS terminal status",
+        "enum": [
+          "Active",
+          "Inactive",
+          "Offline",
+          "Syncing"
         ]
       },
       "ProcessOutboxResponse": {
@@ -31891,6 +33032,62 @@
           "closed"
         ]
       },
+      "SyncQueueItem": {
+        "type": "object",
+        "description": "Sync queue item (offline mode)",
+        "required": [
+          "id",
+          "tenant_id",
+          "terminal_id",
+          "payload",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "error_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "payload": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SyncQueueStatus"
+          },
+          "synced_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "terminal_id": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SyncQueueStatus": {
+        "type": "string",
+        "description": "Sync queue status",
+        "enum": [
+          "Pending",
+          "Synced",
+          "Failed"
+        ]
+      },
       "SystemHealthSummary": {
         "type": "object",
         "description": "System-wide health summary",
@@ -32718,6 +33915,33 @@
                 "$ref": "#/components/schemas/Decimal"
               }
             ],
+            "nullable": true
+          }
+        }
+      },
+      "UpdatePosTerminal": {
+        "type": "object",
+        "description": "Update POS terminal request",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PosTerminalStatus"
+              }
+            ],
+            "nullable": true
+          },
+          "store_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "format": "int64",
             "nullable": true
           }
         }
@@ -34055,6 +35279,176 @@
             "type": "string"
           }
         }
+      },
+      "ZReport": {
+        "type": "object",
+        "description": "Z-report entity (end-of-day reconciliation)",
+        "required": [
+          "id",
+          "tenant_id",
+          "terminal_id",
+          "report_number",
+          "report_date",
+          "status",
+          "total_sales",
+          "total_cash",
+          "total_card",
+          "total_other",
+          "total_tax",
+          "total_discount",
+          "transaction_count",
+          "opened_at",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "closed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "opened_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "report_date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "report_number": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ZReportStatus"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "terminal_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_card": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_cash": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_discount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_other": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_sales": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_tax": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "transaction_count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "updated_at": {
+            "$ref": "#/components/schemas/DateTime"
+          }
+        }
+      },
+      "ZReportResponse": {
+        "type": "object",
+        "description": "Z-report response",
+        "required": [
+          "id",
+          "terminal_id",
+          "report_number",
+          "report_date",
+          "status",
+          "total_sales",
+          "total_cash",
+          "total_card",
+          "total_other",
+          "total_tax",
+          "total_discount",
+          "transaction_count",
+          "opened_at",
+          "created_at"
+        ],
+        "properties": {
+          "closed_at": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DateTime"
+              }
+            ],
+            "nullable": true
+          },
+          "created_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "opened_at": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "report_date": {
+            "$ref": "#/components/schemas/DateTime"
+          },
+          "report_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "terminal_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_card": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_cash": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_discount": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_other": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_sales": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "total_tax": {
+            "$ref": "#/components/schemas/Decimal"
+          },
+          "transaction_count": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "ZReportStatus": {
+        "type": "string",
+        "description": "Z-report status",
+        "enum": [
+          "Open",
+          "Closed",
+          "Reconciled"
+        ]
       }
     },
     "securitySchemes": {
@@ -34113,6 +35507,10 @@
     {
       "name": "Sales",
       "description": "Sales orders and quotations"
+    },
+    {
+      "name": "POS",
+      "description": "Point of Sale terminals, sales, Z-reports and sync queue"
     },
     {
       "name": "Purchase Orders",

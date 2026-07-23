@@ -38,6 +38,7 @@ pub mod manufacturing;
 pub mod mfa;
 pub mod notifications;
 pub mod observability;
+pub mod pos;
 pub mod product_variants;
 pub mod project;
 pub mod purchase_orders;
