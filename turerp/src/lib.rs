@@ -380,6 +380,7 @@ pub mod app {
         pub stock_service: web::Data<StockService>,
         pub invoice_service: web::Data<InvoiceService>,
         pub sales_service: web::Data<SalesService>,
+        pub pos_service: web::Data<crate::domain::pos::service::PosService>,
         pub purchase_service: web::Data<PurchaseService>,
         pub product_service: web::Data<ProductService>,
         pub barcode_service: web::Data<BarcodeService>,
@@ -514,6 +515,7 @@ pub mod app {
             cfg.app_data(self.commerce.stock_service.clone());
             cfg.app_data(self.commerce.invoice_service.clone());
             cfg.app_data(self.commerce.sales_service.clone());
+            cfg.app_data(self.commerce.pos_service.clone());
             cfg.app_data(self.commerce.barcode_service.clone());
             cfg.app_data(self.commerce.product_service.clone());
             cfg.app_data(self.commerce.purchase_service.clone());
@@ -687,6 +689,26 @@ pub mod app {
             cari_repo.clone(),
             product_repo.clone(),
             company_repo.clone(),
+        );
+
+        // POS
+        let pos_terminal_repo =
+            Arc::new(crate::domain::pos::repository::InMemoryPosTerminalRepository::new())
+                as crate::domain::pos::repository::BoxPosTerminalRepository;
+        let pos_sale_repo =
+            Arc::new(crate::domain::pos::repository::InMemoryPosSaleRepository::new())
+                as crate::domain::pos::repository::BoxPosSaleRepository;
+        let z_report_repo =
+            Arc::new(crate::domain::pos::repository::InMemoryZReportRepository::new())
+                as crate::domain::pos::repository::BoxZReportRepository;
+        let sync_queue_repo =
+            Arc::new(crate::domain::pos::repository::InMemorySyncQueueRepository::new())
+                as crate::domain::pos::repository::BoxSyncQueueRepository;
+        let pos_service = crate::domain::pos::service::PosService::new(
+            pos_terminal_repo,
+            pos_sale_repo,
+            z_report_repo,
+            sync_queue_repo,
         );
 
         // HR
@@ -1180,6 +1202,7 @@ pub mod app {
                 invoice_service: web::Data::new(invoice_service),
                 sales_service: web::Data::new(sales_service),
                 purchase_service: web::Data::new(purchase_service),
+                pos_service: web::Data::new(pos_service),
                 product_service: web::Data::new(product_service),
                 barcode_service: web::Data::new(barcode_service),
                 inter_company_service: web::Data::new(inter_company_service),
@@ -1381,6 +1404,26 @@ pub mod app {
             cari_repo.clone(),
             product_repo.clone(),
             company_repo.clone(),
+        );
+
+        // POS - PostgreSQL (uses InMemory repos for now; POS tables not yet migrated)
+        let pos_terminal_repo =
+            Arc::new(crate::domain::pos::repository::InMemoryPosTerminalRepository::new())
+                as crate::domain::pos::repository::BoxPosTerminalRepository;
+        let pos_sale_repo =
+            Arc::new(crate::domain::pos::repository::InMemoryPosSaleRepository::new())
+                as crate::domain::pos::repository::BoxPosSaleRepository;
+        let z_report_repo =
+            Arc::new(crate::domain::pos::repository::InMemoryZReportRepository::new())
+                as crate::domain::pos::repository::BoxZReportRepository;
+        let sync_queue_repo =
+            Arc::new(crate::domain::pos::repository::InMemorySyncQueueRepository::new())
+                as crate::domain::pos::repository::BoxSyncQueueRepository;
+        let pos_service = crate::domain::pos::service::PosService::new(
+            pos_terminal_repo,
+            pos_sale_repo,
+            z_report_repo,
+            sync_queue_repo,
         );
 
         // HR - PostgreSQL
@@ -1813,6 +1856,7 @@ pub mod app {
                 stock_service: web::Data::new(stock_service),
                 invoice_service: web::Data::new(invoice_service),
                 sales_service: web::Data::new(sales_service),
+                pos_service: web::Data::new(pos_service),
                 purchase_service: web::Data::new(purchase_service),
                 product_service: web::Data::new(product_service),
                 barcode_service: web::Data::new(barcode_service),

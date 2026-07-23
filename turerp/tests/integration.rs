@@ -47,6 +47,7 @@ mod e2e_crm_test;
 mod e2e_hr_shift_test;
 mod e2e_infra_test;
 mod e2e_manufacturing_test;
+mod e2e_pos_test;
 mod e2e_products_tax_currency_test;
 mod e2e_tenant_users_test;
 mod e2e_turkish_portals_test;
